@@ -214,6 +214,45 @@ export interface FfttGroupsImportResult {
   skipped: Array<{ id: string; number: number | null }>
 }
 
+// --- Schedule document import (#260) ---
+// Alternative to the FFTT-API imports above: the browser parses an uploaded
+// PDF/image itself (see src/lib/ffttScheduleDocument.ts) and the admin
+// confirms, per document, which existing phase/division/group/club/team it
+// maps to — so unlike the FFTT flows there is no server preview round trip;
+// the "preview" is the confirmation table built from data already in this
+// context, and this single call both validates and persists.
+export interface ScheduleDocImportTeam { name: string; number: number; affiliationNumber: string }
+export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number }
+export interface ScheduleDocImportJournee { number: number; date: string; matches: ScheduleDocImportMatch[] }
+
+export interface ScheduleDocImportInput {
+  seasonId: string
+  phaseNumber: number
+  /** Existing division id chosen by the admin; null to create one from newDivisionLabel. */
+  divisionId: string | null
+  newDivisionLabel: string
+  /** Existing group id chosen by the admin; null to create one numbered newGroupNumber. */
+  groupId: string | null
+  newGroupNumber: number | null
+  teams: ScheduleDocImportTeam[]
+  journees: ScheduleDocImportJournee[]
+}
+
+/** Response of POST /api/schedule-documents/import (#260). */
+export interface ScheduleDocImportResult {
+  createdPhases: Phase[]
+  createdDivisions: Division[]
+  createdGroups: Group[]
+  createdClubs: Club[]
+  createdTeams: Team[]
+  /** Every touched group (created or team-list-updated), in its final state. */
+  groups: Group[]
+  createdMatchDays: MatchDay[]
+  createdGames: Game[]
+  skippedSchedules: Array<{ index: number; reason: string }>
+  existingGames: number
+}
+
 // Read the current session token (set by AuthContext) for the Authorization
 // header. Read at call time so mutations always use the latest token.
 function sessionToken(): string | null {
@@ -280,6 +319,8 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   fetchGroupsPreview: (divisionId: string) => Promise<FfttGroupsPreview | null>
   /** Import a division's FFTT groups not already present locally. */
   importFfttGroups: (divisionId: string) => Promise<FfttGroupsImportResult | null>
+  /** Import schedule documents (PDF/image, #260) confirmed by the admin; null on failure. */
+  importScheduleDocuments: (schedules: ScheduleDocImportInput[]) => Promise<ScheduleDocImportResult | null>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
@@ -731,6 +772,36 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       if (!r.ok) return null
       const result = (await r.json()) as FfttGroupsImportResult
       if (result.created.length) setGroups((prev) => [...prev, ...result.created])
+      return result
+    } catch {
+      return null
+    }
+  }, [])
+
+  // --- Schedule document import (#260, no server preview — see the type note above) ---
+  const importScheduleDocuments = useCallback(async (
+    schedules: ScheduleDocImportInput[],
+  ): Promise<ScheduleDocImportResult | null> => {
+    try {
+      const r = await fetch('/api/schedule-documents/import', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ schedules }),
+      })
+      if (!r.ok) return null
+      const result = (await r.json()) as ScheduleDocImportResult
+      if (result.createdPhases.length) setPhases((prev) => [...prev, ...result.createdPhases])
+      if (result.createdDivisions.length) setDivisions((prev) => [...prev, ...result.createdDivisions])
+      if (result.createdClubs.length) setClubs((prev) => [...prev, ...result.createdClubs])
+      if (result.createdTeams.length) setTeams((prev) => [...prev, ...result.createdTeams])
+      if (result.groups.length) {
+        setGroups((prev) => [
+          ...prev.filter((g) => !result.groups.some((u) => u.id === g.id)),
+          ...result.groups,
+        ])
+      }
+      if (result.createdMatchDays.length) setMatchDays((prev) => [...prev, ...result.createdMatchDays])
+      if (result.createdGames.length) setGames((prev) => [...prev, ...result.createdGames])
       return result
     } catch {
       return null
@@ -1412,6 +1483,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       importFfttGames,
       fetchGroupsPreview,
       importFfttGroups,
+      importScheduleDocuments,
       updatePhase,
       archivePhase,
       deletePhase,
@@ -1452,7 +1524,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, updateTeam, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, updateTeam, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       updatePlayer, addPlayer, setAvatar, removeAvatar,
