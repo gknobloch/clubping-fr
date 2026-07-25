@@ -125,6 +125,32 @@ describe('parseScheduleDocumentLines', () => {
     if ('error' in result) throw new Error('expected a parsed document')
     expect(result.warnings.some((w) => w.includes('Ligne de match illisible'))).toBe(true)
   })
+
+  // OCR (photographed/scanned documents, see ocrScheduleText.ts) routinely
+  // mangles whitespace and punctuation around the header line — a shaded
+  // background band, in particular, is a classic OCR contrast problem for
+  // exactly the "... Poule N" / "1ère phase YYYY-YYYY" title bar these
+  // documents render it with — without touching the letters/digits
+  // themselves. The header regexes must tolerate that.
+  it('locates the header despite OCR-mangled spacing/punctuation around "Poule N"', () => {
+    const result = parseScheduleDocumentLines(['CHAMPIONNAT GRAND EST ELITE Poule:3', '1ere phase 2026-2027'])
+    if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
+    expect(result.poolNumber).toBe(3)
+    expect(result.divisionLabel).toBe('CHAMPIONNAT GRAND EST ELITE')
+  })
+
+  it('locates the header despite OCR-mangled spacing around "Poule N" with no space at all', () => {
+    const result = parseScheduleDocumentLines(['CHAMPIONNAT GRAND EST ELITE Poule3', '1ère phase 2026-2027'])
+    if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
+    expect(result.poolNumber).toBe(3)
+  })
+
+  it('locates the phase/season line despite OCR-mangled spacing around it', () => {
+    const result = parseScheduleDocumentLines(['CHAMPIONNAT GRAND EST ELITE Poule 3', '1erephase2026 2027'])
+    if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
+    expect(result.phaseNumber).toBe(1)
+    expect(result.seasonId).toBe('27')
+  })
 })
 
 describe('AFFILIATION_NUMBER_RE', () => {

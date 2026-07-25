@@ -75,8 +75,11 @@ const FIXED_DATE_RE = /^(\d{1,2})\s+(\S+)\s+(\d{4})$/
 // The start of a range carries a month only when it differs from the end's
 // ("du 28 sept au 04 octobre") — a same-month range just says "du 14 au 20".
 const START_DATE_RE = /^(\d{1,2})(?:\s+(\S+))?$/
-const PHASE_SEASON_RE = /^(\d+)(?:ère|ere|ème|eme|e)\s+phase\s+(\d{4})-(\d{4})$/i
-const POOL_RE = /Poule\s+(\d+)/i
+// Lenient on purpose: this line also has to survive OCR (photographed/scanned
+// documents, see ocrScheduleText.ts), which routinely mangles spacing and
+// punctuation without touching the letters/digits themselves.
+const PHASE_SEASON_RE = /^(\d+)\D{0,6}phase\D{0,3}(\d{4})\D{1,3}(\d{4})$/i
+const POOL_RE = /Poule\D{0,3}(\d+)/i
 
 const MONTHS = [
   'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',

@@ -14,6 +14,8 @@ interface FileEntry {
   name: string
   status: FileStatus
   errorMessage?: string
+  /** Raw extracted text lines, kept even on parse failure so the admin can see what was actually read (OCR is the likeliest failure point — see ocrScheduleText.ts). */
+  extractedLines?: string[]
   parsed?: ParsedScheduleDocument
   /** Existing division id, or '' to create one from parsed.divisionLabel. */
   divisionChoice: string
@@ -107,7 +109,11 @@ export function ImportScheduleDocumentModal({
         if (lines.length === 0) lines = await extractOcrScheduleLines(file)
         const parsed = parseScheduleDocumentLines(lines)
         if ('error' in parsed) {
-          updateEntry(id, { status: 'error', errorMessage: 'En-tête du calendrier introuvable dans ce document.' })
+          updateEntry(id, {
+            status: 'error',
+            errorMessage: 'En-tête du calendrier introuvable dans ce document.',
+            extractedLines: lines,
+          })
           return
         }
         resolveEntry(id, parsed)
@@ -270,7 +276,22 @@ export function ImportScheduleDocumentModal({
                     </div>
 
                     {entry.status === 'error' && (
-                      <p className="text-sm text-red-600">{entry.errorMessage}</p>
+                      <div className="space-y-1">
+                        <p className="text-sm text-red-600">{entry.errorMessage}</p>
+                        {entry.extractedLines && entry.extractedLines.length > 0 && (
+                          <details className="text-xs text-slate-400">
+                            <summary className="cursor-pointer">Voir le texte extrait du document</summary>
+                            <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-slate-600">
+                              {entry.extractedLines.join('\n')}
+                            </pre>
+                          </details>
+                        )}
+                        {entry.extractedLines?.length === 0 && (
+                          <p className="text-xs text-slate-400">
+                            Aucun texte n’a pu être extrait de ce fichier (image illisible ou vide).
+                          </p>
+                        )}
+                      </div>
                     )}
 
                     {entry.status === 'ready' && p && (
