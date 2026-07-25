@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 // [source svg, output png, width, height?]. Height defaults to width.
 const jobs = [
   ['icon.svg', '../icon.png', 1024],
-  ['icon.svg', '../../ios/PingPongClub/Images.xcassets/AppIcon.appiconset/App-Icon-1024x1024@1x.png', 1024],
+  ['icon.svg', '../../ios/PingClub/Images.xcassets/AppIcon.appiconset/App-Icon-1024x1024@1x.png', 1024],
   ['adaptive-icon.svg', '../adaptive-icon.png', 1024],
   // Splash matches the login photo's native aspect (1600x1067) so cover-mode
   // crops sides on portrait devices but keeps the paddle/ball centered.

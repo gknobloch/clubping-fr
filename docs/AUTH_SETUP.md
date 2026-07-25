@@ -32,7 +32,7 @@ with no `users` row gets `403 no_account` (see issue #101).
 3. Set:
    - `RESEND_API_KEY` = the key — **secret**.
    - `RESEND_FROM` = a sender on the verified domain, e.g.
-     `Ping-Pong Club <no-reply@yourdomain.fr>`.
+     `Ping Club <no-reply@yourdomain.fr>`.
 
 > Resend's shared `onboarding@resend.dev` sender only delivers to the Resend
 > account owner's own address — fine for a first smoke test, not for real users.

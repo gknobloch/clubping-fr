@@ -10,7 +10,7 @@
 RESEND_API_KEY=
 # Verified sender. Resend's shared onboarding@resend.dev only delivers to the
 # Resend account owner's address; use a verified domain for real users.
-RESEND_FROM=Ping-Pong Club <onboarding@resend.dev>
+RESEND_FROM=Ping Club <onboarding@resend.dev>
 
 # --- OAuth accepted audiences (comma-separated, PUBLIC) ---
 # The backend verifies each OIDC id_token's `aud` against these lists.

@@ -14,7 +14,7 @@ database_id = "11b715a2-d479-4bdd-9474-8ba49ce74c6c"
 # (or `wrangler pages secret put RESEND_API_KEY`) — never committed.
 # Locally, all of these come from `.dev.vars` (see .dev.vars.example).
 [vars]
-RESEND_FROM = "Ping-Pong Club <no-reply@mail.leskno.fr>"
+RESEND_FROM = "Ping Club <no-reply@mail.leskno.fr>"
 # Comma-separated accepted OIDC audiences — fill in once OAuth clients exist (#100):
 #   GOOGLE_CLIENT_IDS = "web-id,ios-id,android-id"
 #   APPLE_CLIENT_IDS  = "fr.pingclub.web,fr.pingclub.app"

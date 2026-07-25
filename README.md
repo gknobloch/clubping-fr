@@ -1,4 +1,4 @@
-# Ping-Pong Club — Application de disponibilités
+# Ping Club — Application de disponibilités
 
 Application web mobile-friendly pour la gestion des joueurs, équipes et disponibilités des matchs de tennis de table (voir [SPEC.md](docs/SPEC.md)).
 

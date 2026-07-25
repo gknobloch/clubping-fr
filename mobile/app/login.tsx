@@ -108,7 +108,7 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.brandBlock}>
-              <Text style={styles.brand}>Ping-Pong Club</Text>
+              <Text style={styles.brand}>Ping Club</Text>
               <Text style={styles.tagline}>
                 {step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}
               </Text>

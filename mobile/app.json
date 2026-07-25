@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Ping-Pong Club",
-    "slug": "ping-pong-club",
+    "name": "Ping Club",
+    "slug": "pingclub-fr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -1,4 +1,4 @@
-# Ping-Pong Club — Mobile (Expo)
+# Ping Club — Mobile (Expo)
 
 Native iOS and Android app built with Expo and expo-router. Uses the same Cloudflare Pages API as the web app.
 
