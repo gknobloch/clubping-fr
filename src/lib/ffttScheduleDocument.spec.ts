@@ -151,6 +151,29 @@ describe('parseScheduleDocumentLines', () => {
     expect(result.phaseNumber).toBe(1)
     expect(result.seasonId).toBe('27')
   })
+
+  // A real OCR pass appended a stray apostrophe/period to isolated team
+  // numbers ("... ESTT 1' contre ...", "... PPA 1. contre ...") without
+  // touching anything else on the line.
+  it('parses roster and match rows despite a stray punctuation mark after the team number', () => {
+    const lines = [
+      'CHAMPIONNAT GRAND EST ELITE Poule 3',
+      '1ère phase 2026-2027',
+      '1 THAON CHENIMENIL ESTT 1. Samedi 16h 06880145',
+      '2 ROSENAU TT 1 Samedi 16h 06680125',
+      'Journée 1 : 19 septembre 2026',
+      "Samedi 16h THAON CHENIMENIL ESTT 1' contre ROSENAU TT 1. -",
+    ]
+    const result = parseScheduleDocumentLines(lines)
+    if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
+    expect(result.teams[0]).toMatchObject({ name: 'THAON CHENIMENIL ESTT', number: 1 })
+    expect(result.journees[0].matches).toEqual([{
+      day: 'Samedi', time: '16h00',
+      homeName: 'THAON CHENIMENIL ESTT', homeNumber: 1,
+      awayName: 'ROSENAU TT', awayNumber: 1,
+      score: '-',
+    }])
+  })
 })
 
 describe('AFFILIATION_NUMBER_RE', () => {

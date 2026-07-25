@@ -47,15 +47,6 @@ async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
   return canvas
 }
 
-/** Crop a canvas to its top `fraction` (0..1), by height. */
-function topStrip(canvas: HTMLCanvasElement, fraction: number): HTMLCanvasElement {
-  const strip = document.createElement('canvas')
-  strip.width = canvas.width
-  strip.height = Math.round(canvas.height * fraction)
-  strip.getContext('2d')!.drawImage(canvas, 0, 0)
-  return strip
-}
-
 /** Extract text lines from an image file (or a rasterized PDF page) via OCR. */
 export async function extractOcrScheduleLines(file: File | Blob): Promise<string[]> {
   const { createWorker, PSM } = await import('tesseract.js')
@@ -70,15 +61,20 @@ export async function extractOcrScheduleLines(file: File | Blob): Promise<string
     // classify a bordered, shaded box as a non-text graphic and drop it
     // entirely rather than misreading it — confirmed against a real upload
     // whose extracted text started exactly at the roster table, with the
-    // title box simply absent, not garbled. Re-OCR just the top of the page
-    // (where that title box sits) with a page-segmentation mode that makes
-    // no layout assumptions, which is far less likely to discard it; prepend
-    // whatever it finds rather than trusting it over the already-good body
-    // read above.
+    // title box simply absent, not garbled. Re-OCR the whole page with a
+    // page-segmentation mode that makes no layout assumptions, which is far
+    // less likely to discard it. This deliberately re-scans the full page
+    // rather than just a guessed-at top slice: a phone photo can have the
+    // title positioned anywhere depending on how much blank margin got
+    // captured around the paper, so guessing a fixed region is exactly the
+    // kind of layout assumption this pass exists to avoid. Prepend whatever
+    // it finds rather than trusting it over the already-good body read
+    // above — any fragment it duplicates from the body falls before the
+    // header line once located, so it's never read as roster/journée data.
     await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
-    const header = await worker.recognize(topStrip(canvas, 0.15))
-    const headerLines = header.data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-    return [...headerLines, ...lines]
+    const retry = await worker.recognize(canvas)
+    const retryLines = retry.data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    return [...retryLines, ...lines]
   } finally {
     await worker.terminate()
   }

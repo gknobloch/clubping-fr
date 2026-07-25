@@ -65,10 +65,14 @@ export interface ParsedScheduleDocument {
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 const DAY_RE_SRC = DAY_NAMES.join('|')
 
-const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(\\d{1,2})\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
+// Team numbers tolerate a trailing stray punctuation mark (`[.,']?`): a real
+// OCR pass read "... ESTT 1' contre ..." and "... PPA 1. contre ..." for
+// plain "1" — the apostrophe/period isn't part of the number, just noise
+// tesseract occasionally appends to an isolated digit.
+const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(\\d{1,2})[.,']?\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
 const JOURNEE_RE = /^Journ[ée]e\s+(\d+)\s*:\s*(.+)$/i
 const MATCH_RE = new RegExp(
-  `^(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(.+?)\\s+(\\d{1,2})\\s+contre\\s+(.+?)\\s+(\\d{1,2})\\s+(.+)$`, 'i',
+  `^(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(.+?)\\s+(\\d{1,2})[.,']?\\s+contre\\s+(.+?)\\s+(\\d{1,2})[.,']?\\s+(.+)$`, 'i',
 )
 const RANGE_DATE_RE = /^du\s+(.+?)\s+au\s+(.+)$/i
 const FIXED_DATE_RE = /^(\d{1,2})\s+(\S+)\s+(\d{4})$/
