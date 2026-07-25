@@ -14,18 +14,71 @@
 // a shaded, bordered box near the top of the page — a low-contrast band
 // that's a classic OCR failure mode even on an otherwise crisp
 // screenshot/photo — and phone photos are often lower-resolution than OCR
-// wants. Grayscale + contrast-stretch and a floor on resolution before
-// recognition measurably help both cases; this is deliberately simple (no
-// perspective correction, no deskew) rather than a full document-scanner
-// pipeline.
+// wants. Binarizing (pure black/white, no gray survives) and a floor on
+// resolution before recognition measurably help both cases; this is
+// deliberately simple (no perspective correction, no deskew) rather than a
+// full document-scanner pipeline.
 //
-// The stretch is centered on the middle gray (128), not a fixed cutoff: two
-// grays that are already on the same side of a fixed cutoff (plausible for
-// dark text on a not-too-different gray banner background) would get pushed
-// by the same fixed amount and stay just as hard to tell apart — a stretch
-// around the midpoint always increases the gap between two different grays,
-// whichever side of the midpoint they start on.
-const CONTRAST_FACTOR = 1.6
+// A soft contrast stretch around the midpoint was tried first and confirmed
+// insufficient against a real upload: it still left the shaded box's
+// background and text close enough together that OCR came back with
+// unreadable fragments instead of nothing. A single global Otsu threshold
+// (the standard black/white OCR preprocessing technique) was tried next and
+// is still not quite enough on its own: it's computed from the WHOLE image's
+// histogram, which the much larger plain-white body dominates, so a shaded
+// header band that's a small fraction of total pixels doesn't necessarily
+// land on the right side of that one global cutoff even though it clearly
+// should locally — confirmed against a synthetic image where the header was
+// found but "Poule" itself came back character-garbled ("Poui").
+//
+// Binarizing each tile of the image against its OWN local Otsu threshold
+// fixes that: a tile inside the shaded header adapts to its own
+// background/text tones instead of the body's, and a tile of body text
+// adapts to its own (typically landing close to the global result anyway,
+// since it's already high-contrast).
+const TILE_SIZE = 180
+
+function otsuThreshold(histogram: number[], count: number): number {
+  if (count === 0) return 128
+  let sum = 0
+  for (let t = 0; t < 256; t++) sum += t * histogram[t]
+  let sumB = 0, weightB = 0, bestVariance = 0, threshold = 128
+  for (let t = 0; t < 256; t++) {
+    weightB += histogram[t]
+    if (weightB === 0) continue
+    const weightF = count - weightB
+    if (weightF === 0) break
+    sumB += t * histogram[t]
+    const meanB = sumB / weightB
+    const meanF = (sum - sumB) / weightF
+    const variance = weightB * weightF * (meanB - meanF) * (meanB - meanF)
+    if (variance > bestVariance) { bestVariance = variance; threshold = t }
+  }
+  return threshold
+}
+
+function adaptiveBinarize(gray: Uint8ClampedArray, width: number, height: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(gray.length)
+  for (let tileY = 0; tileY < height; tileY += TILE_SIZE) {
+    const tileH = Math.min(TILE_SIZE, height - tileY)
+    for (let tileX = 0; tileX < width; tileX += TILE_SIZE) {
+      const tileW = Math.min(TILE_SIZE, width - tileX)
+      const histogram = new Array(256).fill(0)
+      for (let y = 0; y < tileH; y++) {
+        const rowStart = (tileY + y) * width + tileX
+        for (let x = 0; x < tileW; x++) histogram[gray[rowStart + x]]++
+      }
+      const threshold = otsuThreshold(histogram, tileW * tileH)
+      for (let y = 0; y < tileH; y++) {
+        const rowStart = (tileY + y) * width + tileX
+        for (let x = 0; x < tileW; x++) {
+          out[rowStart + x] = gray[rowStart + x] < threshold ? 0 : 255
+        }
+      }
+    }
+  }
+  return out
+}
 
 async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
   const bitmap = await createImageBitmap(file)
@@ -38,14 +91,24 @@ async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
   const d = imageData.data
-  for (let i = 0; i < d.length; i += 4) {
-    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-    const contrasted = Math.min(255, Math.max(0, (gray - 128) * CONTRAST_FACTOR + 128))
-    d[i] = d[i + 1] = d[i + 2] = contrasted
+  const gray = new Uint8ClampedArray(d.length / 4)
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    gray[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+  }
+  const bw = adaptiveBinarize(gray, canvas.width, canvas.height)
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    d[i] = d[i + 1] = d[i + 2] = bw[j]
   }
   ctx.putImageData(imageData, 0, 0)
   return canvas
 }
+
+// A line plausibly belonging to the title block: "... Poule N" or "1ère
+// phase YYYY-YYYY". Deliberately loose (just the keyword) — this is used to
+// pick out the one or two lines worth trusting from the noisy retry pass
+// below, not to validate them; ffttScheduleDocument.ts's own regexes do the
+// real validation once these lines are handed to the parser.
+const TITLE_LINE_RE = /Poule|phase/i
 
 /** Extract text lines from an image file (or a rasterized PDF page) via OCR. */
 export async function extractOcrScheduleLines(file: File | Blob): Promise<string[]> {
@@ -57,24 +120,28 @@ export async function extractOcrScheduleLines(file: File | Blob): Promise<string
     const lines = data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
     if (lines.some((l) => /Poule/i.test(l))) return lines
 
-    // Tesseract's automatic layout analysis (the default PSM.AUTO) can
-    // classify a bordered, shaded box as a non-text graphic and drop it
-    // entirely rather than misreading it — confirmed against a real upload
-    // whose extracted text started exactly at the roster table, with the
-    // title box simply absent, not garbled. Re-OCR the whole page with a
-    // page-segmentation mode that makes no layout assumptions, which is far
-    // less likely to discard it. This deliberately re-scans the full page
-    // rather than just a guessed-at top slice: a phone photo can have the
-    // title positioned anywhere depending on how much blank margin got
-    // captured around the paper, so guessing a fixed region is exactly the
-    // kind of layout assumption this pass exists to avoid. Prepend whatever
-    // it finds rather than trusting it over the already-good body read
-    // above — any fragment it duplicates from the body falls before the
-    // header line once located, so it's never read as roster/journée data.
+    // Tesseract's default automatic layout analysis (PSM.AUTO) can classify
+    // a bordered, shaded box as a non-text graphic and drop it entirely
+    // rather than misreading it — confirmed against a real upload whose
+    // extracted text started exactly at the roster table, the title box
+    // simply absent, not garbled, even after the per-tile binarization above
+    // (which fixes the header's own readability once Tesseract actually
+    // attempts to read it, but not this layout-classification problem).
+    // PSM.SPARSE_TEXT ("find text in no particular order") re-attempts the
+    // whole page without that layout analysis, which does recover the box —
+    // but only pull the specific title-shaped line(s) out of its result
+    // rather than trusting the rest of it: sparse mode's lack of layout
+    // assumptions produces heavy noise on anything with real-world grain
+    // (compression artifacts, camera noise), and that noise routinely lands
+    // on the same output line as otherwise-correct body text, breaking the
+    // parser's end-of-line-anchored regexes — confirmed against a noisy
+    // synthetic image where trusting the full retry output corrupted an
+    // otherwise perfectly-read roster/journée section.
     await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
     const retry = await worker.recognize(canvas)
     const retryLines = retry.data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-    return [...retryLines, ...lines]
+    const recovered = retryLines.filter((l) => TITLE_LINE_RE.test(l))
+    return [...recovered, ...lines]
   } finally {
     await worker.terminate()
   }

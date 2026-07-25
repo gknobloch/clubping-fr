@@ -50,7 +50,7 @@ export function ImportScheduleDocumentModal({
   const updateEntry = (id: string, patch: Partial<FileEntry>) =>
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
 
-  const resolveEntry = useCallback((id: string, parsed: ParsedScheduleDocument) => {
+  const resolveEntry = useCallback((id: string, parsed: ParsedScheduleDocument, extractedLines: string[]) => {
     const seasonMissing = !parsed.seasonId || !seasons.some((s) => s.id === parsed.seasonId)
     const phase = parsed.seasonId && parsed.phaseNumber !== null
       ? phases.find((p) => p.seasonId === parsed.seasonId && p.name === `Phase ${parsed.phaseNumber}`)
@@ -88,7 +88,7 @@ export function ImportScheduleDocumentModal({
     }
 
     updateEntry(id, {
-      status: 'ready', parsed, seasonMissing, divisionChoice, groupChoice, mismatchWarning,
+      status: 'ready', parsed, extractedLines, seasonMissing, divisionChoice, groupChoice, mismatchWarning,
     })
   }, [seasons, phases, divisions, groups, lockedGroupId])
 
@@ -116,7 +116,7 @@ export function ImportScheduleDocumentModal({
           })
           return
         }
-        resolveEntry(id, parsed)
+        resolveEntry(id, parsed, lines)
       } catch {
         updateEntry(id, { status: 'error', errorMessage: 'Impossible de lire ce fichier.' })
       }
@@ -368,6 +368,14 @@ export function ImportScheduleDocumentModal({
                             <ul className="mt-1 list-disc pl-4">
                               {p.warnings.map((w, i) => <li key={i}>{w}</li>)}
                             </ul>
+                          </details>
+                        )}
+                        {entry.extractedLines && entry.extractedLines.length > 0 && (
+                          <details className="text-xs text-slate-400">
+                            <summary className="cursor-pointer">Voir le texte extrait du document</summary>
+                            <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-slate-600">
+                              {entry.extractedLines.join('\n')}
+                            </pre>
                           </details>
                         )}
                       </div>
