@@ -1,7 +1,6 @@
 import type { ComponentProps } from 'react'
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
 import { TabBar } from '@/components/TabBar'
 
@@ -15,9 +14,6 @@ function tabIcon(name: IconName) {
 }
 
 export default function TabLayout() {
-  const { user } = useAuth()
-  const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
-
   return (
     <Tabs
       backBehavior="history"
@@ -43,15 +39,6 @@ export default function TabLayout() {
       <Tabs.Screen
         name="joueurs"
         options={{ title: 'Joueurs', headerShown: false, tabBarIcon: tabIcon('person-outline') }}
-      />
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Admin',
-          headerShown: false,
-          tabBarIcon: tabIcon('settings-outline'),
-          href: isAdmin ? undefined : null,
-        }}
       />
       <Tabs.Screen
         name="compte"
