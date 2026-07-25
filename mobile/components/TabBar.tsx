@@ -22,7 +22,6 @@ function pathToTab(path: string, hasPlayerId: boolean): string {
   if (path.startsWith('/journees')) return 'journees'
   if (path.startsWith('/equipes')) return 'equipes'
   if (path.startsWith('/joueurs')) return 'joueurs'
-  if (path.startsWith('/admin')) return 'admin'
   if (path.startsWith('/compte')) return 'compte'
   return 'index' // Accueil
 }
@@ -37,7 +36,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
         // Skip hidden tabs — expo-router turns href:null into display:'none'
-        // (covers the (detail) stack and the admin tab for non-admins).
+        // (covers the (detail) stack).
         const itemStyle = options.tabBarItemStyle as { display?: string } | undefined
         if (itemStyle?.display === 'none') return null
 

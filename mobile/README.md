@@ -56,12 +56,11 @@ mobile/
 │   ├── _layout.tsx          # Root layout — DataProvider + AuthProvider + auth guard
 │   ├── login.tsx            # User selector (mock auth, matches web)
 │   └── (tabs)/
-│       ├── _layout.tsx      # Bottom tab bar (role-aware)
+│       ├── _layout.tsx      # Bottom tab bar
 │       ├── index.tsx        # Accueil
 │       ├── journees/        # Match days list + game detail (availability + selection)
 │       ├── equipes/         # Teams list + team detail
 │       ├── joueurs/         # Players list + player detail
-│       └── admin/           # Admin-only: clubs, teams, players management
 ├── contexts/
 │   ├── AuthContext.tsx      # Auth (AsyncStorage — mirrors web localStorage auth)
 │   └── DataContext.tsx      # Data fetching from /api/data

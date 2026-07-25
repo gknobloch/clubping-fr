@@ -13,6 +13,11 @@ export type TeamPhaseEntry = {
   games: GameWithMatchDay[]
 }
 
+type TeamPhaseEntriesOptions = {
+  /** Include phases whose schedule has not been published yet. */
+  includeEmpty?: boolean
+}
+
 // A logical team (a club's "Équipe N") spans several phases as distinct team
 // records. This collapses them back into one chronological list of phases the
 // team has actually played in — shared by the team detail screen (links) and
@@ -23,6 +28,7 @@ export function teamPhaseEntries(
   phases: Phase[],
   matchDays: MatchDay[],
   games: Game[],
+  { includeEmpty = false }: TeamPhaseEntriesOptions = {},
 ): TeamPhaseEntry[] {
   return teams
     .filter((t) => t.clubId === team.clubId && t.number === team.number)
@@ -46,7 +52,7 @@ export function teamPhaseEntries(
         games: phaseGames,
       }
     })
-    .filter((e) => e.games.length > 0)
+    .filter((e) => includeEmpty || e.games.length > 0)
     // Active phase first, then most-recent label first (lexicographic desc
     // works for "Saison 2025/2026 …").
     .sort((a, b) => {

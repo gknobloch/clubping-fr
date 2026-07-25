@@ -51,8 +51,8 @@ client IDs** (one per platform you ship):
 | Platform | Client type | Extra config |
 | --- | --- | --- |
 | Web | "Web application" | Authorized JavaScript origins: your web origin(s), e.g. `http://localhost:8788`, `https://ping-pong-club.pages.dev` |
-| iOS | "iOS" | Bundle ID `com.ppclub.app` |
-| Android | "Android" | Package `com.ppclub.app` + SHA-1 |
+| iOS | "iOS" | Bundle ID `fr.pingclub.app` |
+| Android | "Android" | Package `fr.pingclub.app` + SHA-1 |
 
 Then place the ids:
 
@@ -68,20 +68,20 @@ Then place the ids:
 
 In the [Apple Developer](https://developer.apple.com/account/resources) portal:
 
-1. **App ID** `com.ppclub.app` → enable the *Sign In with Apple* capability
+1. **App ID** `fr.pingclub.app` → enable the *Sign In with Apple* capability
    (used by the native iOS app; its id_token `aud` is the **bundle id**).
-2. **Service ID** (Identifiers → Services IDs), e.g. `com.ppclub.web` →
+2. **Service ID** (Identifiers → Services IDs), e.g. `fr.pingclub.web` →
    enable Sign In with Apple, and add your web domain + **Return URL**
    (`https://<your-domain>/login`). This is the **web** client id.
 3. (No key needed — we only verify the id_token, never exchange the code.)
 
 Then place the values:
 
-- **Web** → `VITE_APPLE_CLIENT_ID` = the **Service ID** (`com.ppclub.web`),
+- **Web** → `VITE_APPLE_CLIENT_ID` = the **Service ID** (`fr.pingclub.web`),
   `VITE_APPLE_REDIRECT_URI` = the Return URL (defaults to `${origin}/login`).
 - **Native iOS** → nothing to set; it uses the app bundle id automatically.
 - **Backend** → `APPLE_CLIENT_IDS` = **comma-separated**: the Service ID **and**
-  the bundle id `com.ppclub.app` (web and native tokens carry different `aud`).
+  the bundle id `fr.pingclub.app` (web and native tokens carry different `aud`).
 
 ---
 

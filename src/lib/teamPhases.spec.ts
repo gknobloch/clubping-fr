@@ -66,6 +66,18 @@ describe('teamPhaseEntries', () => {
     expect(entries).toEqual([])
   })
 
+  it('includes phases with no games when requested', () => {
+    const teams = [makeTeam({ id: 'team-1', clubId: 'club-1', number: 1, phaseId: 'phase-1', groupId: 'group-1' })]
+    const phases = [makePhase({ id: 'phase-1', displayName: '2026/2027 Phase 1', status: 'active' })]
+
+    const entries = teamPhaseEntries(
+      { clubId: 'club-1', number: 1 }, teams, phases, [], [], { includeEmpty: true },
+    )
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ teamId: 'team-1', phaseId: 'phase-1', games: [] })
+  })
+
   it('only counts games whose match-day is in the team-record\'s own group', () => {
     const teams = [makeTeam({ id: 'team-1', clubId: 'club-1', number: 1, phaseId: 'phase-1', groupId: 'group-1' })]
     const phases = [makePhase({ id: 'phase-1', displayName: '2025/2026 Phase 1' })]
