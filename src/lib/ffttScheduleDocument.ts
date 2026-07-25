@@ -69,10 +69,21 @@ const DAY_RE_SRC = DAY_NAMES.join('|')
 // OCR pass read "... ESTT 1' contre ..." and "... PPA 1. contre ..." for
 // plain "1" — the apostrophe/period isn't part of the number, just noise
 // tesseract occasionally appends to an isolated digit.
-const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(\\d{1,2})[.,']?\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
+//
+// They also tolerate an isolated "I", "l" or "|" standing in for the digit
+// "1": a real OCR pass read "... contre RIXHEIM PPA I -" for plain "1" —
+// those characters are visually near-identical to "1" in most fonts, a
+// classic OCR confusion. normalizeTeamNumber() below converts them back.
+const TEAM_NUMBER_RE_SRC = '(?:\\d{1,2}|[Il|])'
+
+function normalizeTeamNumber(raw: string): number {
+  return /^[il|]$/i.test(raw) ? 1 : Number(raw)
+}
+
+const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
 const JOURNEE_RE = /^Journ[ée]e\s+(\d+)\s*:\s*(.+)$/i
 const MATCH_RE = new RegExp(
-  `^(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(.+?)\\s+(\\d{1,2})[.,']?\\s+contre\\s+(.+?)\\s+(\\d{1,2})[.,']?\\s+(.+)$`, 'i',
+  `^(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+contre\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(.+)$`, 'i',
 )
 const RANGE_DATE_RE = /^du\s+(.+?)\s+au\s+(.+)$/i
 const FIXED_DATE_RE = /^(\d{1,2})\s+(\S+)\s+(\d{4})$/
@@ -196,7 +207,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
     teams.push({
       rank: Number(m[1]),
       name: m[2].trim(),
-      number: Number(m[3]),
+      number: normalizeTeamNumber(m[3]),
       day: m[4],
       time: normalizeTime(m[5]),
       affiliationNumber,
@@ -234,9 +245,9 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
         day: mm[1],
         time: normalizeTime(mm[2]),
         homeName: mm[3].trim(),
-        homeNumber: Number(mm[4]),
+        homeNumber: normalizeTeamNumber(mm[4]),
         awayName: mm[5].trim(),
-        awayNumber: Number(mm[6]),
+        awayNumber: normalizeTeamNumber(mm[6]),
         score: mm[7].trim(),
       })
     }

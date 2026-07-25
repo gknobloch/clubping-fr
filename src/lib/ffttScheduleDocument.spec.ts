@@ -174,6 +174,29 @@ describe('parseScheduleDocumentLines', () => {
       score: '-',
     }])
   })
+
+  // A real OCR pass misread an isolated "1" as the visually near-identical
+  // letter "I" ("... contre RIXHEIM PPA I -" for plain "1"), a classic OCR
+  // confusion between 1/I/l.
+  it('parses a team number OCR-misread as the letter "I" instead of the digit "1"', () => {
+    const lines = [
+      'CHAMPIONNAT GRAND EST ELITE Poule 3',
+      '1ère phase 2026-2027',
+      '1 ILLZACH TTSJB 2 Samedi 16h 06680091',
+      '2 RIXHEIM PPA I Samedi 16h 06680011',
+      'Journée 1 : 19 septembre 2026',
+      'Samedi 16h ILLZACH TTSJB 2 contre RIXHEIM PPA I -',
+    ]
+    const result = parseScheduleDocumentLines(lines)
+    if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
+    expect(result.teams[1]).toMatchObject({ name: 'RIXHEIM PPA', number: 1 })
+    expect(result.journees[0].matches).toEqual([{
+      day: 'Samedi', time: '16h00',
+      homeName: 'ILLZACH TTSJB', homeNumber: 2,
+      awayName: 'RIXHEIM PPA', awayNumber: 1,
+      score: '-',
+    }])
+  })
 })
 
 describe('AFFILIATION_NUMBER_RE', () => {
