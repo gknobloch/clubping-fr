@@ -10,13 +10,23 @@
 // the import-from-file modal and a document needs OCR — this keeps it (and
 // its WASM core) out of the app's main bundle entirely.
 
-// FFTT's own export renders the "... Poule N" / "1ère phase ..." title as a
-// shaded gray banner — a low-contrast band that's a classic OCR failure mode
-// even on an otherwise crisp screenshot/photo — and phone photos are often
-// lower-resolution than OCR wants. Grayscale + contrast-stretch and a floor
-// on resolution before recognition measurably help both cases; this is
-// deliberately simple (no perspective correction, no deskew) rather than a
-// full document-scanner pipeline.
+// FFTT's own export renders the "... Poule N" / "1ère phase ..." title inside
+// a shaded, bordered box near the top of the page — a low-contrast band
+// that's a classic OCR failure mode even on an otherwise crisp
+// screenshot/photo — and phone photos are often lower-resolution than OCR
+// wants. Grayscale + contrast-stretch and a floor on resolution before
+// recognition measurably help both cases; this is deliberately simple (no
+// perspective correction, no deskew) rather than a full document-scanner
+// pipeline.
+//
+// The stretch is centered on the middle gray (128), not a fixed cutoff: two
+// grays that are already on the same side of a fixed cutoff (plausible for
+// dark text on a not-too-different gray banner background) would get pushed
+// by the same fixed amount and stay just as hard to tell apart — a stretch
+// around the midpoint always increases the gap between two different grays,
+// whichever side of the midpoint they start on.
+const CONTRAST_FACTOR = 1.6
+
 async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
   const bitmap = await createImageBitmap(file)
   const scale = bitmap.width < 1200 ? 1200 / bitmap.width : 1
@@ -30,21 +40,45 @@ async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
   const d = imageData.data
   for (let i = 0; i < d.length; i += 4) {
     const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-    const contrasted = gray < 180 ? Math.max(0, gray - 40) : Math.min(255, gray + 40)
+    const contrasted = Math.min(255, Math.max(0, (gray - 128) * CONTRAST_FACTOR + 128))
     d[i] = d[i + 1] = d[i + 2] = contrasted
   }
   ctx.putImageData(imageData, 0, 0)
   return canvas
 }
 
+/** Crop a canvas to its top `fraction` (0..1), by height. */
+function topStrip(canvas: HTMLCanvasElement, fraction: number): HTMLCanvasElement {
+  const strip = document.createElement('canvas')
+  strip.width = canvas.width
+  strip.height = Math.round(canvas.height * fraction)
+  strip.getContext('2d')!.drawImage(canvas, 0, 0)
+  return strip
+}
+
 /** Extract text lines from an image file (or a rasterized PDF page) via OCR. */
 export async function extractOcrScheduleLines(file: File | Blob): Promise<string[]> {
-  const { createWorker } = await import('tesseract.js')
+  const { createWorker, PSM } = await import('tesseract.js')
   const worker = await createWorker('fra')
   try {
     const canvas = await preprocessForOcr(file)
     const { data } = await worker.recognize(canvas)
-    return data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    const lines = data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    if (lines.some((l) => /Poule/i.test(l))) return lines
+
+    // Tesseract's automatic layout analysis (the default PSM.AUTO) can
+    // classify a bordered, shaded box as a non-text graphic and drop it
+    // entirely rather than misreading it — confirmed against a real upload
+    // whose extracted text started exactly at the roster table, with the
+    // title box simply absent, not garbled. Re-OCR just the top of the page
+    // (where that title box sits) with a page-segmentation mode that makes
+    // no layout assumptions, which is far less likely to discard it; prepend
+    // whatever it finds rather than trusting it over the already-good body
+    // read above.
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
+    const header = await worker.recognize(topStrip(canvas, 0.15))
+    const headerLines = header.data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    return [...headerLines, ...lines]
   } finally {
     await worker.terminate()
   }
