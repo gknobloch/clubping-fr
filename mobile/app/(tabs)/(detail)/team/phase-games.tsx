@@ -41,9 +41,14 @@ export default function PhaseGamesScreen() {
     if (baseTeam) navigation.setOptions({ title: getTeamName(baseTeam, clubs) })
   }, [baseTeam, clubs, navigation])
 
-  // Phases this team has played, chronological for the switcher.
+  // Include the current phase even before its schedule is published, so a
+  // team detail opened for that phase does not fall back to an older season.
   const entries = useMemo(
-    () => (baseTeam ? teamPhaseEntries(baseTeam, teams, phases, matchDays, games) : []),
+    () => (
+      baseTeam
+        ? teamPhaseEntries(baseTeam, teams, phases, matchDays, games, { includeEmpty: true })
+        : []
+    ),
     [baseTeam, teams, phases, matchDays, games],
   )
   const ordered = useMemo(
