@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ppclub.app",
+      "bundleIdentifier": "fr.pingclub.app",
       "usesAppleSignIn": true
     },
     "android": {
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e293b"
       },
-      "package": "com.ppclub.app"
+      "package": "fr.pingclub.app"
     },
     "web": {
       "bundler": "metro",
