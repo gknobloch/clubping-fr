@@ -46,7 +46,7 @@ import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
-import { divisionPoolsQuery, parseDivisionPools, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
+import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
 import { dafunkerResultsUrl, parseDafunkerResultsXml } from '@/lib/ffttGamesXml'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
@@ -670,28 +670,58 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   // --- FFTT games import (#231, browser-side transport like the teams) ---
-  // The browser fetches each requested group's division schedule from
-  // dafunker (FFTT/dafunker block Cloudflare egress) and hands the parsed
-  // payload to our API. The payload of the last successful preview is kept
-  // per group set so the import sends exactly what the admin previewed.
+  // The browser fetches each requested group's schedule from dafunker
+  // (FFTT/dafunker block Cloudflare egress) and hands the parsed payload to
+  // our API. The payload of the last successful preview is kept per group
+  // set so the import sends exactly what the admin previewed.
+  //
+  // dafunker's xml_result_equ.php returns one pool at a time: `cx_poule`
+  // must be that pool's dafunker-space id, which only aligns with local
+  // Group.id for groups from the original teams-import flow (#229) — other
+  // groups' ids live in a different space (see selectPoolForGroup in
+  // ffttGames.ts). So this is two-tier: try `cx_poule=<Group.id>` per group
+  // first (one request each, correct whenever the id happens to align —
+  // dafunker validates cx_poule against the division, so a wrong guess just
+  // comes back empty, never another pool's data); then, for any division
+  // where a requested group still has no matching pool, fall back to
+  // apiv2's whole-division fetch and let selectPoolForGroup reconcile it.
   const gamesPayloadRef = useRef<Record<string, Array<{ divisionId: string; pools: FfttPool[] }>>>({})
 
   const fetchGamesPreview = useCallback(async (groupIds: string[]): Promise<FfttGamesPreview | null> => {
     try {
-      // Distinct FFTT-aligned (numeric) division ids of the requested groups;
+      // Requested groups with an FFTT-aligned (numeric) division id;
       // non-numeric ones predate the FFTT imports and can't be queried.
-      const divisionIds = [...new Set(
-        groupIds
-          .map((gid) => groups.find((g) => g.id === gid)?.divisionId)
-          .filter((id): id is string => !!id && /^\d+$/.test(id)),
-      )]
-      const fetched = await Promise.all(divisionIds.map(async (divisionId) => {
-        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(divisionId))
-        return xml === null ? null : { divisionId, pools: parseDafunkerResultsXml(xml) }
+      const requested = groupIds
+        .map((gid) => groups.find((g) => g.id === gid))
+        .filter((g): g is Group => !!g && /^\d+$/.test(g.divisionId))
+      const divisionIds = [...new Set(requested.map((g) => g.divisionId))]
+
+      const byDivision = new Map<string, FfttPool[]>()
+      const addPools = (divisionId: string, pools: FfttPool[]) => {
+        if (pools.length === 0) return
+        byDivision.set(divisionId, [...(byDivision.get(divisionId) ?? []), ...pools])
+      }
+
+      // Tier 1: direct per-group guess.
+      const direct = await Promise.all(requested.map(async (g) => {
+        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, g.id))
+        return xml === null ? null : { divisionId: g.divisionId, pools: parseDafunkerResultsXml(xml) }
       }))
-      const pools = fetched.filter((f): f is { divisionId: string; pools: FfttPool[] } => f !== null)
-      // Every FFTT-aligned division unreachable → same as FFTT being down.
-      if (divisionIds.length > 0 && pools.length === 0) return null
+      for (const r of direct) if (r) addPools(r.divisionId, r.pools)
+
+      // Tier 2: apiv2 whole-division fallback for divisions still missing a
+      // pool for at least one of their requested groups.
+      const unresolvedDivisions = divisionIds.filter((divisionId) =>
+        requested.some((g) => g.divisionId === divisionId && !selectPoolForGroup(byDivision.get(divisionId) ?? [], g)))
+      const fallback = await Promise.all(unresolvedDivisions.map(async (divisionId) => {
+        const data = await ffttGraphqlFromBrowser<FfttDivisionPoolsData>(divisionPoolsQuery(divisionId))
+        return data === null ? null : { divisionId, pools: parseDivisionPools(data) }
+      }))
+      for (const r of fallback) if (r) addPools(r.divisionId, r.pools)
+
+      const pools = divisionIds.map((divisionId) => ({ divisionId, pools: byDivision.get(divisionId) ?? [] }))
+      // Every FFTT-aligned division came back empty → same as FFTT being down.
+      if (divisionIds.length > 0 && pools.every((p) => p.pools.length === 0)) return null
 
       const r = await fetch('/api/fftt/games-preview', {
         method: 'POST',

@@ -23,12 +23,21 @@ const RESULTS_XML =
   '</liste>'
 
 describe('dafunkerResultsUrl', () => {
-  it('builds the whole-division results URL, sanitizing the division id', () => {
+  it('builds the division results URL, sanitizing the division id', () => {
     expect(dafunkerResultsUrl('234461')).toBe(
       'https://fftt.dafunker.com/v1/proxy/xml_result_equ.php?force=1&D1=234461',
     )
     expect(dafunkerResultsUrl('234a461x')).toBe(
       'https://fftt.dafunker.com/v1/proxy/xml_result_equ.php?force=1&D1=234461',
+    )
+  })
+
+  it('appends a sanitized cx_poule when targeting a specific pool', () => {
+    expect(dafunkerResultsUrl('234461', '1502306')).toBe(
+      'https://fftt.dafunker.com/v1/proxy/xml_result_equ.php?force=1&D1=234461&cx_poule=1502306',
+    )
+    expect(dafunkerResultsUrl('234461', '150a2306x')).toBe(
+      'https://fftt.dafunker.com/v1/proxy/xml_result_equ.php?force=1&D1=234461&cx_poule=1502306',
     )
   })
 })
