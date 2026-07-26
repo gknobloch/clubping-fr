@@ -47,7 +47,9 @@ import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhase
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
-import { dafunkerResultsUrl, parseDafunkerResultsXml } from '@/lib/ffttGamesXml'
+import {
+  dafunkerClubTeamsUrl, dafunkerResultsUrl, parseDafunkerClubTeamsXml, parseDafunkerResultsXml,
+} from '@/lib/ffttGamesXml'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
 // older than what becomes active, back to 'upcoming' when newer (rollback).
@@ -679,12 +681,15 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   // must be that pool's dafunker-space id, which only aligns with local
   // Group.id for groups from the original teams-import flow (#229) — other
   // groups' ids live in a different space (see selectPoolForGroup in
-  // ffttGames.ts). So this is two-tier: try `cx_poule=<Group.id>` per group
-  // first (one request each, correct whenever the id happens to align —
-  // dafunker validates cx_poule against the division, so a wrong guess just
-  // comes back empty, never another pool's data); then, for any division
-  // where a requested group still has no matching pool, fall back to
-  // apiv2's whole-division fetch and let selectPoolForGroup reconcile it.
+  // ffttGames.ts). Resolving it is therefore three-tier:
+  //  0. Authoritative lookup: xml_equipe.php lists a club's teams together
+  //     with their real (D1, cx_poule) — query it for the affiliation number
+  //     of any of the group's own teams' clubs, no guessing involved.
+  //  1. Direct guess: try `cx_poule=<Group.id>` (correct for #229-origin
+  //     groups; dafunker validates cx_poule against the division, so a wrong
+  //     guess just comes back empty, never another pool's data).
+  //  2. apiv2 whole-division fallback, reconciled via selectPoolForGroup, for
+  //     whatever tiers 0-1 still didn't resolve.
   const gamesPayloadRef = useRef<Record<string, Array<{ divisionId: string; pools: FfttPool[] }>>>({})
 
   const fetchGamesPreview = useCallback(async (groupIds: string[]): Promise<FfttGamesPreview | null> => {
@@ -701,9 +706,30 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         if (pools.length === 0) return
         byDivision.set(divisionId, [...(byDivision.get(divisionId) ?? []), ...pools])
       }
+      const isResolved = (g: Group) => !!selectPoolForGroup(byDivision.get(g.divisionId) ?? [], g)
 
-      // Tier 1: direct per-group guess.
-      const direct = await Promise.all(requested.map(async (g) => {
+      // Tier 0: look up (D1, cx_poule) via an affiliation number from one of
+      // the group's own teams' clubs.
+      const affiliationNumbers = [...new Set(
+        requested.flatMap((g) => teams
+          .filter((t) => t.groupId === g.id)
+          .map((t) => clubs.find((c) => c.id === t.clubId)?.affiliationNumber)
+          .filter((n): n is string => !!n)),
+      )]
+      const clubTeamPools = (await Promise.all(affiliationNumbers.map(async (aff) => {
+        const xml = await fetchTextFromBrowser(dafunkerClubTeamsUrl(aff))
+        return xml === null ? [] : parseDafunkerClubTeamsXml(xml)
+      }))).flat()
+      const lookedUp = await Promise.all(requested.map(async (g) => {
+        const match = clubTeamPools.find((p) => p.divisionId === g.divisionId && p.poolNumber === g.number)
+        if (!match) return null
+        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, match.cxPoule))
+        return xml === null ? null : { divisionId: g.divisionId, pools: parseDafunkerResultsXml(xml) }
+      }))
+      for (const r of lookedUp) if (r) addPools(r.divisionId, r.pools)
+
+      // Tier 1: direct per-group guess for whatever tier 0 didn't resolve.
+      const direct = await Promise.all(requested.filter((g) => !isResolved(g)).map(async (g) => {
         const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, g.id))
         return xml === null ? null : { divisionId: g.divisionId, pools: parseDafunkerResultsXml(xml) }
       }))
@@ -712,7 +738,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       // Tier 2: apiv2 whole-division fallback for divisions still missing a
       // pool for at least one of their requested groups.
       const unresolvedDivisions = divisionIds.filter((divisionId) =>
-        requested.some((g) => g.divisionId === divisionId && !selectPoolForGroup(byDivision.get(divisionId) ?? [], g)))
+        requested.some((g) => g.divisionId === divisionId && !isResolved(g)))
       const fallback = await Promise.all(unresolvedDivisions.map(async (divisionId) => {
         const data = await ffttGraphqlFromBrowser<FfttDivisionPoolsData>(divisionPoolsQuery(divisionId))
         return data === null ? null : { divisionId, pools: parseDivisionPools(data) }
@@ -734,7 +760,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     } catch {
       return null
     }
-  }, [groups])
+  }, [groups, teams, clubs])
 
   const importFfttGames = useCallback(async (groupIds: string[]): Promise<FfttGamesImportResult | null> => {
     try {

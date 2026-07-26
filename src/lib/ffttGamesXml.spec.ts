@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { dafunkerResultsUrl, parseDafunkerResultsXml } from './ffttGamesXml'
+import {
+  dafunkerClubTeamsUrl, dafunkerResultsUrl, parseDafunkerClubTeamsXml, parseDafunkerResultsXml,
+} from './ffttGamesXml'
+
+// Real response captured from xml_equipe.php?force=1&numclu=06680011 (Rixheim
+// PPA), trimmed to two teams.
+const CLUB_TEAMS_XML =
+  '<?xml version="1.0" encoding="ISO-8859-1"?>' +
+  '<liste>' +
+  '<equipe><idepr>18368</idepr><libepr>FED_Championnat de France par Equipes Masculin</libepr>' +
+  '<idequipe>5458</idequipe><libequipe>RIXHEIM PPA  1 - Phase 1</libequipe>' +
+  '<libdivision>GE Elite P1 Poule 3</libdivision>' +
+  '<liendivision><![CDATA[cx_poule=1502291&D1=234142&organisme_pere=14]]></liendivision></equipe>' +
+  '<equipe><idepr>18368</idepr><libepr>FED_Championnat de France par Equipes Masculin</libepr>' +
+  '<idequipe>3354</idequipe><libequipe>RIXHEIM PPA  2 - Phase 1</libequipe>' +
+  '<libdivision>GE 2 Phase 1 Poule 9</libdivision>' +
+  '<liendivision><![CDATA[cx_poule=1502306&D1=234461&organisme_pere=14]]></liendivision></equipe>' +
+  '</liste>'
 
 // Real tour entries captured from xml_result_equ.php?force=1&D1=234461
 // (Poule 1), plus a second poule synthesized from the CDATA payload shared
@@ -92,5 +109,41 @@ describe('parseDafunkerResultsXml', () => {
     const xml = RESULTS_XML.replace('Poule 2 - tour n°1 du 20/09/2026', 'Journée annulée')
     const pools = parseDafunkerResultsXml(xml)
     expect(pools.map((p) => p.poolNumber)).toEqual([1])
+  })
+})
+
+describe('dafunkerClubTeamsUrl', () => {
+  it('builds the club-teams URL, sanitizing the affiliation number', () => {
+    expect(dafunkerClubTeamsUrl('06680011')).toBe(
+      'https://fftt.dafunker.com/v1/proxy/xml_equipe.php?force=1&numclu=06680011',
+    )
+    expect(dafunkerClubTeamsUrl('066/8001!1')).toBe(
+      'https://fftt.dafunker.com/v1/proxy/xml_equipe.php?force=1&numclu=06680011',
+    )
+  })
+})
+
+describe('parseDafunkerClubTeamsXml', () => {
+  it('resolves each team to its (D1, cx_poule, poule number)', () => {
+    expect(parseDafunkerClubTeamsXml(CLUB_TEAMS_XML)).toEqual([
+      { divisionId: '234142', cxPoule: '1502291', poolNumber: 3 },
+      { divisionId: '234461', cxPoule: '1502306', poolNumber: 9 },
+    ])
+  })
+
+  it('returns an empty array for an unknown club (empty <liste/>)', () => {
+    expect(parseDafunkerClubTeamsXml('<?xml version="1.0" encoding="ISO-8859-1"?><liste/>')).toEqual([])
+  })
+
+  it('returns an empty array on malformed XML', () => {
+    expect(parseDafunkerClubTeamsXml('not xml at all <<<')).toEqual([])
+  })
+
+  it('skips an equipe entry with no parseable division/cx_poule link', () => {
+    const xml = CLUB_TEAMS_XML.replace(
+      '<liendivision><![CDATA[cx_poule=1502291&D1=234142&organisme_pere=14]]></liendivision>',
+      '<liendivision><![CDATA[]]></liendivision>',
+    )
+    expect(parseDafunkerClubTeamsXml(xml)).toEqual([{ divisionId: '234461', cxPoule: '1502306', poolNumber: 9 }])
   })
 })
