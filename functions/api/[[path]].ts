@@ -1381,6 +1381,46 @@ function normalizeTeamNameKey(name: string): string {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
+// Standard edit distance (insert/delete/substitute), used only as the
+// fallback below when the exact normalized key misses.
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  const dp = new Array(b.length + 1)
+  for (let j = 0; j <= b.length; j++) dp[j] = j
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const temp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j - 1], dp[j])
+      prev = temp
+    }
+  }
+  return dp[b.length]
+}
+
+// Confirmed against a real upload: the roster table and each journ\u00e9e's match
+// rows are read by separate OCR passes, and normalizeTeamNameKey only
+// absorbs spacing/punctuation drift between them \u2014 it can't fix an outright
+// wrong letter ("ILLZACH TTSIB" on the roster line vs "ILLZACH TTSJB" on
+// every single match line, an OCR I/J mix-up). When the exact key misses,
+// fall back to the closest roster name *with the same team number* by edit
+// distance \u2014 team number is a reliable, purely numeric anchor, so this only
+// ever resolves ambiguity between candidates that already agree on it, and
+// the distance cap keeps it to "one OCR slip", not "a different team".
+function closestRosterNameForNumber(
+  targetNormalized: string, candidates: Array<{ normalizedName: string; teamId: string }>,
+): string | null {
+  let best: { teamId: string; distance: number } | null = null
+  for (const cand of candidates) {
+    const distance = levenshtein(targetNormalized, cand.normalizedName)
+    if (!best || distance < best.distance) best = { teamId: cand.teamId, distance }
+  }
+  if (!best) return null
+  const maxAllowed = Math.max(1, Math.floor(targetNormalized.length * 0.2))
+  return best.distance <= maxAllowed ? best.teamId : null
+}
+
 app.post('/schedule-documents/import', async (c) => {
   const b = await c.req.json()
   const schedules = (Array.isArray(b.schedules) ? b.schedules.slice(0, 10) : [])
@@ -1500,8 +1540,11 @@ app.post('/schedule-documents/import', async (c) => {
 
     // Resolve every roster team once, keyed by (normalized name, number) for
     // the match join below — see normalizeTeamNameKey for why the key isn't
-    // the raw name.
+    // the raw name. rosterByNumber backs the closestRosterNameForNumber
+    // fallback when a match's own OCR reading of the name doesn't exactly
+    // match the roster's.
     const teamKeyToId = new Map<string, string>()
+    const rosterByNumber = new Map<number, Array<{ normalizedName: string; teamId: string }>>()
     for (const t of s.teams) {
       const side: FfttMatchTeam = {
         teamId: `doc-${t.affiliationNumber}-${t.number}`, teamName: t.name,
@@ -1518,9 +1561,19 @@ app.post('/schedule-documents/import', async (c) => {
         resolver.register(teamId, clubId, t.number, phaseId, side.teamId)
       }
       if (!group.teamIds.includes(teamId)) group.teamIds.push(teamId)
-      teamKeyToId.set(`${normalizeTeamNameKey(t.name)}|${t.number}`, teamId)
+      const normalizedName = normalizeTeamNameKey(t.name)
+      teamKeyToId.set(`${normalizedName}|${t.number}`, teamId)
+      if (!rosterByNumber.has(t.number)) rosterByNumber.set(t.number, [])
+      rosterByNumber.get(t.number)!.push({ normalizedName, teamId })
     }
     touchedGroups.set(groupId, group)
+
+    const resolveMatchTeamId = (name: string, number: number): string | null => {
+      const normalizedName = normalizeTeamNameKey(name)
+      const exact = teamKeyToId.get(`${normalizedName}|${number}`)
+      if (exact) return exact
+      return closestRosterNameForNumber(normalizedName, rosterByNumber.get(number) ?? [])
+    }
 
     for (const j of s.journees) {
       const mdKey = `${groupId}|${j.number}`
@@ -1531,8 +1584,8 @@ app.post('/schedule-documents/import', async (c) => {
         createdMatchDays.push({ id: md.id as string, groupId, number: j.number, date: j.date })
       }
       for (const m of j.matches) {
-        const homeId = teamKeyToId.get(`${normalizeTeamNameKey(m.homeName)}|${m.homeNumber}`)
-        const awayId = teamKeyToId.get(`${normalizeTeamNameKey(m.awayName)}|${m.awayNumber}`)
+        const homeId = resolveMatchTeamId(m.homeName, m.homeNumber)
+        const awayId = resolveMatchTeamId(m.awayName, m.awayNumber)
         // A team referenced in a match but absent from the roster table can't
         // be resolved to a club/affiliation — skip rather than guess, but
         // report exactly which side(s) and name/number: this used to fail
