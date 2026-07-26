@@ -90,11 +90,40 @@ describe('parseScheduleDocumentLines', () => {
     expect(result.journees).toHaveLength(3)
 
     const [j1, j2, j4] = result.journees
-    expect(j1).toMatchObject({ dateType: 'range', date: '2026-09-14', rangeEndDate: '2026-09-20' })
+    // The window itself starts on a Monday, but every journée's one match is
+    // on a Samedi — the stored date resolves to that Saturday within the
+    // window, not the window's (unplayed) first day. rangeEndDate keeps the
+    // raw window end regardless.
+    expect(j1).toMatchObject({ dateType: 'range', date: '2026-09-19', rangeEndDate: '2026-09-20' })
     // Abbreviated start month ("sept"), cross-month range: the start date's
     // year/month must come from the end date's month, not just its year.
-    expect(j2).toMatchObject({ dateType: 'range', date: '2026-09-28', rangeEndDate: '2026-10-04' })
-    expect(j4).toMatchObject({ number: 4, dateType: 'range', date: '2026-11-02', rangeEndDate: '2026-11-08' })
+    expect(j2).toMatchObject({ dateType: 'range', date: '2026-10-03', rangeEndDate: '2026-10-04' })
+    expect(j4).toMatchObject({ number: 4, dateType: 'range', date: '2026-11-07', rangeEndDate: '2026-11-08' })
+  })
+
+  // FFTT poules routinely mix home days within one journée (most teams play
+  // Samedi, but a team whose own home day is Dimanche, per its roster row,
+  // plays that journée's match on Dimanche instead) — the app can only store
+  // one date per journée, so the majority day wins rather than an arbitrary
+  // "first match seen" or the window's first day (often a day nobody plays).
+  it('resolves a range journée to the day most matches actually play on', () => {
+    const lines = [
+      'CHAMPIONNAT GRAND EST 3 Poule 12',
+      '1ère phase 2026-2027',
+      '1 BOOTZHEIM FCJ 2 Samedi 15h 06670183',
+      '2 THANN TTC 1 Dimanche 9h30 06680111',
+      '3 BARR TT 4 Samedi 16h 06670221',
+      '4 ROSENAU TT 3 Samedi 16h 06680125',
+      'Journée 1 : du 14 au 20 septembre 2026',
+      'Dimanche 9h30 THANN TTC 1 contre BOOTZHEIM FCJ 2 -',
+      'Samedi 16h BARR TT 4 contre ROSENAU TT 3 -',
+      'Samedi 16h ROSENAU TT 3 contre BARR TT 4 -',
+    ]
+    const result = parseScheduleDocumentLines(lines)
+    if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
+    // 2 of 3 matches are Samedi (2026-09-19) despite the lone Dimanche match
+    // (2026-09-20) appearing first in the document.
+    expect(result.journees[0]).toMatchObject({ date: '2026-09-19', rangeEndDate: '2026-09-20' })
   })
 
   it('flags a malformed affiliation number instead of silently trusting it', () => {

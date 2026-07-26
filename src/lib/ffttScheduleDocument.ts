@@ -123,6 +123,23 @@ function parseFrenchDate(day: number, monthLabel: string, year: number): string 
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+const DAY_INDEX: Record<string, number> = {
+  Dimanche: 0, Lundi: 1, Mardi: 2, Mercredi: 3, Jeudi: 4, Vendredi: 5, Samedi: 6,
+}
+
+/** The date within [startDate, endDate] (inclusive, YYYY-MM-DD) that falls on `dayName`, or null if none does. */
+function dateForDayInRange(startDate: string, endDate: string, dayName: string): string | null {
+  const target = DAY_INDEX[dayName]
+  if (target === undefined) return null
+  const end = new Date(`${endDate}T00:00:00Z`).getTime()
+  const d = new Date(`${startDate}T00:00:00Z`)
+  while (d.getTime() <= end) {
+    if (d.getUTCDay() === target) return d.toISOString().slice(0, 10)
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return null
+}
+
 function normalizeLine(s: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
@@ -257,6 +274,32 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
     }
   } else {
     warnings.push('Aucune journée détectée dans le document.')
+  }
+
+  // FFTT's own calendar sometimes only gives a week window for a journée
+  // ("du 14 au 20 septembre 2026") rather than one fixed date — each match's
+  // own day (Samedi, Lundi, ...) is that team's actual home day, echoed from
+  // the roster, and different teams within the same poule often play on
+  // different days (one team's home day can be a Sunday while the rest play
+  // Saturday). The app's MatchDay only carries a single date per journée, so
+  // once each match's real date is resolved from its own day within the
+  // window, the most common one becomes the journée's stored date — far
+  // closer to reality than the window's first day, which is very often a
+  // day nobody in the poule actually plays on.
+  for (const j of journees) {
+    if (j.dateType !== 'range' || !j.date || !j.rangeEndDate || j.matches.length === 0) continue
+    const resolved = j.matches
+      .map((m) => dateForDayInRange(j.date!, j.rangeEndDate!, m.day))
+      .filter((d): d is string => d !== null)
+    if (resolved.length === 0) continue
+    const counts = new Map<string, number>()
+    for (const d of resolved) counts.set(d, (counts.get(d) ?? 0) + 1)
+    let best = resolved[0]
+    let bestCount = 0
+    for (const [d, count] of counts) {
+      if (count > bestCount) { best = d; bestCount = count }
+    }
+    j.date = best
   }
 
   return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings }
