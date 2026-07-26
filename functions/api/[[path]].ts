@@ -2044,6 +2044,26 @@ app.delete('/groups/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// Reset (#270): delete every journée/match of a group — and their
+// availabilities/selections — without touching the group or its teams.
+// Mirrors the match-day cascade from the group delete above, minus the
+// group/team removal.
+app.delete('/groups/:id/games', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const matchDaysR = await db.prepare('SELECT id FROM match_days WHERE group_id = ?').bind(id).all()
+  for (const md of matchDaysR.results) {
+    const mdGamesR = await db.prepare('SELECT id FROM games WHERE match_day_id = ?').bind(md.id).all()
+    for (const g of mdGamesR.results) {
+      await db.prepare('DELETE FROM game_availabilities WHERE game_id = ?').bind(g.id).run()
+      await db.prepare('DELETE FROM game_selections WHERE game_id = ?').bind(g.id).run()
+    }
+    await db.prepare('DELETE FROM games WHERE match_day_id = ?').bind(md.id).run()
+  }
+  await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(id).run()
+  return c.json({ ok: true })
+})
+
 // --- Players ---
 // Players are users with is_player = 1 (see #105). These routes manage that row.
 app.post('/players', async (c) => {

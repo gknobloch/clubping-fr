@@ -17,7 +17,7 @@ export function GroupsPage() {
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
     groups: allGroups, divisions, phases, teams, clubs,
-    updateGroup, addGroup, archiveGroup, deleteGroup,
+    updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
 
@@ -147,6 +147,12 @@ export function GroupsPage() {
   const handleDelete = (group: Group) => {
     if (window.confirm(`Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
       deleteGroup(group.id)
+    }
+  }
+
+  const handleResetGames = (group: Group) => {
+    if (window.confirm(`Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`)) {
+      resetGroupGames(group.id)
     }
   }
 
@@ -298,6 +304,15 @@ export function GroupsPage() {
                         className="text-sm font-medium text-accent-600 hover:text-accent-800"
                       >
                         Depuis un fichier
+                      </button>
+                    )}
+                    {!group.isArchived && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetGames(group)}
+                        className="text-sm font-medium text-red-600 hover:text-red-800"
+                      >
+                        Réinitialiser les matchs
                       </button>
                     )}
                     {!group.isArchived && (

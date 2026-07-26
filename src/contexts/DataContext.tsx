@@ -329,6 +329,8 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   updateGroup: (id: string, patch: Partial<Group>) => void
   archiveGroup: (id: string) => void
   deleteGroup: (id: string) => void
+  /** Delete every journée/match (and their availabilities/selections) of a group — keeps the group and its teams (#270). */
+  resetGroupGames: (id: string) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
   archiveTeam: (id: string) => void
   deleteTeam: (id: string) => void
@@ -1176,6 +1178,23 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) api(`/groups/${id}`, { method: 'DELETE' })
   }, [persist, teams, matchDays, games])
 
+  // Same match-day/game/availability/selection cascade as deleteGroup above,
+  // minus the group and team removal (#270) — for starting a group's
+  // calendar over, e.g. after a bad FFTT/file import.
+  const resetGroupGames = useCallback((id: string) => {
+    const groupMatchDayIds = matchDays.filter((md) => md.groupId === id).map((md) => md.id)
+    const affectedGameIds = games.filter((g) => groupMatchDayIds.includes(g.matchDayId)).map((g) => g.id)
+    if (affectedGameIds.length > 0) {
+      setGames((prev) => prev.filter((g) => !affectedGameIds.includes(g.id)))
+      setGameAvailabilities((prev) => prev.filter((a) => !affectedGameIds.includes(a.gameId)))
+      setGameSelections((prev) => prev.filter((s) => !affectedGameIds.includes(s.gameId)))
+    }
+    if (groupMatchDayIds.length > 0) {
+      setMatchDays((prev) => prev.filter((md) => !groupMatchDayIds.includes(md.id)))
+    }
+    if (persist) api(`/groups/${id}/games`, { method: 'DELETE' })
+  }, [persist, matchDays, games])
+
   // --- Teams ---
   const updateTeam = useCallback((id: string, patch: Partial<Team>) => {
     setTeams((prev) => {
@@ -1495,6 +1514,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateGroup,
       archiveGroup,
       deleteGroup,
+      resetGroupGames,
       updateTeam,
       archiveTeam,
       deleteTeam,
@@ -1529,7 +1549,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, updateTeam, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       updatePlayer, addPlayer, setAvatar, removeAvatar,
