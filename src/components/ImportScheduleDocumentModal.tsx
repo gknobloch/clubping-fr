@@ -368,7 +368,7 @@ export function ImportScheduleDocumentModal({
                             const b = teamPreview(t, phase?.id)
                             return (
                               <span key={`${t.affiliationNumber}-${t.number}`} className={`rounded px-1.5 py-0.5 text-xs ${b.className}`} title={t.name}>
-                                {t.name} · {b.label}
+                                {t.name} n° {t.number} · {b.label}
                               </span>
                             )
                           })}
