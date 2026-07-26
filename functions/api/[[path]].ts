@@ -1437,6 +1437,7 @@ app.post('/schedule-documents/import', async (c) => {
   const createdMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
   const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string }> = []
   const skippedSchedules: Array<{ index: number; reason: string }> = []
+  const skippedMatchDetails: Array<{ side: 'home' | 'away'; name: string; number: number }> = []
   let existingGames = 0
   let skippedMatches = 0
 
@@ -1534,11 +1535,18 @@ app.post('/schedule-documents/import', async (c) => {
         const awayId = teamKeyToId.get(`${normalizeTeamNameKey(m.awayName)}|${m.awayNumber}`)
         // A team referenced in a match but absent from the roster table can't
         // be resolved to a club/affiliation — skip rather than guess, but
-        // count it: this used to fail silently, which is how a single
-        // OCR-garbled team name in one journée's line quietly dropped that
-        // match with zero visibility even though everything else about the
-        // import looked fine.
-        if (!homeId || !awayId) { skippedMatches++; continue }
+        // report exactly which side(s) and name/number: this used to fail
+        // silently (or just as an opaque count), which made a single
+        // OCR-garbled team name impossible to track down without re-reading
+        // the raw OCR dump by hand.
+        if (!homeId || !awayId) {
+          skippedMatches++
+          if (skippedMatchDetails.length < 30) {
+            if (!homeId) skippedMatchDetails.push({ side: 'home', name: m.homeName, number: m.homeNumber })
+            if (!awayId) skippedMatchDetails.push({ side: 'away', name: m.awayName, number: m.awayNumber })
+          }
+          continue
+        }
         const mdId = md.id as string
         const pairings = pairingsByMatchDay.get(mdId)
         // Dedup by pairing-on-journée, not by game id: unlike the FFTT games
@@ -1607,6 +1615,7 @@ app.post('/schedule-documents/import', async (c) => {
     skippedSchedules,
     existingGames,
     skippedMatches,
+    skippedMatchDetails,
   })
 })
 

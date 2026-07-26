@@ -234,9 +234,21 @@ export function ImportScheduleDocumentModal({
                 </p>
               )}
               {imported.skippedMatches > 0 && (
-                <p className="text-sm text-amber-700">
-                  {plural(imported.skippedMatches, 'match')} non importé{imported.skippedMatches > 1 ? 's' : ''} : équipe non reconnue (relisez le document, ou réessayez l’import).
-                </p>
+                <div className="text-sm text-amber-700">
+                  <p>
+                    {plural(imported.skippedMatches, 'match')} non importé{imported.skippedMatches > 1 ? 's' : ''} : équipe non reconnue.
+                  </p>
+                  {imported.skippedMatchDetails.length > 0 && (
+                    <details className="mt-1 text-xs">
+                      <summary className="cursor-pointer">Voir le détail</summary>
+                      <ul className="mt-1 list-disc pl-4">
+                        {imported.skippedMatchDetails.map((d, i) => (
+                          <li key={i}>{d.side === 'home' ? 'Domicile' : 'Extérieur'} : « {d.name} » n° {d.number}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
               )}
             </div>
           )}
