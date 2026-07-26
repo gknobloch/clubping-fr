@@ -82,8 +82,12 @@ function normalizeTeamNumber(raw: string): number {
 
 const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
 const JOURNEE_RE = /^Journ[ée]e\s+(\d+)\s*:\s*(.+)$/i
+// A real OCR pass inserted one or two stray standalone underscores between
+// the home team's number and "contre" ("... BARR TT 4 _ contre ...", "...
+// BARR TT 4 __ contre ...") — noise from a faint table rule or vertical
+// separator, not part of either token.
 const MATCH_RE = new RegExp(
-  `^(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+contre\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(.+)$`, 'i',
+  `^(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(?:_+\\s+)?contre\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(.+)$`, 'i',
 )
 const RANGE_DATE_RE = /^du\s+(.+?)\s+au\s+(.+)$/i
 const FIXED_DATE_RE = /^(\d{1,2})\s+(\S+)\s+(\d{4})$/

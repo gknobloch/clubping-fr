@@ -251,6 +251,8 @@ export interface ScheduleDocImportResult {
   createdGames: Game[]
   skippedSchedules: Array<{ index: number; reason: string }>
   existingGames: number
+  /** Matches whose home/away team name couldn't be joined back to a roster entry (OCR variance between the roster line and that match's line) — not imported. */
+  skippedMatches: number
 }
 
 // Read the current session token (set by AuthContext) for the Authorization

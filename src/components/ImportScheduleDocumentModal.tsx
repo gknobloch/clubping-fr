@@ -233,6 +233,11 @@ export function ImportScheduleDocumentModal({
                   {plural(imported.skippedSchedules.length, 'fichier')} ignoré{imported.skippedSchedules.length > 1 ? 's' : ''} (saison ou division introuvable).
                 </p>
               )}
+              {imported.skippedMatches > 0 && (
+                <p className="text-sm text-amber-700">
+                  {plural(imported.skippedMatches, 'match')} non importé{imported.skippedMatches > 1 ? 's' : ''} : équipe non reconnue (relisez le document, ou réessayez l’import).
+                </p>
+              )}
             </div>
           )}
 

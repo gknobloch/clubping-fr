@@ -197,6 +197,34 @@ describe('parseScheduleDocumentLines', () => {
       score: '-',
     }])
   })
+
+  // A real OCR pass inserted one or two stray standalone underscores between
+  // the home team's number and "contre" ("... BARR TT 4 _ contre ...", "...
+  // BARR TT 4 __ contre ...") — noise from a faint table rule, not part of
+  // either token.
+  it('parses a match row despite stray underscore noise before "contre"', () => {
+    const lines = [
+      'CHAMPIONNAT GRAND EST 3 Poule 12',
+      '1ère phase 2026-2027',
+      '1 BARR TT 4 Samedi 16h 06670221',
+      '2 ROSENAU TT 3 Samedi 16h 06680125',
+      'Journée 1 : 19 septembre 2026',
+      'Samedi 16h BARR TT 4 _ contre ROSENAU TT 3 -',
+    ]
+    const single = parseScheduleDocumentLines(lines)
+    if ('error' in single) throw new Error(`expected a parsed document, got error: ${single.error}`)
+    expect(single.journees[0].matches).toEqual([{
+      day: 'Samedi', time: '16h00',
+      homeName: 'BARR TT', homeNumber: 4,
+      awayName: 'ROSENAU TT', awayNumber: 3,
+      score: '-',
+    }])
+
+    lines[5] = 'Samedi 16h BARR TT 4 __ contre ROSENAU TT 3 -'
+    const double = parseScheduleDocumentLines(lines)
+    if ('error' in double) throw new Error(`expected a parsed document, got error: ${double.error}`)
+    expect(double.journees[0].matches).toHaveLength(1)
+  })
 })
 
 describe('AFFILIATION_NUMBER_RE', () => {

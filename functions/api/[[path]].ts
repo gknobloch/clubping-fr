@@ -1370,6 +1370,17 @@ function parseScheduleDocInput(raw: unknown): ScheduleDocInput | null {
   }
 }
 
+// The roster table and each journée's match rows are read by separate OCR
+// passes over the same document, so the same team name can come back with
+// slightly different spacing/punctuation each time it's read (confirmed
+// against a real upload: one journée's mention of an otherwise-fine team
+// silently failed to join because that one occurrence read with different
+// whitespace) — normalize away everything but the letters/digits before
+// keying the join, rather than requiring an exact string match.
+function normalizeTeamNameKey(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
 app.post('/schedule-documents/import', async (c) => {
   const b = await c.req.json()
   const schedules = (Array.isArray(b.schedules) ? b.schedules.slice(0, 10) : [])
@@ -1427,6 +1438,7 @@ app.post('/schedule-documents/import', async (c) => {
   const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string }> = []
   const skippedSchedules: Array<{ index: number; reason: string }> = []
   let existingGames = 0
+  let skippedMatches = 0
 
   let uidCounter = 0
   const localId = (prefix: string) => `${prefix}-doc-${Date.now()}-${uidCounter++}`
@@ -1485,7 +1497,9 @@ app.post('/schedule-documents/import', async (c) => {
 
     const group = touchedGroups.get(groupId) ?? { ...groupById.get(groupId)!, teamIds: [...groupById.get(groupId)!.teamIds] }
 
-    // Resolve every roster team once, keyed by (name, number) for the match join below.
+    // Resolve every roster team once, keyed by (normalized name, number) for
+    // the match join below — see normalizeTeamNameKey for why the key isn't
+    // the raw name.
     const teamKeyToId = new Map<string, string>()
     for (const t of s.teams) {
       const side: FfttMatchTeam = {
@@ -1503,7 +1517,7 @@ app.post('/schedule-documents/import', async (c) => {
         resolver.register(teamId, clubId, t.number, phaseId, side.teamId)
       }
       if (!group.teamIds.includes(teamId)) group.teamIds.push(teamId)
-      teamKeyToId.set(`${t.name}|${t.number}`, teamId)
+      teamKeyToId.set(`${normalizeTeamNameKey(t.name)}|${t.number}`, teamId)
     }
     touchedGroups.set(groupId, group)
 
@@ -1516,11 +1530,15 @@ app.post('/schedule-documents/import', async (c) => {
         createdMatchDays.push({ id: md.id as string, groupId, number: j.number, date: j.date })
       }
       for (const m of j.matches) {
-        const homeId = teamKeyToId.get(`${m.homeName}|${m.homeNumber}`)
-        const awayId = teamKeyToId.get(`${m.awayName}|${m.awayNumber}`)
+        const homeId = teamKeyToId.get(`${normalizeTeamNameKey(m.homeName)}|${m.homeNumber}`)
+        const awayId = teamKeyToId.get(`${normalizeTeamNameKey(m.awayName)}|${m.awayNumber}`)
         // A team referenced in a match but absent from the roster table can't
-        // be resolved to a club/affiliation — skip rather than guess.
-        if (!homeId || !awayId) continue
+        // be resolved to a club/affiliation — skip rather than guess, but
+        // count it: this used to fail silently, which is how a single
+        // OCR-garbled team name in one journée's line quietly dropped that
+        // match with zero visibility even though everything else about the
+        // import looked fine.
+        if (!homeId || !awayId) { skippedMatches++; continue }
         const mdId = md.id as string
         const pairings = pairingsByMatchDay.get(mdId)
         // Dedup by pairing-on-journée, not by game id: unlike the FFTT games
@@ -1588,6 +1606,7 @@ app.post('/schedule-documents/import', async (c) => {
     createdGames,
     skippedSchedules,
     existingGames,
+    skippedMatches,
   })
 })
 
