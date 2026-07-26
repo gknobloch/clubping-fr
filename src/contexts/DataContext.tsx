@@ -788,7 +788,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         headers: authHeaders(),
         body: JSON.stringify({ schedules }),
       })
-      if (!r.ok) return null
+      if (!r.ok) {
+        console.error('schedule-documents/import failed', r.status, await r.text().catch(() => ''))
+        return null
+      }
       const result = (await r.json()) as ScheduleDocImportResult
       if (result.createdPhases.length) setPhases((prev) => [...prev, ...result.createdPhases])
       if (result.createdDivisions.length) setDivisions((prev) => [...prev, ...result.createdDivisions])

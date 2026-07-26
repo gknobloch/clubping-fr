@@ -1542,8 +1542,14 @@ app.post('/schedule-documents/import', async (c) => {
     ...createdDivisions.map((d) =>
       db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES (?, ?, ?, ?, ?, 0, NULL)')
         .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame)),
+    // OR IGNORE on clubs/teams: their ids are fully deterministic
+    // (club-fftt-<affiliation>, and the FFTT-team-id-shaped doc-<affiliation>-<number>
+    // for teams), so a leftover row from an earlier partial/retried import —
+    // one this request's own freshly-queried resolver didn't happen to pick
+    // up — can never collide with different data, only with itself; ignoring
+    // the redundant insert keeps a retry safe instead of a hard 500.
     ...createdClubs.map((cl) =>
-      db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
+      db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
     ...[...touchedGroups.values()].map((g) =>
       createdGroupIds.has(g.id)
@@ -1552,17 +1558,22 @@ app.post('/schedule-documents/import', async (c) => {
         : db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdTeams.map((t) =>
       db.prepare(
-        `INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
          VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', '[]', 0)`,
       ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId)),
     ...createdMatchDays.map((m) =>
-      db.prepare('INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+      db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
         .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId)),
   ]
-  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  try {
+    for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  } catch (err) {
+    console.error('schedule-documents/import batch failed', err)
+    return c.json({ error: 'import_failed', message: err instanceof Error ? err.message : String(err) }, 500)
+  }
 
   const allGroups = [...touchedGroups.values()]
   return c.json({
