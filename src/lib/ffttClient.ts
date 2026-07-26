@@ -31,6 +31,21 @@ export async function ffttGraphqlFromBrowser<T>(query: string): Promise<T | null
   }
 }
 
+/** Fetch a URL's raw text body from the browser; null when unreachable. Used for the dafunker XML endpoints (see ffttClub.ts, ffttGamesXml.ts). */
+export async function fetchTextFromBrowser(url: string): Promise<string | null> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) return null
+    return await res.text()
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /** The FFTT current season, normalized ("/api/seasons/27", "2026 - 2027"). */
 export async function fetchFfttCurrentSeasonFromBrowser(): Promise<{ id: string; displayName: string } | null> {
   const data = await ffttGraphqlFromBrowser<{ seasons?: { edges?: Array<{ node?: { id?: string; name?: string } }> } }>(

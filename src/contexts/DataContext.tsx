@@ -44,9 +44,10 @@ import {
 } from '@/mock/data'
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
-import { fetchFfttCurrentSeasonFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
+import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
+import { dafunkerResultsUrl, parseDafunkerResultsXml } from '@/lib/ffttGamesXml'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
 // older than what becomes active, back to 'upcoming' when newer (rollback).
@@ -669,10 +670,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   // --- FFTT games import (#231, browser-side transport like the teams) ---
-  // The browser fetches each requested group's division pools from apiv2
-  // (FFTT blocks Cloudflare egress) and hands the parsed payload to our API.
-  // The payload of the last successful preview is kept per group set so the
-  // import sends exactly what the admin previewed.
+  // The browser fetches each requested group's division schedule from
+  // dafunker (FFTT/dafunker block Cloudflare egress) and hands the parsed
+  // payload to our API. The payload of the last successful preview is kept
+  // per group set so the import sends exactly what the admin previewed.
   const gamesPayloadRef = useRef<Record<string, Array<{ divisionId: string; pools: FfttPool[] }>>>({})
 
   const fetchGamesPreview = useCallback(async (groupIds: string[]): Promise<FfttGamesPreview | null> => {
@@ -685,8 +686,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
           .filter((id): id is string => !!id && /^\d+$/.test(id)),
       )]
       const fetched = await Promise.all(divisionIds.map(async (divisionId) => {
-        const data = await ffttGraphqlFromBrowser<FfttDivisionPoolsData>(divisionPoolsQuery(divisionId))
-        return data === null ? null : { divisionId, pools: parseDivisionPools(data) }
+        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(divisionId))
+        return xml === null ? null : { divisionId, pools: parseDafunkerResultsXml(xml) }
       }))
       const pools = fetched.filter((f): f is { divisionId: string; pools: FfttPool[] } => f !== null)
       // Every FFTT-aligned division unreachable → same as FFTT being down.
