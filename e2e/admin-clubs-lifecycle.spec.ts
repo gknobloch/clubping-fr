@@ -130,8 +130,48 @@ test.describe('General admin — Clubs lifecycle (archive / activate / delete)',
     await page.goto('/clubs/club-fftt-06680011')
     await page.getByRole('button', { name: 'Synchroniser depuis la FFTT' }).click()
 
+    // #280: nothing is written until the preview is confirmed.
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: 'Synchroniser depuis la FFTT' })).toBeVisible()
+    // The name row shows both sides. "RIXHEIM PPA NOUVEAU" normalized:
+    // "RIXHEIM"/"NOUVEAU" title-cased, "PPA" (<=4 letters) kept as-is.
+    const nameRow = dialog.locator('li').filter({ hasText: 'Nom du club' })
+    await expect(nameRow).toContainText('PPA Rixheim')
+    await expect(nameRow).toContainText('Rixheim PPA Nouveau')
+    const venueRow = dialog.locator('li').filter({ hasText: 'Lieu de jeu' })
+    await expect(venueRow).toContainText('12 rue du Sport')
+    await expect(venueRow).toContainText('9 rue Neuve')
+    await dialog.getByRole('button', { name: 'Appliquer' }).click()
+
     await expect(page.getByText('Club synchronisé.')).toBeVisible()
-    // "RIXHEIM PPA NOUVEAU" normalized: "RIXHEIM"/"NOUVEAU" title-cased, "PPA" (<=4 letters) kept as-is.
     await expect(page.getByRole('heading', { name: /Rixheim PPA Nouveau/ })).toBeVisible()
+  })
+
+  // #280: the whole point — take the venue, keep a hand-edited club name.
+  test('sync can apply the address while leaving the club name untouched', async ({ page }) => {
+    await page.route(CLUB_DETAIL, (route) => route.fulfill({ body: rixheimUpdatedXml, contentType: 'text/xml' }))
+
+    await page.goto('/clubs/club-fftt-06680011')
+    await page.getByRole('button', { name: 'Synchroniser depuis la FFTT' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await dialog.locator('#import-field-displayName').uncheck()
+    await dialog.getByRole('button', { name: 'Appliquer' }).click()
+
+    await expect(page.getByText('Club synchronisé.')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'PPA Rixheim' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Rixheim PPA Nouveau/ })).toHaveCount(0)
+    await expect(page.getByText('9 rue Neuve')).toBeVisible()
+  })
+
+  test('sync changes nothing when cancelled', async ({ page }) => {
+    await page.route(CLUB_DETAIL, (route) => route.fulfill({ body: rixheimUpdatedXml, contentType: 'text/xml' }))
+
+    await page.goto('/clubs/club-fftt-06680011')
+    await page.getByRole('button', { name: 'Synchroniser depuis la FFTT' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Annuler' }).click()
+
+    await expect(page.getByText('Club synchronisé.')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'PPA Rixheim' })).toBeVisible()
   })
 })
