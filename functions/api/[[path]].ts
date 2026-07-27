@@ -1246,26 +1246,39 @@ app.post('/games/import', async (c) => {
   updatedMatchDays = updatedMatchDays.filter((m) => m.date !== originalDates.get(m.id as string))
 
   const stmts = [
+    // OR IGNORE on clubs/teams/match_days/games: their ids are fully
+    // deterministic (club-fftt-<affiliation>, the FFTT team id, md-fftt-<group>-r<round>,
+    // the FFTT match id), so a leftover/stale row this request's own
+    // freshly-queried resolver didn't happen to recognize (e.g. a club row
+    // from another import path with a mismatched/missing affiliation number)
+    // can never collide with different data, only with itself; ignoring the
+    // redundant insert keeps this safe instead of a hard 500 (see the same
+    // pattern in /schedule-documents/import).
     ...createdClubs.map((cl) =>
-      db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
+      db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
     ...createdTeams.map((t) =>
       db.prepare(
-        `INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
          VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', '[]', 0)`,
       ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId)),
     ...[...touchedGroups.values()].map((g) =>
       db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdMatchDays.map((m) =>
-      db.prepare('INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+      db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...updatedMatchDays.map((m) =>
       db.prepare('UPDATE match_days SET date = ? WHERE id = ?').bind(m.date, m.id)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
         .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId)),
   ]
-  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  try {
+    for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  } catch (err) {
+    console.error('games/import batch failed', err)
+    return c.json({ error: 'import_failed', message: err instanceof Error ? err.message : String(err) }, 500)
+  }
 
   return c.json({
     createdClubs,
@@ -1278,6 +1291,397 @@ app.post('/games/import', async (c) => {
     skippedGroups,
     existingGames,
     skippedMatches,
+  })
+})
+
+// --- Schedule document import (#260) ---
+// Alternative to the FFTT-API-based imports above: the browser parses an
+// uploaded PDF/image (a poule schedule sheet) with a regex parser targeting
+// FFTT's own export template (no LLM — see src/lib/ffttScheduleDocument.ts)
+// and the admin confirms, per document, which existing phase/division/group
+// it maps to (or that new ones should be created). The document never
+// carries genuine FFTT ids for division/pool/team/match — only the club
+// affiliation number is a real, stable FFTT identifier — so this reuses the
+// *matching logic* of the imports above (makeTeamResolver, club-by-affiliation,
+// team-by-club-number-phase) but not their NUMERIC_ID-gated payload shapes,
+// which assume every id is FFTT-issued.
+
+interface ScheduleDocTeamInput { name: string; number: number; affiliationNumber: string }
+interface ScheduleDocMatchInput { homeName: string; homeNumber: number; awayName: string; awayNumber: number }
+interface ScheduleDocJourneeInput { number: number; date: string; matches: ScheduleDocMatchInput[] }
+interface ScheduleDocInput {
+  seasonId: string
+  phaseNumber: number
+  /** Existing division chosen by the admin; null to create one from newDivisionLabel. */
+  divisionId: string | null
+  newDivisionLabel: string
+  /** Existing group chosen by the admin; null to create one numbered newGroupNumber. */
+  groupId: string | null
+  newGroupNumber: number | null
+  teams: ScheduleDocTeamInput[]
+  journees: ScheduleDocJourneeInput[]
+}
+
+function parseScheduleDocTeams(raw: unknown): ScheduleDocTeamInput[] {
+  if (!Array.isArray(raw)) return []
+  const out: ScheduleDocTeamInput[] = []
+  for (const t of raw.slice(0, 20)) {
+    if (!t || typeof t !== 'object') continue
+    const x = t as Record<string, unknown>
+    if (typeof x.name !== 'string' || !x.name.trim()) continue
+    if (typeof x.number !== 'number' || !Number.isInteger(x.number) || x.number < 1 || x.number > 99) continue
+    if (typeof x.affiliationNumber !== 'string' || !/^\d{8}$/.test(x.affiliationNumber)) continue
+    out.push({ name: x.name.trim().slice(0, 80), number: x.number, affiliationNumber: x.affiliationNumber })
+  }
+  return out
+}
+
+function parseScheduleDocJournees(raw: unknown): ScheduleDocJourneeInput[] {
+  if (!Array.isArray(raw)) return []
+  const out: ScheduleDocJourneeInput[] = []
+  for (const j of raw.slice(0, 20)) {
+    if (!j || typeof j !== 'object') continue
+    const x = j as Record<string, unknown>
+    if (typeof x.number !== 'number' || !Number.isInteger(x.number) || x.number < 1 || x.number > 99) continue
+    if (typeof x.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x.date)) continue
+    const matches: ScheduleDocMatchInput[] = []
+    if (Array.isArray(x.matches)) {
+      for (const m of x.matches.slice(0, 20)) {
+        if (!m || typeof m !== 'object') continue
+        const y = m as Record<string, unknown>
+        if (typeof y.homeName !== 'string' || !y.homeName.trim()) continue
+        if (typeof y.homeNumber !== 'number' || !Number.isInteger(y.homeNumber)) continue
+        if (typeof y.awayName !== 'string' || !y.awayName.trim()) continue
+        if (typeof y.awayNumber !== 'number' || !Number.isInteger(y.awayNumber)) continue
+        matches.push({
+          homeName: y.homeName.trim().slice(0, 80), homeNumber: y.homeNumber,
+          awayName: y.awayName.trim().slice(0, 80), awayNumber: y.awayNumber,
+        })
+      }
+    }
+    out.push({ number: x.number, date: x.date, matches })
+  }
+  return out
+}
+
+function parseScheduleDocInput(raw: unknown): ScheduleDocInput | null {
+  if (!raw || typeof raw !== 'object') return null
+  const x = raw as Record<string, unknown>
+  if (typeof x.seasonId !== 'string' || !/^\d{1,3}$/.test(x.seasonId)) return null
+  if (typeof x.phaseNumber !== 'number' || !FFTT_PHASES.some((p) => Number(p.id) === x.phaseNumber)) return null
+  const divisionId = typeof x.divisionId === 'string' && x.divisionId ? x.divisionId : null
+  const newDivisionLabel = typeof x.newDivisionLabel === 'string' ? x.newDivisionLabel.trim().slice(0, 80) : ''
+  if (!divisionId && !newDivisionLabel) return null
+  const groupId = typeof x.groupId === 'string' && x.groupId ? x.groupId : null
+  const newGroupNumber = typeof x.newGroupNumber === 'number'
+    && Number.isInteger(x.newGroupNumber) && x.newGroupNumber >= 1 && x.newGroupNumber <= 99
+    ? x.newGroupNumber : null
+  if (!groupId && newGroupNumber === null) return null
+  return {
+    seasonId: x.seasonId, phaseNumber: x.phaseNumber, divisionId, newDivisionLabel, groupId, newGroupNumber,
+    teams: parseScheduleDocTeams(x.teams), journees: parseScheduleDocJournees(x.journees),
+  }
+}
+
+// The roster table and each journée's match rows are read by separate OCR
+// passes over the same document, so the same team name can come back with
+// slightly different spacing/punctuation each time it's read (confirmed
+// against a real upload: one journée's mention of an otherwise-fine team
+// silently failed to join because that one occurrence read with different
+// whitespace) — normalize away everything but the letters/digits before
+// keying the join, rather than requiring an exact string match.
+function normalizeTeamNameKey(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+// Standard edit distance (insert/delete/substitute), used only as the
+// fallback below when the exact normalized key misses.
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  const dp = new Array(b.length + 1)
+  for (let j = 0; j <= b.length; j++) dp[j] = j
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const temp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j - 1], dp[j])
+      prev = temp
+    }
+  }
+  return dp[b.length]
+}
+
+// Confirmed against a real upload: the roster table and each journ\u00e9e's match
+// rows are read by separate OCR passes, and normalizeTeamNameKey only
+// absorbs spacing/punctuation drift between them \u2014 it can't fix an outright
+// wrong letter ("ILLZACH TTSIB" on the roster line vs "ILLZACH TTSJB" on
+// every single match line, an OCR I/J mix-up). When the exact key misses,
+// fall back to the closest roster name *with the same team number* by edit
+// distance \u2014 team number is a reliable, purely numeric anchor, so this only
+// ever resolves ambiguity between candidates that already agree on it, and
+// the distance cap keeps it to "one OCR slip", not "a different team".
+function closestRosterNameForNumber(
+  targetNormalized: string, candidates: Array<{ normalizedName: string; teamId: string }>,
+): string | null {
+  let best: { teamId: string; distance: number } | null = null
+  for (const cand of candidates) {
+    const distance = levenshtein(targetNormalized, cand.normalizedName)
+    if (!best || distance < best.distance) best = { teamId: cand.teamId, distance }
+  }
+  if (!best) return null
+  const maxAllowed = Math.max(1, Math.floor(targetNormalized.length * 0.2))
+  return best.distance <= maxAllowed ? best.teamId : null
+}
+
+app.post('/schedule-documents/import', async (c) => {
+  const b = await c.req.json()
+  const schedules = (Array.isArray(b.schedules) ? b.schedules.slice(0, 10) : [])
+    .map(parseScheduleDocInput)
+    .filter((s): s is ScheduleDocInput => s !== null)
+  if (schedules.length === 0) return c.json({ error: 'invalid_params' }, 400)
+
+  const db = c.env.DB
+  const [seasonRows, phaseRows, divisionRows, groupRows, clubRows, teamRows, mdRows, gameRows] = await Promise.all([
+    db.prepare('SELECT id, display_name FROM seasons').all(),
+    db.prepare('SELECT id, season_id, name, display_name, status FROM phases').all(),
+    db.prepare('SELECT id, phase_id, display_name, rank, players_per_game FROM divisions').all(),
+    db.prepare('SELECT id, division_id, number, team_ids FROM groups_tbl').all(),
+    db.prepare('SELECT id, affiliation_number FROM clubs').all(),
+    db.prepare('SELECT id, club_id, phase_id, number FROM teams').all(),
+    db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
+    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id FROM games').all(),
+  ])
+
+  const seasonById = new Map(seasonRows.results.map((s) => [s.id as string, s]))
+  const phaseExists = new Set(phaseRows.results.map((p) => p.id as string))
+  const divisionExists = new Set(divisionRows.results.map((d) => d.id as string))
+  const divisionMaxRankByPhase = new Map<string, number>()
+  for (const d of divisionRows.results) {
+    const k = d.phase_id as string
+    divisionMaxRankByPhase.set(k, Math.max(divisionMaxRankByPhase.get(k) ?? 0, d.rank as number))
+  }
+  type GroupState = { id: string; divisionId: string; number: number; teamIds: string[]; isArchived: boolean }
+  const groupById = new Map<string, GroupState>(groupRows.results.map((g) => [g.id as string, {
+    id: g.id as string, divisionId: g.division_id as string, number: g.number as number,
+    teamIds: (jsonParse(g.team_ids) as string[]) ?? [], isArchived: false,
+  }]))
+  const groupNumbersByDivision = new Map<string, Set<number>>()
+  for (const g of groupById.values()) {
+    if (!groupNumbersByDivision.has(g.divisionId)) groupNumbersByDivision.set(g.divisionId, new Set())
+    groupNumbersByDivision.get(g.divisionId)!.add(g.number)
+  }
+  const resolver = makeTeamResolver(clubRows.results, teamRows.results)
+  const matchDayByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m]))
+  const pairingsByMatchDay = new Map<string, Set<string>>()
+  for (const g of gameRows.results) {
+    const key = g.match_day_id as string
+    if (!pairingsByMatchDay.has(key)) pairingsByMatchDay.set(key, new Set())
+    pairingsByMatchDay.get(key)!.add(`${g.home_team_id}|${g.away_team_id}`)
+    pairingsByMatchDay.get(key)!.add(`${g.away_team_id}|${g.home_team_id}`)
+  }
+
+  const createdPhases: Array<{ id: string; seasonId: string; name: string; displayName: string; status: string }> = []
+  const createdDivisions: Array<{ id: string; phaseId: string; displayName: string; rank: number; playersPerGame: number; isArchived: boolean }> = []
+  const createdGroupIds = new Set<string>()
+  const createdClubs: Array<{ id: string; affiliationNumber: string; displayName: string; isArchived: boolean; addresses: []; channels: [] }> = []
+  const createdTeams: Array<Record<string, unknown>> = []
+  const touchedGroups = new Map<string, GroupState>()
+  const createdMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
+  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string }> = []
+  const skippedSchedules: Array<{ index: number; reason: string }> = []
+  const skippedMatchDetails: Array<{ side: 'home' | 'away'; name: string; number: number }> = []
+  let existingGames = 0
+  let skippedMatches = 0
+
+  let uidCounter = 0
+  const localId = (prefix: string) => `${prefix}-doc-${Date.now()}-${uidCounter++}`
+
+  const clubIdFor = (name: string, affiliationNumber: string): string => {
+    const existing = resolver.clubByAffiliation.get(affiliationNumber)
+    if (existing) return existing
+    const id = `club-fftt-${affiliationNumber}`
+    createdClubs.push({
+      id, affiliationNumber, displayName: name.replace(/\s*\d+\s*$/, '').trim() || name,
+      isArchived: false, addresses: [], channels: [],
+    })
+    resolver.clubByAffiliation.set(affiliationNumber, id)
+    return id
+  }
+
+  for (let i = 0; i < schedules.length; i++) {
+    const s = schedules[i]
+    const season = seasonById.get(s.seasonId)
+    if (!season) { skippedSchedules.push({ index: i, reason: 'season_not_found' }); continue }
+
+    const phaseId = localPhaseId(s.seasonId, s.phaseNumber)
+    if (!phaseExists.has(phaseId)) {
+      const phaseName = `Phase ${s.phaseNumber}`
+      const displayName = `${season.display_name as string} ${phaseName}`
+      phaseExists.add(phaseId)
+      createdPhases.push({ id: phaseId, seasonId: s.seasonId, name: phaseName, displayName, status: 'upcoming' })
+    }
+
+    let divisionId = s.divisionId
+    if (divisionId && !divisionExists.has(divisionId)) {
+      skippedSchedules.push({ index: i, reason: 'division_not_found' }); continue
+    }
+    if (!divisionId) {
+      const rank = (divisionMaxRankByPhase.get(phaseId) ?? 0) + 1
+      divisionMaxRankByPhase.set(phaseId, rank)
+      divisionId = localId('div')
+      divisionExists.add(divisionId)
+      createdDivisions.push({
+        id: divisionId, phaseId, displayName: s.newDivisionLabel, rank,
+        playersPerGame: PLAYERS_PER_GAME_DEFAULT, isArchived: false,
+      })
+    }
+
+    let groupId = s.groupId
+    if (groupId && !groupById.has(groupId)) { skippedSchedules.push({ index: i, reason: 'group_not_found' }); continue }
+    if (!groupId) {
+      const number = s.newGroupNumber!
+      groupId = localId('group')
+      const group: GroupState = { id: groupId, divisionId, number, teamIds: [], isArchived: false }
+      groupById.set(groupId, group)
+      createdGroupIds.add(groupId)
+      if (!groupNumbersByDivision.has(divisionId)) groupNumbersByDivision.set(divisionId, new Set())
+      groupNumbersByDivision.get(divisionId)!.add(number)
+    }
+
+    const group = touchedGroups.get(groupId) ?? { ...groupById.get(groupId)!, teamIds: [...groupById.get(groupId)!.teamIds] }
+
+    // Resolve every roster team once, keyed by (normalized name, number) for
+    // the match join below — see normalizeTeamNameKey for why the key isn't
+    // the raw name. rosterByNumber backs the closestRosterNameForNumber
+    // fallback when a match's own OCR reading of the name doesn't exactly
+    // match the roster's.
+    const teamKeyToId = new Map<string, string>()
+    const rosterByNumber = new Map<number, Array<{ normalizedName: string; teamId: string }>>()
+    for (const t of s.teams) {
+      const side: FfttMatchTeam = {
+        teamId: `doc-${t.affiliationNumber}-${t.number}`, teamName: t.name,
+        teamNumber: t.number, clubIdentifier: t.affiliationNumber, clubName: t.name,
+      }
+      let teamId = resolver.resolve(side, phaseId)
+      if (!teamId) {
+        const clubId = clubIdFor(t.name, t.affiliationNumber)
+        teamId = resolver.teamIds.has(side.teamId) ? `${side.teamId}-${phaseId}` : side.teamId
+        createdTeams.push({
+          id: teamId, clubId, phaseId, number: t.number, divisionId, groupId,
+          gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', playerIds: [], isArchived: false,
+        })
+        resolver.register(teamId, clubId, t.number, phaseId, side.teamId)
+      }
+      if (!group.teamIds.includes(teamId)) group.teamIds.push(teamId)
+      const normalizedName = normalizeTeamNameKey(t.name)
+      teamKeyToId.set(`${normalizedName}|${t.number}`, teamId)
+      if (!rosterByNumber.has(t.number)) rosterByNumber.set(t.number, [])
+      rosterByNumber.get(t.number)!.push({ normalizedName, teamId })
+    }
+    touchedGroups.set(groupId, group)
+
+    const resolveMatchTeamId = (name: string, number: number): string | null => {
+      const normalizedName = normalizeTeamNameKey(name)
+      const exact = teamKeyToId.get(`${normalizedName}|${number}`)
+      if (exact) return exact
+      return closestRosterNameForNumber(normalizedName, rosterByNumber.get(number) ?? [])
+    }
+
+    for (const j of s.journees) {
+      const mdKey = `${groupId}|${j.number}`
+      let md = matchDayByKey.get(mdKey)
+      if (!md) {
+        md = { id: localId('md'), group_id: groupId, number: j.number, date: j.date }
+        matchDayByKey.set(mdKey, md)
+        createdMatchDays.push({ id: md.id as string, groupId, number: j.number, date: j.date })
+      }
+      for (const m of j.matches) {
+        const homeId = resolveMatchTeamId(m.homeName, m.homeNumber)
+        const awayId = resolveMatchTeamId(m.awayName, m.awayNumber)
+        // A team referenced in a match but absent from the roster table can't
+        // be resolved to a club/affiliation — skip rather than guess, but
+        // report exactly which side(s) and name/number: this used to fail
+        // silently (or just as an opaque count), which made a single
+        // OCR-garbled team name impossible to track down without re-reading
+        // the raw OCR dump by hand.
+        if (!homeId || !awayId) {
+          skippedMatches++
+          if (skippedMatchDetails.length < 30) {
+            if (!homeId) skippedMatchDetails.push({ side: 'home', name: m.homeName, number: m.homeNumber })
+            if (!awayId) skippedMatchDetails.push({ side: 'away', name: m.awayName, number: m.awayNumber })
+          }
+          continue
+        }
+        const mdId = md.id as string
+        const pairings = pairingsByMatchDay.get(mdId)
+        // Dedup by pairing-on-journée, not by game id: unlike the FFTT games
+        // import, these ids have no stable external source, so re-uploading
+        // the same document must still recognize matches already imported.
+        if (pairings?.has(`${homeId}|${awayId}`)) { existingGames++; continue }
+        if (!pairingsByMatchDay.has(mdId)) pairingsByMatchDay.set(mdId, new Set())
+        pairingsByMatchDay.get(mdId)!.add(`${homeId}|${awayId}`)
+        pairingsByMatchDay.get(mdId)!.add(`${awayId}|${homeId}`)
+        createdGames.push({ id: localId('game'), matchDayId: mdId, homeTeamId: homeId, awayTeamId: awayId })
+      }
+    }
+  }
+
+  const stmts = [
+    ...createdPhases.map((p) =>
+      db.prepare("INSERT INTO phases (id, season_id, name, display_name, status) VALUES (?, ?, ?, ?, 'upcoming')")
+        .bind(p.id, p.seasonId, p.name, p.displayName)),
+    ...createdDivisions.map((d) =>
+      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES (?, ?, ?, ?, ?, 0, NULL)')
+        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame)),
+    // OR IGNORE on clubs/teams: their ids are fully deterministic
+    // (club-fftt-<affiliation>, and the FFTT-team-id-shaped doc-<affiliation>-<number>
+    // for teams), so a leftover row from an earlier partial/retried import —
+    // one this request's own freshly-queried resolver didn't happen to pick
+    // up — can never collide with different data, only with itself; ignoring
+    // the redundant insert keeps a retry safe instead of a hard 500.
+    ...createdClubs.map((cl) =>
+      db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
+        .bind(cl.id, cl.affiliationNumber, cl.displayName)),
+    ...[...touchedGroups.values()].map((g) =>
+      createdGroupIds.has(g.id)
+        ? db.prepare('INSERT INTO groups_tbl (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
+          .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds))
+        : db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
+    ...createdTeams.map((t) =>
+      db.prepare(
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
+         VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', '[]', 0)`,
+      ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId)),
+    ...createdMatchDays.map((m) =>
+      db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+        .bind(m.id, m.groupId, m.number, m.date)),
+    ...createdGames.map((g) =>
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
+        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId)),
+  ]
+  try {
+    for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  } catch (err) {
+    console.error('schedule-documents/import batch failed', err)
+    return c.json({ error: 'import_failed', message: err instanceof Error ? err.message : String(err) }, 500)
+  }
+
+  const allGroups = [...touchedGroups.values()]
+  return c.json({
+    createdPhases,
+    createdDivisions,
+    createdGroups: allGroups.filter((g) => createdGroupIds.has(g.id)),
+    createdClubs,
+    createdTeams,
+    // Every touched group (created or team-list-updated) in its final state.
+    groups: allGroups,
+    createdMatchDays,
+    createdGames,
+    skippedSchedules,
+    existingGames,
+    skippedMatches,
+    skippedMatchDetails,
   })
 })
 
@@ -1712,6 +2116,26 @@ app.delete('/groups/:id', async (c) => {
   }
   await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(id).run()
   await db.prepare('DELETE FROM groups_tbl WHERE id = ?').bind(id).run()
+  return c.json({ ok: true })
+})
+
+// Reset (#270): delete every journée/match of a group — and their
+// availabilities/selections — without touching the group or its teams.
+// Mirrors the match-day cascade from the group delete above, minus the
+// group/team removal.
+app.delete('/groups/:id/games', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const matchDaysR = await db.prepare('SELECT id FROM match_days WHERE group_id = ?').bind(id).all()
+  for (const md of matchDaysR.results) {
+    const mdGamesR = await db.prepare('SELECT id FROM games WHERE match_day_id = ?').bind(md.id).all()
+    for (const g of mdGamesR.results) {
+      await db.prepare('DELETE FROM game_availabilities WHERE game_id = ?').bind(g.id).run()
+      await db.prepare('DELETE FROM game_selections WHERE game_id = ?').bind(g.id).run()
+    }
+    await db.prepare('DELETE FROM games WHERE match_day_id = ?').bind(md.id).run()
+  }
+  await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(id).run()
   return c.json({ ok: true })
 })
 

@@ -5,6 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportGroupsModal } from '@/components/ImportGroupsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
+import { ImportScheduleDocumentModal } from '@/components/ImportScheduleDocumentModal'
 import { PageHeader } from '@/components/PageHeader'
 import { PrimaryButton, SecondaryButton } from '@/components/Button'
 import { PhaseSwitchButton } from '@/components/icons'
@@ -16,7 +17,7 @@ export function GroupsPage() {
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
     groups: allGroups, divisions, phases, teams, clubs,
-    updateGroup, addGroup, archiveGroup, deleteGroup,
+    updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
 
@@ -82,6 +83,8 @@ export function GroupsPage() {
   const [creating, setCreating] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importGamesFor, setImportGamesFor] = useState<Group | null>(null)
+  const [importDocOpen, setImportDocOpen] = useState(false)
+  const [importDocForGroup, setImportDocForGroup] = useState<Group | null>(null)
   const [form, setForm] = useState({ divisionId: '', number: 1 })
   const [showArchived, setShowArchived] = useState(false)
 
@@ -147,6 +150,12 @@ export function GroupsPage() {
     }
   }
 
+  const handleResetGames = (group: Group) => {
+    if (window.confirm(`Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`)) {
+      resetGroupGames(group.id)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -154,6 +163,9 @@ export function GroupsPage() {
         actions={
           <>
             <SecondaryButton onClick={openCreate}>Ajouter un groupe</SecondaryButton>
+            {isAdmin && (
+              <SecondaryButton onClick={() => setImportDocOpen(true)}>Importer depuis un fichier</SecondaryButton>
+            )}
             {isAdmin && division && (
               <PrimaryButton onClick={() => setImportOpen(true)}>Importer les groupes FFTT</PrimaryButton>
             )}
@@ -285,6 +297,24 @@ export function GroupsPage() {
                         Importer les matchs
                       </button>
                     )}
+                    {!group.isArchived && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setImportDocForGroup(group)}
+                        className="text-sm font-medium text-accent-600 hover:text-accent-800"
+                      >
+                        Depuis un fichier
+                      </button>
+                    )}
+                    {!group.isArchived && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetGames(group)}
+                        className="text-sm font-medium text-red-600 hover:text-red-800"
+                      >
+                        Réinitialiser les matchs
+                      </button>
+                    )}
                     {!group.isArchived && (
                       <button
                         type="button"
@@ -331,6 +361,17 @@ export function GroupsPage() {
           onClose={() => setImportGamesFor(null)}
           groupIds={[importGamesFor.id]}
           context={`${division?.displayName ?? ''} · Groupe ${importGamesFor.number} — calendrier de cette poule`}
+        />
+      )}
+
+      {importDocOpen && (
+        <ImportScheduleDocumentModal onClose={() => setImportDocOpen(false)} />
+      )}
+
+      {importDocForGroup && (
+        <ImportScheduleDocumentModal
+          onClose={() => setImportDocForGroup(null)}
+          lockedGroupId={importDocForGroup.id}
         />
       )}
 

@@ -44,9 +44,12 @@ import {
 } from '@/mock/data'
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
-import { fetchFfttCurrentSeasonFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
+import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
-import { divisionPoolsQuery, parseDivisionPools, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
+import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
+import {
+  dafunkerClubTeamsUrl, dafunkerResultsUrl, parseDafunkerClubTeamsXml, parseDafunkerResultsXml,
+} from '@/lib/ffttGamesXml'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
 // older than what becomes active, back to 'upcoming' when newer (rollback).
@@ -214,6 +217,49 @@ export interface FfttGroupsImportResult {
   skipped: Array<{ id: string; number: number | null }>
 }
 
+// --- Schedule document import (#260) ---
+// Alternative to the FFTT-API imports above: the browser parses an uploaded
+// PDF/image itself (see src/lib/ffttScheduleDocument.ts) and the admin
+// confirms, per document, which existing phase/division/group/club/team it
+// maps to — so unlike the FFTT flows there is no server preview round trip;
+// the "preview" is the confirmation table built from data already in this
+// context, and this single call both validates and persists.
+export interface ScheduleDocImportTeam { name: string; number: number; affiliationNumber: string }
+export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number }
+export interface ScheduleDocImportJournee { number: number; date: string; matches: ScheduleDocImportMatch[] }
+
+export interface ScheduleDocImportInput {
+  seasonId: string
+  phaseNumber: number
+  /** Existing division id chosen by the admin; null to create one from newDivisionLabel. */
+  divisionId: string | null
+  newDivisionLabel: string
+  /** Existing group id chosen by the admin; null to create one numbered newGroupNumber. */
+  groupId: string | null
+  newGroupNumber: number | null
+  teams: ScheduleDocImportTeam[]
+  journees: ScheduleDocImportJournee[]
+}
+
+/** Response of POST /api/schedule-documents/import (#260). */
+export interface ScheduleDocImportResult {
+  createdPhases: Phase[]
+  createdDivisions: Division[]
+  createdGroups: Group[]
+  createdClubs: Club[]
+  createdTeams: Team[]
+  /** Every touched group (created or team-list-updated), in its final state. */
+  groups: Group[]
+  createdMatchDays: MatchDay[]
+  createdGames: Game[]
+  skippedSchedules: Array<{ index: number; reason: string }>
+  existingGames: number
+  /** Matches whose home/away team name couldn't be joined back to a roster entry (OCR variance between the roster line and that match's line) — not imported. */
+  skippedMatches: number
+  /** Which side(s) of each skipped match couldn't be resolved, and what name/number the parser read (bounded to 30 entries). */
+  skippedMatchDetails: Array<{ side: 'home' | 'away'; name: string; number: number }>
+}
+
 // Read the current session token (set by AuthContext) for the Authorization
 // header. Read at call time so mutations always use the latest token.
 function sessionToken(): string | null {
@@ -280,12 +326,16 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   fetchGroupsPreview: (divisionId: string) => Promise<FfttGroupsPreview | null>
   /** Import a division's FFTT groups not already present locally. */
   importFfttGroups: (divisionId: string) => Promise<FfttGroupsImportResult | null>
+  /** Import schedule documents (PDF/image, #260) confirmed by the admin; null on failure. */
+  importScheduleDocuments: (schedules: ScheduleDocImportInput[]) => Promise<ScheduleDocImportResult | null>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
   updateGroup: (id: string, patch: Partial<Group>) => void
   archiveGroup: (id: string) => void
   deleteGroup: (id: string) => void
+  /** Delete every journée/match (and their availabilities/selections) of a group — keeps the group and its teams (#270). */
+  resetGroupGames: (id: string) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
   archiveTeam: (id: string) => void
   deleteTeam: (id: string) => void
@@ -622,28 +672,82 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   // --- FFTT games import (#231, browser-side transport like the teams) ---
-  // The browser fetches each requested group's division pools from apiv2
-  // (FFTT blocks Cloudflare egress) and hands the parsed payload to our API.
-  // The payload of the last successful preview is kept per group set so the
-  // import sends exactly what the admin previewed.
+  // The browser fetches each requested group's schedule from dafunker
+  // (FFTT/dafunker block Cloudflare egress) and hands the parsed payload to
+  // our API. The payload of the last successful preview is kept per group
+  // set so the import sends exactly what the admin previewed.
+  //
+  // dafunker's xml_result_equ.php returns one pool at a time: `cx_poule`
+  // must be that pool's dafunker-space id, which only aligns with local
+  // Group.id for groups from the original teams-import flow (#229) — other
+  // groups' ids live in a different space (see selectPoolForGroup in
+  // ffttGames.ts). Resolving it is therefore three-tier:
+  //  0. Authoritative lookup: xml_equipe.php lists a club's teams together
+  //     with their real (D1, cx_poule) — query it for the affiliation number
+  //     of any of the group's own teams' clubs, no guessing involved.
+  //  1. Direct guess: try `cx_poule=<Group.id>` (correct for #229-origin
+  //     groups; dafunker validates cx_poule against the division, so a wrong
+  //     guess just comes back empty, never another pool's data).
+  //  2. apiv2 whole-division fallback, reconciled via selectPoolForGroup, for
+  //     whatever tiers 0-1 still didn't resolve.
   const gamesPayloadRef = useRef<Record<string, Array<{ divisionId: string; pools: FfttPool[] }>>>({})
 
   const fetchGamesPreview = useCallback(async (groupIds: string[]): Promise<FfttGamesPreview | null> => {
     try {
-      // Distinct FFTT-aligned (numeric) division ids of the requested groups;
+      // Requested groups with an FFTT-aligned (numeric) division id;
       // non-numeric ones predate the FFTT imports and can't be queried.
-      const divisionIds = [...new Set(
-        groupIds
-          .map((gid) => groups.find((g) => g.id === gid)?.divisionId)
-          .filter((id): id is string => !!id && /^\d+$/.test(id)),
+      const requested = groupIds
+        .map((gid) => groups.find((g) => g.id === gid))
+        .filter((g): g is Group => !!g && /^\d+$/.test(g.divisionId))
+      const divisionIds = [...new Set(requested.map((g) => g.divisionId))]
+
+      const byDivision = new Map<string, FfttPool[]>()
+      const addPools = (divisionId: string, pools: FfttPool[]) => {
+        if (pools.length === 0) return
+        byDivision.set(divisionId, [...(byDivision.get(divisionId) ?? []), ...pools])
+      }
+      const isResolved = (g: Group) => !!selectPoolForGroup(byDivision.get(g.divisionId) ?? [], g)
+
+      // Tier 0: look up (D1, cx_poule) via an affiliation number from one of
+      // the group's own teams' clubs.
+      const affiliationNumbers = [...new Set(
+        requested.flatMap((g) => teams
+          .filter((t) => t.groupId === g.id)
+          .map((t) => clubs.find((c) => c.id === t.clubId)?.affiliationNumber)
+          .filter((n): n is string => !!n)),
       )]
-      const fetched = await Promise.all(divisionIds.map(async (divisionId) => {
+      const clubTeamPools = (await Promise.all(affiliationNumbers.map(async (aff) => {
+        const xml = await fetchTextFromBrowser(dafunkerClubTeamsUrl(aff))
+        return xml === null ? [] : parseDafunkerClubTeamsXml(xml)
+      }))).flat()
+      const lookedUp = await Promise.all(requested.map(async (g) => {
+        const match = clubTeamPools.find((p) => p.divisionId === g.divisionId && p.poolNumber === g.number)
+        if (!match) return null
+        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, match.cxPoule))
+        return xml === null ? null : { divisionId: g.divisionId, pools: parseDafunkerResultsXml(xml) }
+      }))
+      for (const r of lookedUp) if (r) addPools(r.divisionId, r.pools)
+
+      // Tier 1: direct per-group guess for whatever tier 0 didn't resolve.
+      const direct = await Promise.all(requested.filter((g) => !isResolved(g)).map(async (g) => {
+        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, g.id))
+        return xml === null ? null : { divisionId: g.divisionId, pools: parseDafunkerResultsXml(xml) }
+      }))
+      for (const r of direct) if (r) addPools(r.divisionId, r.pools)
+
+      // Tier 2: apiv2 whole-division fallback for divisions still missing a
+      // pool for at least one of their requested groups.
+      const unresolvedDivisions = divisionIds.filter((divisionId) =>
+        requested.some((g) => g.divisionId === divisionId && !isResolved(g)))
+      const fallback = await Promise.all(unresolvedDivisions.map(async (divisionId) => {
         const data = await ffttGraphqlFromBrowser<FfttDivisionPoolsData>(divisionPoolsQuery(divisionId))
         return data === null ? null : { divisionId, pools: parseDivisionPools(data) }
       }))
-      const pools = fetched.filter((f): f is { divisionId: string; pools: FfttPool[] } => f !== null)
-      // Every FFTT-aligned division unreachable → same as FFTT being down.
-      if (divisionIds.length > 0 && pools.length === 0) return null
+      for (const r of fallback) if (r) addPools(r.divisionId, r.pools)
+
+      const pools = divisionIds.map((divisionId) => ({ divisionId, pools: byDivision.get(divisionId) ?? [] }))
+      // Every FFTT-aligned division came back empty → same as FFTT being down.
+      if (divisionIds.length > 0 && pools.every((p) => p.pools.length === 0)) return null
 
       const r = await fetch('/api/fftt/games-preview', {
         method: 'POST',
@@ -656,7 +760,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     } catch {
       return null
     }
-  }, [groups])
+  }, [groups, teams, clubs])
 
   const importFfttGames = useCallback(async (groupIds: string[]): Promise<FfttGamesImportResult | null> => {
     try {
@@ -731,6 +835,39 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       if (!r.ok) return null
       const result = (await r.json()) as FfttGroupsImportResult
       if (result.created.length) setGroups((prev) => [...prev, ...result.created])
+      return result
+    } catch {
+      return null
+    }
+  }, [])
+
+  // --- Schedule document import (#260, no server preview — see the type note above) ---
+  const importScheduleDocuments = useCallback(async (
+    schedules: ScheduleDocImportInput[],
+  ): Promise<ScheduleDocImportResult | null> => {
+    try {
+      const r = await fetch('/api/schedule-documents/import', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ schedules }),
+      })
+      if (!r.ok) {
+        console.error('schedule-documents/import failed', r.status, await r.text().catch(() => ''))
+        return null
+      }
+      const result = (await r.json()) as ScheduleDocImportResult
+      if (result.createdPhases.length) setPhases((prev) => [...prev, ...result.createdPhases])
+      if (result.createdDivisions.length) setDivisions((prev) => [...prev, ...result.createdDivisions])
+      if (result.createdClubs.length) setClubs((prev) => [...prev, ...result.createdClubs])
+      if (result.createdTeams.length) setTeams((prev) => [...prev, ...result.createdTeams])
+      if (result.groups.length) {
+        setGroups((prev) => [
+          ...prev.filter((g) => !result.groups.some((u) => u.id === g.id)),
+          ...result.groups,
+        ])
+      }
+      if (result.createdMatchDays.length) setMatchDays((prev) => [...prev, ...result.createdMatchDays])
+      if (result.createdGames.length) setGames((prev) => [...prev, ...result.createdGames])
       return result
     } catch {
       return null
@@ -1100,6 +1237,23 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) api(`/groups/${id}`, { method: 'DELETE' })
   }, [persist, teams, matchDays, games])
 
+  // Same match-day/game/availability/selection cascade as deleteGroup above,
+  // minus the group and team removal (#270) — for starting a group's
+  // calendar over, e.g. after a bad FFTT/file import.
+  const resetGroupGames = useCallback((id: string) => {
+    const groupMatchDayIds = matchDays.filter((md) => md.groupId === id).map((md) => md.id)
+    const affectedGameIds = games.filter((g) => groupMatchDayIds.includes(g.matchDayId)).map((g) => g.id)
+    if (affectedGameIds.length > 0) {
+      setGames((prev) => prev.filter((g) => !affectedGameIds.includes(g.id)))
+      setGameAvailabilities((prev) => prev.filter((a) => !affectedGameIds.includes(a.gameId)))
+      setGameSelections((prev) => prev.filter((s) => !affectedGameIds.includes(s.gameId)))
+    }
+    if (groupMatchDayIds.length > 0) {
+      setMatchDays((prev) => prev.filter((md) => !groupMatchDayIds.includes(md.id)))
+    }
+    if (persist) api(`/groups/${id}/games`, { method: 'DELETE' })
+  }, [persist, matchDays, games])
+
   // --- Teams ---
   const updateTeam = useCallback((id: string, patch: Partial<Team>) => {
     setTeams((prev) => {
@@ -1412,12 +1566,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       importFfttGames,
       fetchGroupsPreview,
       importFfttGroups,
+      importScheduleDocuments,
       updatePhase,
       archivePhase,
       deletePhase,
       updateGroup,
       archiveGroup,
       deleteGroup,
+      resetGroupGames,
       updateTeam,
       archiveTeam,
       deleteTeam,
@@ -1452,7 +1608,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, updateTeam, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       updatePlayer, addPlayer, setAvatar, removeAvatar,
