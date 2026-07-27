@@ -9,7 +9,8 @@ const NODE: FfttPoolOpponentNode = {
     group: {
       tour: {
         division: {
-          id: '/api/divisions/234461', name: 'GE 2 Phase 1', phase: { id: '/api/phases/1' },
+          id: '/api/divisions/234461', identifier: 'GE2P1', name: 'GE 2 Phase 1',
+          phase: { id: '/api/phases/1' },
           parent: { id: '/api/divisions/234322' },
         },
       },
@@ -24,7 +25,9 @@ describe('parsePoolOpponent', () => {
       number: 2,
       phase: 1,
       divisionId: '234461',
-      divisionName: 'GE 2 Phase 1',
+      // Phase marker stripped: the division already belongs to a phase (#275).
+      divisionName: 'GE 2',
+      divisionIdentifier: 'GE2P1',
       divisionParentId: '234322',
       poolId: '1502306',
       poolNumber: 9,

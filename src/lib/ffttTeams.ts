@@ -10,7 +10,7 @@
 // Cloudflare egress IPs, so the browser fetches apiv2 directly (CORS *) and
 // hands the parsed payload to our API.
 
-import { ffttIdFromIri } from './ffttDivisions'
+import { divisionDisplayName, ffttIdFromIri } from './ffttDivisions'
 import { teamNumberFromName } from './ffttGames'
 
 /** A poolOpponents node as returned by the GraphQL query. */
@@ -25,6 +25,7 @@ export interface FfttPoolOpponentNode {
       tour?: {
         division?: {
           id: string
+          identifier?: string | null
           name?: string | null
           phase?: { id: string } | null
           parent?: { id: string } | null
@@ -44,8 +45,10 @@ export interface FfttClubTeam {
   phase: number | null
   /** FFTT division id = local division id (#219). */
   divisionId: string
-  /** Division display name, e.g. "GE 2 Phase 1". */
+  /** Division display name, phase marker stripped (#275): "GE 2 Phase 1" → "GE 2". */
   divisionName: string
+  /** FFTT division identifier, e.g. "GE2P1"; '' when the payload omits it. */
+  divisionIdentifier: string
   /** FFTT id of the division's parent (#236); null when it has none. */
   divisionParentId: string | null
   /** apiv2 pool id — becomes the local group id (the id space the games import queries). */
@@ -80,7 +83,9 @@ export function parsePoolOpponent(node: FfttPoolOpponentNode): FfttClubTeam | nu
     number,
     phase: Number.isInteger(phase) && phase >= 1 ? phase : null,
     divisionId: ffttIdFromIri(division.id),
-    divisionName: (division.name ?? '').trim() || `Division ${ffttIdFromIri(division.id)}`,
+    divisionName:
+      divisionDisplayName((division.name ?? '').trim()) || `Division ${ffttIdFromIri(division.id)}`,
+    divisionIdentifier: (division.identifier ?? '').trim(),
     divisionParentId: division.parent ? ffttIdFromIri(division.parent.id) : null,
     poolId: ffttIdFromIri(pool.id),
     poolNumber: poolNumber(pool.name),
@@ -104,5 +109,5 @@ export function poolOpponentsQuery(affiliation: string): string {
   const safe = affiliation.replace(/[^0-9A-Za-z]/g, '')
   return `{ poolOpponents(opponent_team_clubs_identifier: "${safe}", pool_group_tour_division_contest_season_current: true, first: 60) ` +
     `{ edges { node { opponent { team { id name } } ` +
-    `pool { id name group { tour { division { id name phase { id } parent { id } } } } } } } } }`
+    `pool { id name group { tour { division { id identifier name phase { id } parent { id } } } } } } } } }`
 }

@@ -20,7 +20,7 @@ export function ClubsPage() {
   const visibleClubs = showArchived ? clubs : activeClubs
 
   const openEdit = (club: Club) => {
-    navigate(`/clubs/${club.affiliationNumber}`)
+    navigate(`/clubs/${encodeURIComponent(club.id)}`)
   }
 
   const openCreate = () => {

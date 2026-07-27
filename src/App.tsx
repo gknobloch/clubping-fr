@@ -54,7 +54,7 @@ export default function App() {
           <Route path="/" element={<ProtectedLayout />}>
             <Route index element={<HomePage />} />
             <Route path="clubs" element={<ClubsPage />} />
-            <Route path="clubs/:affiliationNumber" element={<ClubDetailPage />} />
+            <Route path="clubs/:clubId" element={<ClubDetailPage />} />
             <Route path="saisons" element={<SeasonsPage />} />
             <Route path="phases" element={<PhasesPage />} />
             <Route path="divisions" element={<DivisionsPage />} />

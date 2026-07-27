@@ -25,7 +25,7 @@ test.describe('General admin — Clubs', () => {
   }) => {
     await page.goto('/clubs')
     await page.getByRole('button', { name: 'Modifier' }).first().click()
-    await expect(page).toHaveURL(/\/clubs\/\d+/)
+    await expect(page).toHaveURL(/\/clubs\/club-fftt-\d+/)
     await expect(page.getByRole('link', { name: /Retour à la liste des clubs/i })).toBeVisible()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   })

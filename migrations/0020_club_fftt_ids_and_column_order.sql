@@ -37,15 +37,25 @@
 --    cascades).
 --
 -- Re-run safety: the id-rename statements naturally no-op on a re-run (zero
--- rows still match the bare-digit GLOB once renamed). The rebuild is
--- guarded by never dropping its own backup copy (clubs_pre_0020_backup) —
--- unlike every other migration's throwaway intermediate table, this one is
--- kept around on purpose: it's what makes the very first rebuild statement
--- fail immediately on any redeploy after the first successful run (the
--- rename target already exists), aborting the whole file cleanly before
--- touching anything, the same fail-fast contract as 0007/0016/0017/0019 —
--- just via a kept table instead of a dropped column. It holds 33 tiny rows,
--- negligible, and is a free rollback snapshot for one migration cycle.
+-- rows still match the bare-digit GLOB once renamed). The rebuild is guarded
+-- by the schema_guards marker inserted below: the plain INSERT fails on any
+-- redeploy after the first successful run, aborting the whole file cleanly
+-- before touching anything — the same fail-fast contract as 0007/0016/0017/
+-- 0019, just via a marker row instead of a dropped column.
+--
+-- #275: that guard used to be implicit — this migration deliberately never
+-- dropped its own backup copy (clubs_pre_0020_backup), and the very first
+-- rebuild statement failed on a re-run because the rename target already
+-- existed. The explicit marker replaces it so 0025 can drop the leftover
+-- table without making this file re-runnable and destructive.
+
+-- Re-run guard (see above): must be the first statement, so a redeploy stops
+-- here instead of reaching the destructive rebuild further down.
+CREATE TABLE IF NOT EXISTS schema_guards (
+  name       TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO schema_guards (name) VALUES ('0020_club_fftt_ids_and_column_order');
 
 INSERT INTO clubs (id, display_name, is_archived, affiliation_number)
 SELECT 'club-fftt-' || id, display_name, is_archived, affiliation_number
@@ -102,4 +112,5 @@ INSERT INTO club_logos_new SELECT * FROM club_logos;
 DROP TABLE club_logos;
 ALTER TABLE club_logos_new RENAME TO club_logos;
 
--- clubs_pre_0020_backup is intentionally never dropped (see note above).
+-- clubs_pre_0020_backup is dropped by 0025 (#275); the re-run guard is now the
+-- schema_guards marker at the top of this file, not this table's existence.

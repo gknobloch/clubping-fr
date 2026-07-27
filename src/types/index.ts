@@ -77,6 +77,8 @@ export interface Division {
   rank: number
   playersPerGame: number
   isArchived: boolean
+  /** FFTT identifier, e.g. "GE3P1" (#275); absent for divisions created by hand. */
+  identifier?: string
   /** FFTT id of the division directly above this one (#236); absent for a top-level division. */
   parentId?: string
 }

@@ -6,11 +6,11 @@ const PREVIEW = '**/api/fftt/games-preview*'
 const IMPORT = '**/api/games/import'
 
 // Matches the mock data: PPA Rixheim 1 (team-1) plays in group-1 (division
-// div-1 "GE1"), phase-1 (2025/2026 Phase 1, active).
+// 198609 "GE 1"), phase-26-1 (2025/2026 Phase 1, active).
 const previewOneGroup = {
   groups: [
     {
-      groupId: 'group-1', groupNumber: 1, divisionName: 'GE1',
+      groupId: 'group-1', groupNumber: 1, divisionName: 'GE 1',
       rounds: 7, matches: 28, newMatchDays: 3, newGames: 12, existingGames: 16, newTeams: 3,
     },
   ],
@@ -23,7 +23,7 @@ const importResult = {
   ],
   createdTeams: [
     {
-      id: '5834', clubId: 'club-fftt-06570024', phaseId: 'phase-1', number: 1, divisionId: 'div-1', groupId: 'group-1',
+      id: '5834', clubId: 'club-fftt-06570024', phaseId: 'phase-26-1', number: 1, divisionId: '198609', groupId: 'group-1',
       gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', playerIds: [], isArchived: false,
     },
   ],
@@ -46,9 +46,19 @@ const importResult = {
 test.describe('General admin — Games FFTT import', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, 'admin')
-    // Hermetic guard: the client only queries apiv2 for FFTT-aligned (numeric)
-    // division ids — the mock data has none, so this must never be hit.
-    await page.route('https://apiv2.fftt.com/api/graphql', (route) => route.abort())
+    // The mock data is FFTT-aligned since #275, so the games preview really
+    // runs its three-tier pool resolution before hitting our API. Kept
+    // hermetic: dafunker (tiers 0-1) answers empty, and apiv2 (tier 2)
+    // answers with a single poule 1 — enough for selectPoolForGroup to
+    // resolve every mock group, which are all numbered 1. Without a resolved
+    // pool the preview short-circuits to "FFTT unreachable" and never reaches
+    // the mocked endpoints below.
+    await page.route('**/fftt.dafunker.com/**', (route) =>
+      route.fulfill({ body: '', contentType: 'text/xml' }))
+    await page.route('https://apiv2.fftt.com/api/graphql', (route) =>
+      route.fulfill({
+        json: { data: { pools: { edges: [{ node: { id: '/api/pools/9001', name: '1', sportMatches: { edges: [] } } }] } } },
+      }))
   })
 
   test('imports a team’s pool calendar from /equipes', async ({ page }) => {
@@ -66,7 +76,7 @@ test.describe('General admin — Games FFTT import', () => {
     const dialog = page.getByRole('dialog')
     await expect(page.getByRole('heading', { name: 'Importer les matchs FFTT' })).toBeVisible()
     await expect(dialog.getByText('PPA Rixheim 1 — calendrier de sa poule')).toBeVisible()
-    await expect(dialog.getByText('GE1', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('GE 1', { exact: true })).toBeVisible()
     await expect(dialog.getByText(/7 journées · 12 nouveaux matchs · 16 déjà présents · 3 adversaires à créer/)).toBeVisible()
     await expect(page.getByText(/Les équipes adverses manquantes \(3, dont 2 nouveaux clubs\)/)).toBeVisible()
 
@@ -75,7 +85,12 @@ test.describe('General admin — Games FFTT import', () => {
     await expect(page.getByText('1 journée redatée d’après la FFTT.')).toBeVisible()
     await expect(page.getByText('Adversaires créés : 1 équipe et 1 club.')).toBeVisible()
 
-    expect(importBody).toEqual({ groupIds: ['group-1'], pools: [] })
+    // The import sends exactly the pools the preview resolved (the tier-2
+    // apiv2 poule 1 mocked above), never a re-fetched list.
+    expect(importBody).toEqual({
+      groupIds: ['group-1'],
+      pools: [{ divisionId: '198609', pools: [{ id: '9001', poolNumber: 1, matches: [] }] }],
+    })
   })
 
   test('imports one group’s calendar from /groupes (#245)', async ({ page }) => {
@@ -87,20 +102,25 @@ test.describe('General admin — Games FFTT import', () => {
     })
 
     await page.goto('/groupes')
-    await page.getByLabel('Division').selectOption({ label: 'GE1' })
+    await page.getByLabel('Division').selectOption({ label: 'GE 1' })
 
     const row = page.locator('tr').filter({ hasText: 'PPA Rixheim 1' })
     await row.getByRole('button', { name: 'Importer les matchs' }).click()
 
     const dialog = page.getByRole('dialog')
     await expect(page.getByRole('heading', { name: 'Importer les matchs FFTT' })).toBeVisible()
-    await expect(dialog.getByText(/GE1 · Groupe 1 — calendrier de cette poule/)).toBeVisible()
+    await expect(dialog.getByText(/GE 1 · Groupe 1 — calendrier de cette poule/)).toBeVisible()
     await expect(dialog.getByText(/7 journées · 12 nouveaux matchs · 16 déjà présents · 3 adversaires à créer/)).toBeVisible()
 
     await page.getByRole('button', { name: 'Importer 12 matchs' }).click()
     await expect(page.getByText('1 match importé, 1 journée créée.')).toBeVisible()
 
-    expect(importBody).toEqual({ groupIds: ['group-1'], pools: [] })
+    // The import sends exactly the pools the preview resolved (the tier-2
+    // apiv2 poule 1 mocked above), never a re-fetched list.
+    expect(importBody).toEqual({
+      groupIds: ['group-1'],
+      pools: [{ divisionId: '198609', pools: [{ id: '9001', poolNumber: 1, matches: [] }] }],
+    })
   })
 
   test('imports the whole phase from /journees, flagging unimportable groups', async ({ page }) => {
@@ -111,8 +131,8 @@ test.describe('General admin — Games FFTT import', () => {
         json: {
           groups: [
             previewOneGroup.groups[0],
-            { groupId: 'group-2', groupNumber: 2, divisionName: 'GE2', error: 'pool_not_found' },
-            { groupId: 'group-3', groupNumber: 3, divisionName: 'GE3', error: 'calendar_not_published' },
+            { groupId: 'group-2', groupNumber: 2, divisionName: 'GE 2', error: 'pool_not_found' },
+            { groupId: 'group-3', groupNumber: 3, divisionName: 'GE 3', error: 'calendar_not_published' },
           ],
           totals: previewOneGroup.totals,
         },
@@ -123,12 +143,12 @@ test.describe('General admin — Games FFTT import', () => {
     await page.getByRole('button', { name: 'Importer les matchs FFTT' }).click()
 
     await expect(page.getByText(/toutes les poules avec équipes/)).toBeVisible()
-    await expect(page.getByText('GE1', { exact: true })).toBeVisible()
+    await expect(page.getByText('GE 1', { exact: true })).toBeVisible()
     // Error rows are named by division · poule, never by raw group id.
     const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('GE2', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('GE 2', { exact: true })).toBeVisible()
     await expect(dialog.getByText('Poule inconnue côté FFTT')).toBeVisible()
-    await expect(dialog.getByText('GE3', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('GE 3', { exact: true })).toBeVisible()
     await expect(dialog.getByText('Calendrier pas encore publié par la FFTT')).toBeVisible()
     await expect(dialog.getByText(/Groupe group-/)).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Importer 12 matchs' })).toBeEnabled()
@@ -154,7 +174,7 @@ test.describe('Player — Games FFTT import', () => {
     await page.goto('/journees')
     await expect(page.getByRole('button', { name: 'Importer les matchs FFTT' })).toHaveCount(0)
     await page.goto('/groupes')
-    await page.getByLabel('Division').selectOption({ label: 'GE1' })
+    await page.getByLabel('Division').selectOption({ label: 'GE 1' })
     await expect(page.getByRole('button', { name: 'Importer les matchs' })).toHaveCount(0)
   })
 })

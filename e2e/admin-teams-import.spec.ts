@@ -30,8 +30,8 @@ async function mockFfttGraphql(page: Page) {
         data: {
           poolOpponents: {
             edges: [
-              graphqlTeamNode('9101', 'PPA RIXHEIM 1', '801', '3', '901', 'GE1'),
-              graphqlTeamNode('9110', 'PPA RIXHEIM 10', '807', '5', '907', 'GE7'),
+              graphqlTeamNode('9101', 'PPA RIXHEIM 1', '801', '3', '901', 'GE 1'),
+              graphqlTeamNode('9110', 'PPA RIXHEIM 10', '807', '5', '907', 'GE 7'),
               graphqlTeamNode('9111', 'PPA RIXHEIM 11', '808', '2', '234700', 'GE 8 Phase 1'),
             ],
           },
@@ -42,7 +42,7 @@ async function mockFfttGraphql(page: Page) {
 }
 
 // Matches the mock data: club-fftt-06680011 (PPA Rixheim) already has teams
-// 1..8 in phase-1 (2025/2026 Phase 1, active); divisions div-1..div-7 exist
+// 1..8 in phase-26-1 (2025/2026 Phase 1, active); divisions 198609..198907 exist
 // locally; its addresses are addr-1 (Gymnase principal, default) and addr-2
 // (Salle annexe).
 const preview = {
@@ -51,12 +51,12 @@ const preview = {
   teams: [
     {
       id: '9101', name: 'PPA Rixheim 1', number: 1, phase: 1,
-      divisionId: 'div-1', divisionName: 'GE1', divisionExists: true,
+      divisionId: '198609', divisionName: 'GE 1', divisionExists: true,
       poolNumber: 3, exists: true, importable: false,
     },
     {
       id: '9110', name: 'PPA Rixheim 10', number: 10, phase: 1,
-      divisionId: 'div-7', divisionName: 'GE7', divisionExists: true,
+      divisionId: '198907', divisionName: 'GE 7', divisionExists: true,
       poolNumber: 5, exists: false, importable: true,
     },
     {
@@ -70,19 +70,19 @@ const preview = {
 const importResult = {
   createdPhases: [],
   createdDivisions: [
-    { id: '234700', phaseId: 'phase-1', displayName: 'GE 8 Phase 1', rank: 8, playersPerGame: 3, isArchived: false },
+    { id: '234700', phaseId: 'phase-26-1', displayName: 'GE 8 Phase 1', rank: 8, playersPerGame: 3, isArchived: false },
   ],
   groups: [
-    { id: '1500001', divisionId: 'div-7', number: 5, teamIds: ['9110'], isArchived: false },
+    { id: '1500001', divisionId: '198907', number: 5, teamIds: ['9110'], isArchived: false },
     { id: '1500002', divisionId: '234700', number: 2, teamIds: ['9111'], isArchived: false },
   ],
   createdTeams: [
     {
-      id: '9110', clubId: 'club-fftt-06680011', phaseId: 'phase-1', number: 10, divisionId: 'div-7', groupId: '1500001',
+      id: '9110', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 10, divisionId: '198907', groupId: '1500001',
       gameLocationId: 'addr-2', defaultDay: 'Jeudi', defaultTime: '20h00', captainId: '', playerIds: [], isArchived: false,
     },
     {
-      id: '9111', clubId: 'club-fftt-06680011', phaseId: 'phase-1', number: 11, divisionId: '234700', groupId: '1500002',
+      id: '9111', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 11, divisionId: '234700', groupId: '1500002',
       gameLocationId: 'addr-1', defaultDay: 'Jeudi', defaultTime: '20h00', captainId: '', playerIds: [], isArchived: false,
     },
   ],

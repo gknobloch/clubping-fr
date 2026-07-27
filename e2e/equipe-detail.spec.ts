@@ -9,7 +9,7 @@ test.describe('Player — Team detail', () => {
 
   test('shows identity, roster with play-counts, and a renfort tag', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'PPA Rixheim 1' })).toBeVisible()
-    await expect(page.getByText('GE1')).toBeVisible()
+    await expect(page.getByText('GE 1')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Joueurs' })).toBeVisible()
 
     const renfortRow = page.locator('li').filter({ hasText: 'Cédric Cunin' })

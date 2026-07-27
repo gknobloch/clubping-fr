@@ -74,8 +74,6 @@ export interface ClubDetailViewProps {
   canEdit: boolean
   /** When true, N° affiliation can be edited (reserved for global admin). Default false. */
   canEditAffiliationNumber?: boolean
-  /** Called after saving club (e.g. to navigate to new URL if affiliation number changed). */
-  onClubSaved?: (patch: { affiliationNumber: string; displayName: string }) => void
   /** Prefix for input ids to avoid duplicates when multiple instances exist. */
   idPrefix?: string
 }
@@ -84,7 +82,6 @@ export function ClubDetailView({
   club,
   canEdit,
   canEditAffiliationNumber = false,
-  onClubSaved,
   idPrefix = 'club-detail',
 }: ClubDetailViewProps) {
   const {
@@ -108,7 +105,6 @@ export function ClubDetailView({
 
   const handleSaveClub = () => {
     updateClub(club.id, form)
-    onClubSaved?.(form)
   }
 
   const openAddAddress = () => {

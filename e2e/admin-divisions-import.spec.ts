@@ -11,7 +11,7 @@ const organizations = [
   { id: '72', type: 'Committee', identifier: 'D68', name: 'HAUT RHIN' },
 ]
 
-// Matches the mock data: season '26' with phase 'phase-1' (Phase 1, active).
+// Matches the mock data: season '26' with phase 'phase-26-1' (Phase 1, active).
 const preview = {
   contest: { id: '18368', name: 'FED_Championnat de France par Equipes Masculin' },
   phaseExists: true,
@@ -23,11 +23,11 @@ const preview = {
 }
 
 const importResult = {
-  phase: { id: 'phase-1', seasonId: '26', name: 'Phase 1', displayName: '2025/2026 Phase 1', isArchived: false, isActive: true },
+  phase: { id: 'phase-26-1', seasonId: '26', name: 'Phase 1', displayName: '2025/2026 Phase 1', isArchived: false, isActive: true },
   createdPhase: false,
   created: [
-    { id: '234142', phaseId: 'phase-1', displayName: 'GE Elite P1', rank: 5, playersPerGame: 4, isArchived: false },
-    { id: '234612', phaseId: 'phase-1', displayName: 'GE 7 Phase 1', rank: 6, playersPerGame: 3, isArchived: false },
+    { id: '234142', phaseId: 'phase-26-1', displayName: 'GE Elite P1', rank: 5, playersPerGame: 4, isArchived: false },
+    { id: '234612', phaseId: 'phase-26-1', displayName: 'GE 7 Phase 1', rank: 6, playersPerGame: 3, isArchived: false },
   ],
   skipped: [{ id: '234322', name: 'GE 1 Phase 1' }],
 }
@@ -118,14 +118,14 @@ test.describe('General admin — Divisions organization filter', () => {
     await loginAs(page, 'admin')
   })
 
-  // Matches the mock data: div-1..div-7 (GE1..GE7) all exist in phase-1.
+  // Matches the mock data: 198609..198907 (GE 1..GE 7) all exist in phase-26-1.
   const localPreview = {
     contest: { id: '18368', name: 'FED_Championnat de France par Equipes Masculin' },
     phaseExists: true,
     divisions: [
-      { id: 'div-1', identifier: 'GE1P1', name: 'GE1', rank: 1, playersPerGame: 4, exists: true },
-      { id: 'div-2', identifier: 'GE2P1', name: 'GE2', rank: 2, playersPerGame: 4, exists: true },
-      { id: 'div-3', identifier: 'GE3P1', name: 'GE3', rank: 3, playersPerGame: 4, exists: true },
+      { id: '198609', identifier: 'GE1P1', name: 'GE 1', rank: 1, playersPerGame: 4, exists: true },
+      { id: '198755', identifier: 'GE2P1', name: 'GE 2', rank: 2, playersPerGame: 4, exists: true },
+      { id: '198305', identifier: 'GE3P1', name: 'GE 3', rank: 3, playersPerGame: 4, exists: true },
     ],
   }
 
@@ -134,16 +134,16 @@ test.describe('General admin — Divisions organization filter', () => {
     await page.route(PREVIEW, (route) => route.fulfill({ json: localPreview }))
 
     await page.goto('/divisions')
-    await expect(page.getByRole('cell', { name: 'GE1', exact: true })).toBeVisible()
-    await expect(page.getByRole('cell', { name: 'GE7', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'GE 1', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'GE 7', exact: true })).toBeVisible()
 
     await page.getByLabel('Organisation', { exact: false }).selectOption('14')
-    await expect(page.getByRole('cell', { name: 'GE1', exact: true })).toBeVisible()
-    await expect(page.getByRole('cell', { name: 'GE3', exact: true })).toBeVisible()
-    await expect(page.getByRole('cell', { name: 'GE7', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('cell', { name: 'GE 1', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'GE 3', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'GE 7', exact: true })).toHaveCount(0)
 
     await page.getByLabel('Organisation', { exact: false }).selectOption('')
-    await expect(page.getByRole('cell', { name: 'GE7', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'GE 7', exact: true })).toBeVisible()
   })
 
   test('preselects the import dialog’s organization from the page filter (#259)', async ({ page }) => {
@@ -152,7 +152,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
     await page.goto('/divisions')
     await page.getByLabel('Organisation', { exact: false }).selectOption('14')
-    await expect(page.getByRole('cell', { name: 'GE1', exact: true })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'GE 1', exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await expect(page.getByLabel('Organisation', { exact: true })).toHaveValue('14')
