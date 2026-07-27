@@ -24,6 +24,18 @@
 -- to re-run: once a club's id already equals its affiliation number, every
 -- statement below matches zero rows for it.
 
+-- #275: re-run guard. This file's original guard was incidental and has since
+-- been invalidated — see 0027 for the full story. The marker below is now the
+-- only thing standing between a redeploy and this migration renaming every
+-- club id again. Plain INSERT on purpose: it fails once the marker exists, and
+-- wrangler runs each migration file in a single transaction, so the whole file
+-- rolls back without touching anything.
+CREATE TABLE IF NOT EXISTS schema_guards (
+  name       TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO schema_guards (name) VALUES ('0016_club_id_is_affiliation_number');
+
 UPDATE club_addresses
 SET club_id = (SELECT affiliation_number FROM clubs WHERE clubs.id = club_addresses.club_id)
 WHERE club_id IN (

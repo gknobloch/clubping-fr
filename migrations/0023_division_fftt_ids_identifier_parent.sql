@@ -44,7 +44,7 @@ CREATE TABLE division_remap (
 
 INSERT INTO division_remap (phase_id, norm_key, new_id, identifier, new_name, parent_id) VALUES
   -- 2025/2026 Phase 1 (contest 15954)
-  ('phase-26-1', 'GEELITE', '198428', 'GEEP1', 'GE Elite', NULL),
+  ('phase-26-1', 'GEE',     '198428', 'GEEP1', 'GE Elite', NULL),
   ('phase-26-1', 'GE1',     '198609', 'GE1P1', 'GE 1',     '198428'),
   ('phase-26-1', 'GE2',     '198755', 'GE2P1', 'GE 2',     '198609'),
   ('phase-26-1', 'GE3',     '198305', 'GE3P1', 'GE 3',     '198755'),
@@ -55,7 +55,7 @@ INSERT INTO division_remap (phase_id, norm_key, new_id, identifier, new_name, pa
   ('phase-26-1', 'GE7',     '198907', 'GE7P1', 'GE 7',     NULL),
 
   -- 2025/2026 Phase 2 (contest 15954)
-  ('phase-26-2', 'GEELITE', '198826', 'GEEP2', 'GE Elite', NULL),
+  ('phase-26-2', 'GEE',     '198826', 'GEEP2', 'GE Elite', NULL),
   ('phase-26-2', 'GE1',     '198360', 'GE1P2', 'GE 1',     '198826'),
   ('phase-26-2', 'GE2',     '198361', 'GE2P2', 'GE 2',     '198360'),
   ('phase-26-2', 'GE3',     '198756', 'GE3P2', 'GE 3',     '198361'),
@@ -66,7 +66,7 @@ INSERT INTO division_remap (phase_id, norm_key, new_id, identifier, new_name, pa
 
   -- 2026/2027 Phase 1 (contest 18368) — already imported on these ids, so
   -- the id remap is a no-op here; the identifier and display name are not.
-  ('phase-27-1', 'GEELITE', '234142', 'GEEP1', 'GE Elite', NULL),
+  ('phase-27-1', 'GEE',     '234142', 'GEEP1', 'GE Elite', NULL),
   ('phase-27-1', 'GE1',     '234322', 'GE1P1', 'GE 1',     '234142'),
   ('phase-27-1', 'GE2',     '234461', 'GE2P1', 'GE 2',     '234322'),
   ('phase-27-1', 'GE3',     '234020', 'GE3P1', 'GE 3',     '234461'),
@@ -80,11 +80,16 @@ INSERT INTO division_remap (phase_id, norm_key, new_id, identifier, new_name, pa
 -- seed and by hand-created rows, or "GE Elite P1". Spaces and hyphens are
 -- dropped, the result upper-cased, and a trailing phase marker ("PHASE1" or
 -- "P1") removed — the phase is already the row's phase_id.
+--
+-- GEELITE -> GEE last: production spells the Elite division "GEE" in the
+-- 2025/2026 rows and "GE Elite P1" in 2026/2027, and both have to land on the
+-- same key. Collapsing here rather than listing both keys in division_remap
+-- keeps new_id unique in that table, which the joins below rely on.
 CREATE TABLE division_norm AS
 SELECT
   id,
   phase_id,
-  CASE
+  replace(CASE
     WHEN upper(replace(replace(display_name, ' ', ''), '-', '')) GLOB '*PHASE[1-9]'
       THEN substr(
              upper(replace(replace(display_name, ' ', ''), '-', '')), 1,
@@ -94,7 +99,7 @@ SELECT
              upper(replace(replace(display_name, ' ', ''), '-', '')), 1,
              length(upper(replace(replace(display_name, ' ', ''), '-', ''))) - 2)
     ELSE upper(replace(replace(display_name, ' ', ''), '-', ''))
-  END AS norm_key
+  END, 'GEELITE', 'GEE') AS norm_key
 FROM divisions;
 
 -- Flat old id -> new id list, snapshotted before any row is touched.
@@ -150,3 +155,25 @@ WHERE id IN (SELECT new_id FROM division_remap);
 DROP TABLE division_id_remap;
 DROP TABLE division_norm;
 DROP TABLE division_remap;
+
+-- Finally, strip the phase marker from EVERY division, not just the mapped
+-- ones. A production export shows plenty outside the GE ladder carrying it —
+-- "Nationale 1 Messieurs Phase 1", "L03_Regionale 1 Messieurs_Ph1" — and
+-- leaving those alone would mean an existing division keeps a suffix that a
+-- freshly imported one no longer gets. Same three spellings as
+-- divisionDisplayName() in src/lib/ffttDivisions.ts; keep the two in step.
+--
+-- The marker must carry its own "Phase"/"Ph"/"P", so a division whose name
+-- simply ends in a number ("GE 3", "Nationale 3 Messieurs") is left alone.
+UPDATE divisions
+SET display_name = CASE
+  WHEN display_name GLOB '* Phase [1-9]' THEN substr(display_name, 1, length(display_name) - 8)
+  WHEN display_name GLOB '*_Ph[1-9]'     THEN substr(display_name, 1, length(display_name) - 4)
+  WHEN display_name GLOB '* Ph[1-9]'     THEN substr(display_name, 1, length(display_name) - 4)
+  WHEN display_name GLOB '*_P[1-9]'      THEN substr(display_name, 1, length(display_name) - 3)
+  WHEN display_name GLOB '* P[1-9]'      THEN substr(display_name, 1, length(display_name) - 3)
+  ELSE display_name
+END
+WHERE display_name GLOB '* Phase [1-9]'
+   OR display_name GLOB '*_Ph[1-9]' OR display_name GLOB '* Ph[1-9]'
+   OR display_name GLOB '*_P[1-9]'  OR display_name GLOB '* P[1-9]';

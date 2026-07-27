@@ -33,95 +33,37 @@
 -- Re-run safety: naturally idempotent — the remap table comes out empty once
 -- every id conforms.
 
--- === Step 1: merge the clubs that exist twice ===
+-- === A collision is NOT a duplicate: never merge ===
 --
--- A club can be sitting under BOTH a legacy id and its club-fftt- twin, each
--- with its own real dependents — the production export for #275 has exactly
--- one such pair, "Bergheim CSS" as 06680128 (2 teams, 1 address) and
--- club-fftt-06680128 (1 team, 1 address). Renaming is impossible there (the
--- target id is taken), so the legacy row is merged into the club-fftt- one
--- first; the rename rules below then find nothing left to do for it.
+-- An earlier draft of this migration merged a legacy-id club into its
+-- club-fftt- twin whenever both existed. Running it against a real production
+-- export showed that would have been data loss. The two colliding pairs are
+-- not the same club twice — they are two DIFFERENT clubs sharing one
+-- affiliation number:
 --
--- Written generically rather than for that one pair, so a future duplicate is
--- absorbed the same way. It naturally matches nothing when there are none.
+--   06680123            "Ensisheim TTMC"  team p2-opp-staffelfelden-1, address Staffelfelden
+--   club-fftt-06680123  "Ensisheim TTMC"  Ensisheim teams,             address Ensisheim
+--   06680128            "Bergheim CSS"    team p2-opp-eloyes-1,        address Eloyes
+--   club-fftt-06680128  "Bergheim CSS"    team p2-opp-bergheim-2,      address Bergheim
 --
--- Deliberately non-destructive, unlike 0018's merge: every team is repointed,
--- none is deleted, and both sides' addresses are kept. Two rows that look like
--- the same team (same phase and number) or the same venue may therefore end up
--- under the merged club — visible in the UI and removable in two clicks,
--- whereas picking a winner here would silently drop a row this migration
--- cannot actually inspect. See the verification query in the PR.
+-- So one row in each pair carries someone else's club under the wrong name
+-- and number — the p2-opp-* ids point at the phase-2 schedule-document
+-- import, which reads affiliation numbers off a PDF via OCR (see
+-- ffttScheduleDocument.spec.ts, which has a real 'O688O145' letter-O-for-zero
+-- case). Merging would have folded Staffelfelden into Ensisheim and Eloyes
+-- into Bergheim, silently and irreversibly.
+--
+-- The right id for those rows cannot be derived — nothing here knows
+-- Staffelfelden's or Eloyes' real affiliation number — so both are left
+-- exactly as they are. They stay fully reachable and editable thanks to the
+-- /clubs/:clubId routing change in the same PR, which is where the club's
+-- name and number get corrected by hand. A visibly wrong row beats a
+-- silently merged one.
+--
+-- Hence the NOT EXISTS guard on both rules below: whenever the target id is
+-- already taken, this migration does nothing rather than guess.
 
-DROP TABLE IF EXISTS club_merge;
-
-CREATE TABLE club_merge (
-  old_id TEXT PRIMARY KEY,
-  new_id TEXT NOT NULL
-);
-
-INSERT INTO club_merge (old_id, new_id)
-SELECT id, 'club-fftt-' || affiliation_number
-FROM clubs
-WHERE id NOT GLOB 'club-fftt-*'
-  AND affiliation_number GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
-  AND EXISTS (SELECT 1 FROM clubs t WHERE t.id = 'club-fftt-' || clubs.affiliation_number);
-
-INSERT OR IGNORE INTO club_merge (old_id, new_id)
-SELECT id, 'club-fftt-' || id
-FROM clubs
-WHERE id GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
-  AND (affiliation_number IS NULL OR affiliation_number = '')
-  AND EXISTS (SELECT 1 FROM clubs t WHERE t.id = 'club-fftt-' || clubs.id);
-
--- The surviving row is the one that kept the convention, but it is also the
--- one whose affiliation_number 0019/0020 left NULL — take it from the row
--- being merged away before that row disappears.
-UPDATE clubs
-SET affiliation_number = (
-  SELECT o.affiliation_number FROM clubs o
-  JOIN club_merge m ON m.old_id = o.id
-  WHERE m.new_id = clubs.id AND o.affiliation_number IS NOT NULL AND o.affiliation_number != ''
-)
-WHERE (affiliation_number IS NULL OR affiliation_number = '')
-  AND id IN (SELECT new_id FROM club_merge)
-  AND EXISTS (
-    SELECT 1 FROM clubs o JOIN club_merge m ON m.old_id = o.id
-    WHERE m.new_id = clubs.id AND o.affiliation_number IS NOT NULL AND o.affiliation_number != ''
-  );
-
-UPDATE club_addresses
-SET club_id = (SELECT new_id FROM club_merge WHERE old_id = club_addresses.club_id)
-WHERE club_id IN (SELECT old_id FROM club_merge);
-
-UPDATE club_channels
-SET club_id = (SELECT new_id FROM club_merge WHERE old_id = club_channels.club_id)
-WHERE club_id IN (SELECT old_id FROM club_merge);
-
-UPDATE teams
-SET club_id = (SELECT new_id FROM club_merge WHERE old_id = teams.club_id)
-WHERE club_id IN (SELECT old_id FROM club_merge);
-
-UPDATE users
-SET club_id = (SELECT new_id FROM club_merge WHERE old_id = users.club_id)
-WHERE club_id IN (SELECT old_id FROM club_merge);
-
--- club_logos.club_id is the primary key, so a logo can only move onto a
--- surviving club that has none. Any leftover goes away with its club row
--- below (REFERENCES clubs(id) ON DELETE CASCADE) — a duplicate logo of the
--- same club, nothing else.
-UPDATE club_logos
-SET club_id = (SELECT new_id FROM club_merge WHERE old_id = club_logos.club_id)
-WHERE club_id IN (SELECT old_id FROM club_merge)
-  AND NOT EXISTS (
-    SELECT 1 FROM club_logos e
-    WHERE e.club_id = (SELECT new_id FROM club_merge WHERE old_id = club_logos.club_id)
-  );
-
-DELETE FROM clubs WHERE id IN (SELECT old_id FROM club_merge);
-
-DROP TABLE club_merge;
-
--- === Step 2: rename what is simply on the wrong id ===
+-- === Rename what is simply on the wrong id ===
 
 DROP TABLE IF EXISTS club_id_remap;
 

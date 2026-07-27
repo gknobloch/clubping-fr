@@ -131,10 +131,22 @@ describe('divisionDisplayName', () => {
     expect(divisionDisplayName('GE Elite P2')).toBe('GE Elite')
   })
 
+  it('strips the underscored "_PhN" marker used by the league divisions', () => {
+    expect(divisionDisplayName('L03_Regionale 1 Messieurs_Ph1')).toBe('L03_Regionale 1 Messieurs')
+    expect(divisionDisplayName('L03_Pré-Nationale Messieurs_Ph1')).toBe('L03_Pré-Nationale Messieurs')
+  })
+
+  it('strips the marker from the national divisions too', () => {
+    expect(divisionDisplayName('Nationale 1 Messieurs Phase 1')).toBe('Nationale 1 Messieurs')
+  })
+
   it('keeps a name whose trailing number is the division’s own', () => {
     expect(divisionDisplayName('GE 3')).toBe('GE 3')
     expect(divisionDisplayName('GE Elite')).toBe('GE Elite')
     expect(divisionDisplayName('Régionale 2')).toBe('Régionale 2')
+    expect(divisionDisplayName('Nationale 3 Messieurs')).toBe('Nationale 3 Messieurs')
+    expect(divisionDisplayName('Pre-Nat Masculine')).toBe('Pre-Nat Masculine')
+    expect(divisionDisplayName('GEE')).toBe('GEE')
   })
 
   it('is idempotent and trims, so re-importing never erodes a name', () => {

@@ -20,6 +20,18 @@
 -- changes (the rename would otherwise erase the old id these lookups join
 -- on) — same ordering as 0016.
 
+-- #275: re-run guard. This file's original guard was incidental and has since
+-- been invalidated — see 0027 for the full story. The marker below is now the
+-- only thing standing between a redeploy and this migration renaming every
+-- club id again. Plain INSERT on purpose: it fails once the marker exists, and
+-- wrangler runs each migration file in a single transaction, so the whole file
+-- rolls back without touching anything.
+CREATE TABLE IF NOT EXISTS schema_guards (
+  name       TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO schema_guards (name) VALUES ('0017_drop_club_affiliation_number');
+
 WITH orphans AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
   FROM clubs

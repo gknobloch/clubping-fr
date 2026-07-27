@@ -14,6 +14,10 @@ playwright/.cache
 # Cloudflare
 .wrangler
 .dev.vars
+# D1 exports: real production data (player names, emails, phone numbers).
+# Never commit one — take them outside the repo, or leave them ignored here.
+d1-backup*.sql
+*.d1-export.sql
 
 # Env (local secrets / overrides — *.local also covers .env.local)
 .env
