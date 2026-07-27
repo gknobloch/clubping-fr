@@ -158,6 +158,20 @@ describe('selectPoolForGroup', () => {
     expect(pool?.id).toBe('1162588')
   })
 
+  it('the group’s own FFTT pool id wins over membership and number (#278)', () => {
+    // Number says poule 1 and team 200 sits in 1162588, but the group knows
+    // exactly which pool it is.
+    const pool = selectPoolForGroup(pools, { number: 1, teamIds: ['200'], groupId: '1162590' })
+    expect(pool?.id).toBe('1162590')
+  })
+
+  it('falls back to the old inference when the pool id is unknown locally', () => {
+    // A group carrying a pool id FFTT no longer returns must not resolve to
+    // nothing when membership still identifies it.
+    const pool = selectPoolForGroup(pools, { number: 9, teamIds: ['201'], groupId: 'gone' })
+    expect(pool?.id).toBe('1162588')
+  })
+
   it('returns null when nothing lines up', () => {
     expect(selectPoolForGroup(pools, { number: 9, teamIds: ['999'] })).toBeNull()
     expect(selectPoolForGroup([], { number: 1, teamIds: [] })).toBeNull()

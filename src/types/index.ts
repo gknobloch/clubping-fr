@@ -84,11 +84,19 @@ export interface Division {
 }
 
 export interface Group {
+  /** Opaque generated local id; never carries meaning (#278). */
   id: string
   divisionId: string
   number: number
   teamIds: string[]
   isArchived: boolean
+  /**
+   * FFTT pool id, when this group came from FFTT (#278). Absent for groups
+   * created by hand or read off a PDF calendar. Note the name collision:
+   * Team.groupId and MatchDay.groupId point AT Group.id — this one is the
+   * FFTT identity of the group itself.
+   */
+  groupId?: string
 }
 
 /**

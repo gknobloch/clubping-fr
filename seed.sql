@@ -75,14 +75,16 @@ INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_de
   ('addr-mutt', 'club-fftt-06680105', 'Salle', '1 rue du Sport', '68000', 'Mulhouse', 1);
 
 -- groups
-INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES
-  ('group-1', '198609', 1, '["team-1","opp-etival-1","opp-rosenau-1","opp-rcs-2","opp-vittel-1","opp-illzach-2","opp-moussey-1","opp-anould-2"]', 0),
-  ('group-2', '198755', 1, '["team-2","opp-illzach-3","opp-rosenau-2","opp-cmjc-3","opp-caje-1","opp-stlouis-1","opp-huningue-1","opp-ingersheim-1"]', 0),
-  ('group-3', '198305', 1, '["team-3","opp-issenheim-1","opp-illzach-6","opp-wintzfelden-2","opp-huningue-2","opp-thann-2","opp-rosenau-4"]', 0),
-  ('group-4', '198821', 1, '["team-4","opp-soultz-2","opp-wittelsheim-5","opp-illzach-8","opp-fcm-3","opp-kembs-2","opp-ensisheim-1","opp-rosenau-6"]', 0),
-  ('group-5', '198895', 1, '["team-5","team-6","opp-issenheim-3","opp-illzach-7","opp-ballons-4","opp-mutt-5","opp-wittelsheim-4","opp-wintzfelden-3"]', 0),
-  ('group-6', '198435', 1, '["team-7","opp-huningue-3","opp-mutt-7","opp-thann-5","opp-stlouis-3","opp-kembs-3","opp-illzach-10","opp-soultz-4"]', 0),
-  ('group-7', '198907', 1, '["team-8","opp-rosenau-7","opp-thann-4","opp-issenheim-4","opp-huningue-4","opp-kembs-6","opp-kembs-4","opp-illzach-11"]', 0);
+-- group_id (FFTT pool id, #278) is NULL here: the seed's groups are local,
+-- not imported from FFTT.
+INSERT INTO groups (id, division_id, number, team_ids, is_archived, group_id) VALUES
+  ('group-1', '198609', 1, '["team-1","opp-etival-1","opp-rosenau-1","opp-rcs-2","opp-vittel-1","opp-illzach-2","opp-moussey-1","opp-anould-2"]', 0, NULL),
+  ('group-2', '198755', 1, '["team-2","opp-illzach-3","opp-rosenau-2","opp-cmjc-3","opp-caje-1","opp-stlouis-1","opp-huningue-1","opp-ingersheim-1"]', 0, NULL),
+  ('group-3', '198305', 1, '["team-3","opp-issenheim-1","opp-illzach-6","opp-wintzfelden-2","opp-huningue-2","opp-thann-2","opp-rosenau-4"]', 0, NULL),
+  ('group-4', '198821', 1, '["team-4","opp-soultz-2","opp-wittelsheim-5","opp-illzach-8","opp-fcm-3","opp-kembs-2","opp-ensisheim-1","opp-rosenau-6"]', 0, NULL),
+  ('group-5', '198895', 1, '["team-5","team-6","opp-issenheim-3","opp-illzach-7","opp-ballons-4","opp-mutt-5","opp-wittelsheim-4","opp-wintzfelden-3"]', 0, NULL),
+  ('group-6', '198435', 1, '["team-7","opp-huningue-3","opp-mutt-7","opp-thann-5","opp-stlouis-3","opp-kembs-3","opp-illzach-10","opp-soultz-4"]', 0, NULL),
+  ('group-7', '198907', 1, '["team-8","opp-rosenau-7","opp-thann-4","opp-issenheim-4","opp-huningue-4","opp-kembs-6","opp-kembs-4","opp-illzach-11"]', 0, NULL);
 
 -- players
 

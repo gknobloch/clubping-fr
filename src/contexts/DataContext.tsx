@@ -735,8 +735,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       for (const r of lookedUp) if (r) addPools(r.divisionId, r.pools)
 
       // Tier 1: direct per-group guess for whatever tier 0 didn't resolve.
-      const direct = await Promise.all(requested.filter((g) => !isResolved(g)).map(async (g) => {
-        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, g.id))
+      // cx_poule is an FFTT-space id, so this uses the group's own FFTT pool
+      // id (#278) — before that field existed it used Group.id, which only
+      // happened to hold a pool id for groups from the FFTT import.
+      const direct = await Promise.all(requested.filter((g) => !isResolved(g) && g.groupId).map(async (g) => {
+        const xml = await fetchTextFromBrowser(dafunkerResultsUrl(g.divisionId, g.groupId!))
         return xml === null ? null : { divisionId: g.divisionId, pools: parseDafunkerResultsXml(xml) }
       }))
       for (const r of direct) if (r) addPools(r.divisionId, r.pools)
