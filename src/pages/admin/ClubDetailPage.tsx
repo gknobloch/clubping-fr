@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView } from '@/components/ClubDetailView'
-import { fetchClubDetailXmlFromBrowser, hasVenueInfo, parseClubDetailXml } from '@/lib/ffttClub'
+import { ClubImportPreview } from '@/components/ClubImportPreview'
+import { ModalShell } from '@/components/ModalShell'
+import {
+  clubSyncFields, defaultSelectedFields, fetchClubDetailXmlFromBrowser, parseClubDetailXml,
+  type ClubSyncField, type FfttClubDetail,
+} from '@/lib/ffttClub'
 
 type SyncState = 'idle' | 'loading' | 'done' | 'not_found' | 'error'
 
@@ -16,6 +21,9 @@ export function ClubDetailPage() {
   const club = clubId != null ? clubs.find((c) => c.id === clubId) ?? null : null
 
   const [syncState, setSyncState] = useState<SyncState>('idle')
+  // Nothing is written until the preview is confirmed (#280).
+  const [preview, setPreview] = useState<{ detail: FfttClubDetail; fields: ClubSyncField[] } | null>(null)
+  const [selected, setSelected] = useState<Set<ClubSyncField['key']>>(new Set())
 
   if (!clubId || !club) {
     return (
@@ -49,6 +57,8 @@ export function ClubDetailPage() {
     }
   }
 
+  const defaultAddress = (club.addresses ?? []).find((a) => a.isDefault)
+
   const handleSync = async () => {
     setSyncState('loading')
     const xml = await fetchClubDetailXmlFromBrowser(club.affiliationNumber)
@@ -61,13 +71,41 @@ export function ClubDetailPage() {
       setSyncState('not_found')
       return
     }
-    updateClub(club.id, { displayName: parsed.displayName })
-    if (hasVenueInfo(parsed)) {
-      const defaultAddress = (club.addresses ?? []).find((a) => a.isDefault)
-      const patch = { label: parsed.venueLabel || 'Salle', street: parsed.street, postalCode: parsed.postalCode, city: parsed.city }
+    const fields = clubSyncFields(parsed, {
+      displayName: club.displayName,
+      venue: defaultAddress
+        ? {
+            label: defaultAddress.label, street: defaultAddress.street,
+            postalCode: defaultAddress.postalCode, city: defaultAddress.city,
+          }
+        : null,
+    })
+    setPreview({ detail: parsed, fields })
+    setSelected(defaultSelectedFields(fields))
+    setSyncState('idle')
+  }
+
+  const toggleField = (key: ClubSyncField['key']) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const applySync = () => {
+    if (!preview) return
+    const { detail } = preview
+    if (selected.has('displayName')) updateClub(club.id, { displayName: detail.displayName })
+    if (selected.has('venue')) {
+      const patch = {
+        label: detail.venueLabel || 'Salle', street: detail.street,
+        postalCode: detail.postalCode, city: detail.city,
+      }
       if (defaultAddress) updateClubAddress(club.id, defaultAddress.id, patch)
       else addClubAddress(club.id, { ...patch, isDefault: true })
     }
+    setPreview(null)
     setSyncState('done')
   }
 
@@ -168,6 +206,49 @@ export function ClubDetailPage() {
             </p>
           )}
         </div>
+      )}
+
+      {preview && (
+        <ModalShell
+          onClose={() => setPreview(null)}
+          labelledBy="sync-preview-title"
+          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
+            <h2 id="sync-preview-title" className="font-display text-lg font-semibold text-slate-800">
+              Synchroniser depuis la FFTT
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Choisissez ce que vous voulez reprendre pour « {club.displayName} ». Rien n’est modifié tant que vous
+              n’avez pas confirmé.
+            </p>
+            <div className="mt-4">
+              <ClubImportPreview fields={preview.fields} selected={selected} onToggle={toggleField} />
+            </div>
+            {selected.size === 0 && (
+              <p className="mt-3 text-sm text-slate-500">
+                Rien de sélectionné : il n’y a aucune modification à appliquer.
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={applySync}
+                disabled={selected.size === 0}
+                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </ModalShell>
       )}
     </div>
   )

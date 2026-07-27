@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { clubIdFromAffiliation, hasVenueInfo, normalizeFfttName, parseClubDetailXml } from './ffttClub'
+import {
+  clubIdFromAffiliation,
+  clubSyncFields,
+  defaultSelectedFields,
+  formatVenue,
+  hasVenueInfo,
+  normalizeFfttName,
+  parseClubDetailXml,
+} from './ffttClub'
 
 const RIXHEIM_XML =
   '<?xml version="1.0" encoding="ISO-8859-1"?>\n' +
@@ -92,5 +100,63 @@ describe('clubIdFromAffiliation', () => {
     expect(clubIdFromAffiliation('123')).toBeNull()
     expect(clubIdFromAffiliation('0668001A')).toBeNull()
     expect(clubIdFromAffiliation('066800110')).toBeNull()
+  })
+})
+
+describe('clubSyncFields', () => {
+  const incoming = {
+    displayName: 'Rixheim PPA',
+    venueLabel: 'Gymnase',
+    street: '1 rue du Sport',
+    postalCode: '68170',
+    city: 'Rixheim',
+  }
+  const field = (fs: ReturnType<typeof clubSyncFields>, key: string) => fs.find((f) => f.key === key)!
+
+  it('marks a differing field as importable, with both sides shown', () => {
+    const fs = clubSyncFields(incoming, { displayName: 'PPA Rixheim', venue: null })
+    const name = field(fs, 'displayName')
+    expect(name.current).toBe('PPA Rixheim')
+    expect(name.incoming).toBe('Rixheim PPA')
+    expect(name.unchanged).toBe(false)
+    expect(name.unavailable).toBe(false)
+  })
+
+  it('marks an identical field unchanged so it cannot be selected', () => {
+    const fs = clubSyncFields(incoming, { displayName: 'Rixheim PPA', venue: null })
+    expect(field(fs, 'displayName').unchanged).toBe(true)
+  })
+
+  it('treats a venue FFTT does not have as unavailable rather than an erasure', () => {
+    const fs = clubSyncFields(
+      { ...incoming, street: '', postalCode: '', city: '' },
+      { displayName: 'X', venue: { label: 'Salle', street: '2 rue A', postalCode: '68000', city: 'Colmar' } },
+    )
+    const venue = field(fs, 'venue')
+    expect(venue.unavailable).toBe(true)
+    expect(venue.incoming).toBeNull()
+    expect(venue.current).toBe('Salle · 2 rue A, 68000 Colmar')
+    expect(defaultSelectedFields(fs).has('venue')).toBe(false)
+  })
+
+  it('leaves every current value null for a club being created', () => {
+    const fs = clubSyncFields(incoming)
+    expect(fs.every((f) => f.current === null)).toBe(true)
+    expect([...defaultSelectedFields(fs)].sort()).toEqual(['displayName', 'venue'])
+  })
+
+  it('detects an identical venue even when spelled through separate parts', () => {
+    const fs = clubSyncFields(incoming, {
+      displayName: 'Rixheim PPA',
+      venue: { label: 'Gymnase', street: '1 rue du Sport', postalCode: '68170', city: 'Rixheim' },
+    })
+    expect(field(fs, 'venue').unchanged).toBe(true)
+    expect(defaultSelectedFields(fs).size).toBe(0)
+  })
+
+  it('formats a venue as one line, or null when empty', () => {
+    expect(formatVenue({ label: 'Salle', street: '', postalCode: '', city: 'Thann' })).toBe('Salle · Thann')
+    expect(formatVenue({ label: '', street: '', postalCode: '', city: '' })).toBeNull()
+    expect(formatVenue(null)).toBeNull()
   })
 })

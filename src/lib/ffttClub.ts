@@ -47,6 +47,90 @@ export function normalizeFfttName(raw: string): string {
     .join(' ')
 }
 
+// ---------------------------------------------------------------------------
+// Import preview (#280)
+// ---------------------------------------------------------------------------
+
+/** One reviewable field of an FFTT club import. */
+export interface ClubSyncField {
+  key: 'displayName' | 'venue'
+  label: string
+  /** What the club has today; null when it has nothing (e.g. a new club, or no venue yet). */
+  current: string | null
+  /** What the FFTT payload would set; null when FFTT has nothing to offer. */
+  incoming: string | null
+  /** Same on both sides — there is nothing to decide, so it is not selectable. */
+  unchanged: boolean
+  /** Nothing usable coming from FFTT, so this field cannot be imported at all. */
+  unavailable: boolean
+}
+
+/** One line of address, as shown in the preview and stored on the club. */
+export interface ClubVenue {
+  label: string
+  street: string
+  postalCode: string
+  city: string
+}
+
+/** Human-readable single line for a venue, or null when it is entirely empty. */
+export function formatVenue(v: ClubVenue | null | undefined): string | null {
+  if (!v) return null
+  const street = [v.street, [v.postalCode, v.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  const line = [v.label, street].filter(Boolean).join(' · ')
+  return line || null
+}
+
+/**
+ * Build the reviewable field list for an FFTT club import (#280).
+ *
+ * `current` is the club as it stands — omit it for a club being created, which
+ * simply leaves every `current` null. A field is only selectable when FFTT has
+ * something to offer AND it differs from what is already there: importing a
+ * value identical to the current one is a no-op, and importing nothing would
+ * erase data the FFTT payload never had.
+ */
+export function clubSyncFields(
+  incoming: Pick<FfttClubDetail, 'displayName' | 'venueLabel' | 'street' | 'postalCode' | 'city'>,
+  current?: { displayName: string; venue: ClubVenue | null },
+): ClubSyncField[] {
+  const incomingVenue: ClubVenue = {
+    label: incoming.venueLabel || 'Salle',
+    street: incoming.street,
+    postalCode: incoming.postalCode,
+    city: incoming.city,
+  }
+  // The label alone is a default we invented, not information from FFTT.
+  const hasVenue = hasVenueInfo(incoming)
+
+  const name: ClubSyncField = {
+    key: 'displayName',
+    label: 'Nom du club',
+    current: current?.displayName ?? null,
+    incoming: incoming.displayName || null,
+    unchanged: !!current && current.displayName === incoming.displayName,
+    unavailable: !incoming.displayName,
+  }
+
+  const currentVenueLine = formatVenue(current?.venue)
+  const incomingVenueLine = hasVenue ? formatVenue(incomingVenue) : null
+  const venue: ClubSyncField = {
+    key: 'venue',
+    label: 'Lieu de jeu',
+    current: currentVenueLine,
+    incoming: incomingVenueLine,
+    unchanged: !!currentVenueLine && currentVenueLine === incomingVenueLine,
+    unavailable: !incomingVenueLine,
+  }
+
+  return [name, venue]
+}
+
+/** The fields a preview should start with ticked: everything actually importable. */
+export function defaultSelectedFields(fields: ClubSyncField[]): Set<ClubSyncField['key']> {
+  return new Set(fields.filter((f) => !f.unchanged && !f.unavailable).map((f) => f.key))
+}
+
 /** Whether a club detail carries any usable game-venue information at all. */
 /**
  * FFTT-aligned club id (#275): `club-fftt-<affiliationNumber>`, the format the
