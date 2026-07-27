@@ -6,19 +6,20 @@ INSERT INTO seasons (id, display_name, status) VALUES
 
 -- phases
 INSERT INTO phases (id, season_id, name, display_name, status) VALUES
-  ('phase-1', '26', 'Phase 1', '2025/2026 Phase 1', 'active');
+  ('phase-26-1', '26', 'Phase 1', '2025/2026 Phase 1', 'active');
 
 -- divisions
--- GE1 -> GE5 form a parent chain (#236); GE6/GE7 are orphans, same as real
--- FFTT data (see src/mock/data.ts for the rationale).
-INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES
-  ('div-1', 'phase-1', 'GE1', 1, 4, 0, NULL),
-  ('div-2', 'phase-1', 'GE2', 2, 4, 0, 'div-1'),
-  ('div-3', 'phase-1', 'GE3', 3, 4, 0, 'div-2'),
-  ('div-4', 'phase-1', 'GE4', 4, 4, 0, 'div-3'),
-  ('div-5', 'phase-1', 'GE5', 5, 4, 0, 'div-4'),
-  ('div-6', 'phase-1', 'GE6', 6, 3, 0, NULL),
-  ('div-7', 'phase-1', 'GE7', 7, 3, 0, NULL);
+-- Ids, identifiers and names are the real FFTT ones for 2025/2026 Phase 1
+-- (#275). GE 1 -> GE 5 form a parent chain (#236); GE 6/GE 7 are orphans here,
+-- same as real FFTT data (see src/mock/data.ts for the rationale).
+INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES
+  ('198609', 'phase-26-1', 'GE 1', 1, 4, 0, NULL, 'GE1P1'),
+  ('198755', 'phase-26-1', 'GE 2', 2, 4, 0, '198609', 'GE2P1'),
+  ('198305', 'phase-26-1', 'GE 3', 3, 4, 0, '198755', 'GE3P1'),
+  ('198821', 'phase-26-1', 'GE 4', 4, 4, 0, '198305', 'GE4P1'),
+  ('198895', 'phase-26-1', 'GE 5', 5, 4, 0, '198821', 'GE5P1'),
+  ('198435', 'phase-26-1', 'GE 6', 6, 3, 0, NULL, 'GE6P1'),
+  ('198907', 'phase-26-1', 'GE 7', 7, 3, 0, NULL, 'GE7P1');
 
 -- clubs
 INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES
@@ -73,78 +74,78 @@ INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_de
   ('addr-ballons', 'club-fftt-06880064', 'Salle', '1 rue du Sport', '68000', 'Ballons des Vosges', 1),
   ('addr-mutt', 'club-fftt-06680105', 'Salle', '1 rue du Sport', '68000', 'Mulhouse', 1);
 
--- groups_tbl
-INSERT INTO groups_tbl (id, division_id, number, team_ids, is_archived) VALUES
-  ('group-1', 'div-1', 1, '["team-1","opp-etival-1","opp-rosenau-1","opp-rcs-2","opp-vittel-1","opp-illzach-2","opp-moussey-1","opp-anould-2"]', 0),
-  ('group-2', 'div-2', 1, '["team-2","opp-illzach-3","opp-rosenau-2","opp-cmjc-3","opp-caje-1","opp-stlouis-1","opp-huningue-1","opp-ingersheim-1"]', 0),
-  ('group-3', 'div-3', 1, '["team-3","opp-issenheim-1","opp-illzach-6","opp-wintzfelden-2","opp-huningue-2","opp-thann-2","opp-rosenau-4"]', 0),
-  ('group-4', 'div-4', 1, '["team-4","opp-soultz-2","opp-wittelsheim-5","opp-illzach-8","opp-fcm-3","opp-kembs-2","opp-ensisheim-1","opp-rosenau-6"]', 0),
-  ('group-5', 'div-5', 1, '["team-5","team-6","opp-issenheim-3","opp-illzach-7","opp-ballons-4","opp-mutt-5","opp-wittelsheim-4","opp-wintzfelden-3"]', 0),
-  ('group-6', 'div-6', 1, '["team-7","opp-huningue-3","opp-mutt-7","opp-thann-5","opp-stlouis-3","opp-kembs-3","opp-illzach-10","opp-soultz-4"]', 0),
-  ('group-7', 'div-7', 1, '["team-8","opp-rosenau-7","opp-thann-4","opp-issenheim-4","opp-huningue-4","opp-kembs-6","opp-kembs-4","opp-illzach-11"]', 0);
+-- groups
+INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES
+  ('group-1', '198609', 1, '["team-1","opp-etival-1","opp-rosenau-1","opp-rcs-2","opp-vittel-1","opp-illzach-2","opp-moussey-1","opp-anould-2"]', 0),
+  ('group-2', '198755', 1, '["team-2","opp-illzach-3","opp-rosenau-2","opp-cmjc-3","opp-caje-1","opp-stlouis-1","opp-huningue-1","opp-ingersheim-1"]', 0),
+  ('group-3', '198305', 1, '["team-3","opp-issenheim-1","opp-illzach-6","opp-wintzfelden-2","opp-huningue-2","opp-thann-2","opp-rosenau-4"]', 0),
+  ('group-4', '198821', 1, '["team-4","opp-soultz-2","opp-wittelsheim-5","opp-illzach-8","opp-fcm-3","opp-kembs-2","opp-ensisheim-1","opp-rosenau-6"]', 0),
+  ('group-5', '198895', 1, '["team-5","team-6","opp-issenheim-3","opp-illzach-7","opp-ballons-4","opp-mutt-5","opp-wittelsheim-4","opp-wintzfelden-3"]', 0),
+  ('group-6', '198435', 1, '["team-7","opp-huningue-3","opp-mutt-7","opp-thann-5","opp-stlouis-3","opp-kembs-3","opp-illzach-10","opp-soultz-4"]', 0),
+  ('group-7', '198907', 1, '["team-8","opp-rosenau-7","opp-thann-4","opp-issenheim-4","opp-huningue-4","opp-kembs-6","opp-kembs-4","opp-illzach-11"]', 0);
 
 -- players
 
 -- teams (PPA Rixheim)
 INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived) VALUES
-  ('team-1', 'club-fftt-06680011', 'phase-1', 1, 'div-1', 'group-1', 'addr-1', 'Samedi', '16h00', 'p2-player-5', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3","p2-player-4"]', '{"p2-player-5":"1887","p2-player-1":"1763","p2-player-2":"1665","p2-player-3":"1647","p2-player-4":"1566"}', '#374151', NULL, 0),
-  ('team-2', 'club-fftt-06680011', 'phase-1', 2, 'div-2', 'group-2', 'addr-1', 'Samedi', '16h00', 'p2-player-6', '["p2-player-6","p2-player-10","p2-player-7","p2-player-9","p2-player-8"]', '{"p2-player-6":"1791","p2-player-10":"1661","p2-player-7":"1500","p2-player-9":"1301","p2-player-8":"1301"}', '#b91c1c', NULL, 0),
-  ('team-3', 'club-fftt-06680011', 'phase-1', 3, 'div-3', 'group-3', 'addr-1', 'Samedi', '16h00', 'p2-player-12', '["p2-player-12","p2-player-13","p2-player-14","p2-player-11","p2-player-17"]', '{"p2-player-12":"1356","p2-player-13":"1267","p2-player-14":"1198","p2-player-11":"1186","p2-player-17":"754"}', '#15803d', NULL, 0),
-  ('team-4', 'club-fftt-06680011', 'phase-1', 4, 'div-4', 'group-4', 'addr-1', 'Jeudi', '20h00', 'p2-player-16', '["p2-player-16","p2-player-19","p2-player-18","p2-player-15","p2-player-20"]', '{"p2-player-16":"889","p2-player-19":"728","p2-player-18":"727","p2-player-15":"713","p2-player-20":"704"}', '#c2410c', NULL, 0),
-  ('team-5', 'club-fftt-06680011', 'phase-1', 5, 'div-5', 'group-5', 'addr-1', 'Samedi', '16h00', 'p2-player-23', '["p2-player-22","p2-player-24","p2-player-21","p2-player-23","p2-player-26"]', '{"p2-player-22":"735","p2-player-24":"701","p2-player-21":"702","p2-player-23":"1050","p2-player-26":"707"}', '#1d4ed8', NULL, 0),
-  ('team-6', 'club-fftt-06680011', 'phase-1', 6, 'div-5', 'group-5', 'addr-2', 'Samedi', '16h00', 'p2-player-42', '["p2-player-29","p2-player-39","p2-player-40","p2-player-41","p2-player-42","p2-player-38","p2-player-43","p2-player-44"]', '{"p2-player-29":"632","p2-player-39":"500","p2-player-40":"503","p2-player-41":"561","p2-player-42":"500","p2-player-38":"500","p2-player-43":"500","p2-player-44":"500"}', '#be185d', NULL, 0),
-  ('team-7', 'club-fftt-06680011', 'phase-1', 7, 'div-6', 'group-6', 'addr-1', 'Jeudi', '20h00', 'p2-player-33', '["p2-player-33","p2-player-35","p2-player-34","p2-player-36","p2-player-37"]', '{"p2-player-33":"500","p2-player-35":"500","p2-player-34":"500","p2-player-36":"500","p2-player-37":"500"}', '#7c2d12', NULL, 0),
-  ('team-8', 'club-fftt-06680011', 'phase-1', 8, 'div-7', 'group-7', 'addr-1', 'Jeudi', '20h00', 'p2-player-32', '["p2-player-32","p2-player-27","p2-player-28","p2-player-30","p2-player-31"]', '{"p2-player-32":"607","p2-player-27":"501","p2-player-28":"500","p2-player-30":"500","p2-player-31":"500"}', '#0d9488', NULL, 0);
+  ('team-1', 'club-fftt-06680011', 'phase-26-1', 1, '198609', 'group-1', 'addr-1', 'Samedi', '16h00', 'p2-player-5', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3","p2-player-4"]', '{"p2-player-5":"1887","p2-player-1":"1763","p2-player-2":"1665","p2-player-3":"1647","p2-player-4":"1566"}', '#374151', NULL, 0),
+  ('team-2', 'club-fftt-06680011', 'phase-26-1', 2, '198755', 'group-2', 'addr-1', 'Samedi', '16h00', 'p2-player-6', '["p2-player-6","p2-player-10","p2-player-7","p2-player-9","p2-player-8"]', '{"p2-player-6":"1791","p2-player-10":"1661","p2-player-7":"1500","p2-player-9":"1301","p2-player-8":"1301"}', '#b91c1c', NULL, 0),
+  ('team-3', 'club-fftt-06680011', 'phase-26-1', 3, '198305', 'group-3', 'addr-1', 'Samedi', '16h00', 'p2-player-12', '["p2-player-12","p2-player-13","p2-player-14","p2-player-11","p2-player-17"]', '{"p2-player-12":"1356","p2-player-13":"1267","p2-player-14":"1198","p2-player-11":"1186","p2-player-17":"754"}', '#15803d', NULL, 0),
+  ('team-4', 'club-fftt-06680011', 'phase-26-1', 4, '198821', 'group-4', 'addr-1', 'Jeudi', '20h00', 'p2-player-16', '["p2-player-16","p2-player-19","p2-player-18","p2-player-15","p2-player-20"]', '{"p2-player-16":"889","p2-player-19":"728","p2-player-18":"727","p2-player-15":"713","p2-player-20":"704"}', '#c2410c', NULL, 0),
+  ('team-5', 'club-fftt-06680011', 'phase-26-1', 5, '198895', 'group-5', 'addr-1', 'Samedi', '16h00', 'p2-player-23', '["p2-player-22","p2-player-24","p2-player-21","p2-player-23","p2-player-26"]', '{"p2-player-22":"735","p2-player-24":"701","p2-player-21":"702","p2-player-23":"1050","p2-player-26":"707"}', '#1d4ed8', NULL, 0),
+  ('team-6', 'club-fftt-06680011', 'phase-26-1', 6, '198895', 'group-5', 'addr-2', 'Samedi', '16h00', 'p2-player-42', '["p2-player-29","p2-player-39","p2-player-40","p2-player-41","p2-player-42","p2-player-38","p2-player-43","p2-player-44"]', '{"p2-player-29":"632","p2-player-39":"500","p2-player-40":"503","p2-player-41":"561","p2-player-42":"500","p2-player-38":"500","p2-player-43":"500","p2-player-44":"500"}', '#be185d', NULL, 0),
+  ('team-7', 'club-fftt-06680011', 'phase-26-1', 7, '198435', 'group-6', 'addr-1', 'Jeudi', '20h00', 'p2-player-33', '["p2-player-33","p2-player-35","p2-player-34","p2-player-36","p2-player-37"]', '{"p2-player-33":"500","p2-player-35":"500","p2-player-34":"500","p2-player-36":"500","p2-player-37":"500"}', '#7c2d12', NULL, 0),
+  ('team-8', 'club-fftt-06680011', 'phase-26-1', 8, '198907', 'group-7', 'addr-1', 'Jeudi', '20h00', 'p2-player-32', '["p2-player-32","p2-player-27","p2-player-28","p2-player-30","p2-player-31"]', '{"p2-player-32":"607","p2-player-27":"501","p2-player-28":"500","p2-player-30":"500","p2-player-31":"500"}', '#0d9488', NULL, 0);
 
 -- teams (opponents)
 INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived) VALUES
-  ('opp-etival-1', 'club-fftt-06880123', 'phase-1', 1, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-1', 'club-fftt-06680125', 'phase-1', 1, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rcs-2', 'club-fftt-06670045', 'phase-1', 2, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-vittel-1', 'club-fftt-06880022', 'phase-1', 1, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-2', 'club-fftt-06680091', 'phase-1', 2, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-moussey-1', 'club-fftt-06100004', 'phase-1', 1, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-anould-2', 'club-fftt-06880002', 'phase-1', 2, 'div-1', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-3', 'club-fftt-06680091', 'phase-1', 3, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-2', 'club-fftt-06680125', 'phase-1', 2, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-cmjc-3', 'club-fftt-06680004', 'phase-1', 3, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-caje-1', 'club-fftt-06680080', 'phase-1', 1, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-stlouis-1', 'club-fftt-06680082', 'phase-1', 1, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-1', 'club-fftt-06680102', 'phase-1', 1, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-ingersheim-1', 'club-fftt-06680090', 'phase-1', 1, 'div-2', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-issenheim-1', 'club-fftt-06680071', 'phase-1', 1, 'div-3', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-6', 'club-fftt-06680091', 'phase-1', 6, 'div-3', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wintzfelden-2', 'club-fftt-06680116', 'phase-1', 2, 'div-3', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-2', 'club-fftt-06680102', 'phase-1', 2, 'div-3', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-thann-2', 'club-fftt-06680111', 'phase-1', 2, 'div-3', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-4', 'club-fftt-06680125', 'phase-1', 4, 'div-3', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-soultz-2', 'club-fftt-06680138', 'phase-1', 2, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wittelsheim-5', 'club-fftt-06680118', 'phase-1', 5, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-8', 'club-fftt-06680091', 'phase-1', 8, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-fcm-3', 'club-fftt-06680006', 'phase-1', 3, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-2', 'club-fftt-06680140', 'phase-1', 2, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-ensisheim-1', 'club-fftt-06680123', 'phase-1', 1, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-6', 'club-fftt-06680125', 'phase-1', 6, 'div-4', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-issenheim-3', 'club-fftt-06680071', 'phase-1', 3, 'div-5', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-7', 'club-fftt-06680091', 'phase-1', 7, 'div-5', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-ballons-4', 'club-fftt-06880064', 'phase-1', 4, 'div-5', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-mutt-5', 'club-fftt-06680105', 'phase-1', 5, 'div-5', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wittelsheim-4', 'club-fftt-06680118', 'phase-1', 4, 'div-5', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wintzfelden-3', 'club-fftt-06680116', 'phase-1', 3, 'div-5', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-3', 'club-fftt-06680102', 'phase-1', 3, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-mutt-7', 'club-fftt-06680105', 'phase-1', 7, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-thann-5', 'club-fftt-06680111', 'phase-1', 5, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-stlouis-3', 'club-fftt-06680082', 'phase-1', 3, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-3', 'club-fftt-06680140', 'phase-1', 3, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-10', 'club-fftt-06680091', 'phase-1', 10, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-soultz-4', 'club-fftt-06680138', 'phase-1', 4, 'div-6', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-7', 'club-fftt-06680125', 'phase-1', 7, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-thann-4', 'club-fftt-06680111', 'phase-1', 4, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-issenheim-4', 'club-fftt-06680071', 'phase-1', 4, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-4', 'club-fftt-06680102', 'phase-1', 4, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-6', 'club-fftt-06680140', 'phase-1', 6, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-4', 'club-fftt-06680140', 'phase-1', 4, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-11', 'club-fftt-06680091', 'phase-1', 11, 'div-7', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0);
+  ('opp-etival-1', 'club-fftt-06880123', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-1', 'club-fftt-06680125', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rcs-2', 'club-fftt-06670045', 'phase-26-1', 2, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-vittel-1', 'club-fftt-06880022', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-2', 'club-fftt-06680091', 'phase-26-1', 2, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-moussey-1', 'club-fftt-06100004', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-anould-2', 'club-fftt-06880002', 'phase-26-1', 2, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-3', 'club-fftt-06680091', 'phase-26-1', 3, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-2', 'club-fftt-06680125', 'phase-26-1', 2, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-cmjc-3', 'club-fftt-06680004', 'phase-26-1', 3, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-caje-1', 'club-fftt-06680080', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-stlouis-1', 'club-fftt-06680082', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-1', 'club-fftt-06680102', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-ingersheim-1', 'club-fftt-06680090', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-issenheim-1', 'club-fftt-06680071', 'phase-26-1', 1, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-6', 'club-fftt-06680091', 'phase-26-1', 6, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wintzfelden-2', 'club-fftt-06680116', 'phase-26-1', 2, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-2', 'club-fftt-06680102', 'phase-26-1', 2, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-thann-2', 'club-fftt-06680111', 'phase-26-1', 2, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-4', 'club-fftt-06680125', 'phase-26-1', 4, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-soultz-2', 'club-fftt-06680138', 'phase-26-1', 2, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wittelsheim-5', 'club-fftt-06680118', 'phase-26-1', 5, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-8', 'club-fftt-06680091', 'phase-26-1', 8, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-fcm-3', 'club-fftt-06680006', 'phase-26-1', 3, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-2', 'club-fftt-06680140', 'phase-26-1', 2, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-ensisheim-1', 'club-fftt-06680123', 'phase-26-1', 1, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-6', 'club-fftt-06680125', 'phase-26-1', 6, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-issenheim-3', 'club-fftt-06680071', 'phase-26-1', 3, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-7', 'club-fftt-06680091', 'phase-26-1', 7, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-ballons-4', 'club-fftt-06880064', 'phase-26-1', 4, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-mutt-5', 'club-fftt-06680105', 'phase-26-1', 5, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wittelsheim-4', 'club-fftt-06680118', 'phase-26-1', 4, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wintzfelden-3', 'club-fftt-06680116', 'phase-26-1', 3, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-3', 'club-fftt-06680102', 'phase-26-1', 3, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-mutt-7', 'club-fftt-06680105', 'phase-26-1', 7, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-thann-5', 'club-fftt-06680111', 'phase-26-1', 5, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-stlouis-3', 'club-fftt-06680082', 'phase-26-1', 3, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-3', 'club-fftt-06680140', 'phase-26-1', 3, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-10', 'club-fftt-06680091', 'phase-26-1', 10, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-soultz-4', 'club-fftt-06680138', 'phase-26-1', 4, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-7', 'club-fftt-06680125', 'phase-26-1', 7, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-thann-4', 'club-fftt-06680111', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-issenheim-4', 'club-fftt-06680071', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-4', 'club-fftt-06680102', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-6', 'club-fftt-06680140', 'phase-26-1', 6, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-4', 'club-fftt-06680140', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-11', 'club-fftt-06680091', 'phase-26-1', 11, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0);
 
 -- match_days
 INSERT INTO match_days (id, group_id, number, date) VALUES

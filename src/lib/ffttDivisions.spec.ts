@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canMoveDivisionDown,
   canMoveDivisionUp,
+  divisionDisplayName,
   ffttIdFromIri,
   orderDivisions,
   playersPerGameFor,
@@ -116,5 +117,45 @@ describe('canMoveDivisionUp / canMoveDivisionDown', () => {
   it('returns false for a division not in the list', () => {
     expect(canMoveDivisionUp({ id: 'missing' }, inPhase)).toBe(false)
     expect(canMoveDivisionDown({ id: 'missing' }, inPhase)).toBe(false)
+  })
+})
+
+describe('divisionDisplayName', () => {
+  it('strips the long "Phase N" marker FFTT puts on numbered divisions', () => {
+    expect(divisionDisplayName('GE 3 Phase 1')).toBe('GE 3')
+    expect(divisionDisplayName('GE 7 Phase 2')).toBe('GE 7')
+  })
+
+  it('strips the short "PN" marker used by the Elite division', () => {
+    expect(divisionDisplayName('GE Elite P1')).toBe('GE Elite')
+    expect(divisionDisplayName('GE Elite P2')).toBe('GE Elite')
+  })
+
+  it('strips the underscored "_PhN" marker used by the league divisions', () => {
+    expect(divisionDisplayName('L03_Regionale 1 Messieurs_Ph1')).toBe('L03_Regionale 1 Messieurs')
+    expect(divisionDisplayName('L03_Pré-Nationale Messieurs_Ph1')).toBe('L03_Pré-Nationale Messieurs')
+  })
+
+  it('strips the marker from the national divisions too', () => {
+    expect(divisionDisplayName('Nationale 1 Messieurs Phase 1')).toBe('Nationale 1 Messieurs')
+  })
+
+  it('keeps a name whose trailing number is the division’s own', () => {
+    expect(divisionDisplayName('GE 3')).toBe('GE 3')
+    expect(divisionDisplayName('GE Elite')).toBe('GE Elite')
+    expect(divisionDisplayName('Régionale 2')).toBe('Régionale 2')
+    expect(divisionDisplayName('Nationale 3 Messieurs')).toBe('Nationale 3 Messieurs')
+    expect(divisionDisplayName('Pre-Nat Masculine')).toBe('Pre-Nat Masculine')
+    expect(divisionDisplayName('GEE')).toBe('GEE')
+  })
+
+  it('is idempotent and trims, so re-importing never erodes a name', () => {
+    expect(divisionDisplayName(divisionDisplayName('GE 3 Phase 1'))).toBe('GE 3')
+    expect(divisionDisplayName('  GE 3 Phase 1  ')).toBe('GE 3')
+  })
+
+  it('leaves names with no marker alone', () => {
+    expect(divisionDisplayName('Division 234020')).toBe('Division 234020')
+    expect(divisionDisplayName('')).toBe('')
   })
 })

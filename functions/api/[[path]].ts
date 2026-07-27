@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, bearer, userFromToken, type Env } from './auth'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
-import { ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
+import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
+import { clubIdFromAffiliation } from '../../src/lib/ffttClub'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
@@ -56,7 +57,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM clubs').all(),
     db.prepare('SELECT * FROM club_addresses').all(),
     db.prepare('SELECT * FROM club_channels ORDER BY sort_order').all(),
-    db.prepare('SELECT * FROM groups_tbl').all(),
+    db.prepare('SELECT * FROM groups').all(),
     db.prepare('SELECT * FROM teams').all(),
     db.prepare('SELECT * FROM match_days').all(),
     db.prepare('SELECT * FROM games').all(),
@@ -111,6 +112,7 @@ app.get('/data', async (c) => {
       id: r.id, phaseId: r.phase_id, displayName: r.display_name,
       rank: r.rank, playersPerGame: r.players_per_game,
       isArchived: bool(r.is_archived),
+      ...(r.identifier ? { identifier: r.identifier } : {}),
       ...(r.parent_id ? { parentId: r.parent_id } : {}),
     })),
     clubs: clubsR.results.map(r => ({
@@ -442,9 +444,9 @@ app.get('/fftt/divisions-preview', async (c) => {
     contest: result.contest,
     phaseExists: !!phaseRow,
     divisions: orderDivisions(result.divisions).map((d, i) => ({
-      id: d.id, identifier: d.identifier, name: d.name, rank: i + 1,
+      id: d.id, identifier: d.identifier, name: divisionDisplayName(d.name), rank: i + 1,
       playersPerGame: playersPerGameFor(d.identifier),
-      exists: existing.ids.has(d.id) || existing.names.has(d.name.toLowerCase()),
+      exists: existing.ids.has(d.id) || existing.names.has(divisionDisplayName(d.name).toLowerCase()),
     })),
   })
 })
@@ -452,6 +454,8 @@ app.get('/fftt/divisions-preview', async (c) => {
 type ImportedPhase = { id: string; seasonId: unknown; name: unknown; displayName: unknown; status: unknown }
 type ImportedDivision = {
   id: string; phaseId: string; displayName: string; rank: number; playersPerGame: number; isArchived: boolean
+  /** FFTT identifier, e.g. "GE3P1" (#275) — persisted so playersPerGameFor() can be re-derived. */
+  identifier: string
   /** FFTT id of the parent division (#236); the local match may not exist yet — see importDivisions. */
   parentId?: string
 }
@@ -491,21 +495,23 @@ async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; seas
   const created: ImportedDivision[] = []
   const skipped: Array<{ id: string; name: string }> = []
   for (const d of orderDivisions(result.divisions)) {
-    if (existing.ids.has(d.id) || existing.names.has(d.name.toLowerCase())) {
-      skipped.push({ id: d.id, name: d.name })
+    const displayName = divisionDisplayName(d.name)
+    if (existing.ids.has(d.id) || existing.names.has(displayName.toLowerCase())) {
+      skipped.push({ id: d.id, name: displayName })
       continue
     }
     rank += 1
     created.push({
-      id: d.id, phaseId, displayName: d.name, rank,
+      id: d.id, phaseId, displayName, rank,
       playersPerGame: playersPerGameFor(d.identifier), isArchived: false,
+      identifier: d.identifier,
       ...(d.parentId ? { parentId: d.parentId } : {}),
     })
   }
   if (created.length) {
     await db.batch(created.map((d) =>
-      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES (?, ?, ?, ?, ?, 0, ?)')
-        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null),
+      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
+        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier),
     ))
   }
   return {
@@ -565,7 +571,9 @@ function parseTeamsPayload(raw: unknown): FfttClubTeam[] {
       phase: x.phase as number | null,
       divisionId: x.divisionId,
       divisionName: (typeof x.divisionName === 'string' && x.divisionName.trim())
-        ? x.divisionName.trim().slice(0, 80) : `Division ${x.divisionId}`,
+        ? divisionDisplayName(x.divisionName.trim().slice(0, 80)) : `Division ${x.divisionId}`,
+      divisionIdentifier: typeof x.divisionIdentifier === 'string'
+        ? x.divisionIdentifier.trim().slice(0, 20) : '',
       divisionParentId,
       poolId: x.poolId,
       poolNumber,
@@ -708,23 +716,27 @@ app.post('/teams/import', async (c) => {
     }
     const rank = (maxRankByPhase.get(phaseRow.id as string) ?? 0) + 1
     maxRankByPhase.set(phaseRow.id as string, rank)
-    // Players-per-game defaults to 4: the payload has no division identifier
-    // (e.g. "GE7P1") to apply the known overrides — adjustable on /divisions.
+    // The payload now carries the division identifier (e.g. "GE7P1", #275),
+    // so the known players-per-game overrides apply here too; older clients
+    // that omit it still fall back to the default, adjustable on /divisions.
     // parentId (#236) is the FFTT id of a division that may not exist locally
     // yet (e.g. a lower pool imported before its parent) — same caveat as the
     // dedicated divisions import; the lock simply has no effect until it does.
-    await db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES (?, ?, ?, ?, ?, 0, ?)')
-      .bind(t.divisionId, phaseRow.id, t.divisionName, rank, PLAYERS_PER_GAME_DEFAULT, t.divisionParentId).run()
+    const playersPerGame = t.divisionIdentifier
+      ? playersPerGameFor(t.divisionIdentifier) : PLAYERS_PER_GAME_DEFAULT
+    await db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
+      .bind(t.divisionId, phaseRow.id, t.divisionName, rank, playersPerGame, t.divisionParentId, t.divisionIdentifier || null).run()
     const division = {
       id: t.divisionId, phaseId: phaseRow.id as string, displayName: t.divisionName,
-      rank, playersPerGame: PLAYERS_PER_GAME_DEFAULT, isArchived: false,
+      rank, playersPerGame, isArchived: false,
+      ...(t.divisionIdentifier ? { identifier: t.divisionIdentifier } : {}),
       ...(t.divisionParentId ? { parentId: t.divisionParentId } : {}),
     }
     createdDivisions.push(division)
     divisionById.set(t.divisionId, { id: t.divisionId, phase_id: phaseRow.id })
   }
 
-  const groupRows = await db.prepare('SELECT id, division_id, number, team_ids, is_archived FROM groups_tbl').all()
+  const groupRows = await db.prepare('SELECT id, division_id, number, team_ids, is_archived FROM groups').all()
   const groups = groupRows.results.map((g) => ({
     id: g.id as string, divisionId: g.division_id as string, number: g.number as number,
     teamIds: (jsonParse(g.team_ids) as string[]) ?? [], isArchived: bool(g.is_archived),
@@ -782,10 +794,10 @@ app.post('/teams/import', async (c) => {
 
   const stmts = [
     ...createdGroups.map((g) =>
-      db.prepare('INSERT INTO groups_tbl (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
+      db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
         .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds))),
     ...[...touchedGroups.values()].filter((g) => !createdGroups.includes(g)).map((g) =>
-      db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
+      db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdTeams.map((t) =>
       db.prepare(
         `INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
@@ -840,7 +852,7 @@ type GroupsImportContext =
 async function groupsImportContext(db: Env['Bindings']['DB'], divisionId: string, poolsRaw: unknown): Promise<GroupsImportContext> {
   const division = await db.prepare('SELECT id, display_name FROM divisions WHERE id = ?').bind(divisionId).first()
   if (!division) return { error: 'division_not_found' }
-  const existingRows = await db.prepare('SELECT id, number FROM groups_tbl WHERE division_id = ?').bind(divisionId).all()
+  const existingRows = await db.prepare('SELECT id, number FROM groups WHERE division_id = ?').bind(divisionId).all()
   return {
     division: { id: division.id as string, displayName: division.display_name as string },
     pools: parsePoolsList(poolsRaw),
@@ -893,7 +905,7 @@ app.post('/groups/import', async (c) => {
   }
   if (created.length) {
     await c.env.DB.batch(created.map((g) =>
-      c.env.DB.prepare('INSERT INTO groups_tbl (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
+      c.env.DB.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
         .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds))))
   }
   return c.json({ created, skipped })
@@ -979,7 +991,7 @@ interface GamesGroupContext {
 // client-fetched payload. A division absent from the payload means the
 // browser couldn't fetch it from apiv2.
 async function gamesImportContext(db: Env['Bindings']['DB'], groupIds: string[], poolsRaw: unknown): Promise<GamesGroupContext[]> {
-  const groupRows = await db.prepare('SELECT id, division_id, number, team_ids FROM groups_tbl').all()
+  const groupRows = await db.prepare('SELECT id, division_id, number, team_ids FROM groups').all()
   const groupById = new Map(groupRows.results.map((g) => [g.id as string, g]))
   const divisionRows = await db.prepare('SELECT id, display_name, phase_id FROM divisions').all()
   const divisionById = new Map(divisionRows.results.map((d) => [d.id as string, d]))
@@ -1030,7 +1042,20 @@ function makeTeamResolver(
     resolve(side: FfttMatchTeam, phaseId: string): string | null {
       const byId = teamByIdPhase.get(`${side.teamId}|${phaseId}`)
       if (byId) return byId
-      const clubId = side.clubIdentifier ? clubByAffiliation.get(side.clubIdentifier) : undefined
+      // Second lookup key: the club id derived from the affiliation number
+      // (#275). Going through clubByAffiliation alone is not enough — a club
+      // whose affiliation_number is NULL is simply absent from that map, the
+      // (club, number, phase) fallback below is skipped, and the caller
+      // creates a team that already exists under another id space. That is
+      // what produced the duplicate phase-27-1 teams in production: the
+      // schedule-document import keys teams on doc-<affiliation>-<number>
+      // while the games import uses the real FFTT team id, and only this
+      // fallback can tell that they are the same team. Club ids are
+      // deterministic (clubIdFor / clubIdFromAffiliation), so deriving the id
+      // is safe: it resolves to nothing when no such club exists.
+      const clubId = side.clubIdentifier
+        ? clubByAffiliation.get(side.clubIdentifier) ?? clubIdFromAffiliation(side.clubIdentifier) ?? undefined
+        : undefined
       if (clubId && side.teamNumber !== null) {
         return teamByClubNumberPhase.get(`${clubId}|${side.teamNumber}|${phaseId}`) ?? null
       }
@@ -1275,7 +1300,7 @@ app.post('/games/import', async (c) => {
          VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', '[]', 0)`,
       ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId)),
     ...[...touchedGroups.values()].map((g) =>
-      db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
+      db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdMatchDays.map((m) =>
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
@@ -1485,7 +1510,7 @@ app.post('/schedule-documents/import', async (c) => {
     db.prepare('SELECT id, display_name FROM seasons').all(),
     db.prepare('SELECT id, season_id, name, display_name, status FROM phases').all(),
     db.prepare('SELECT id, phase_id, display_name, rank, players_per_game FROM divisions').all(),
-    db.prepare('SELECT id, division_id, number, team_ids FROM groups_tbl').all(),
+    db.prepare('SELECT id, division_id, number, team_ids FROM groups').all(),
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
     db.prepare('SELECT id, club_id, phase_id, number FROM teams').all(),
     db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
@@ -1692,9 +1717,9 @@ app.post('/schedule-documents/import', async (c) => {
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
     ...[...touchedGroups.values()].map((g) =>
       createdGroupIds.has(g.id)
-        ? db.prepare('INSERT INTO groups_tbl (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
+        ? db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
           .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds))
-        : db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
+        : db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdTeams.map((t) =>
       db.prepare(
         `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
@@ -1770,7 +1795,7 @@ app.delete('/seasons/:id', async (c) => {
     const divIds = divsR.results.map(r => r.id as string)
     for (const divId of divIds) {
       // Find groups in division
-      const grpsR = await db.prepare('SELECT id FROM groups_tbl WHERE division_id = ?').bind(divId).all()
+      const grpsR = await db.prepare('SELECT id FROM groups WHERE division_id = ?').bind(divId).all()
       const grpIds = grpsR.results.map(r => r.id as string)
       // Delete match days in these groups
       for (const gid of grpIds) {
@@ -1785,7 +1810,7 @@ app.delete('/seasons/:id', async (c) => {
           await db.prepare('DELETE FROM games WHERE match_day_id = ?').bind(md.id).run()
         }
         await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(gid).run()
-        await db.prepare('DELETE FROM groups_tbl WHERE id = ?').bind(gid).run()
+        await db.prepare('DELETE FROM groups WHERE id = ?').bind(gid).run()
       }
       // Delete teams in division
       await db.prepare('DELETE FROM teams WHERE division_id = ?').bind(divId).run()
@@ -1855,7 +1880,7 @@ app.delete('/phases/:id', async (c) => {
   if (divIds.length > 0) {
     for (const divId of divIds) {
       // Find groups in this division
-      const grpsR = await db.prepare('SELECT id FROM groups_tbl WHERE division_id = ?').bind(divId).all()
+      const grpsR = await db.prepare('SELECT id FROM groups WHERE division_id = ?').bind(divId).all()
       const grpIds = grpsR.results.map(r => r.id as string)
       for (const grpId of grpIds) {
         // Find match days in this group → games → availabilities → selections
@@ -1872,7 +1897,7 @@ app.delete('/phases/:id', async (c) => {
         }
         await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(grpId).run()
       }
-      await db.prepare('DELETE FROM groups_tbl WHERE division_id = ?').bind(divId).run()
+      await db.prepare('DELETE FROM groups WHERE division_id = ?').bind(divId).run()
     }
     await db.prepare('DELETE FROM divisions WHERE phase_id = ?').bind(id).run()
   }
@@ -1897,8 +1922,8 @@ app.delete('/phases/:id', async (c) => {
 app.post('/divisions', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null).run()
+    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null).run()
   return c.json({ ok: true })
 })
 
@@ -1912,6 +1937,7 @@ app.patch('/divisions/:id', async (c) => {
   if ('playersPerGame' in p) { s.push('players_per_game = ?'); v.push(p.playersPerGame) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
   if ('parentId' in p) { s.push('parent_id = ?'); v.push(p.parentId ?? null) }
+  if ('identifier' in p) { s.push('identifier = ?'); v.push(p.identifier ?? null) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE divisions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
 })
@@ -1921,7 +1947,7 @@ app.delete('/divisions/:id', async (c) => {
   const db = c.env.DB
   const id = c.req.param('id')
   // Find groups in this division
-  const groupsR = await db.prepare('SELECT id FROM groups_tbl WHERE division_id = ?').bind(id).all()
+  const groupsR = await db.prepare('SELECT id FROM groups WHERE division_id = ?').bind(id).all()
   const groupIds = groupsR.results.map(r => r.id as string)
   for (const gid of groupIds) {
     // Find match days in this group
@@ -1941,7 +1967,7 @@ app.delete('/divisions/:id', async (c) => {
     await db.prepare('DELETE FROM teams WHERE group_id = ?').bind(gid).run()
   }
   // Delete groups
-  await db.prepare('DELETE FROM groups_tbl WHERE division_id = ?').bind(id).run()
+  await db.prepare('DELETE FROM groups WHERE division_id = ?').bind(id).run()
   // Delete division
   await db.prepare('DELETE FROM divisions WHERE id = ?').bind(id).run()
   return c.json({ ok: true })
@@ -2144,7 +2170,7 @@ app.delete('/clubs/:id/logo', async (c) => {
 app.post('/groups', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    'INSERT INTO groups_tbl (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, ?)'
   ).bind(d.id, d.divisionId, d.number, jsonStr(d.teamIds ?? []), d.isArchived ? 1 : 0).run()
   return c.json({ ok: true })
 })
@@ -2157,7 +2183,7 @@ app.patch('/groups/:id', async (c) => {
   if ('number' in p) { s.push('number = ?'); v.push(p.number) }
   if ('teamIds' in p) { s.push('team_ids = ?'); v.push(jsonStr(p.teamIds)) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
-  if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE groups_tbl SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE groups SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
 })
 
@@ -2188,7 +2214,7 @@ app.delete('/groups/:id', async (c) => {
     await db.prepare('DELETE FROM games WHERE match_day_id = ?').bind(md.id).run()
   }
   await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(id).run()
-  await db.prepare('DELETE FROM groups_tbl WHERE id = ?').bind(id).run()
+  await db.prepare('DELETE FROM groups WHERE id = ?').bind(id).run()
   return c.json({ ok: true })
 })
 
@@ -2324,11 +2350,11 @@ app.delete('/teams/:id', async (c) => {
   const db = c.env.DB
   const id = c.req.param('id')
   // Remove team from group's team_ids
-  const groupsR = await db.prepare('SELECT id, team_ids FROM groups_tbl').all()
+  const groupsR = await db.prepare('SELECT id, team_ids FROM groups').all()
   for (const g of groupsR.results) {
     const teamIds: string[] = jsonParse(g.team_ids) as string[]
     if (teamIds.includes(id)) {
-      await db.prepare('UPDATE groups_tbl SET team_ids = ? WHERE id = ?')
+      await db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?')
         .bind(jsonStr(teamIds.filter(t => t !== id)), g.id).run()
     }
   }

@@ -161,7 +161,7 @@ export function ImportClubModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="flex items-center gap-4">
                 <Link
-                  to={`/clubs/${existingClub.affiliationNumber}`}
+                  to={`/clubs/${encodeURIComponent(existingClub.id)}`}
                   onClick={onClose}
                   className="text-sm font-medium text-accent-600 hover:text-accent-800"
                 >

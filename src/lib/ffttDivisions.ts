@@ -40,6 +40,25 @@ export function playersPerGameFor(identifier: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Display name
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip the phase marker FFTT bakes into a division name (#275): a division
+ * already belongs to a phase, so "GE 3 Phase 1" is stored as "GE 3". All three
+ * spellings below occur in real data (checked against a production export):
+ *   "GE 3 Phase 1"                   -> "GE 3"
+ *   "GE Elite P1"                    -> "GE Elite"
+ *   "L03_Regionale 1 Messieurs_Ph1"  -> "L03_Regionale 1 Messieurs"
+ * A name with no marker is returned unchanged.
+ */
+export function divisionDisplayName(name: string): string {
+  // The marker must carry a "Phase"/"Ph"/"P" of its own, so a division whose
+  // name simply ends in a number ("GE 3", "Nationale 3") is left alone.
+  return name.replace(/[\s_]+(?:phase\s*[1-9]|ph?[1-9])\s*$/i, '').trim()
+}
+
+// ---------------------------------------------------------------------------
 // Ordering
 // ---------------------------------------------------------------------------
 

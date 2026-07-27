@@ -11,7 +11,7 @@ test.describe('General admin — Équipes list', () => {
     await expect(page.getByText('Saison 2025/2026 Phase 1')).toBeVisible()
 
     const card = page.locator('div').filter({ hasText: 'PPA Rixheim 1' }).filter({ hasText: 'Quentin Colle' }).last()
-    await expect(card.getByText('GE1')).toBeVisible()
+    await expect(card.getByText('GE 1')).toBeVisible()
     await expect(card.getByText('Samedi 16h00')).toBeVisible()
     await expect(card.getByText('Quentin Colle')).toBeVisible()
   })

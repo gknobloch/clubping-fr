@@ -48,6 +48,19 @@ export function normalizeFfttName(raw: string): string {
 }
 
 /** Whether a club detail carries any usable game-venue information at all. */
+/**
+ * FFTT-aligned club id (#275): `club-fftt-<affiliationNumber>`, the format the
+ * games and schedule-document imports already produce for the clubs they
+ * auto-create (clubIdFor). Returns null when the number isn't a usable FFTT
+ * affiliation number, in which case the caller falls back to a generated id —
+ * a club can legitimately have no number (its column is nullable since
+ * migration 0019).
+ */
+export function clubIdFromAffiliation(affiliationNumber: string | undefined): string | null {
+  const n = (affiliationNumber ?? '').trim()
+  return /^\d{8}$/.test(n) ? `club-fftt-${n}` : null
+}
+
 export function hasVenueInfo(d: Pick<FfttClubDetail, 'street' | 'postalCode' | 'city'>): boolean {
   return Boolean(d.street || d.postalCode || d.city)
 }

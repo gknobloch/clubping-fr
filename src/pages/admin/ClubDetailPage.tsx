@@ -7,17 +7,17 @@ import { fetchClubDetailXmlFromBrowser, hasVenueInfo, parseClubDetailXml } from 
 type SyncState = 'idle' | 'loading' | 'done' | 'not_found' | 'error'
 
 export function ClubDetailPage() {
-  const { affiliationNumber } = useParams<{ affiliationNumber: string }>()
+  // Keyed on the club id, not the affiliation number (#275): the number is
+  // optional since migration 0019, and clubs without one used to have no
+  // reachable detail page at all.
+  const { clubId } = useParams<{ clubId: string }>()
   const navigate = useNavigate()
   const { clubs, teams, players, archiveClub, updateClub, deleteClub, addClubAddress, updateClubAddress } = useAppData()
-  const club =
-    affiliationNumber != null
-      ? clubs.find((c) => c.affiliationNumber === affiliationNumber) ?? null
-      : null
+  const club = clubId != null ? clubs.find((c) => c.id === clubId) ?? null : null
 
   const [syncState, setSyncState] = useState<SyncState>('idle')
 
-  if (!affiliationNumber || !club) {
+  if (!clubId || !club) {
     return (
       <div className="space-y-6">
         <p className="text-slate-600">Club introuvable.</p>
@@ -89,25 +89,26 @@ export function ClubDetailPage() {
           )}
         </h1>
       </div>
+      {/* The URL is the club id, so editing the affiliation number no longer
+          invalidates it and no post-save re-navigation is needed (#275). */}
       <ClubDetailView
         club={club}
         canEdit={!club.isArchived}
         canEditAffiliationNumber
-        onClubSaved={({ affiliationNumber: newNum }) =>
-          navigate(`/clubs/${encodeURIComponent(newNum)}`, { replace: true })
-        }
         idPrefix="admin-club"
       />
 
       <div className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-sm font-medium text-slate-800">Synchronisation FFTT</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Récupère à nouveau le nom et le lieu de jeu de ce club depuis la FFTT (n° {club.affiliationNumber}).
+          {club.affiliationNumber
+            ? `Récupère à nouveau le nom et le lieu de jeu de ce club depuis la FFTT (n° ${club.affiliationNumber}).`
+            : 'Renseignez le numéro d’affiliation ci-dessus pour pouvoir synchroniser ce club depuis la FFTT.'}
         </p>
         <button
           type="button"
           onClick={handleSync}
-          disabled={syncState === 'loading'}
+          disabled={syncState === 'loading' || !club.affiliationNumber}
           className="mt-3 rounded-lg border border-accent-600 px-4 py-2 text-sm font-medium text-accent-600 hover:bg-accent-50 disabled:opacity-50"
         >
           {syncState === 'loading' ? 'Synchronisation…' : 'Synchroniser depuis la FFTT'}

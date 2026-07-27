@@ -98,10 +98,36 @@ test.describe('General admin — Clubs lifecycle (archive / activate / delete)',
     await expect(page.getByRole('cell', { name: 'Etival' })).toBeVisible()
   })
 
+  // #275: the detail page used to be routed on the affiliation number, so a
+  // club without one (allowed since migration 0019) had no reachable page at
+  // all — "Modifier" landed on "Club introuvable.".
+  test('opens and edits a club that has no affiliation number', async ({ page }) => {
+    await page.goto('/clubs')
+
+    await page.getByRole('button', { name: 'Ajouter un club' }).click()
+    const createDialog = page.getByRole('dialog')
+    await createDialog.getByLabel('Nom').fill('TT Sans Numéro')
+    await createDialog.getByRole('button', { name: 'Enregistrer' }).click()
+
+    const row = page.getByRole('row').filter({ hasText: 'TT Sans Numéro' })
+    await row.getByRole('button', { name: 'Modifier' }).click()
+
+    await expect(page.getByRole('heading', { name: 'TT Sans Numéro' })).toBeVisible()
+    // Nothing to sync against without a number, so the action is disabled.
+    await expect(page.getByRole('button', { name: 'Synchroniser depuis la FFTT' })).toBeDisabled()
+
+    // The URL is the club id, so filling the number in does not invalidate it.
+    const url = page.url()
+    await page.getByLabel('N° affiliation').fill('06680998')
+    await page.getByRole('button', { name: 'Enregistrer' }).first().click()
+    await expect(page).toHaveURL(url)
+    await expect(page.getByRole('button', { name: 'Synchroniser depuis la FFTT' })).toBeEnabled()
+  })
+
   test('syncs a club’s name and address from the FFTT on its detail page', async ({ page }) => {
     await page.route(CLUB_DETAIL, (route) => route.fulfill({ body: rixheimUpdatedXml, contentType: 'text/xml' }))
 
-    await page.goto('/clubs/06680011')
+    await page.goto('/clubs/club-fftt-06680011')
     await page.getByRole('button', { name: 'Synchroniser depuis la FFTT' }).click()
 
     await expect(page.getByText('Club synchronisé.')).toBeVisible()
