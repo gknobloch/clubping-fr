@@ -105,15 +105,20 @@ export function parseDivisionPools(data: FfttDivisionPoolsData): FfttPool[] {
 }
 
 /**
- * Pick the pool corresponding to a local group. Membership wins: a pool whose
- * matches involve one of the group's known team ids (local team ids are FFTT
- * team ids for imported teams) is the right one even if numbering drifted.
- * Otherwise fall back to poule number = group number.
+ * Pick the pool corresponding to a local group. The group's own FFTT pool id
+ * wins when it has one (#278) — that is the pool, no inference needed.
+ * Otherwise membership: a pool whose matches involve one of the group's known
+ * team ids (local team ids are FFTT team ids for imported teams) is the right
+ * one even if numbering drifted. Failing that, poule number = group number.
  */
 export function selectPoolForGroup(
   pools: FfttPool[],
-  group: { number: number; teamIds: string[] },
+  group: { number: number; teamIds: string[]; groupId?: string },
 ): FfttPool | null {
+  if (group.groupId) {
+    const byPoolId = pools.find((p) => p.id === group.groupId)
+    if (byPoolId) return byPoolId
+  }
   const known = new Set(group.teamIds)
   const byMembership = pools.find((p) =>
     p.matches.some((m) => known.has(m.home.teamId) || known.has(m.away.teamId)))

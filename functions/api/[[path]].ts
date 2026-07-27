@@ -10,6 +10,13 @@ import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool }
 
 const app = new Hono<Env>().basePath('/api')
 
+// Opaque generated id (#278), same shape as the web app's nextId(). The
+// counter keeps a single request that creates several rows from colliding on
+// one Date.now().
+let generatedIdCounter = 0
+const newId = (prefix: string) =>
+  `${prefix}-${Date.now()}-${generatedIdCounter++}-${Math.random().toString(36).slice(2, 7)}`
+
 // Public endpoints that must work without a session (you're not logged in yet).
 const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$)/
 
@@ -127,6 +134,7 @@ app.get('/data', async (c) => {
     groups: groupsR.results.map(r => ({
       id: r.id, divisionId: r.division_id, number: r.number, teamIds: jsonParse(r.team_ids),
       isArchived: bool(r.is_archived),
+      ...(r.group_id ? { groupId: r.group_id } : {}),
     })),
     // Players are the projection of users where is_player = 1.
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
@@ -736,15 +744,18 @@ app.post('/teams/import', async (c) => {
     divisionById.set(t.divisionId, { id: t.divisionId, phase_id: phaseRow.id })
   }
 
-  const groupRows = await db.prepare('SELECT id, division_id, number, team_ids, is_archived FROM groups').all()
+  const groupRows = await db.prepare('SELECT id, division_id, number, team_ids, is_archived, group_id FROM groups').all()
   const groups = groupRows.results.map((g) => ({
     id: g.id as string, divisionId: g.division_id as string, number: g.number as number,
     teamIds: (jsonParse(g.team_ids) as string[]) ?? [], isArchived: bool(g.is_archived),
+    groupId: (g.group_id as string | null) ?? undefined,
   }))
   const existing = await clubTeamKeys(db, clubId)
 
   const createdGroups: typeof groups = []
   const touchedGroups = new Map<string, (typeof groups)[number]>()
+  /** Existing groups that just learned their FFTT pool id (#278). */
+  const adoptedPoolIds = new Map<string, string>()
   const createdTeams: Array<Record<string, unknown>> = []
   const skipped: Array<{ id: string; label: string; reason: 'already_exists' | 'division_missing' | 'invalid_location' }> = []
 
@@ -767,16 +778,27 @@ app.post('/teams/import', async (c) => {
       continue
     }
 
-    // Reuse the pool when known by FFTT id or by (division, number); create it
-    // otherwise, FFTT-aligned (local group id = FFTT pool id).
-    let group = groups.find((g) => g.id === t.poolId) ??
+    // Reuse the pool when known by FFTT pool id or by (division, number);
+    // create it otherwise. The local id is generated and the FFTT pool id is
+    // kept in its own column (#278) — the two used to be the same value, which
+    // left groups created by hand or from a PDF in a different id space.
+    let group = groups.find((g) => g.groupId === t.poolId) ??
       (t.poolNumber !== null
         ? groups.find((g) => g.divisionId === t.divisionId && g.number === t.poolNumber)
         : undefined)
     if (!group) {
-      group = { id: t.poolId, divisionId: t.divisionId, number: t.poolNumber ?? 1, teamIds: [], isArchived: false }
+      group = {
+        id: newId('group'), divisionId: t.divisionId, number: t.poolNumber ?? 1,
+        teamIds: [], isArchived: false, groupId: t.poolId,
+      }
       groups.push(group)
       createdGroups.push(group)
+    }
+    // An existing group matched by (division, number) may predate the FFTT
+    // import and carry no pool id yet — adopt the one FFTT just gave us.
+    if (!group.groupId) {
+      group.groupId = t.poolId
+      adoptedPoolIds.set(group.id, t.poolId)
     }
 
     const team = {
@@ -794,8 +816,10 @@ app.post('/teams/import', async (c) => {
 
   const stmts = [
     ...createdGroups.map((g) =>
-      db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
-        .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds))),
+      db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived, group_id) VALUES (?, ?, ?, ?, 0, ?)')
+        .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds), g.groupId ?? null)),
+    ...[...adoptedPoolIds].map(([id, poolId]) =>
+      db.prepare('UPDATE groups SET group_id = ? WHERE id = ?').bind(poolId, id)),
     ...[...touchedGroups.values()].filter((g) => !createdGroups.includes(g)).map((g) =>
       db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdTeams.map((t) =>
@@ -845,6 +869,7 @@ type GroupsImportContext =
   | {
       division: { id: string; displayName: string }
       pools: Array<{ id: string; number: number | null }>
+      /** FFTT pool ids already present locally (groups.group_id), not local group ids (#278). */
       existingIds: Set<string>
       existingNumbers: Set<number>
     }
@@ -852,11 +877,11 @@ type GroupsImportContext =
 async function groupsImportContext(db: Env['Bindings']['DB'], divisionId: string, poolsRaw: unknown): Promise<GroupsImportContext> {
   const division = await db.prepare('SELECT id, display_name FROM divisions WHERE id = ?').bind(divisionId).first()
   if (!division) return { error: 'division_not_found' }
-  const existingRows = await db.prepare('SELECT id, number FROM groups WHERE division_id = ?').bind(divisionId).all()
+  const existingRows = await db.prepare('SELECT id, number, group_id FROM groups WHERE division_id = ?').bind(divisionId).all()
   return {
     division: { id: division.id as string, displayName: division.display_name as string },
     pools: parsePoolsList(poolsRaw),
-    existingIds: new Set(existingRows.results.map((g) => g.id as string)),
+    existingIds: new Set(existingRows.results.flatMap((g) => g.group_id ? [g.group_id as string] : [])),
     existingNumbers: new Set(existingRows.results.map((g) => g.number as number)),
   }
 }
@@ -891,7 +916,7 @@ app.post('/groups/import', async (c) => {
   const ctx = await groupsImportContext(c.env.DB, divisionId, b.pools)
   if ('error' in ctx) return c.json({ error: ctx.error }, 404)
 
-  const created: Array<{ id: string; divisionId: string; number: number; teamIds: string[]; isArchived: boolean }> = []
+  const created: Array<{ id: string; divisionId: string; number: number; teamIds: string[]; isArchived: boolean; groupId: string }> = []
   const skipped: Array<{ id: string; number: number | null }> = []
   for (const p of ctx.pools) {
     if (ctx.existingIds.has(p.id) || (p.number !== null && ctx.existingNumbers.has(p.number))) {
@@ -899,14 +924,15 @@ app.post('/groups/import', async (c) => {
       continue
     }
     const number = p.number ?? 1
-    created.push({ id: p.id, divisionId, number, teamIds: [], isArchived: false })
+    // Local id generated, FFTT pool id stored alongside it (#278).
+    created.push({ id: newId('group'), divisionId, number, teamIds: [], isArchived: false, groupId: p.id })
     ctx.existingIds.add(p.id)
     ctx.existingNumbers.add(number)
   }
   if (created.length) {
     await c.env.DB.batch(created.map((g) =>
-      c.env.DB.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
-        .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds))))
+      c.env.DB.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived, group_id) VALUES (?, ?, ?, ?, 0, ?)')
+        .bind(g.id, g.divisionId, g.number, jsonStr(g.teamIds), g.groupId)))
   }
   return c.json({ created, skipped })
 })
@@ -2170,8 +2196,8 @@ app.delete('/clubs/:id/logo', async (c) => {
 app.post('/groups', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    'INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, ?)'
-  ).bind(d.id, d.divisionId, d.number, jsonStr(d.teamIds ?? []), d.isArchived ? 1 : 0).run()
+    'INSERT INTO groups (id, division_id, number, team_ids, is_archived, group_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.divisionId, d.number, jsonStr(d.teamIds ?? []), d.isArchived ? 1 : 0, d.groupId ?? null).run()
   return c.json({ ok: true })
 })
 
@@ -2183,6 +2209,7 @@ app.patch('/groups/:id', async (c) => {
   if ('number' in p) { s.push('number = ?'); v.push(p.number) }
   if ('teamIds' in p) { s.push('team_ids = ?'); v.push(jsonStr(p.teamIds)) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
+  if ('groupId' in p) { s.push('group_id = ?'); v.push(p.groupId ?? null) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE groups SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
 })
