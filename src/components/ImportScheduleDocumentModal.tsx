@@ -155,6 +155,7 @@ export function ImportScheduleDocumentModal({
           date: j.date!,
           matches: j.matches.map((m) => ({
             homeName: m.homeName, homeNumber: m.homeNumber, awayName: m.awayName, awayNumber: m.awayNumber,
+            date: m.date,
           })),
         })),
     }

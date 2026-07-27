@@ -33,6 +33,13 @@ export interface ParsedScheduleMatch {
   awayNumber: number
   /** Raw trailing token(s): "-" when not yet played, otherwise free text (scores are never imported, see games/import). */
   score: string
+  /**
+   * This match's own resolved date (#271), set by the post-processing pass
+   * below: the journée's fixed date, or (for a range journée) this match's
+   * own day resolved within the range — never left as the range's shared
+   * majority-vote date when a per-match resolution is available.
+   */
+  date: string | null
 }
 
 export interface ParsedScheduleJournee {
@@ -270,36 +277,40 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
         awayName: mm[5].trim(),
         awayNumber: normalizeTeamNumber(mm[6]),
         score: mm[7].trim(),
+        date: null,
       })
     }
   } else {
     warnings.push('Aucune journée détectée dans le document.')
   }
 
-  // FFTT's own calendar sometimes only gives a week window for a journée
-  // ("du 14 au 20 septembre 2026") rather than one fixed date — each match's
-  // own day (Samedi, Lundi, ...) is that team's actual home day, echoed from
-  // the roster, and different teams within the same poule often play on
-  // different days (one team's home day can be a Sunday while the rest play
-  // Saturday). The app's MatchDay only carries a single date per journée, so
-  // once each match's real date is resolved from its own day within the
-  // window, the most common one becomes the journée's stored date — far
-  // closer to reality than the window's first day, which is very often a
-  // day nobody in the poule actually plays on.
+  // Every match ends up with its own resolved date (#271). For a fixed-date
+  // journée, that's simply the journée's date — the document states one day
+  // for the whole round. For a range journée ("du 14 au 20 septembre 2026"),
+  // each match's own day (Samedi, Lundi, ...) is that team's actual home
+  // day, echoed from the roster, and different teams within the same poule
+  // often play on different days (one team's home day can be a Sunday while
+  // the rest play Saturday) — resolve each match's day within the window
+  // individually. The journée's own `date` is still set too (as the
+  // majority-resolved day, falling back to the fallback used when a specific
+  // match's day can't be resolved) since match_days keeps a derived date for
+  // grouping/display, but it no longer overrides a match's own resolution.
   for (const j of journees) {
-    if (j.dateType !== 'range' || !j.date || !j.rangeEndDate || j.matches.length === 0) continue
-    const resolved = j.matches
-      .map((m) => dateForDayInRange(j.date!, j.rangeEndDate!, m.day))
-      .filter((d): d is string => d !== null)
-    if (resolved.length === 0) continue
+    if (j.dateType === 'fixed') {
+      for (const m of j.matches) m.date = j.date
+      continue
+    }
+    if (!j.date || !j.rangeEndDate || j.matches.length === 0) continue
+    const perMatch = j.matches.map((m) => dateForDayInRange(j.date!, j.rangeEndDate!, m.day))
     const counts = new Map<string, number>()
-    for (const d of resolved) counts.set(d, (counts.get(d) ?? 0) + 1)
-    let best = resolved[0]
+    for (const d of perMatch) if (d) counts.set(d, (counts.get(d) ?? 0) + 1)
+    let best: string | null = null
     let bestCount = 0
     for (const [d, count] of counts) {
       if (count > bestCount) { best = d; bestCount = count }
     }
-    j.date = best
+    j.date = best ?? j.date
+    j.matches.forEach((m, i) => { m.date = perMatch[i] ?? best ?? j.date })
   }
 
   return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings }

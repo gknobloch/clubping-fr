@@ -1047,6 +1047,23 @@ function makeTeamResolver(
 const parseGroupIds = (raw: unknown): string[] =>
   Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && !!x).slice(0, 100) : []
 
+// Games own their date (#271); match_days.date is now derived — the MIN of
+// its games' dates, recomputed whenever games under it change. Guarded by
+// the EXISTS check so a match_day with zero dated games (a freshly-created
+// empty shell, or one whose games were all created without a date) is left
+// alone and keeps whatever date it was given directly. One shared statement
+// reused by every write path (bulk imports fold it into their own
+// db.batch(); single-row endpoints call recomputeMatchDayDate directly).
+function matchDayDateRecomputeStmt(db: Env['Bindings']['DB'], matchDayId: string) {
+  return db.prepare(
+    `UPDATE match_days SET date = (SELECT MIN(date) FROM games WHERE games.match_day_id = ? AND games.date IS NOT NULL)
+     WHERE id = ? AND EXISTS (SELECT 1 FROM games WHERE games.match_day_id = ? AND games.date IS NOT NULL)`,
+  ).bind(matchDayId, matchDayId, matchDayId)
+}
+async function recomputeMatchDayDate(db: Env['Bindings']['DB'], matchDayId: string) {
+  await matchDayDateRecomputeStmt(db, matchDayId).run()
+}
+
 // POST /fftt/games-preview — per group: what an import would do
 // (rounds/matches found, games and opponents to create). POST because the
 // browser sends the FFTT pools payload it fetched (see the transport note on
@@ -1119,11 +1136,13 @@ app.post('/fftt/games-preview', async (c) => {
 })
 
 // POST /games/import — re-fetches from FFTT (never trusts a client list),
-// auto-creates missing opponent clubs/teams, upserts the journées by
-// (group, round) — refreshing dates on re-import — and inserts the games not
+// auto-creates missing opponent clubs/teams, and inserts the games not
 // already present (matched by FFTT match id, or same pairing on the same
 // journée for manually created ones). Scores are not imported (#231); manual
-// game times are never touched.
+// game times are never touched. Each game owns its own date (#271); a
+// journée's (match_day's) date is derived — recomputed from its games by
+// matchDayDateRecomputeStmt — so a round staggered across several real dates
+// no longer collapses onto whichever match was imported last.
 app.post('/games/import', async (c) => {
   const b = await c.req.json()
   const groupIds = parseGroupIds(b.groupIds)
@@ -1135,11 +1154,12 @@ app.post('/games/import', async (c) => {
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
     db.prepare('SELECT id, club_id, phase_id, number FROM teams').all(),
     db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
-    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id FROM games').all(),
+    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date FROM games').all(),
   ])
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
   const matchDayByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m]))
   const gameIds = new Set(gameRows.results.map((g) => g.id as string))
+  const existingGameDateById = new Map(gameRows.results.map((g) => [g.id as string, g.date as string | null]))
   const pairingsByMatchDay = new Map<string, Set<string>>()
   for (const g of gameRows.results) {
     const key = g.match_day_id as string
@@ -1151,12 +1171,14 @@ app.post('/games/import', async (c) => {
   const createdClubs: Array<Record<string, unknown>> = []
   const createdTeams: Array<Record<string, unknown>> = []
   const createdMatchDays: Array<Record<string, unknown>> = []
-  let updatedMatchDays: Array<Record<string, unknown>> = []
-  // Pre-import dates of updated journées: a round spanning several dates makes
-  // the walk flip the date back and forth, and an entry that lands back on its
-  // original date is a no-op, not an update.
-  const originalDates = new Map<string, string>()
+  const updatedMatchDays: Array<Record<string, unknown>> = []
   const createdGames: Array<Record<string, unknown>> = []
+  const updatedGames: Array<{ id: string; date: string }> = []
+  // Every match_day that gained a new game or had an existing game's date
+  // change — recomputed (derived date) after the batch, then re-read to
+  // build the response's created/updatedMatchDays from the authoritative DB
+  // state rather than JS-side guesswork.
+  const touchedMatchDayIds = new Set<string>()
   const touchedGroups = new Map<string, { id: string; divisionId: string; number: number; teamIds: string[]; isArchived: boolean }>()
   const skippedGroups: Array<{ groupId: string; reason: GamesGroupError }> = []
   let existingGames = 0, skippedMatches = 0
@@ -1208,25 +1230,17 @@ app.post('/games/import', async (c) => {
         md = { id: `md-fftt-${ctx.groupId}-r${m.round}`, group_id: ctx.groupId, number: m.round, date: m.date }
         matchDayByKey.set(mdKey, md)
         createdMatchDays.push({ id: md.id, groupId: ctx.groupId, number: m.round, date: m.date })
-      } else if (md.date !== m.date) {
-        // FFTT can stagger one round across days; the journée keeps a single
-        // date, so the last one seen wins (stable across re-imports since
-        // matches are ordered by round then id).
-        const created = createdMatchDays.find((x) => x.id === md!.id)
-        if (created) {
-          created.date = m.date
-        } else {
-          const updated = updatedMatchDays.find((x) => x.id === md!.id)
-          if (updated) updated.date = m.date
-          else {
-            originalDates.set(md.id as string, md.date as string)
-            updatedMatchDays.push({ id: md.id, groupId: md.group_id, number: md.number, date: m.date })
-          }
-        }
-        md.date = m.date
+        touchedMatchDayIds.add(md.id as string)
       }
 
-      if (gameIds.has(m.id)) { existingGames++; continue }
+      if (gameIds.has(m.id)) {
+        existingGames++
+        if (existingGameDateById.get(m.id) !== m.date) {
+          updatedGames.push({ id: m.id, date: m.date })
+          touchedMatchDayIds.add(md.id as string)
+        }
+        continue
+      }
       const homeId = teamIdFor(m.home)
       const awayId = teamIdFor(m.away)
       if (!homeId || !awayId) { skippedMatches++; continue }
@@ -1238,12 +1252,10 @@ app.post('/games/import', async (c) => {
       pairingsByMatchDay.get(md.id as string)!.add(`${homeId}|${awayId}`)
       pairingsByMatchDay.get(md.id as string)!.add(`${awayId}|${homeId}`)
       gameIds.add(m.id)
-      createdGames.push({ id: m.id, matchDayId: md.id, homeTeamId: homeId, awayTeamId: awayId })
+      createdGames.push({ id: m.id, matchDayId: md.id, homeTeamId: homeId, awayTeamId: awayId, date: m.date })
+      touchedMatchDayIds.add(md.id as string)
     }
   }
-
-  // Journées whose date walked back to its pre-import value are no-ops.
-  updatedMatchDays = updatedMatchDays.filter((m) => m.date !== originalDates.get(m.id as string))
 
   const stmts = [
     // OR IGNORE on clubs/teams/match_days/games: their ids are fully
@@ -1267,17 +1279,42 @@ app.post('/games/import', async (c) => {
     ...createdMatchDays.map((m) =>
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
-    ...updatedMatchDays.map((m) =>
-      db.prepare('UPDATE match_days SET date = ? WHERE id = ?').bind(m.date, m.id)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
-        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId)),
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date) VALUES (?, ?, ?, ?, NULL, ?)')
+        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date)),
+    ...updatedGames.map((g) =>
+      db.prepare('UPDATE games SET date = ? WHERE id = ?').bind(g.date, g.id)),
+    // Last: recompute every touched journée's derived date from its (now
+    // fully written) games.
+    ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),
   ]
   try {
     for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
   } catch (err) {
     console.error('games/import batch failed', err)
     return c.json({ error: 'import_failed', message: err instanceof Error ? err.message : String(err) }, 500)
+  }
+
+  // Re-read every touched match_day's authoritative (derived) date rather
+  // than recomputing it in JS — one source of truth (SQL), and it's what
+  // gives a brand-new round the right date even when its matches were
+  // processed out of date order.
+  if (touchedMatchDayIds.size) {
+    const ids = [...touchedMatchDayIds]
+    const fresh = await db.prepare(
+      `SELECT id, group_id, number, date FROM match_days WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ).bind(...ids).all()
+    const createdMatchDayIds = new Set(createdMatchDays.map((m) => m.id as string))
+    const priorDateById = new Map(mdRows.results.map((m) => [m.id as string, m.date as string]))
+    for (const row of fresh.results) {
+      const id = row.id as string
+      const created = createdMatchDayIds.has(id) ? createdMatchDays.find((m) => m.id === id) : undefined
+      if (created) {
+        created.date = row.date
+      } else if (priorDateById.get(id) !== row.date) {
+        updatedMatchDays.push({ id, groupId: row.group_id, number: row.number, date: row.date })
+      }
+    }
   }
 
   return c.json({
@@ -1288,6 +1325,7 @@ app.post('/games/import', async (c) => {
     createdMatchDays,
     updatedMatchDays,
     createdGames,
+    updatedGames,
     skippedGroups,
     existingGames,
     skippedMatches,
@@ -1307,7 +1345,7 @@ app.post('/games/import', async (c) => {
 // which assume every id is FFTT-issued.
 
 interface ScheduleDocTeamInput { name: string; number: number; affiliationNumber: string }
-interface ScheduleDocMatchInput { homeName: string; homeNumber: number; awayName: string; awayNumber: number }
+interface ScheduleDocMatchInput { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null }
 interface ScheduleDocJourneeInput { number: number; date: string; matches: ScheduleDocMatchInput[] }
 interface ScheduleDocInput {
   seasonId: string
@@ -1353,9 +1391,10 @@ function parseScheduleDocJournees(raw: unknown): ScheduleDocJourneeInput[] {
         if (typeof y.homeNumber !== 'number' || !Number.isInteger(y.homeNumber)) continue
         if (typeof y.awayName !== 'string' || !y.awayName.trim()) continue
         if (typeof y.awayNumber !== 'number' || !Number.isInteger(y.awayNumber)) continue
+        const date = typeof y.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(y.date) ? y.date : null
         matches.push({
           homeName: y.homeName.trim().slice(0, 80), homeNumber: y.homeNumber,
-          awayName: y.awayName.trim().slice(0, 80), awayNumber: y.awayNumber,
+          awayName: y.awayName.trim().slice(0, 80), awayNumber: y.awayNumber, date,
         })
       }
     }
@@ -1488,7 +1527,13 @@ app.post('/schedule-documents/import', async (c) => {
   const createdTeams: Array<Record<string, unknown>> = []
   const touchedGroups = new Map<string, GroupState>()
   const createdMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
-  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string }> = []
+  const updatedMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
+  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string; date: string | null }> = []
+  // Every match_day that gained a game (created here, or an already-existing
+  // one from an earlier FFTT/doc import) — recomputed (derived date) after
+  // the batch, then re-read to build updatedMatchDays from the authoritative
+  // DB state, same pattern as /games/import (#271).
+  const touchedMatchDayIds = new Set<string>()
   const skippedSchedules: Array<{ index: number; reason: string }> = []
   const skippedMatchDetails: Array<{ side: 'home' | 'away'; name: string; number: number }> = []
   let existingGames = 0
@@ -1595,6 +1640,7 @@ app.post('/schedule-documents/import', async (c) => {
         md = { id: localId('md'), group_id: groupId, number: j.number, date: j.date }
         matchDayByKey.set(mdKey, md)
         createdMatchDays.push({ id: md.id as string, groupId, number: j.number, date: j.date })
+        touchedMatchDayIds.add(md.id as string)
       }
       for (const m of j.matches) {
         const homeId = resolveMatchTeamId(m.homeName, m.homeNumber)
@@ -1622,7 +1668,8 @@ app.post('/schedule-documents/import', async (c) => {
         if (!pairingsByMatchDay.has(mdId)) pairingsByMatchDay.set(mdId, new Set())
         pairingsByMatchDay.get(mdId)!.add(`${homeId}|${awayId}`)
         pairingsByMatchDay.get(mdId)!.add(`${awayId}|${homeId}`)
-        createdGames.push({ id: localId('game'), matchDayId: mdId, homeTeamId: homeId, awayTeamId: awayId })
+        createdGames.push({ id: localId('game'), matchDayId: mdId, homeTeamId: homeId, awayTeamId: awayId, date: m.date ?? j.date })
+        touchedMatchDayIds.add(mdId)
       }
     }
   }
@@ -1657,14 +1704,39 @@ app.post('/schedule-documents/import', async (c) => {
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, NULL)')
-        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId)),
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date) VALUES (?, ?, ?, ?, NULL, ?)')
+        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date)),
+    // Last: recompute every touched journée's derived date from its (now
+    // fully written) games (#271).
+    ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),
   ]
   try {
     for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
   } catch (err) {
     console.error('schedule-documents/import batch failed', err)
     return c.json({ error: 'import_failed', message: err instanceof Error ? err.message : String(err) }, 500)
+  }
+
+  // Re-read every touched match_day's authoritative (derived) date, same
+  // pattern as /games/import: one source of truth (SQL), not JS-side
+  // guesswork, and it's what catches a journée whose derived date shifted
+  // because a game landed under an already-existing match_day.
+  if (touchedMatchDayIds.size) {
+    const ids = [...touchedMatchDayIds]
+    const fresh = await db.prepare(
+      `SELECT id, group_id, number, date FROM match_days WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ).bind(...ids).all()
+    const createdMatchDayIds = new Set(createdMatchDays.map((m) => m.id))
+    const priorDateById = new Map(mdRows.results.map((m) => [m.id as string, m.date as string]))
+    for (const row of fresh.results) {
+      const id = row.id as string
+      const created = createdMatchDayIds.has(id) ? createdMatchDays.find((m) => m.id === id) : undefined
+      if (created) {
+        created.date = row.date as string
+      } else if (priorDateById.get(id) !== row.date) {
+        updatedMatchDays.push({ id, groupId: row.group_id as string, number: row.number as number, date: row.date as string })
+      }
+    }
   }
 
   const allGroups = [...touchedGroups.values()]
@@ -1677,6 +1749,7 @@ app.post('/schedule-documents/import', async (c) => {
     // Every touched group (created or team-list-updated) in its final state.
     groups: allGroups,
     createdMatchDays,
+    updatedMatchDays,
     createdGames,
     skippedSchedules,
     existingGames,
@@ -2308,21 +2381,39 @@ app.patch('/match-days/:id', async (c) => {
 // --- Games ---
 app.post('/games', async (c) => {
   const d = await c.req.json()
-  await c.env.DB.prepare(
-    'INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES (?, ?, ?, ?, ?)'
-  ).bind(d.id, d.matchDayId, d.homeTeamId, d.awayTeamId, d.time ?? null).run()
+  const db = c.env.DB
+  await db.prepare(
+    'INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time, date) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.matchDayId, d.homeTeamId, d.awayTeamId, d.time ?? null, d.date ?? null).run()
+  await recomputeMatchDayDate(db, d.matchDayId)
   return c.json({ ok: true })
 })
 
 app.patch('/games/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
+  const db = c.env.DB
   const s: string[] = [], v: unknown[] = []
   if ('matchDayId' in p) { s.push('match_day_id = ?'); v.push(p.matchDayId) }
   if ('homeTeamId' in p) { s.push('home_team_id = ?'); v.push(p.homeTeamId) }
   if ('awayTeamId' in p) { s.push('away_team_id = ?'); v.push(p.awayTeamId) }
   if ('time' in p) { s.push('time = ?'); v.push(p.time ?? null) }
-  if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE games SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  if ('date' in p) { s.push('date = ?'); v.push(p.date ?? null) }
+  if (!s.length) return c.json({ ok: true })
+  // A date (or a match-day move) can shift the derived date of whichever
+  // match_day(s) this game belongs to before/after — capture the prior one
+  // so both are recomputed, not just the new one.
+  let oldMatchDayId: string | null = null
+  if ('date' in p || 'matchDayId' in p) {
+    const row = await db.prepare('SELECT match_day_id FROM games WHERE id = ?').bind(id).first<{ match_day_id: string }>()
+    oldMatchDayId = row?.match_day_id ?? null
+  }
+  v.push(id)
+  await db.prepare(`UPDATE games SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
+  if (oldMatchDayId) {
+    await recomputeMatchDayDate(db, oldMatchDayId)
+    if (typeof p.matchDayId === 'string' && p.matchDayId !== oldMatchDayId) await recomputeMatchDayDate(db, p.matchDayId)
+  }
   return c.json({ ok: true })
 })
 

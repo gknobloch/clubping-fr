@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { teamPhaseEntries } from '@/lib/teamPhases'
+import { gameDate } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { getTeamName } from '@/lib/teamName'
 import { Avatar } from '@/components/Avatar'
@@ -156,9 +157,10 @@ export function TeamDetailPage() {
                 const md = g.matchDay
                 const isHome = g.homeTeamId === team.id
                 const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
-                const isPast = md ? md.date < today : false
-                const dateLabel = md
-                  ? new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+                const date = md ? gameDate(g, md) : null
+                const isPast = date ? date < today : false
+                const dateLabel = date
+                  ? new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
                   : ''
                 return (
                   <li key={g.id} className="flex items-center justify-between gap-3 border-t border-slate-100 py-2.5">

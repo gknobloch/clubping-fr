@@ -1,4 +1,5 @@
 import type { Game, MatchDay, Phase, Team } from '../types'
+import { gameDate } from './matchdays'
 
 export type GameWithMatchDay = Game & { matchDay?: MatchDay }
 
@@ -43,7 +44,8 @@ export function teamPhaseEntries(
             (g.homeTeamId === t.id || g.awayTeamId === t.id) && mdInGroup.has(g.matchDayId),
         )
         .map((g) => ({ ...g, matchDay: matchDays.find((md) => md.id === g.matchDayId) }))
-        .sort((a, b) => (a.matchDay?.date ?? '').localeCompare(b.matchDay?.date ?? ''))
+        .sort((a, b) =>
+          (a.matchDay ? gameDate(a, a.matchDay) : '').localeCompare(b.matchDay ? gameDate(b, b.matchDay) : ''))
       return {
         teamId: t.id,
         phaseId: t.phaseId,
