@@ -10,7 +10,7 @@ import { AvailabilityButtons, AvailabilityChip } from '@/components/Availability
 import { HomeIcon, AwayIcon, Pill, PhaseSwitchButton } from '@/components/icons'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
-import { playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
 export function HomePage() {
@@ -47,13 +47,12 @@ export function HomePage() {
         : [],
     [games, myActiveTeam],
   )
-  const upcoming = useMemo(
-    () =>
-      teamGames
-        .filter((g) => { const md = mdMap.get(g.matchDayId); return md && md.date >= today })
-        .sort((a, b) => (mdMap.get(a.matchDayId)?.date ?? '').localeCompare(mdMap.get(b.matchDayId)?.date ?? '')),
-    [teamGames, mdMap, today],
-  )
+  const upcoming = useMemo(() => {
+    const dateOf = (g: (typeof teamGames)[number]) => { const md = mdMap.get(g.matchDayId); return md ? gameDate(g, md) : null }
+    return teamGames
+      .filter((g) => { const d = dateOf(g); return d !== null && d >= today })
+      .sort((a, b) => (dateOf(a) ?? '').localeCompare(dateOf(b) ?? ''))
+  }, [teamGames, mdMap, today])
 
   const availOf = (gameId: string): AvailabilityStatus | undefined =>
     myPlayerId ? gameAvailabilities.find((a) => a.playerId === myPlayerId && a.gameId === gameId)?.status : undefined
@@ -141,7 +140,7 @@ export function HomePage() {
                   const matchup = isHome
                     ? `${getTeamName(myActiveTeam, clubs)} – ${opp ? getTeamName(opp, clubs) : '?'}`
                     : `${opp ? getTeamName(opp, clubs) : '?'} – ${getTeamName(myActiveTeam, clubs)}`
-                  const dateLabel = new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', {
+                  const dateLabel = new Date(gameDate(g, md) + 'T12:00:00').toLocaleDateString('fr-FR', {
                     weekday: 'long', day: 'numeric', month: 'long',
                   })
                   const locked = committedElsewhere(g.id)

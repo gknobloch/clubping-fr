@@ -159,6 +159,8 @@ export interface Game {
   awayTeamId: string
   /** Optional time (e.g. "20h00"). */
   time?: string
+  /** This game's own date (#271); falls back to its match day's (derived) date when unset. */
+  date?: string
 }
 
 /** Per game, per team: which players are selected to play (captain/club admin). */

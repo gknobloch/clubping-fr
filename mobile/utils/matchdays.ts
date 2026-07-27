@@ -1,7 +1,7 @@
 import type { MatchDay, Division, Group } from '@shared/types'
 import { getMondayOf, getSundayOf, todayIso } from './weeks'
 
-export { playersCommittedElsewhere } from '@shared/lib/matchdays'
+export { playersCommittedElsewhere, gameDate } from '@shared/lib/matchdays'
 
 // A "journée" across the club: all the per-division MatchDay rows that share a
 // number within a phase, plus the date span of their games.

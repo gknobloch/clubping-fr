@@ -10,6 +10,7 @@ import { getTeamName } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
 import { computeBrulage } from '@shared/lib/brulage'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
+import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
@@ -126,16 +127,17 @@ export default function PhaseGamesScreen() {
         if (!md) continue
         const isHome = g.homeTeamId === t.id
         const oppTeam = teams.find((ot) => ot.id === (isHome ? g.awayTeamId : g.homeTeamId))
+        const gDate = gameDate(g, md)
         entries.push({
-          rawDate: md.date,
+          rawDate: gDate,
           jNumber: md.number,
           isHome,
           oppName: oppTeam ? getTeamName(oppTeam, clubs) : '—',
           team: t,
-          date: new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', {
+          date: new Date(gDate + 'T12:00:00').toLocaleDateString('fr-FR', {
             day: 'numeric', month: 'short',
           }),
-          isPast: md.date < todayStr,
+          isPast: gDate < todayStr,
         })
       }
     }
@@ -255,7 +257,7 @@ export default function PhaseGamesScreen() {
                   isHome={isHome}
                   teamName={getTeamName(team, clubs)}
                   opponentName={oppName}
-                  matchDayDate={md.date}
+                  matchDayDate={gameDate(g, md)}
                   time={g.time}
                 />
                 {gamePlayers.length > 0 && (
@@ -283,7 +285,7 @@ export default function PhaseGamesScreen() {
           gamesTotal={games.filter((g) => {
             if (g.homeTeamId !== team.id && g.awayTeamId !== team.id) return false
             const md = matchDays.find((m) => m.id === g.matchDayId)
-            return !!md && md.date < today
+            return !!md && gameDate(g, md) < today
           }).length}
           team={team}
           brulageTeam={brulageInfo}

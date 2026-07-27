@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { playersCommittedElsewhere } from './matchdays'
+import { deriveMatchDayDate, gameDate, playersCommittedElsewhere } from './matchdays'
 import type { Team, Game, MatchDay, GameSelection } from '../types'
 
 const team = (id: string, number: number): Team => ({
@@ -41,5 +41,45 @@ describe('playersCommittedElsewhere', () => {
       'team-2', 1, clubTeams, [...games, otherRoundGame], [...matchDays, otherRoundMd], selections,
     )
     expect(committed.has('p1')).toBe(false)
+  })
+})
+
+// Games own their date (#271); match_days.date is derived from them client-side
+// the same way the server recomputes it — see matchDayDateRecomputeStmt.
+describe('deriveMatchDayDate', () => {
+  const g = (id: string, matchDayId: string, date?: string): Game =>
+    ({ id, matchDayId, homeTeamId: 'team-1', awayTeamId: 'team-2', date })
+
+  it('returns the earliest date among the match day\'s dated games', () => {
+    const games = [g('g1', 'md-1', '2026-09-20'), g('g2', 'md-1', '2026-09-19'), g('g3', 'md-1', '2026-09-21')]
+    expect(deriveMatchDayDate(games, '2026-09-01')).toBe('2026-09-19')
+  })
+
+  it('falls back to the current date when no game has one yet (empty shell)', () => {
+    expect(deriveMatchDayDate([], '2026-09-01')).toBe('2026-09-01')
+    expect(deriveMatchDayDate([g('g1', 'md-1')], '2026-09-01')).toBe('2026-09-01')
+  })
+
+  it('ignores undated games alongside dated ones', () => {
+    const games = [g('g1', 'md-1'), g('g2', 'md-1', '2026-09-19')]
+    expect(deriveMatchDayDate(games, '2026-09-01')).toBe('2026-09-19')
+  })
+
+  it('returns a single game\'s own date', () => {
+    expect(deriveMatchDayDate([g('g1', 'md-1', '2026-09-19')], '2026-09-01')).toBe('2026-09-19')
+  })
+})
+
+describe('gameDate', () => {
+  const md: MatchDay = { id: 'md-1', groupId: 'group-1', number: 1, date: '2026-09-01' }
+
+  it('prefers the game\'s own date', () => {
+    const game: Game = { id: 'g1', matchDayId: 'md-1', homeTeamId: 'team-1', awayTeamId: 'team-2', date: '2026-09-20' }
+    expect(gameDate(game, md)).toBe('2026-09-20')
+  })
+
+  it('falls back to the match day\'s (derived) date when the game has none', () => {
+    const game: Game = { id: 'g1', matchDayId: 'md-1', homeTeamId: 'team-1', awayTeamId: 'team-2' }
+    expect(gameDate(game, md)).toBe('2026-09-01')
   })
 })

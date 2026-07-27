@@ -10,6 +10,7 @@ import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
+import { gameDate } from '@/utils/matchdays'
 import type { Game, MatchDay, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ export default function MesMatchsScreen() {
         out.push({ game: g, team: t, md, isRenfort: !isAssigned })
       }
     }
-    return out.sort((a, b) => a.md.date.localeCompare(b.md.date))
+    return out.sort((a, b) => gameDate(a.game, a.md).localeCompare(gameDate(b.game, b.md)))
   }, [phase, targetPlayerId, targetClubId, teamByPhase, teams, games, gameSelections, mdMap])
 
   function opponentName(game: Game, team: Team): string {
@@ -171,7 +172,7 @@ export default function MesMatchsScreen() {
                       isHome={game.homeTeamId === team.id}
                       teamName={getTeamName(team, clubs)}
                       opponentName={opponentName(game, team)}
-                      matchDayDate={md.date}
+                      matchDayDate={gameDate(game, md)}
                       time={game.time}
                       label={isRenfort ? 'Renfort' : undefined}
                     />

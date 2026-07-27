@@ -19,6 +19,7 @@ import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { sortByName } from '@shared/lib/sortByName'
+import { gameDate } from '@/utils/matchdays'
 import { getMondayOf, todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 
@@ -102,9 +103,10 @@ export default function HomeScreen() {
   const activeTeamGames = myActiveTeam ? getTeamGames(myActiveTeam.id) : []
   const upcomingGames = useMemo(() => {
     if (!myActiveTeam) return []
+    const dateOf = (g: Game) => { const md = mdMap.get(g.matchDayId); return md ? gameDate(g, md) : null }
     return getTeamGames(myActiveTeam.id)
-      .filter((g) => { const md = mdMap.get(g.matchDayId); return md && getMondayOf(md.date) >= currentWeekMonday })
-      .sort((a, b) => (mdMap.get(a.matchDayId)?.date ?? '').localeCompare(mdMap.get(b.matchDayId)?.date ?? ''))
+      .filter((g) => { const d = dateOf(g); return d !== null && getMondayOf(d) >= currentWeekMonday })
+      .sort((a, b) => (dateOf(a) ?? '').localeCompare(dateOf(b) ?? ''))
   }, [myActiveTeam, games, mdMap, currentWeekMonday]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Roster sorted (used by every hero card + the compose sheet).
@@ -129,7 +131,7 @@ export default function HomeScreen() {
   // whole season, so an upcoming game isn't counted in the denominator.
   const pastTeamGames = activeTeamGames.filter((g) => {
     const md = mdMap.get(g.matchDayId)
-    return md && md.date < today
+    return md && gameDate(g, md) < today
   })
   const playedCount = myActiveTeam && myPlayerId
     ? pastTeamGames.filter((g) => getSelectedForGame(myActiveTeam.id, g.id).includes(myPlayerId)).length
@@ -215,7 +217,7 @@ export default function HomeScreen() {
                     <View key={h.game.id} style={{ width: cardWidth }}>
                       <NextMatchCard
                         matchDayNumber={h.md.number}
-                        matchDayDate={h.md.date}
+                        matchDayDate={gameDate(h.game, h.md)}
                         time={h.game.time}
                         divisionLabel={getDivisionLabel(myActiveTeam)}
                         teamColor={myActiveTeam.color}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage } from '@/lib/brulage'
+import { gameDate } from '@/lib/matchdays'
 import { getTeamName } from '@/lib/teamName'
 import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
@@ -85,8 +86,9 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
             if (!md) continue
             const isHome = g.homeTeamId === t.id
             const opp = teams.find((ot) => ot.id === (isHome ? g.awayTeamId : g.homeTeamId))
+            const gDate = gameDate(g, md)
             rows.push({
-              raw: md.date,
+              raw: gDate,
               e: {
                 gameId: g.id,
                 teamId: t.id,
@@ -95,11 +97,11 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
                 oppName: opp ? getTeamName(opp, clubs) : '—',
                 teamNumber: t.number,
                 teamColor: t.color,
-                date: new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', {
+                date: new Date(gDate + 'T12:00:00').toLocaleDateString('fr-FR', {
                   day: 'numeric',
                   month: 'short',
                 }),
-                isPast: md.date < today,
+                isPast: gDate < today,
               },
             })
           }
@@ -111,7 +113,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           const teamPastGames = games.filter((g) => {
             if (g.homeTeamId !== rosterTeam.id && g.awayTeamId !== rosterTeam.id) return false
             const md = matchDays.find((m) => m.id === g.matchDayId)
-            return md && md.date < today
+            return md && gameDate(g, md) < today
           })
           total = teamPastGames.length
           played = teamPastGames.filter((g) =>

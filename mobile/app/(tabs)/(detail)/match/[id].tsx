@@ -12,7 +12,7 @@ import { PlayerSheet } from '@/components/PlayerSheet'
 import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
-import { playersCommittedElsewhere } from '@/utils/matchdays'
+import { gameDate, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
 import { todayIso } from '@/utils/weeks'
@@ -103,7 +103,8 @@ export default function MatchDetailScreen() {
   )
 
   const canManage = !!(user && canManageTeam(user, team))
-  const gameDatePast = matchDay.date < today
+  const thisGameDate = gameDate(game, matchDay)
+  const gameDatePast = thisGameDate < today
   const getAvail = (pid: string) =>
     gameAvailabilities.find((a) => a.playerId === pid && a.gameId === game.id)?.status
 
@@ -119,15 +120,16 @@ export default function MatchDetailScreen() {
         if (!md) continue
         const home = g.homeTeamId === t.id
         const opp = teams.find((x) => x.id === (home ? g.awayTeamId : g.homeTeamId))
+        const gDate = gameDate(g, md)
         rows.push({
-          raw: md.date,
+          raw: gDate,
           e: {
             jNumber: md.number,
             icon: home ? 'home' : 'paper-plane-outline',
             text: opp ? getTeamName(opp, clubs) : '—',
             team: t,
-            date: new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-            isPast: md.date < today,
+            date: new Date(gDate + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+            isPast: gDate < today,
           },
         })
       }
@@ -148,7 +150,7 @@ export default function MatchDetailScreen() {
             isHome={isHome}
             teamName={getTeamName(team, clubs)}
             opponentName={opponentName}
-            matchDayDate={matchDay.date}
+            matchDayDate={thisGameDate}
             time={game.time}
             venueLabel={venueLabel}
           />
@@ -284,7 +286,7 @@ export default function MatchDetailScreen() {
         const totalPlayed = games.filter((g) => {
           if (g.homeTeamId !== viewTeam.id && g.awayTeamId !== viewTeam.id) return false
           const md = matchDays.find((m) => m.id === g.matchDayId)
-          return !!md && md.date < today
+          return !!md && gameDate(g, md) < today
         }).length
         return (
           <PlayerSheet

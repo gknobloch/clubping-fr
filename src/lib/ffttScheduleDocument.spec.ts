@@ -76,9 +76,12 @@ describe('parseScheduleDocumentLines', () => {
       day: 'Samedi', time: '16h00',
       homeName: 'THAON CHENIMENIL ESTT', homeNumber: 1,
       awayName: 'ROSENAU TT', awayNumber: 1,
-      score: '-',
+      score: '-', date: '2026-09-19',
     })
+    // Every match of a fixed-date journée simply carries that journée's date.
+    expect(j1.matches.every((m) => m.date === '2026-09-19')).toBe(true)
     expect(j2).toMatchObject({ number: 2, date: '2026-10-03' })
+    expect(j2.matches.every((m) => m.date === '2026-10-03')).toBe(true)
   })
 
   it('parses same-month and cross-month date-range journées', () => {
@@ -122,8 +125,15 @@ describe('parseScheduleDocumentLines', () => {
     const result = parseScheduleDocumentLines(lines)
     if ('error' in result) throw new Error(`expected a parsed document, got error: ${result.error}`)
     // 2 of 3 matches are Samedi (2026-09-19) despite the lone Dimanche match
-    // (2026-09-20) appearing first in the document.
+    // (2026-09-20) appearing first in the document — the journée's own date
+    // (used for match_days' derived date and as a fallback) is the majority.
     expect(result.journees[0]).toMatchObject({ date: '2026-09-19', rangeEndDate: '2026-09-20' })
+    // But each match keeps its OWN resolved date (#271) — the Dimanche match
+    // is NOT silently pulled onto the majority's Samedi.
+    const [dimanche, samedi1, samedi2] = result.journees[0].matches
+    expect(dimanche).toMatchObject({ day: 'Dimanche', date: '2026-09-20' })
+    expect(samedi1).toMatchObject({ day: 'Samedi', date: '2026-09-19' })
+    expect(samedi2).toMatchObject({ day: 'Samedi', date: '2026-09-19' })
   })
 
   it('flags a malformed affiliation number instead of silently trusting it', () => {
@@ -200,7 +210,7 @@ describe('parseScheduleDocumentLines', () => {
       day: 'Samedi', time: '16h00',
       homeName: 'THAON CHENIMENIL ESTT', homeNumber: 1,
       awayName: 'ROSENAU TT', awayNumber: 1,
-      score: '-',
+      score: '-', date: '2026-09-19',
     }])
   })
 
@@ -223,7 +233,7 @@ describe('parseScheduleDocumentLines', () => {
       day: 'Samedi', time: '16h00',
       homeName: 'ILLZACH TTSJB', homeNumber: 2,
       awayName: 'RIXHEIM PPA', awayNumber: 1,
-      score: '-',
+      score: '-', date: '2026-09-19',
     }])
   })
 
@@ -246,7 +256,7 @@ describe('parseScheduleDocumentLines', () => {
       day: 'Samedi', time: '16h00',
       homeName: 'BARR TT', homeNumber: 4,
       awayName: 'ROSENAU TT', awayNumber: 3,
-      score: '-',
+      score: '-', date: '2026-09-19',
     }])
 
     lines[5] = 'Samedi 16h BARR TT 4 __ contre ROSENAU TT 3 -'

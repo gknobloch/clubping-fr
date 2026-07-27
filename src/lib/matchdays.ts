@@ -27,3 +27,16 @@ export function playersCommittedElsewhere(
   }
   return result
 }
+
+// Games own their date (#271); a match_day's date is derived server-side as
+// the MIN of its games' dates. updateGame/addGame call the API fire-and-forget
+// (no awaited response to sync from), so the optimistic client state needs
+// its own mirror of that same derivation to avoid showing a stale date until
+// the next full refetch.
+export function deriveMatchDayDate(gamesForMatchDay: Game[], currentDate: string): string {
+  const dates = gamesForMatchDay.map((g) => g.date).filter((d): d is string => !!d)
+  return dates.length ? dates.sort()[0] : currentDate
+}
+
+/** A specific game's own date, falling back to its match day's (derived) date when unset. */
+export const gameDate = (game: Game, matchDay: MatchDay): string => game.date ?? matchDay.date

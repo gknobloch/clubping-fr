@@ -50,6 +50,7 @@ import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDi
 import {
   dafunkerClubTeamsUrl, dafunkerResultsUrl, parseDafunkerClubTeamsXml, parseDafunkerResultsXml,
 } from '@/lib/ffttGamesXml'
+import { deriveMatchDayDate } from '@/lib/matchdays'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
 // older than what becomes active, back to 'upcoming' when newer (rollback).
@@ -187,9 +188,11 @@ export interface FfttGamesImportResult {
   /** Groups whose team list changed, in their final state (client-side upsert). */
   groups: Group[]
   createdMatchDays: MatchDay[]
-  /** Journées whose FFTT date changed since the last import (re-import sync). */
+  /** Journées whose derived date changed since the last import (re-import sync). */
   updatedMatchDays: MatchDay[]
   createdGames: Game[]
+  /** Existing games whose FFTT date changed since the last import (re-import sync); their time is never touched. */
+  updatedGames: Game[]
   skippedGroups: Array<{ groupId: string; reason: 'group_not_found' | 'fftt_unavailable' | 'pool_not_found' | 'calendar_not_published' }>
   existingGames: number
   skippedMatches: number
@@ -225,7 +228,7 @@ export interface FfttGroupsImportResult {
 // the "preview" is the confirmation table built from data already in this
 // context, and this single call both validates and persists.
 export interface ScheduleDocImportTeam { name: string; number: number; affiliationNumber: string }
-export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number }
+export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null }
 export interface ScheduleDocImportJournee { number: number; date: string; matches: ScheduleDocImportMatch[] }
 
 export interface ScheduleDocImportInput {
@@ -251,6 +254,8 @@ export interface ScheduleDocImportResult {
   /** Every touched group (created or team-list-updated), in its final state. */
   groups: Group[]
   createdMatchDays: MatchDay[]
+  /** Existing journées whose derived date changed because a newly-imported game landed under them (#271). */
+  updatedMatchDays: MatchDay[]
   createdGames: Game[]
   skippedSchedules: Array<{ index: number; reason: string }>
   existingGames: number
@@ -788,7 +793,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
           ...upserts,
         ])
       }
-      if (result.createdGames.length) setGames((prev) => [...prev, ...result.createdGames])
+      if (result.createdGames.length || result.updatedGames.length) {
+        const upserts = [...result.createdGames, ...result.updatedGames]
+        setGames((prev) => [
+          ...prev.filter((g) => !upserts.some((u) => u.id === g.id)),
+          ...upserts,
+        ])
+      }
       return result
     } catch {
       return null
@@ -866,7 +877,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
           ...result.groups,
         ])
       }
-      if (result.createdMatchDays.length) setMatchDays((prev) => [...prev, ...result.createdMatchDays])
+      if (result.createdMatchDays.length || result.updatedMatchDays.length) {
+        const upserts = [...result.createdMatchDays, ...result.updatedMatchDays]
+        setMatchDays((prev) => [
+          ...prev.filter((m) => !upserts.some((u) => u.id === m.id)),
+          ...upserts,
+        ])
+      }
       if (result.createdGames.length) setGames((prev) => [...prev, ...result.createdGames])
       return result
     } catch {
@@ -1416,15 +1433,37 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [persist])
 
   // --- Games ---
+  // A game's own date (#271) also shifts its match day's derived date (the
+  // MIN of its games' dates). The API recomputes this server-side, but
+  // these two actions are fire-and-forget (not awaited), so the optimistic
+  // local matchDays state needs its own mirror of that derivation —
+  // otherwise the grid/header would show a stale date until the next
+  // refetch. See deriveMatchDayDate in lib/matchdays.ts.
+  const syncMatchDayDate = (matchDayId: string, gamesForMatchDay: Game[]) => {
+    setMatchDays((prev) => prev.map((md) =>
+      md.id === matchDayId ? { ...md, date: deriveMatchDayDate(gamesForMatchDay, md.date) } : md))
+  }
+
   const updateGame = useCallback((id: string, patch: Partial<Game>) => {
-    setGames((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)))
+    setGames((prev) => {
+      const next = prev.map((g) => (g.id === id ? { ...g, ...patch } : g))
+      if ('date' in patch) {
+        const game = next.find((g) => g.id === id)
+        if (game) syncMatchDayDate(game.matchDayId, next.filter((g) => g.matchDayId === game.matchDayId))
+      }
+      return next
+    })
     if (persist) api(`/games/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
   }, [persist])
 
   const addGame = useCallback((data: Omit<Game, 'id'>) => {
     const id = nextId('game')
     const game: Game = { ...data, id }
-    setGames((prev) => [...prev, game])
+    setGames((prev) => {
+      const next = [...prev, game]
+      if (game.date) syncMatchDayDate(game.matchDayId, next.filter((g) => g.matchDayId === game.matchDayId))
+      return next
+    })
     if (persist) api('/games', { method: 'POST', body: JSON.stringify(game) })
     return game
   }, [persist])

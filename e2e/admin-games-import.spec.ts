@@ -35,8 +35,9 @@ const importResult = {
     { id: 'md-g1-1', groupId: 'group-1', number: 1, date: '2025-09-28' },
   ],
   createdGames: [
-    { id: '900001', matchDayId: 'md-fftt-group-1-r8', homeTeamId: 'team-1', awayTeamId: '5834' },
+    { id: '900001', matchDayId: 'md-fftt-group-1-r8', homeTeamId: 'team-1', awayTeamId: '5834', date: '2026-03-14' },
   ],
+  updatedGames: [],
   skippedGroups: [],
   existingGames: 16,
   skippedMatches: 0,

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
-import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange } from '@/utils/matchdays'
+import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate } from '@/utils/matchdays'
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import type { Game, Team } from '@shared/types'
@@ -165,7 +165,7 @@ export default function JourneesScreen() {
         divisionLabel={divLabel(team)}
         playersPerGame={perGame(team)}
         matchDayNumber={md.number}
-        matchDayDate={md.date}
+        matchDayDate={gameDate(game, md)}
         opponentName={opp ? getTeamName(opp, clubs) : '?'}
         isHome={isHome}
         selectedCount={selectedCount}

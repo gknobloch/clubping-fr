@@ -8,7 +8,7 @@ import { Pill } from '@/components/icons'
 import { ModalShell } from '@/components/ModalShell'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
-import { playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
 
 // Read-only quick view of a single game from one team's perspective — match
 // header + availabilities / line-up. Mirrors the mobile match detail screen
@@ -56,7 +56,8 @@ export function GameQuickView({
 
   if (!game || !team || !matchDay) return null
 
-  const isPast = matchDay.date < new Date().toISOString().slice(0, 10)
+  const date = gameDate(game, matchDay)
+  const isPast = date < new Date().toISOString().slice(0, 10)
   const isHome = game.homeTeamId === team.id
   const oppTeam = teams.find((t) => t.id === (isHome ? game.awayTeamId : game.homeTeamId))
   const opponentName = oppTeam ? getTeamName(oppTeam, clubs) : '?'
@@ -76,7 +77,7 @@ export function GameQuickView({
     gameAvailabilities.find((a) => a.playerId === pid && a.gameId === game.id)?.status
 
   const matchup = isHome ? `${getTeamName(team, clubs)} – ${opponentName}` : `${opponentName} – ${getTeamName(team, clubs)}`
-  const dateLabel = new Date(matchDay.date + 'T12:00:00').toLocaleDateString('fr-FR', {
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long',
   })
 

@@ -4,6 +4,7 @@ import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
+import { gameDate } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { ClubLogo } from '@/components/ClubLogo'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
@@ -706,7 +707,7 @@ export function MatchDaysPage() {
     )
     if (!md || !team) return
     setGameEditForm({
-      date: md.date,
+      date: game ? gameDate(game, md) : md.date,
       time: game?.time ?? team.defaultTime ?? '',
       isHome: game ? game.homeTeamId === teamId : true,
       opponentTeamId: game
@@ -731,7 +732,6 @@ export function MatchDaysPage() {
         (g.homeTeamId === teamId || g.awayTeamId === teamId)
     )
     if (!team || !matchDay) return
-    updateMatchDay(matchDayId, { date: gameEditForm.date })
     const homeTeamId = gameEditForm.isHome ? teamId : gameEditForm.opponentTeamId
     const awayTeamId = gameEditForm.isHome ? gameEditForm.opponentTeamId : teamId
     if (!homeTeamId || !awayTeamId) {
@@ -743,6 +743,7 @@ export function MatchDaysPage() {
         homeTeamId,
         awayTeamId,
         time: gameEditForm.time || undefined,
+        date: gameEditForm.date || undefined,
       })
     } else {
       addGame({
@@ -750,6 +751,7 @@ export function MatchDaysPage() {
         homeTeamId,
         awayTeamId,
         time: gameEditForm.time || undefined,
+        date: gameEditForm.date || undefined,
       })
     }
     closeGameEditModal()
