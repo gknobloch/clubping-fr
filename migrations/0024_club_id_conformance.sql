@@ -2,14 +2,27 @@
 -- format 0020 established and that games/import's clubIdFor already produces
 -- for auto-created opponent clubs.
 --
--- 0020 renamed every club that existed at the time, so on a healthy database
--- this migration is expected to match zero rows. It exists because nothing
--- enforced the convention between 0020 and now, and because a silent
--- non-conformant id is exactly the kind of drift this issue is about. Unlike
--- 0022/0023 the target cannot be invented: a club whose affiliation_number is
--- NULL or not an 8-digit FFTT number is left on its current id and simply
--- stays reachable — that is what the /clubs/:clubId routing change in the
--- same PR is for.
+-- 0020 was supposed to have renamed every club that existed at the time, but a
+-- production export taken for #275 shows it did not: 17 clubs are still on the
+-- bare 8-digit id that 0018 gave them, and the three synthetic 99xxxxxx clubs
+-- from #252 never moved either. Two rules therefore apply:
+--
+--   1. a non-conformant id with a usable affiliation number -> club-fftt-<number>
+--   2. a non-conformant id that IS an 8-digit number, with no affiliation
+--      number recorded -> club-fftt-<id>, which is exactly what 0020 intended
+--      for the #252 synthetics (their number stays NULL: 99xxxxxx is a
+--      placeholder this project made up, not an FFTT affiliation number).
+--
+-- The target still cannot always be invented: a club with neither a usable
+-- number nor a numeric id is left on its current id and simply stays
+-- reachable — that is what the /clubs/:clubId routing change in the same PR
+-- is for.
+--
+-- The same export also shows ~10 clubs already on club-fftt-<number> but with
+-- affiliation_number NULL — 0019 re-added that column without backfilling it
+-- and 0020 copied the NULL forward. The number is sitting right there in the
+-- id, so it is recovered at the end of this file; without it the FFTT sync on
+-- the club page has nothing to query.
 --
 -- club_logos.club_id REFERENCES clubs(id) ON DELETE CASCADE with no
 -- ON UPDATE CASCADE, so — exactly as 0018 and 0020 spell out — the rename
@@ -27,6 +40,7 @@ CREATE TABLE club_id_remap (
   new_id TEXT NOT NULL
 );
 
+-- Rule 1: the affiliation number is the source of truth when it is usable.
 INSERT INTO club_id_remap (old_id, new_id)
 SELECT id, 'club-fftt-' || affiliation_number
 FROM clubs
@@ -34,6 +48,17 @@ WHERE id NOT GLOB 'club-fftt-*'
   AND affiliation_number GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
   AND NOT EXISTS (
     SELECT 1 FROM clubs t WHERE t.id = 'club-fftt-' || clubs.affiliation_number
+  );
+
+-- Rule 2: no number recorded, but the id is already the number (0018-era rows
+-- and the #252 synthetics). OR IGNORE because rule 1 owns any row it matched.
+INSERT OR IGNORE INTO club_id_remap (old_id, new_id)
+SELECT id, 'club-fftt-' || id
+FROM clubs
+WHERE id GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+  AND (affiliation_number IS NULL OR affiliation_number = '')
+  AND NOT EXISTS (
+    SELECT 1 FROM clubs t WHERE t.id = 'club-fftt-' || clubs.id
   );
 
 INSERT INTO clubs (id, affiliation_number, display_name, is_archived)
@@ -68,3 +93,14 @@ WHERE club_id IN (SELECT old_id FROM club_id_remap);
 DELETE FROM clubs WHERE id IN (SELECT old_id FROM club_id_remap);
 
 DROP TABLE club_id_remap;
+
+-- Recover the affiliation number 0019/0020 left NULL, from the id itself
+-- ('club-fftt-' is 10 characters, so the number starts at 11). The 99xxxxxx
+-- synthetics are excluded on purpose: they are placeholders invented by #252,
+-- and writing one into affiliation_number would make the club look like it has
+-- a real FFTT number — the FFTT sync would then query a club that cannot exist.
+UPDATE clubs
+SET affiliation_number = substr(id, 11)
+WHERE (affiliation_number IS NULL OR affiliation_number = '')
+  AND id GLOB 'club-fftt-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+  AND substr(id, 11) NOT GLOB '99[0-9][0-9][0-9][0-9][0-9][0-9]';

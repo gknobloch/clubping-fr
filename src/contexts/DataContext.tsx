@@ -45,6 +45,7 @@ import {
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
+import { clubIdFromAffiliation } from '@/lib/ffttClub'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
 import {
@@ -1071,13 +1072,20 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) api(`/clubs/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
   }, [persist])
 
+  // Clubs are keyed on their FFTT affiliation number (#275) — same id space as
+  // the clubs the games/schedule imports auto-create — so the FFTT club import
+  // and manual creation stop producing ids that a later migration has to clean
+  // up. Falls back to a generated id when there is no usable number, or when
+  // the FFTT-aligned one is already taken (the caller is expected to have
+  // offered the existing club instead; a duplicate id would just fail to save).
   const addClub = useCallback((data: Omit<Club, 'id'>) => {
-    const id = nextId('club')
+    const preferred = clubIdFromAffiliation(data.affiliationNumber)
+    const id = preferred && !clubs.some((c) => c.id === preferred) ? preferred : nextId('club')
     const club: Club = { ...data, id }
     setClubs((prev) => [...prev, club])
     if (persist) api('/clubs', { method: 'POST', body: JSON.stringify(club) })
     return club
-  }, [persist])
+  }, [persist, clubs])
 
   const archiveClub = useCallback((id: string) => {
     setClubs((prev) => prev.map((c) => (c.id === id ? { ...c, isArchived: true } : c)))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasVenueInfo, normalizeFfttName, parseClubDetailXml } from './ffttClub'
+import { clubIdFromAffiliation, hasVenueInfo, normalizeFfttName, parseClubDetailXml } from './ffttClub'
 
 const RIXHEIM_XML =
   '<?xml version="1.0" encoding="ISO-8859-1"?>\n' +
@@ -77,5 +77,20 @@ describe('parseClubDetailXml', () => {
   it('returns null when numero or nom is missing', () => {
     const xml = '<liste><club><nomsalle>Salle</nomsalle></club></liste>'
     expect(parseClubDetailXml(xml)).toBeNull()
+  })
+})
+
+describe('clubIdFromAffiliation', () => {
+  it('builds the FFTT-aligned id from an 8-digit affiliation number', () => {
+    expect(clubIdFromAffiliation('06680011')).toBe('club-fftt-06680011')
+    expect(clubIdFromAffiliation('  06680011  ')).toBe('club-fftt-06680011')
+  })
+
+  it('returns null when there is no usable number, so the caller can fall back', () => {
+    expect(clubIdFromAffiliation('')).toBeNull()
+    expect(clubIdFromAffiliation(undefined)).toBeNull()
+    expect(clubIdFromAffiliation('123')).toBeNull()
+    expect(clubIdFromAffiliation('0668001A')).toBeNull()
+    expect(clubIdFromAffiliation('066800110')).toBeNull()
   })
 })
