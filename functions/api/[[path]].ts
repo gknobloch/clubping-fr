@@ -3,6 +3,7 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, bearer, userFromToken, type Env } from './auth'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
+import { clubIdFromAffiliation } from '../../src/lib/ffttClub'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
@@ -1041,7 +1042,20 @@ function makeTeamResolver(
     resolve(side: FfttMatchTeam, phaseId: string): string | null {
       const byId = teamByIdPhase.get(`${side.teamId}|${phaseId}`)
       if (byId) return byId
-      const clubId = side.clubIdentifier ? clubByAffiliation.get(side.clubIdentifier) : undefined
+      // Second lookup key: the club id derived from the affiliation number
+      // (#275). Going through clubByAffiliation alone is not enough — a club
+      // whose affiliation_number is NULL is simply absent from that map, the
+      // (club, number, phase) fallback below is skipped, and the caller
+      // creates a team that already exists under another id space. That is
+      // what produced the duplicate phase-27-1 teams in production: the
+      // schedule-document import keys teams on doc-<affiliation>-<number>
+      // while the games import uses the real FFTT team id, and only this
+      // fallback can tell that they are the same team. Club ids are
+      // deterministic (clubIdFor / clubIdFromAffiliation), so deriving the id
+      // is safe: it resolves to nothing when no such club exists.
+      const clubId = side.clubIdentifier
+        ? clubByAffiliation.get(side.clubIdentifier) ?? clubIdFromAffiliation(side.clubIdentifier) ?? undefined
+        : undefined
       if (clubId && side.teamNumber !== null) {
         return teamByClubNumberPhase.get(`${clubId}|${side.teamNumber}|${phaseId}`) ?? null
       }
