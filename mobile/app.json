@@ -40,7 +40,8 @@
           "photosPermission": "Autorisez l'accès à vos photos pour choisir un avatar.",
           "cameraPermission": "Autorisez l'accès à l'appareil photo pour prendre votre avatar."
         }
-      ]
+      ],
+      "./plugins/withDisableScriptSandboxing"
     ],
     "experiments": {
       "typedRoutes": true
