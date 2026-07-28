@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
-import { gameDate } from '@/lib/matchdays'
+import { gameDate, gameSchedule } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { ClubLogo } from '@/components/ClubLogo'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
@@ -711,7 +711,10 @@ export function MatchDaysPage() {
     if (!md || !team) return
     setGameEditForm({
       date: game ? gameDate(game, md) : md.date,
-      time: game?.time ?? team.defaultTime ?? '',
+      // The home club's time, never the viewing team's (#287).
+      time: game
+        ? gameSchedule(game, md, teams.find((t) => t.id === game.homeTeamId)).time
+        : team.defaultTime ?? '',
       isHome: game ? game.homeTeamId === teamId : true,
       opponentTeamId: game
         ? game.homeTeamId === teamId
@@ -1091,22 +1094,36 @@ export function MatchDaysPage() {
                               <span className="block">J{md.number}</span>
                               {game ? (
                                 <>
-                                  <span className="block text-xs font-normal text-slate-500">
-                                    {/* The game's own date, not the journée's:
-                                        games own their date since #271, and a
-                                        home fixture is moved to the team's
-                                        playing day (#287), so md.date — the MIN
-                                        across the journée — can belong to
-                                        another club's match. */}
-                                    {new Date((game.date ?? md.date) + 'Z').toLocaleDateString('fr-FR', {
-                                      weekday: 'short',
-                                      day: 'numeric',
-                                      month: 'short',
-                                    })}
-                                    {(game.time ?? team.defaultTime) && (
-                                      <span className="ml-1">{game.time ?? team.defaultTime}</span>
-                                    )}
-                                  </span>
+                                  {/* A fixture only has a real slot once the
+                                      HOME club's playing day is known (#287).
+                                      Otherwise all we honestly have is the
+                                      journée's week — showing the FFTT nominal
+                                      date next to the viewing team's default
+                                      time claimed a slot nobody confirmed. */}
+                                  {(() => {
+                                    const sched = gameSchedule(
+                                      game, md, teams.find((t) => t.id === game.homeTeamId),
+                                    )
+                                    const short = (iso: string) =>
+                                      new Date(iso + 'Z').toLocaleDateString('fr-FR', {
+                                        weekday: 'short', day: 'numeric', month: 'short',
+                                      })
+                                    return sched.date ? (
+                                      <span className="block text-xs font-normal text-slate-500">
+                                        {short(sched.date)}
+                                        {sched.time && <span className="ml-1">{sched.time}</span>}
+                                      </span>
+                                    ) : sched.week ? (
+                                      <span
+                                        className="block text-xs font-normal text-amber-700"
+                                        title="Date et heure non confirmées : le jour de jeu du club recevant n’est pas connu."
+                                      >
+                                        <span aria-hidden="true">⚠ </span>
+                                        <span className="sr-only">Date à confirmer, </span>
+                                        {short(sched.week.start)} – {short(sched.week.end)}
+                                      </span>
+                                    ) : null
+                                  })()}
                                   {opponentId && (
                                     <span className="mt-0.5 flex items-center justify-center gap-1 text-xs text-slate-600">
                                       <span
