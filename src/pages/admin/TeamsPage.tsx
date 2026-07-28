@@ -813,6 +813,8 @@ export function TeamsPage() {
         <ImportGamesModal
           onClose={() => setImportGamesFor(null)}
           groupIds={[importGamesFor.groupId]}
+          teamId={importGamesFor.id}
+          clubId={importGamesFor.clubId}
           context={`${getClubName(importGamesFor.clubId)} ${importGamesFor.number} — calendrier de sa poule`}
         />
       )}

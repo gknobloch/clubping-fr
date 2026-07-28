@@ -326,9 +326,9 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   /** Import a club's FFTT teams with the chosen defaults (venue / day / time). */
   importFfttTeams: (clubId: string, teams: TeamImportOverride[]) => Promise<FfttTeamsImportResult | null>
   /** Preview the FFTT calendars of the given groups (#231); null on failure. */
-  fetchGamesPreview: (groupIds: string[]) => Promise<FfttGamesPreview | null>
+  fetchGamesPreview: (groupIds: string[], teamId?: string) => Promise<FfttGamesPreview | null>
   /** Import the FFTT calendars (journées + matchs, auto-creating opponents). */
-  importFfttGames: (groupIds: string[]) => Promise<FfttGamesImportResult | null>
+  importFfttGames: (groupIds: string[], teamId?: string) => Promise<FfttGamesImportResult | null>
   /** Preview a division's FFTT groups/pools (#237); null on failure. */
   fetchGroupsPreview: (divisionId: string) => Promise<FfttGroupsPreview | null>
   /** Import a division's FFTT groups not already present locally. */
@@ -699,7 +699,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   //     whatever tiers 0-1 still didn't resolve.
   const gamesPayloadRef = useRef<Record<string, Array<{ divisionId: string; pools: FfttPool[] }>>>({})
 
-  const fetchGamesPreview = useCallback(async (groupIds: string[]): Promise<FfttGamesPreview | null> => {
+  const fetchGamesPreview = useCallback(async (groupIds: string[], teamId?: string): Promise<FfttGamesPreview | null> => {
     try {
       // Requested groups with an FFTT-aligned (numeric) division id;
       // non-numeric ones predate the FFTT imports and can't be queried.
@@ -762,7 +762,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       const r = await fetch('/api/fftt/games-preview', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ groupIds, pools }),
+        body: JSON.stringify({ groupIds, pools, ...(teamId ? { teamId } : {}) }),
       })
       if (!r.ok) return null
       gamesPayloadRef.current[groupIds.join(',')] = pools
@@ -772,14 +772,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [groups, teams, clubs])
 
-  const importFfttGames = useCallback(async (groupIds: string[]): Promise<FfttGamesImportResult | null> => {
+  const importFfttGames = useCallback(async (groupIds: string[], teamId?: string): Promise<FfttGamesImportResult | null> => {
     try {
       const pools = gamesPayloadRef.current[groupIds.join(',')]
       if (!pools) return null
       const r = await fetch('/api/games/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ groupIds, pools }),
+        body: JSON.stringify({ groupIds, pools, ...(teamId ? { teamId } : {}) }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttGamesImportResult

@@ -19,9 +19,17 @@ const GROUP_ERROR_LABELS: Record<string, string> = {
  * missing opponent clubs/teams auto-created.
  */
 export function ImportGamesModal({
-  onClose, groupIds, context,
-}: { onClose: () => void; groupIds: string[]; context: string }) {
-  const { fetchGamesPreview, importFfttGames } = useAppData()
+  onClose, groupIds, context, teamId, clubId,
+}: {
+  onClose: () => void
+  groupIds: string[]
+  context: string
+  /** Import only this team's fixtures rather than its whole pool (#287). */
+  teamId?: string
+  /** Names the preview rows with this club's teams; omit for a global admin. */
+  clubId?: string
+}) {
+  const { fetchGamesPreview, importFfttGames, teams, clubs } = useAppData()
 
   const [preview, setPreview] = useState<FfttGamesPreview | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>('loading')
@@ -29,9 +37,24 @@ export function ImportGamesModal({
   const [importError, setImportError] = useState(false)
   const [imported, setImported] = useState<FfttGamesImportResult | null>(null)
 
+  /** "Rixheim PPA 5" for the group's team(s) — a pool alone doesn't say which
+   *  of your teams it concerns (#287). Scoped to the club when there is one. */
+  const teamNameOf = (groupId: string) => {
+    const inGroup = teams.filter((t) => t.groupId === groupId && !t.isArchived && (!clubId || t.clubId === clubId))
+    return inGroup
+      .map((t) => `${clubs.find((c) => c.id === t.clubId)?.displayName ?? ''} ${t.number}`.trim())
+      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .join(', ')
+  }
+
+  // Ordered by team name so the list reads like the teams page, not like the
+  // order the groups happened to come back in.
+  const rows = [...(preview?.groups ?? [])].sort((a, b) =>
+    teamNameOf(a.groupId).localeCompare(teamNameOf(b.groupId), 'fr', { numeric: true }))
+
   useEffect(() => {
     let cancelled = false
-    fetchGamesPreview(groupIds).then((result) => {
+    fetchGamesPreview(groupIds, teamId).then((result) => {
       if (cancelled) return
       if (result) {
         setPreview(result)
@@ -43,7 +66,7 @@ export function ImportGamesModal({
     return () => { cancelled = true }
     // groupIds is stable for the lifetime of the dialog (computed by the opener).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchGamesPreview])
+  }, [fetchGamesPreview, groupIds, teamId])
 
   const importableGroups = (preview?.groups ?? []).filter((g) => !g.error)
   const totalNewGames = importableGroups.reduce((n, g) => n + (g.newGames ?? 0), 0)
@@ -51,7 +74,7 @@ export function ImportGamesModal({
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttGames(groupIds)
+    const result = await importFfttGames(groupIds, teamId)
     setImporting(false)
     if (result) {
       setImported(result)
@@ -114,7 +137,7 @@ export function ImportGamesModal({
           {preview && (
             <div className="space-y-3">
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                {preview.groups.map((g) => (
+                {rows.map((g) => (
                   <li key={g.groupId} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                     {g.error ? (
                       <>
@@ -123,6 +146,7 @@ export function ImportGamesModal({
                             <>
                               <span className="font-medium">{g.divisionName}</span>
                               {g.groupNumber !== undefined && <span className="ml-1">· Poule {g.groupNumber}</span>}
+                              {teamNameOf(g.groupId) && <span className="ml-1">— {teamNameOf(g.groupId)}</span>}
                             </>
                           ) : (
                             <>Groupe {g.groupId}</>
@@ -137,6 +161,9 @@ export function ImportGamesModal({
                         <span className="min-w-0 text-slate-800">
                           <span className="font-medium">{g.divisionName}</span>
                           <span className="ml-1 text-slate-500">· Poule {g.groupNumber}</span>
+                          {teamNameOf(g.groupId) && (
+                            <span className="ml-1 text-slate-500">— {teamNameOf(g.groupId)}</span>
+                          )}
                         </span>
                         <span className="shrink-0 text-xs text-slate-500">
                           {plural(g.rounds ?? 0, 'journée')} · {g.newGames ?? 0} {(g.newGames ?? 0) > 1 ? 'nouveaux matchs' : 'nouveau match'}

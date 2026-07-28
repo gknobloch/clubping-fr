@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, Fragment, useRef, useEffect, useLayoutE
 import { createPortal } from 'react-dom'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
+import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
 import { gameDate } from '@/lib/matchdays'
@@ -402,11 +403,13 @@ export function MatchDaysPage() {
 
   /** Groups of the selected phase that contain at least one team — the FFTT
    *  calendar import scope for this page (#231). */
-  const importableGroupIds = useMemo(() => {
-    const divIds = new Set(divisions.filter((d) => d.phaseId === selectedPhaseId).map((d) => d.id))
-    const populated = new Set(teams.filter((t) => !t.isArchived).map((t) => t.groupId))
-    return groups.filter((g) => divIds.has(g.divisionId) && populated.has(g.id)).map((g) => g.id)
-  }, [divisions, groups, teams, selectedPhaseId])
+  const importScopeClubId = hasClubScope ? user?.clubId : undefined
+  const importableGroupIds = useMemo(
+    () => importableGroupIdsFor({
+      phaseId: selectedPhaseId, divisions, groups, teams, clubId: importScopeClubId,
+    }),
+    [divisions, groups, teams, selectedPhaseId, importScopeClubId],
+  )
 
   /** All teams of the user's club in the selected phase (one block per team; each team has its own group's match-days). */
   const userClubId = user?.clubId
@@ -933,6 +936,7 @@ export function MatchDaysPage() {
         <ImportGamesModal
           onClose={() => setImportGamesOpen(false)}
           groupIds={importableGroupIds}
+          clubId={importScopeClubId}
           context={`${selectedPhase?.displayName ?? ''} — toutes les poules avec équipes`}
         />
       )}
@@ -1088,7 +1092,13 @@ export function MatchDaysPage() {
                               {game ? (
                                 <>
                                   <span className="block text-xs font-normal text-slate-500">
-                                    {new Date(md.date + 'Z').toLocaleDateString('fr-FR', {
+                                    {/* The game's own date, not the journée's:
+                                        games own their date since #271, and a
+                                        home fixture is moved to the team's
+                                        playing day (#287), so md.date — the MIN
+                                        across the journée — can belong to
+                                        another club's match. */}
+                                    {new Date((game.date ?? md.date) + 'Z').toLocaleDateString('fr-FR', {
                                       weekday: 'short',
                                       day: 'numeric',
                                       month: 'short',

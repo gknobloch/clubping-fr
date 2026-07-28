@@ -86,9 +86,12 @@ test.describe('General admin — Games FFTT import', () => {
     await expect(page.getByText('Adversaires créés : 1 équipe et 1 club.')).toBeVisible()
 
     // The import sends exactly the pools the preview resolved (the tier-2
-    // apiv2 poule 1 mocked above), never a re-fetched list.
+    // apiv2 poule 1 mocked above), never a re-fetched list. From /equipes it
+    // is also scoped to that one team (#287) — its pool's other fixtures are
+    // not imported.
     expect(importBody).toEqual({
       groupIds: ['group-1'],
+      teamId: 'team-1',
       pools: [{ divisionId: '198609', pools: [{ id: '9001', poolNumber: 1, matches: [] }] }],
     })
   })
