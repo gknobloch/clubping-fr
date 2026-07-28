@@ -365,14 +365,14 @@ export function MockDataProvider({ children }: { children: React.ReactNode }) {
         )
         if (existing) {
           return prev.map((a) =>
-            a.id === existing.id
+            a.gameId === gameId && a.playerId === playerId
               ? { ...a, status, overriddenBy }
               : a
           )
         }
         return [
           ...prev,
-          { id: nextId('avail'), gameId, playerId, status, overriddenBy },
+          { gameId, playerId, status, overriddenBy },
         ]
       })
     },
@@ -417,7 +417,7 @@ export function MockDataProvider({ children }: { children: React.ReactNode }) {
               ...next,
               existing
                 ? { ...existing, playerIds }
-                : { id: nextId('gs'), gameId, teamId, playerIds },
+                : { gameId, teamId, playerIds },
             ]
           }
         }

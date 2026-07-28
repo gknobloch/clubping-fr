@@ -419,30 +419,30 @@ export const mockGames: Game[] = [
 // ---------------------------------------------------------------------------
 export const mockGameSelections: GameSelection[] = [
   // Equipe 1
-  { id: 'gs-g1-1-team-1', gameId: 'g1-1', teamId: 'team-1', playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-3'] },
-  { id: 'gs-g1-2-team-1', gameId: 'g1-2', teamId: 'team-1', playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-8'] },
+  { gameId: 'g1-1', teamId: 'team-1', playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-3'] },
+  { gameId: 'g1-2', teamId: 'team-1', playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-8'] },
   // g1-8 is the future "retour" fixture (see mockGames) — lineup already set.
-  { id: 'gs-g1-8-team-1', gameId: 'g1-8', teamId: 'team-1', playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-3'] },
+  { gameId: 'g1-8', teamId: 'team-1', playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-3'] },
   // Equipe 2 (p2-player-8 sits out MD2 — he's playing up for team-1 that day)
-  { id: 'gs-g2-1-team-2', gameId: 'g2-1', teamId: 'team-2', playerIds: ['p2-player-6', 'p2-player-10', 'p2-player-7', 'p2-player-8'] },
-  { id: 'gs-g2-2-team-2', gameId: 'g2-2', teamId: 'team-2', playerIds: ['p2-player-6', 'p2-player-10', 'p2-player-7', 'p2-player-9'] },
+  { gameId: 'g2-1', teamId: 'team-2', playerIds: ['p2-player-6', 'p2-player-10', 'p2-player-7', 'p2-player-8'] },
+  { gameId: 'g2-2', teamId: 'team-2', playerIds: ['p2-player-6', 'p2-player-10', 'p2-player-7', 'p2-player-9'] },
   // Equipe 3
-  { id: 'gs-g3-1-team-3', gameId: 'g3-1', teamId: 'team-3', playerIds: ['p2-player-12', 'p2-player-13', 'p2-player-14', 'p2-player-11'] },
-  { id: 'gs-g3-2-team-3', gameId: 'g3-2', teamId: 'team-3', playerIds: ['p2-player-12', 'p2-player-13', 'p2-player-14', 'p2-player-17'] },
+  { gameId: 'g3-1', teamId: 'team-3', playerIds: ['p2-player-12', 'p2-player-13', 'p2-player-14', 'p2-player-11'] },
+  { gameId: 'g3-2', teamId: 'team-3', playerIds: ['p2-player-12', 'p2-player-13', 'p2-player-14', 'p2-player-17'] },
   // Equipe 4
-  { id: 'gs-g4-1-team-4', gameId: 'g4-1', teamId: 'team-4', playerIds: ['p2-player-16', 'p2-player-19', 'p2-player-18', 'p2-player-15'] },
-  { id: 'gs-g4-2-team-4', gameId: 'g4-2', teamId: 'team-4', playerIds: ['p2-player-16', 'p2-player-19', 'p2-player-18', 'p2-player-20'] },
+  { gameId: 'g4-1', teamId: 'team-4', playerIds: ['p2-player-16', 'p2-player-19', 'p2-player-18', 'p2-player-15'] },
+  { gameId: 'g4-2', teamId: 'team-4', playerIds: ['p2-player-16', 'p2-player-19', 'p2-player-18', 'p2-player-20'] },
   // Equipe 5 & 6 (derby at MD1 — both teams field a selection for game g5-1)
-  { id: 'gs-g5-1-team-5', gameId: 'g5-1', teamId: 'team-5', playerIds: ['p2-player-22', 'p2-player-24', 'p2-player-21', 'p2-player-23'] },
-  { id: 'gs-g5-1-team-6', gameId: 'g5-1', teamId: 'team-6', playerIds: ['p2-player-29', 'p2-player-39', 'p2-player-40', 'p2-player-41'] },
-  { id: 'gs-g5-2-team-5', gameId: 'g5-2', teamId: 'team-5', playerIds: ['p2-player-22', 'p2-player-24', 'p2-player-21', 'p2-player-26'] },
-  { id: 'gs-g6-2-team-6', gameId: 'g6-2', teamId: 'team-6', playerIds: ['p2-player-29', 'p2-player-42', 'p2-player-38', 'p2-player-43'] },
+  { gameId: 'g5-1', teamId: 'team-5', playerIds: ['p2-player-22', 'p2-player-24', 'p2-player-21', 'p2-player-23'] },
+  { gameId: 'g5-1', teamId: 'team-6', playerIds: ['p2-player-29', 'p2-player-39', 'p2-player-40', 'p2-player-41'] },
+  { gameId: 'g5-2', teamId: 'team-5', playerIds: ['p2-player-22', 'p2-player-24', 'p2-player-21', 'p2-player-26'] },
+  { gameId: 'g6-2', teamId: 'team-6', playerIds: ['p2-player-29', 'p2-player-42', 'p2-player-38', 'p2-player-43'] },
   // Equipe 7
-  { id: 'gs-g7-1-team-7', gameId: 'g7-1', teamId: 'team-7', playerIds: ['p2-player-33', 'p2-player-35', 'p2-player-34'] },
-  { id: 'gs-g7-2-team-7', gameId: 'g7-2', teamId: 'team-7', playerIds: ['p2-player-33', 'p2-player-35', 'p2-player-36'] },
+  { gameId: 'g7-1', teamId: 'team-7', playerIds: ['p2-player-33', 'p2-player-35', 'p2-player-34'] },
+  { gameId: 'g7-2', teamId: 'team-7', playerIds: ['p2-player-33', 'p2-player-35', 'p2-player-36'] },
   // Equipe 8
-  { id: 'gs-g8-1-team-8', gameId: 'g8-1', teamId: 'team-8', playerIds: ['p2-player-32', 'p2-player-27', 'p2-player-28'] },
-  { id: 'gs-g8-2-team-8', gameId: 'g8-2', teamId: 'team-8', playerIds: ['p2-player-32', 'p2-player-27', 'p2-player-30'] },
+  { gameId: 'g8-1', teamId: 'team-8', playerIds: ['p2-player-32', 'p2-player-27', 'p2-player-28'] },
+  { gameId: 'g8-2', teamId: 'team-8', playerIds: ['p2-player-32', 'p2-player-27', 'p2-player-30'] },
 ]
 
 // ---------------------------------------------------------------------------
@@ -453,13 +453,13 @@ export const mockGameSelections: GameSelection[] = [
 // ---------------------------------------------------------------------------
 export const mockGameAvailabilities: GameAvailability[] = [
   // g1-8 (team-1, in daysFromNow(14) days)
-  { id: 'avail-g1-8-p2-player-5', gameId: 'g1-8', playerId: 'p2-player-5', status: 'available' },
-  { id: 'avail-g1-8-p2-player-1', gameId: 'g1-8', playerId: 'p2-player-1', status: 'maybe' },
-  { id: 'avail-g1-8-p2-player-2', gameId: 'g1-8', playerId: 'p2-player-2', status: 'unavailable', overriddenBy: 'captain' },
-  { id: 'avail-g1-8-p2-player-3', gameId: 'g1-8', playerId: 'p2-player-3', status: 'available' },
+  { gameId: 'g1-8', playerId: 'p2-player-5', status: 'available' },
+  { gameId: 'g1-8', playerId: 'p2-player-1', status: 'maybe' },
+  { gameId: 'g1-8', playerId: 'p2-player-2', status: 'unavailable', overriddenBy: 'captain' },
+  { gameId: 'g1-8', playerId: 'p2-player-3', status: 'available' },
   // g7-8 (team-7, in daysFromNow(21) days)
-  { id: 'avail-g7-8-p2-player-33', gameId: 'g7-8', playerId: 'p2-player-33', status: 'available' },
-  { id: 'avail-g7-8-p2-player-35', gameId: 'g7-8', playerId: 'p2-player-35', status: 'unavailable' },
+  { gameId: 'g7-8', playerId: 'p2-player-33', status: 'available' },
+  { gameId: 'g7-8', playerId: 'p2-player-35', status: 'unavailable' },
 ]
 
 // ---------------------------------------------------------------------------

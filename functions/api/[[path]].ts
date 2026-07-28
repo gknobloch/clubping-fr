@@ -4,6 +4,7 @@ import { authApp, bearer, userFromToken, type Env } from './auth'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation } from '../../src/lib/ffttClub'
+import { gameIdFor, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
@@ -104,6 +105,12 @@ app.get('/data', async (c) => {
     })
   }
 
+  // teams.division_id was dropped in 0031 (#282): the group is the single
+  // source of truth for a team's division, and the stored copy had drifted on
+  // 24 of 148 production rows. Still projected onto the Team payload so the UI
+  // can read it directly — derived here, never stored.
+  const divisionByGroup = new Map(groupsR.results.map(g => [g.id as string, g.division_id as string]))
+
   return c.json({
     seasons: seasonsR.results.map(r => ({
       id: r.id, displayName: r.display_name, status: r.status,
@@ -149,9 +156,11 @@ app.get('/data', async (c) => {
     })),
     teams: teamsR.results.map(r => ({
       id: r.id, clubId: r.club_id, phaseId: r.phase_id, number: r.number,
-      divisionId: r.division_id, groupId: r.group_id, gameLocationId: r.game_location_id,
+      divisionId: divisionByGroup.get(r.group_id as string) ?? '',
+      groupId: r.group_id, gameLocationId: r.game_location_id,
       defaultDay: r.default_day, defaultTime: r.default_time, captainId: r.captain_id,
       isArchived: bool(r.is_archived),
+      ...(r.team_id ? { teamId: r.team_id } : {}),
       playerIds: jsonParse(r.player_ids),
       ...(r.roster_initial_points ? { rosterInitialPoints: jsonParse(r.roster_initial_points) } : {}),
       ...(r.color ? { color: r.color } : {}),
@@ -163,13 +172,15 @@ app.get('/data', async (c) => {
     games: gamesR.results.map(r => ({
       id: r.id, matchDayId: r.match_day_id, homeTeamId: r.home_team_id,
       awayTeamId: r.away_team_id, ...(r.time ? { time: r.time } : {}),
+      ...(r.game_id ? { gameId: r.game_id } : {}),
     })),
+    // (game_id, player_id) is the primary key since 0033 (#282) — no surrogate id.
     gameAvailabilities: availsR.results.map(r => ({
-      id: r.id, gameId: r.game_id, playerId: r.player_id, status: r.status,
+      gameId: r.game_id, playerId: r.player_id, status: r.status,
       ...(r.overridden_by ? { overriddenBy: r.overridden_by } : {}),
     })),
     gameSelections: selectionsR.results.map(r => ({
-      id: r.id, gameId: r.game_id, teamId: r.team_id, playerIds: jsonParse(r.player_ids),
+      gameId: r.game_id, teamId: r.team_id, playerIds: jsonParse(r.player_ids),
     })),
     users: usersR.results.map(r => ({
       id: r.id, email: r.email, role: r.role, isPlayer: bool(r.is_player),
@@ -801,8 +812,10 @@ app.post('/teams/import', async (c) => {
       adoptedPoolIds.set(group.id, t.poolId)
     }
 
+    // Local id derived from (club, phase, number) (#282); the FFTT team id is
+    // kept in its own column so a re-import matches instead of duplicating.
     const team = {
-      id: t.id, clubId, phaseId, number: t.number,
+      id: teamIdFor(clubId, phaseId, t.number), teamId: t.id, clubId, phaseId, number: t.number,
       divisionId: t.divisionId, groupId: group.id, gameLocationId: override.gameLocationId,
       defaultDay: override.defaultDay, defaultTime: override.defaultTime,
       captainId: '', playerIds: [] as string[], isArchived: false,
@@ -824,9 +837,9 @@ app.post('/teams/import', async (c) => {
       db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdTeams.map((t) =>
       db.prepare(
-        `INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '[]', 0)`,
-      ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId, t.gameLocationId, t.defaultDay, t.defaultTime)),
+        `INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived, team_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '[]', 0, ?)`,
+      ).bind(t.id, t.clubId, t.phaseId, t.number, t.groupId, t.gameLocationId, t.defaultDay, t.defaultTime, t.teamId ?? null)),
   ]
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
 
@@ -1260,12 +1273,13 @@ app.post('/games/import', async (c) => {
       if (existing) return existing
       const clubId = clubIdFor(side)
       if (!clubId || side.teamNumber === null) return null
-      // FFTT team ids are stable across phases, so the id may already be a
-      // team row of another phase — suffix to keep the primary key unique.
-      const id = resolver.teamIds.has(side.teamId) ? `${side.teamId}-${ctx.phaseId}` : side.teamId
+      // Derived from (club, phase, number) (#282), which is phase-scoped by
+      // construction — the old "suffix the FFTT id when it's taken" hack is
+      // gone. The FFTT team id lives in team_id.
+      const id = teamIdFor(clubId, ctx.phaseId!, side.teamNumber)
       createdTeams.push({
-        id, clubId, phaseId: ctx.phaseId, number: side.teamNumber,
-        divisionId: group.divisionId, groupId: group.id, gameLocationId: '',
+        id, teamId: side.teamId, clubId, phaseId: ctx.phaseId, number: side.teamNumber,
+        groupId: group.id, gameLocationId: '',
         defaultDay: '', defaultTime: '', captainId: '', playerIds: [], isArchived: false,
       })
       resolver.register(id, clubId, side.teamNumber, ctx.phaseId!, side.teamId)
@@ -1303,7 +1317,12 @@ app.post('/games/import', async (c) => {
       pairingsByMatchDay.get(md.id as string)!.add(`${homeId}|${awayId}`)
       pairingsByMatchDay.get(md.id as string)!.add(`${awayId}|${homeId}`)
       gameIds.add(m.id)
-      createdGames.push({ id: m.id, matchDayId: md.id, homeTeamId: homeId, awayTeamId: awayId, date: m.date })
+      // Derived local id, FFTT match id kept in game_id (#282) — the dedup
+      // above still matches on the FFTT id, which is why it has its own column.
+      createdGames.push({
+        id: gameIdFor(md.id as string, homeId, awayId), gameId: m.id,
+        matchDayId: md.id, homeTeamId: homeId, awayTeamId: awayId, date: m.date,
+      })
       touchedMatchDayIds.add(md.id as string)
     }
   }
@@ -1322,17 +1341,17 @@ app.post('/games/import', async (c) => {
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
     ...createdTeams.map((t) =>
       db.prepare(
-        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
-         VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', '[]', 0)`,
-      ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId)),
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived, team_id)
+         VALUES (?, ?, ?, ?, ?, '', '', '', '', '[]', 0, ?)`,
+      ).bind(t.id, t.clubId, t.phaseId, t.number, t.groupId, t.teamId ?? null)),
     ...[...touchedGroups.values()].map((g) =>
       db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdMatchDays.map((m) =>
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date) VALUES (?, ?, ?, ?, NULL, ?)')
-        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date)),
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date, g.gameId ?? null)),
     ...updatedGames.map((g) =>
       db.prepare('UPDATE games SET date = ? WHERE id = ?').bind(g.date, g.id)),
     // Last: recompute every touched journée's derived date from its (now
@@ -1662,9 +1681,12 @@ app.post('/schedule-documents/import', async (c) => {
       let teamId = resolver.resolve(side, phaseId)
       if (!teamId) {
         const clubId = clubIdFor(t.name, t.affiliationNumber)
-        teamId = resolver.teamIds.has(side.teamId) ? `${side.teamId}-${phaseId}` : side.teamId
+        // Derived (#282): the PDF path and the FFTT path now land on the same
+        // id for the same team, instead of doc-* alongside the FFTT id. No
+        // FFTT team id is available here, so team_id stays NULL.
+        teamId = teamIdFor(clubId, phaseId, t.number)
         createdTeams.push({
-          id: teamId, clubId, phaseId, number: t.number, divisionId, groupId,
+          id: teamId, clubId, phaseId, number: t.number, groupId,
           gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', playerIds: [], isArchived: false,
         })
         resolver.register(teamId, clubId, t.number, phaseId, side.teamId)
@@ -1719,7 +1741,8 @@ app.post('/schedule-documents/import', async (c) => {
         if (!pairingsByMatchDay.has(mdId)) pairingsByMatchDay.set(mdId, new Set())
         pairingsByMatchDay.get(mdId)!.add(`${homeId}|${awayId}`)
         pairingsByMatchDay.get(mdId)!.add(`${awayId}|${homeId}`)
-        createdGames.push({ id: localId('game'), matchDayId: mdId, homeTeamId: homeId, awayTeamId: awayId, date: m.date ?? j.date })
+        // Derived (#282); a PDF calendar carries no FFTT match id.
+        createdGames.push({ id: gameIdFor(mdId, homeId, awayId), matchDayId: mdId, homeTeamId: homeId, awayTeamId: awayId, date: m.date ?? j.date })
         touchedMatchDayIds.add(mdId)
       }
     }
@@ -1748,15 +1771,15 @@ app.post('/schedule-documents/import', async (c) => {
         : db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(g.teamIds), g.id)),
     ...createdTeams.map((t) =>
       db.prepare(
-        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
-         VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', '[]', 0)`,
-      ).bind(t.id, t.clubId, t.phaseId, t.number, t.divisionId, t.groupId)),
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived, team_id)
+         VALUES (?, ?, ?, ?, ?, '', '', '', '', '[]', 0, ?)`,
+      ).bind(t.id, t.clubId, t.phaseId, t.number, t.groupId, t.teamId ?? null)),
     ...createdMatchDays.map((m) =>
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date) VALUES (?, ?, ?, ?, NULL, ?)')
-        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date)),
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date, g.gameId ?? null)),
     // Last: recompute every touched journée's derived date from its (now
     // fully written) games (#271).
     ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),
@@ -1838,8 +1861,12 @@ app.delete('/seasons/:id', async (c) => {
         await db.prepare('DELETE FROM match_days WHERE group_id = ?').bind(gid).run()
         await db.prepare('DELETE FROM groups WHERE id = ?').bind(gid).run()
       }
-      // Delete teams in division
-      await db.prepare('DELETE FROM teams WHERE division_id = ?').bind(divId).run()
+      // Delete teams in division — teams.division_id is gone (#282), so they
+      // are reached through their group. The groups were deleted just above,
+      // so this uses the division directly rather than a subquery on groups.
+      await db.prepare(
+        'DELETE FROM teams WHERE group_id IN (SELECT id FROM groups WHERE division_id = ?)'
+      ).bind(divId).run()
       await db.prepare('DELETE FROM divisions WHERE id = ?').bind(divId).run()
     }
     await db.prepare('DELETE FROM phases WHERE id = ?').bind(phaseId).run()
@@ -2205,7 +2232,7 @@ app.patch('/groups/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []
-  if ('divisionId' in p) { s.push('division_id = ?'); v.push(p.divisionId) }
+
   if ('number' in p) { s.push('number = ?'); v.push(p.number) }
   if ('teamIds' in p) { s.push('team_ids = ?'); v.push(jsonStr(p.teamIds)) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
@@ -2339,13 +2366,13 @@ app.delete('/players/:id/avatar', async (c) => {
 app.post('/teams', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    `INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived)
+    `INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived, team_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
-    d.id, d.clubId, d.phaseId, d.number, d.divisionId, d.groupId,
+    d.id, d.clubId, d.phaseId, d.number, d.groupId,
     d.gameLocationId, d.defaultDay, d.defaultTime, d.captainId ?? '',
     jsonStr(d.playerIds ?? []), d.rosterInitialPoints ? jsonStr(d.rosterInitialPoints) : null,
-    d.color ?? null, d.whatsappLink ?? null, d.isArchived ? 1 : 0,
+    d.color ?? null, d.whatsappLink ?? null, d.isArchived ? 1 : 0, d.teamId ?? null,
   ).run()
   return c.json({ ok: true })
 })
@@ -2436,8 +2463,8 @@ app.post('/games', async (c) => {
   const d = await c.req.json()
   const db = c.env.DB
   await db.prepare(
-    'INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time, date) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.matchDayId, d.homeTeamId, d.awayTeamId, d.time ?? null, d.date ?? null).run()
+    'INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.matchDayId, d.homeTeamId, d.awayTeamId, d.time ?? null, d.date ?? null, d.gameId ?? null).run()
   await recomputeMatchDayDate(db, d.matchDayId)
   return c.json({ ok: true })
 })
@@ -2474,9 +2501,9 @@ app.patch('/games/:id', async (c) => {
 app.post('/game-availabilities/set', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    `INSERT INTO game_availabilities (id, game_id, player_id, status, overridden_by) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET status = excluded.status, overridden_by = excluded.overridden_by`
-  ).bind(d.id, d.gameId, d.playerId, d.status, d.overriddenBy ?? null).run()
+    `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) VALUES (?, ?, ?, ?)
+     ON CONFLICT(game_id, player_id) DO UPDATE SET status = excluded.status, overridden_by = excluded.overridden_by`
+  ).bind(d.gameId, d.playerId, d.status, d.overriddenBy ?? null).run()
   return c.json({ ok: true })
 })
 
@@ -2495,15 +2522,12 @@ app.post('/game-selections/set', async (c) => {
     await c.env.DB.prepare('DELETE FROM game_selections WHERE game_id = ? AND team_id = ?')
       .bind(d.gameId, d.teamId).run()
   } else {
-    const existing = await c.env.DB.prepare('SELECT id FROM game_selections WHERE game_id = ? AND team_id = ?')
-      .bind(d.gameId, d.teamId).first()
-    if (existing) {
-      await c.env.DB.prepare('UPDATE game_selections SET player_ids = ? WHERE id = ?')
-        .bind(jsonStr(d.playerIds), existing.id).run()
-    } else {
-      await c.env.DB.prepare('INSERT INTO game_selections (id, game_id, team_id, player_ids) VALUES (?, ?, ?, ?)')
-        .bind(d.id, d.gameId, d.teamId, jsonStr(d.playerIds)).run()
-    }
+    // (game_id, team_id) is the primary key since 0033 (#282), so the old
+    // select-then-update-or-insert dance collapses into one upsert.
+    await c.env.DB.prepare(
+      `INSERT INTO game_selections (game_id, team_id, player_ids) VALUES (?, ?, ?)
+       ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`
+    ).bind(d.gameId, d.teamId, jsonStr(d.playerIds)).run()
   }
   return c.json({ ok: true })
 })
@@ -2515,15 +2539,10 @@ app.post('/game-selections/batch', async (c) => {
       await c.env.DB.prepare('DELETE FROM game_selections WHERE game_id = ? AND team_id = ?')
         .bind(d.gameId, d.teamId).run()
     } else {
-      const existing = await c.env.DB.prepare('SELECT id FROM game_selections WHERE game_id = ? AND team_id = ?')
-        .bind(d.gameId, d.teamId).first()
-      if (existing) {
-        await c.env.DB.prepare('UPDATE game_selections SET player_ids = ? WHERE id = ?')
-          .bind(jsonStr(d.playerIds), existing.id).run()
-      } else {
-        await c.env.DB.prepare('INSERT INTO game_selections (id, game_id, team_id, player_ids) VALUES (?, ?, ?, ?)')
-          .bind(d.id, d.gameId, d.teamId, jsonStr(d.playerIds)).run()
-      }
+      await c.env.DB.prepare(
+        `INSERT INTO game_selections (game_id, team_id, player_ids) VALUES (?, ?, ?)
+         ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`
+      ).bind(d.gameId, d.teamId, jsonStr(d.playerIds)).run()
     }
   }
   return c.json({ ok: true })

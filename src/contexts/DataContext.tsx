@@ -46,6 +46,7 @@ import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { clubIdFromAffiliation } from '@/lib/ffttClub'
+import { gameIdFor, teamIdFor } from '@/lib/entityIds'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
 import {
@@ -1324,7 +1325,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [persist])
 
   const addTeam = useCallback((data: Omit<Team, 'id'>) => {
-    const id = nextId('team')
+    // Derived from (club, phase, number) (#282) so a team created here and the
+    // same team imported later land on one row instead of two.
+    const id = teamIdFor(data.clubId, data.phaseId, data.number)
     const team: Team = { ...data, id }
     setTeams((prev) => {
       const phaseId = team.phaseId
@@ -1468,7 +1471,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [persist])
 
   const addGame = useCallback((data: Omit<Game, 'id'>) => {
-    const id = nextId('game')
+    const id = gameIdFor(data.matchDayId, data.homeTeamId, data.awayTeamId)
     const game: Game = { ...data, id }
     setGames((prev) => {
       const next = [...prev, game]
@@ -1495,21 +1498,20 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
           if (persist) {
             api('/game-availabilities/set', {
               method: 'POST',
-              body: JSON.stringify({ id: existing.id, gameId, playerId, status, overriddenBy }),
+              body: JSON.stringify({ gameId, playerId, status, overriddenBy }),
             })
           }
           return prev.map((a) =>
-            a.id === existing.id ? { ...a, status, overriddenBy } : a
+            a.gameId === gameId && a.playerId === playerId ? { ...a, status, overriddenBy } : a
           )
         }
-        const id = nextId('avail')
         if (persist) {
           api('/game-availabilities/set', {
             method: 'POST',
-            body: JSON.stringify({ id, gameId, playerId, status, overriddenBy }),
+            body: JSON.stringify({ gameId, playerId, status, overriddenBy }),
           })
         }
-        return [...prev, { id, gameId, playerId, status, overriddenBy }]
+        return [...prev, { gameId, playerId, status, overriddenBy }]
       })
     },
     [persist]
@@ -1537,13 +1539,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         return rest
       }
       const existing = prev.find((s) => s.gameId === gameId && s.teamId === teamId)
-      const id = existing?.id ?? nextId('gs')
-      if (persist) api('/game-selections/set', { method: 'POST', body: JSON.stringify({ id, gameId, teamId, playerIds }) })
+      if (persist) api('/game-selections/set', { method: 'POST', body: JSON.stringify({ gameId, teamId, playerIds }) })
       return [
         ...rest,
-        existing
-          ? { ...existing, playerIds }
-          : { id, gameId, teamId, playerIds },
+        existing ? { ...existing, playerIds } : { gameId, teamId, playerIds },
       ]
     })
   }, [persist])
@@ -1552,21 +1551,18 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     (updates: Array<{ gameId: string; teamId: string; playerIds: string[] }>) => {
       setGameSelections((prev) => {
         let next = prev
-        const apiUpdates: Array<{ id: string; gameId: string; teamId: string; playerIds: string[] }> = []
+        const apiUpdates: Array<{ gameId: string; teamId: string; playerIds: string[] }> = []
         for (const { gameId, teamId, playerIds } of updates) {
           next = next.filter((s) => !(s.gameId === gameId && s.teamId === teamId))
           if (playerIds.length > 0) {
             const existing = prev.find((s) => s.gameId === gameId && s.teamId === teamId)
-            const id = existing?.id ?? nextId('gs')
             next = [
               ...next,
-              existing
-                ? { ...existing, playerIds }
-                : { id, gameId, teamId, playerIds },
+              existing ? { ...existing, playerIds } : { gameId, teamId, playerIds },
             ]
-            apiUpdates.push({ id, gameId, teamId, playerIds })
+            apiUpdates.push({ gameId, teamId, playerIds })
           } else {
-            apiUpdates.push({ id: '', gameId, teamId, playerIds: [] })
+            apiUpdates.push({ gameId, teamId, playerIds: [] })
           }
         }
         if (persist) api('/game-selections/batch', { method: 'POST', body: JSON.stringify({ updates: apiUpdates }) })
