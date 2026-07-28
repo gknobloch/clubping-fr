@@ -52,7 +52,7 @@ export default function MatchDetailScreen() {
   const playerMap = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
 
   const roster = useMemo(
-    () => (team ? sortByName(team.playerIds.map((id) => playerMap.get(id)).filter(Boolean) as Player[]) : []),
+    () => (team ? sortByName(team.playerIds.map((pid) => playerMap.get(pid)).filter(Boolean) as Player[]) : []),
     [team, playerMap],
   )
   const clubTeamsInPhase = useMemo(

@@ -111,7 +111,7 @@ export default function PhaseGamesScreen() {
   const playerHistory = useMemo(() => {
     if (!selectedPlayer) return []
     const todayStr = new Date().toISOString().slice(0, 10)
-    const entries: Array<{
+    const rows: Array<{
       rawDate: string; jNumber?: number; isHome: boolean
       oppName: string; team: typeof clubTeamsInPhase[0]; date: string; isPast: boolean
     }> = []
@@ -123,12 +123,12 @@ export default function PhaseGamesScreen() {
         if ((g.homeTeamId !== t.id && g.awayTeamId !== t.id) || !mdInGroup.has(g.matchDayId)) continue
         const sel = gameSelections.find((s) => s.teamId === t.id && s.gameId === g.id)
         if (!sel?.playerIds.includes(selectedPlayer.id)) continue
-        const md = matchDays.find((md) => md.id === g.matchDayId)
+        const md = matchDays.find((day) => day.id === g.matchDayId)
         if (!md) continue
         const isHome = g.homeTeamId === t.id
         const oppTeam = teams.find((ot) => ot.id === (isHome ? g.awayTeamId : g.homeTeamId))
         const gDate = gameDate(g, md)
-        entries.push({
+        rows.push({
           rawDate: gDate,
           jNumber: md.number,
           isHome,
@@ -141,7 +141,7 @@ export default function PhaseGamesScreen() {
         })
       }
     }
-    return entries.sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+    return rows.sort((a, b) => a.rawDate.localeCompare(b.rawDate))
   }, [selectedPlayer, clubTeamsInPhase, matchDays, games, gameSelections, teams, clubs])
 
   const brulageInfo = useMemo(() => {

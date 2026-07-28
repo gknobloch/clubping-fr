@@ -650,7 +650,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [clubs])
 
   const importFfttTeams = useCallback(async (
-    clubId: string, teams: TeamImportOverride[],
+    clubId: string, overrides: TeamImportOverride[],
   ): Promise<FfttTeamsImportResult | null> => {
     try {
       const payload = teamsPayloadRef.current[clubId]
@@ -658,7 +658,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       const r = await fetch('/api/teams/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ clubId, teams, ...payload }),
+        body: JSON.stringify({ clubId, teams: overrides, ...payload }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttTeamsImportResult
@@ -1317,7 +1317,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       }
       return prev.map((t) => {
         if (t.id === id) return { ...t, ...patch, rosterInitialPoints }
-        const u = batchUpdates.find((u) => u.id === t.id)
+        const u = batchUpdates.find((upd) => upd.id === t.id)
         if (u) return { ...t, playerIds: u.playerIds, rosterInitialPoints: u.rosterInitialPoints }
         return t
       })

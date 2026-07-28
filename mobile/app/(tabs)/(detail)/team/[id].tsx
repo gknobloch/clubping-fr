@@ -94,7 +94,7 @@ export default function TeamDetailScreen() {
         if ((g.homeTeamId !== t.id && g.awayTeamId !== t.id) || !mdInGroup.has(g.matchDayId)) continue
         const sel = gameSelections.find((s) => s.teamId === t.id && s.gameId === g.id)
         if (!sel?.playerIds.includes(selectedPlayer.id)) continue
-        const md = matchDays.find((md) => md.id === g.matchDayId)
+        const md = matchDays.find((day) => day.id === g.matchDayId)
         if (!md) continue
         const isHome = g.homeTeamId === t.id
         const oppTeam = teams.find((ot) => ot.id === (isHome ? g.awayTeamId : g.homeTeamId))

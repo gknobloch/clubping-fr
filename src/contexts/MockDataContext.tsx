@@ -217,7 +217,7 @@ export function MockDataProvider({ children }: { children: React.ReactNode }) {
       }
       return prev.map((t) => {
         if (t.id === id) return { ...t, ...patch, rosterInitialPoints }
-        const u = updates.find((u) => u.id === t.id)
+        const u = updates.find((upd) => upd.id === t.id)
         if (u) return { ...t, playerIds: u.playerIds, rosterInitialPoints: u.rosterInitialPoints }
         return t
       })
