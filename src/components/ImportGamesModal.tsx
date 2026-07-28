@@ -36,6 +36,7 @@ export function ImportGamesModal({
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(false)
   const [imported, setImported] = useState<FfttGamesImportResult | null>(null)
+  const [updateDates, setUpdateDates] = useState(false)
 
   /** "Rixheim PPA 5" for the group's team(s) — a pool alone doesn't say which
    *  of your teams it concerns (#287). Scoped to the club when there is one. */
@@ -51,6 +52,7 @@ export function ImportGamesModal({
   // order the groups happened to come back in.
   const rows = [...(preview?.groups ?? [])].sort((a, b) =>
     teamNameOf(a.groupId).localeCompare(teamNameOf(b.groupId), 'fr', { numeric: true }))
+  const mismatchTotal = rows.reduce((n, g) => n + (g.dateMismatches ?? 0), 0)
 
   useEffect(() => {
     let cancelled = false
@@ -74,7 +76,7 @@ export function ImportGamesModal({
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttGames(groupIds, teamId)
+    const result = await importFfttGames(groupIds, teamId, updateDates)
     setImporting(false)
     if (result) {
       setImported(result)
@@ -168,6 +170,11 @@ export function ImportGamesModal({
                         <span className="shrink-0 text-xs text-slate-500">
                           {plural(g.rounds ?? 0, 'journée')} · {g.newGames ?? 0} {(g.newGames ?? 0) > 1 ? 'nouveaux matchs' : 'nouveau match'}
                           {g.existingGames ? ` · ${g.existingGames} déjà présent${g.existingGames > 1 ? 's' : ''}` : ''}
+                          {g.dateMismatches ? (
+                            <span className="text-amber-700">
+                              {` · ${g.dateMismatches} à une autre date`}
+                            </span>
+                          ) : null}
                           {g.newTeams ? ` · ${plural(g.newTeams, 'adversaire')} à créer` : ''}
                         </span>
                       </>
@@ -175,6 +182,25 @@ export function ImportGamesModal({
                   </li>
                 ))}
               </ul>
+              {mismatchTotal > 0 && (
+                <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={updateDates}
+                    onChange={(e) => setUpdateDates(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
+                  />
+                  <span className="text-sm text-amber-900">
+                    Reprendre les dates de la FFTT pour {plural(mismatchTotal, 'match')} déjà
+                    {mismatchTotal > 1 ? ' présents' : ' présent'}.
+                    <span className="mt-0.5 block text-xs text-amber-800">
+                      Décoché, les dates enregistrées sont conservées — un calendrier importé
+                      depuis un fichier indique le vrai créneau, là où la FFTT publie une date
+                      de week-end théorique.
+                    </span>
+                  </span>
+                </label>
+              )}
               {preview.totals.newTeams > 0 && (
                 <p className="text-sm text-slate-600">
                   Les équipes adverses manquantes ({preview.totals.newTeams}
@@ -190,13 +216,17 @@ export function ImportGamesModal({
               <button
                 type="button"
                 onClick={handleImport}
-                disabled={importing || totalNewGames === 0}
+                disabled={importing || (totalNewGames === 0 && !(updateDates && mismatchTotal > 0))}
                 className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
               >
                 {importing
                   ? 'Import…'
                   : totalNewGames === 0
-                    ? 'Rien à importer'
+                    // Adjusting dates is work in its own right (#289): with
+                    // nothing new to add, the button must still act on it.
+                    ? (updateDates && mismatchTotal > 0
+                        ? `Mettre à jour ${plural(mismatchTotal, 'date')}`
+                        : 'Rien à importer')
                     : `Importer ${plural(totalNewGames, 'match')}`}
               </button>
             </div>
