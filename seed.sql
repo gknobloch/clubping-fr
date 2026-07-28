@@ -89,65 +89,67 @@ INSERT INTO groups (id, division_id, number, team_ids, is_archived, group_id) VA
 -- players
 
 -- teams (PPA Rixheim)
-INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived) VALUES
-  ('team-1', 'club-fftt-06680011', 'phase-26-1', 1, '198609', 'group-1', 'addr-1', 'Samedi', '16h00', 'p2-player-5', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3","p2-player-4"]', '{"p2-player-5":"1887","p2-player-1":"1763","p2-player-2":"1665","p2-player-3":"1647","p2-player-4":"1566"}', '#374151', NULL, 0),
-  ('team-2', 'club-fftt-06680011', 'phase-26-1', 2, '198755', 'group-2', 'addr-1', 'Samedi', '16h00', 'p2-player-6', '["p2-player-6","p2-player-10","p2-player-7","p2-player-9","p2-player-8"]', '{"p2-player-6":"1791","p2-player-10":"1661","p2-player-7":"1500","p2-player-9":"1301","p2-player-8":"1301"}', '#b91c1c', NULL, 0),
-  ('team-3', 'club-fftt-06680011', 'phase-26-1', 3, '198305', 'group-3', 'addr-1', 'Samedi', '16h00', 'p2-player-12', '["p2-player-12","p2-player-13","p2-player-14","p2-player-11","p2-player-17"]', '{"p2-player-12":"1356","p2-player-13":"1267","p2-player-14":"1198","p2-player-11":"1186","p2-player-17":"754"}', '#15803d', NULL, 0),
-  ('team-4', 'club-fftt-06680011', 'phase-26-1', 4, '198821', 'group-4', 'addr-1', 'Jeudi', '20h00', 'p2-player-16', '["p2-player-16","p2-player-19","p2-player-18","p2-player-15","p2-player-20"]', '{"p2-player-16":"889","p2-player-19":"728","p2-player-18":"727","p2-player-15":"713","p2-player-20":"704"}', '#c2410c', NULL, 0),
-  ('team-5', 'club-fftt-06680011', 'phase-26-1', 5, '198895', 'group-5', 'addr-1', 'Samedi', '16h00', 'p2-player-23', '["p2-player-22","p2-player-24","p2-player-21","p2-player-23","p2-player-26"]', '{"p2-player-22":"735","p2-player-24":"701","p2-player-21":"702","p2-player-23":"1050","p2-player-26":"707"}', '#1d4ed8', NULL, 0),
-  ('team-6', 'club-fftt-06680011', 'phase-26-1', 6, '198895', 'group-5', 'addr-2', 'Samedi', '16h00', 'p2-player-42', '["p2-player-29","p2-player-39","p2-player-40","p2-player-41","p2-player-42","p2-player-38","p2-player-43","p2-player-44"]', '{"p2-player-29":"632","p2-player-39":"500","p2-player-40":"503","p2-player-41":"561","p2-player-42":"500","p2-player-38":"500","p2-player-43":"500","p2-player-44":"500"}', '#be185d', NULL, 0),
-  ('team-7', 'club-fftt-06680011', 'phase-26-1', 7, '198435', 'group-6', 'addr-1', 'Jeudi', '20h00', 'p2-player-33', '["p2-player-33","p2-player-35","p2-player-34","p2-player-36","p2-player-37"]', '{"p2-player-33":"500","p2-player-35":"500","p2-player-34":"500","p2-player-36":"500","p2-player-37":"500"}', '#7c2d12', NULL, 0),
-  ('team-8', 'club-fftt-06680011', 'phase-26-1', 8, '198907', 'group-7', 'addr-1', 'Jeudi', '20h00', 'p2-player-32', '["p2-player-32","p2-player-27","p2-player-28","p2-player-30","p2-player-31"]', '{"p2-player-32":"607","p2-player-27":"501","p2-player-28":"500","p2-player-30":"500","p2-player-31":"500"}', '#0d9488', NULL, 0);
+-- division_id dropped in 0031 (#282): the group holds the division.
+INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived) VALUES
+  ('team-1', 'club-fftt-06680011', 'phase-26-1', 1, 'group-1', 'addr-1', 'Samedi', '16h00', 'p2-player-5', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3","p2-player-4"]', '{"p2-player-5":"1887","p2-player-1":"1763","p2-player-2":"1665","p2-player-3":"1647","p2-player-4":"1566"}', '#374151', NULL, 0),
+  ('team-2', 'club-fftt-06680011', 'phase-26-1', 2, 'group-2', 'addr-1', 'Samedi', '16h00', 'p2-player-6', '["p2-player-6","p2-player-10","p2-player-7","p2-player-9","p2-player-8"]', '{"p2-player-6":"1791","p2-player-10":"1661","p2-player-7":"1500","p2-player-9":"1301","p2-player-8":"1301"}', '#b91c1c', NULL, 0),
+  ('team-3', 'club-fftt-06680011', 'phase-26-1', 3, 'group-3', 'addr-1', 'Samedi', '16h00', 'p2-player-12', '["p2-player-12","p2-player-13","p2-player-14","p2-player-11","p2-player-17"]', '{"p2-player-12":"1356","p2-player-13":"1267","p2-player-14":"1198","p2-player-11":"1186","p2-player-17":"754"}', '#15803d', NULL, 0),
+  ('team-4', 'club-fftt-06680011', 'phase-26-1', 4, 'group-4', 'addr-1', 'Jeudi', '20h00', 'p2-player-16', '["p2-player-16","p2-player-19","p2-player-18","p2-player-15","p2-player-20"]', '{"p2-player-16":"889","p2-player-19":"728","p2-player-18":"727","p2-player-15":"713","p2-player-20":"704"}', '#c2410c', NULL, 0),
+  ('team-5', 'club-fftt-06680011', 'phase-26-1', 5, 'group-5', 'addr-1', 'Samedi', '16h00', 'p2-player-23', '["p2-player-22","p2-player-24","p2-player-21","p2-player-23","p2-player-26"]', '{"p2-player-22":"735","p2-player-24":"701","p2-player-21":"702","p2-player-23":"1050","p2-player-26":"707"}', '#1d4ed8', NULL, 0),
+  ('team-6', 'club-fftt-06680011', 'phase-26-1', 6, 'group-5', 'addr-2', 'Samedi', '16h00', 'p2-player-42', '["p2-player-29","p2-player-39","p2-player-40","p2-player-41","p2-player-42","p2-player-38","p2-player-43","p2-player-44"]', '{"p2-player-29":"632","p2-player-39":"500","p2-player-40":"503","p2-player-41":"561","p2-player-42":"500","p2-player-38":"500","p2-player-43":"500","p2-player-44":"500"}', '#be185d', NULL, 0),
+  ('team-7', 'club-fftt-06680011', 'phase-26-1', 7, 'group-6', 'addr-1', 'Jeudi', '20h00', 'p2-player-33', '["p2-player-33","p2-player-35","p2-player-34","p2-player-36","p2-player-37"]', '{"p2-player-33":"500","p2-player-35":"500","p2-player-34":"500","p2-player-36":"500","p2-player-37":"500"}', '#7c2d12', NULL, 0),
+  ('team-8', 'club-fftt-06680011', 'phase-26-1', 8, 'group-7', 'addr-1', 'Jeudi', '20h00', 'p2-player-32', '["p2-player-32","p2-player-27","p2-player-28","p2-player-30","p2-player-31"]', '{"p2-player-32":"607","p2-player-27":"501","p2-player-28":"500","p2-player-30":"500","p2-player-31":"500"}', '#0d9488', NULL, 0);
 
 -- teams (opponents)
-INSERT INTO teams (id, club_id, phase_id, number, division_id, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived) VALUES
-  ('opp-etival-1', 'club-fftt-06880123', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-1', 'club-fftt-06680125', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rcs-2', 'club-fftt-06670045', 'phase-26-1', 2, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-vittel-1', 'club-fftt-06880022', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-2', 'club-fftt-06680091', 'phase-26-1', 2, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-moussey-1', 'club-fftt-06100004', 'phase-26-1', 1, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-anould-2', 'club-fftt-06880002', 'phase-26-1', 2, '198609', 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-3', 'club-fftt-06680091', 'phase-26-1', 3, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-2', 'club-fftt-06680125', 'phase-26-1', 2, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-cmjc-3', 'club-fftt-06680004', 'phase-26-1', 3, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-caje-1', 'club-fftt-06680080', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-stlouis-1', 'club-fftt-06680082', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-1', 'club-fftt-06680102', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-ingersheim-1', 'club-fftt-06680090', 'phase-26-1', 1, '198755', 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-issenheim-1', 'club-fftt-06680071', 'phase-26-1', 1, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-6', 'club-fftt-06680091', 'phase-26-1', 6, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wintzfelden-2', 'club-fftt-06680116', 'phase-26-1', 2, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-2', 'club-fftt-06680102', 'phase-26-1', 2, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-thann-2', 'club-fftt-06680111', 'phase-26-1', 2, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-4', 'club-fftt-06680125', 'phase-26-1', 4, '198305', 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-soultz-2', 'club-fftt-06680138', 'phase-26-1', 2, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wittelsheim-5', 'club-fftt-06680118', 'phase-26-1', 5, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-8', 'club-fftt-06680091', 'phase-26-1', 8, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-fcm-3', 'club-fftt-06680006', 'phase-26-1', 3, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-2', 'club-fftt-06680140', 'phase-26-1', 2, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-ensisheim-1', 'club-fftt-06680123', 'phase-26-1', 1, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-6', 'club-fftt-06680125', 'phase-26-1', 6, '198821', 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-issenheim-3', 'club-fftt-06680071', 'phase-26-1', 3, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-7', 'club-fftt-06680091', 'phase-26-1', 7, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-ballons-4', 'club-fftt-06880064', 'phase-26-1', 4, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-mutt-5', 'club-fftt-06680105', 'phase-26-1', 5, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wittelsheim-4', 'club-fftt-06680118', 'phase-26-1', 4, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-wintzfelden-3', 'club-fftt-06680116', 'phase-26-1', 3, '198895', 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-3', 'club-fftt-06680102', 'phase-26-1', 3, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-mutt-7', 'club-fftt-06680105', 'phase-26-1', 7, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-thann-5', 'club-fftt-06680111', 'phase-26-1', 5, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-stlouis-3', 'club-fftt-06680082', 'phase-26-1', 3, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-3', 'club-fftt-06680140', 'phase-26-1', 3, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-10', 'club-fftt-06680091', 'phase-26-1', 10, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-soultz-4', 'club-fftt-06680138', 'phase-26-1', 4, '198435', 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-rosenau-7', 'club-fftt-06680125', 'phase-26-1', 7, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-thann-4', 'club-fftt-06680111', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-issenheim-4', 'club-fftt-06680071', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-huningue-4', 'club-fftt-06680102', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-6', 'club-fftt-06680140', 'phase-26-1', 6, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-kembs-4', 'club-fftt-06680140', 'phase-26-1', 4, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
-  ('opp-illzach-11', 'club-fftt-06680091', 'phase-26-1', 11, '198907', 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0);
+-- division_id dropped in 0031 (#282): the group holds the division.
+INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived) VALUES
+  ('opp-etival-1', 'club-fftt-06880123', 'phase-26-1', 1, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-1', 'club-fftt-06680125', 'phase-26-1', 1, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rcs-2', 'club-fftt-06670045', 'phase-26-1', 2, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-vittel-1', 'club-fftt-06880022', 'phase-26-1', 1, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-2', 'club-fftt-06680091', 'phase-26-1', 2, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-moussey-1', 'club-fftt-06100004', 'phase-26-1', 1, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-anould-2', 'club-fftt-06880002', 'phase-26-1', 2, 'group-1', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-3', 'club-fftt-06680091', 'phase-26-1', 3, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-2', 'club-fftt-06680125', 'phase-26-1', 2, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-cmjc-3', 'club-fftt-06680004', 'phase-26-1', 3, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-caje-1', 'club-fftt-06680080', 'phase-26-1', 1, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-stlouis-1', 'club-fftt-06680082', 'phase-26-1', 1, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-1', 'club-fftt-06680102', 'phase-26-1', 1, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-ingersheim-1', 'club-fftt-06680090', 'phase-26-1', 1, 'group-2', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-issenheim-1', 'club-fftt-06680071', 'phase-26-1', 1, 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-6', 'club-fftt-06680091', 'phase-26-1', 6, 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wintzfelden-2', 'club-fftt-06680116', 'phase-26-1', 2, 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-2', 'club-fftt-06680102', 'phase-26-1', 2, 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-thann-2', 'club-fftt-06680111', 'phase-26-1', 2, 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-4', 'club-fftt-06680125', 'phase-26-1', 4, 'group-3', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-soultz-2', 'club-fftt-06680138', 'phase-26-1', 2, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wittelsheim-5', 'club-fftt-06680118', 'phase-26-1', 5, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-8', 'club-fftt-06680091', 'phase-26-1', 8, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-fcm-3', 'club-fftt-06680006', 'phase-26-1', 3, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-2', 'club-fftt-06680140', 'phase-26-1', 2, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-ensisheim-1', 'club-fftt-06680123', 'phase-26-1', 1, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-6', 'club-fftt-06680125', 'phase-26-1', 6, 'group-4', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-issenheim-3', 'club-fftt-06680071', 'phase-26-1', 3, 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-7', 'club-fftt-06680091', 'phase-26-1', 7, 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-ballons-4', 'club-fftt-06880064', 'phase-26-1', 4, 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-mutt-5', 'club-fftt-06680105', 'phase-26-1', 5, 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wittelsheim-4', 'club-fftt-06680118', 'phase-26-1', 4, 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-wintzfelden-3', 'club-fftt-06680116', 'phase-26-1', 3, 'group-5', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-3', 'club-fftt-06680102', 'phase-26-1', 3, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-mutt-7', 'club-fftt-06680105', 'phase-26-1', 7, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-thann-5', 'club-fftt-06680111', 'phase-26-1', 5, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-stlouis-3', 'club-fftt-06680082', 'phase-26-1', 3, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-3', 'club-fftt-06680140', 'phase-26-1', 3, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-10', 'club-fftt-06680091', 'phase-26-1', 10, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-soultz-4', 'club-fftt-06680138', 'phase-26-1', 4, 'group-6', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-rosenau-7', 'club-fftt-06680125', 'phase-26-1', 7, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-thann-4', 'club-fftt-06680111', 'phase-26-1', 4, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-issenheim-4', 'club-fftt-06680071', 'phase-26-1', 4, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-huningue-4', 'club-fftt-06680102', 'phase-26-1', 4, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-6', 'club-fftt-06680140', 'phase-26-1', 6, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-kembs-4', 'club-fftt-06680140', 'phase-26-1', 4, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0),
+  ('opp-illzach-11', 'club-fftt-06680091', 'phase-26-1', 11, 'group-7', '', '', '', '', '[]', NULL, NULL, NULL, 0);
 
 -- match_days
 INSERT INTO match_days (id, group_id, number, date) VALUES
@@ -270,34 +272,36 @@ INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time) VALUES
 -- MD2 — a "renfort" — while still playing his own team-2 game at MD1; two
 -- games across the two teams burns him into team-2 (see computeBrulage in
 -- src/lib/brulage.ts).
-INSERT INTO game_selections (id, game_id, team_id, player_ids) VALUES
-  ('gs-g1-1-team-1', 'g1-1', 'team-1', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3"]'),
-  ('gs-g1-2-team-1', 'g1-2', 'team-1', '["p2-player-5","p2-player-1","p2-player-2","p2-player-8"]'),
-  ('gs-g1-8-team-1', 'g1-8', 'team-1', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3"]'),
-  ('gs-g2-1-team-2', 'g2-1', 'team-2', '["p2-player-6","p2-player-10","p2-player-7","p2-player-8"]'),
-  ('gs-g2-2-team-2', 'g2-2', 'team-2', '["p2-player-6","p2-player-10","p2-player-7","p2-player-9"]'),
-  ('gs-g3-1-team-3', 'g3-1', 'team-3', '["p2-player-12","p2-player-13","p2-player-14","p2-player-11"]'),
-  ('gs-g3-2-team-3', 'g3-2', 'team-3', '["p2-player-12","p2-player-13","p2-player-14","p2-player-17"]'),
-  ('gs-g4-1-team-4', 'g4-1', 'team-4', '["p2-player-16","p2-player-19","p2-player-18","p2-player-15"]'),
-  ('gs-g4-2-team-4', 'g4-2', 'team-4', '["p2-player-16","p2-player-19","p2-player-18","p2-player-20"]'),
-  ('gs-g5-1-team-5', 'g5-1', 'team-5', '["p2-player-22","p2-player-24","p2-player-21","p2-player-23"]'),
-  ('gs-g5-1-team-6', 'g5-1', 'team-6', '["p2-player-29","p2-player-39","p2-player-40","p2-player-41"]'),
-  ('gs-g5-2-team-5', 'g5-2', 'team-5', '["p2-player-22","p2-player-24","p2-player-21","p2-player-26"]'),
-  ('gs-g6-2-team-6', 'g6-2', 'team-6', '["p2-player-29","p2-player-42","p2-player-38","p2-player-43"]'),
-  ('gs-g7-1-team-7', 'g7-1', 'team-7', '["p2-player-33","p2-player-35","p2-player-34"]'),
-  ('gs-g7-2-team-7', 'g7-2', 'team-7', '["p2-player-33","p2-player-35","p2-player-36"]'),
-  ('gs-g8-1-team-8', 'g8-1', 'team-8', '["p2-player-32","p2-player-27","p2-player-28"]'),
-  ('gs-g8-2-team-8', 'g8-2', 'team-8', '["p2-player-32","p2-player-27","p2-player-30"]');
+-- (game_id, team_id) is the primary key since 0033 (#282).
+INSERT INTO game_selections (game_id, team_id, player_ids) VALUES
+  ('g1-1', 'team-1', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3"]'),
+  ('g1-2', 'team-1', '["p2-player-5","p2-player-1","p2-player-2","p2-player-8"]'),
+  ('g1-8', 'team-1', '["p2-player-5","p2-player-1","p2-player-2","p2-player-3"]'),
+  ('g2-1', 'team-2', '["p2-player-6","p2-player-10","p2-player-7","p2-player-8"]'),
+  ('g2-2', 'team-2', '["p2-player-6","p2-player-10","p2-player-7","p2-player-9"]'),
+  ('g3-1', 'team-3', '["p2-player-12","p2-player-13","p2-player-14","p2-player-11"]'),
+  ('g3-2', 'team-3', '["p2-player-12","p2-player-13","p2-player-14","p2-player-17"]'),
+  ('g4-1', 'team-4', '["p2-player-16","p2-player-19","p2-player-18","p2-player-15"]'),
+  ('g4-2', 'team-4', '["p2-player-16","p2-player-19","p2-player-18","p2-player-20"]'),
+  ('g5-1', 'team-5', '["p2-player-22","p2-player-24","p2-player-21","p2-player-23"]'),
+  ('g5-1', 'team-6', '["p2-player-29","p2-player-39","p2-player-40","p2-player-41"]'),
+  ('g5-2', 'team-5', '["p2-player-22","p2-player-24","p2-player-21","p2-player-26"]'),
+  ('g6-2', 'team-6', '["p2-player-29","p2-player-42","p2-player-38","p2-player-43"]'),
+  ('g7-1', 'team-7', '["p2-player-33","p2-player-35","p2-player-34"]'),
+  ('g7-2', 'team-7', '["p2-player-33","p2-player-35","p2-player-36"]'),
+  ('g8-1', 'team-8', '["p2-player-32","p2-player-27","p2-player-28"]'),
+  ('g8-2', 'team-8', '["p2-player-32","p2-player-27","p2-player-30"]');
 
 -- game_availabilities — a few responses on the upcoming "retour" games so the
 -- Accueil next-match widget and the game modal's disponibilités list aren't empty.
-INSERT INTO game_availabilities (id, game_id, player_id, status, overridden_by) VALUES
-  ('avail-g1-8-p2-player-5', 'g1-8', 'p2-player-5', 'available', NULL),
-  ('avail-g1-8-p2-player-1', 'g1-8', 'p2-player-1', 'maybe', NULL),
-  ('avail-g1-8-p2-player-2', 'g1-8', 'p2-player-2', 'unavailable', 'captain'),
-  ('avail-g1-8-p2-player-3', 'g1-8', 'p2-player-3', 'available', NULL),
-  ('avail-g7-8-p2-player-33', 'g7-8', 'p2-player-33', 'available', NULL),
-  ('avail-g7-8-p2-player-35', 'g7-8', 'p2-player-35', 'unavailable', NULL);
+-- (game_id, player_id) is the primary key since 0033 (#282).
+INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) VALUES
+  ('g1-8', 'p2-player-5', 'available', NULL),
+  ('g1-8', 'p2-player-1', 'maybe', NULL),
+  ('g1-8', 'p2-player-2', 'unavailable', 'captain'),
+  ('g1-8', 'p2-player-3', 'available', NULL),
+  ('g7-8', 'p2-player-33', 'available', NULL),
+  ('g7-8', 'p2-player-35', 'unavailable', NULL);
 
 -- users
 INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id) VALUES

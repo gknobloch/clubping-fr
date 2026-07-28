@@ -17,7 +17,7 @@ describe('playersCommittedElsewhere', () => {
 
   it('maps a player selected for another club team on the same round to that team number', () => {
     const selections: GameSelection[] = [
-      { id: 's1', gameId: 'g1', teamId: 'team-1', playerIds: ['p1'] },
+      { gameId: 'g1', teamId: 'team-1', playerIds: ['p1'] },
     ]
     const committed = playersCommittedElsewhere('team-2', 1, clubTeams, games, matchDays, selections)
     expect(committed.get('p1')).toBe(1)
@@ -25,7 +25,7 @@ describe('playersCommittedElsewhere', () => {
 
   it('ignores selections for the current team itself', () => {
     const selections: GameSelection[] = [
-      { id: 's1', gameId: 'g2', teamId: 'team-2', playerIds: ['p1'] },
+      { gameId: 'g2', teamId: 'team-2', playerIds: ['p1'] },
     ]
     const committed = playersCommittedElsewhere('team-2', 1, clubTeams, games, matchDays, selections)
     expect(committed.has('p1')).toBe(false)
@@ -35,7 +35,7 @@ describe('playersCommittedElsewhere', () => {
     const otherRoundMd: MatchDay = { id: 'md-2', groupId: 'group-1', number: 2, date: '2026-01-08' }
     const otherRoundGame: Game = { id: 'g3', matchDayId: 'md-2', homeTeamId: 'team-1', awayTeamId: 'opp-1' }
     const selections: GameSelection[] = [
-      { id: 's1', gameId: 'g3', teamId: 'team-1', playerIds: ['p1'] },
+      { gameId: 'g3', teamId: 'team-1', playerIds: ['p1'] },
     ]
     const committed = playersCommittedElsewhere(
       'team-2', 1, clubTeams, [...games, otherRoundGame], [...matchDays, otherRoundMd], selections,

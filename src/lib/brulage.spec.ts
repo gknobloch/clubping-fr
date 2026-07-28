@@ -29,7 +29,6 @@ const makeGame = (id: string, matchDayId: string, homeTeamId: string, awayTeamId
 })
 
 const makeSel = (gameId: string, teamId: string, playerIds: string[]): GameSelection => ({
-  id: `sel-${gameId}-${teamId}`,
   gameId,
   teamId,
   playerIds,

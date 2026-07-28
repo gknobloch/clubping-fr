@@ -122,10 +122,15 @@ export interface Player {
 }
 
 export interface Team {
+  /** Derived at creation from (club, phase, number) (#282); opaque thereafter. */
   id: string
   clubId: string
   phaseId: string
   number: number
+  /**
+   * Division of this team's group. Derived by the API, not stored: the column
+   * was dropped in migration 0031 because the group already holds it (#282).
+   */
   divisionId: string
   groupId: string
   gameLocationId: string
@@ -140,6 +145,8 @@ export interface Team {
   /** Optional hex color for table/header display (e.g. #374151). */
   color?: string
   whatsappLink?: string
+  /** FFTT team id, when this team came from FFTT (#282). */
+  teamId?: string
 }
 
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
@@ -147,7 +154,7 @@ export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
 export type AvailabilityOverriddenBy = 'captain' | 'club_admin'
 
 export interface GameAvailability {
-  id: string
+  /** Keyed on (gameId, playerId) — the table's primary key since 0033 (#282). */
   gameId: string
   playerId: string
   status: AvailabilityStatus
@@ -163,6 +170,7 @@ export interface MatchDay {
 }
 
 export interface Game {
+  /** Derived at creation from (journée, home, away) (#282); opaque thereafter. */
   id: string
   matchDayId: string
   homeTeamId: string
@@ -171,11 +179,13 @@ export interface Game {
   time?: string
   /** This game's own date (#271); falls back to its match day's (derived) date when unset. */
   date?: string
+  /** FFTT match id, when this game came from FFTT (#282). */
+  gameId?: string
 }
 
 /** Per game, per team: which players are selected to play (captain/club admin). */
 export interface GameSelection {
-  id: string
+  /** Keyed on (gameId, teamId) — the table's primary key since 0033 (#282). */
   gameId: string
   teamId: string
   playerIds: string[]
