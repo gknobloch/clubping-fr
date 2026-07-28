@@ -473,8 +473,8 @@ app.get('/fftt/divisions-preview', async (c) => {
 type ImportedPhase = { id: string; seasonId: unknown; name: unknown; displayName: unknown; status: unknown }
 type ImportedDivision = {
   id: string; phaseId: string; displayName: string; rank: number; playersPerGame: number; isArchived: boolean
-  /** FFTT identifier, e.g. "GE3P1" (#275) — persisted so playersPerGameFor() can be re-derived. */
-  identifier: string
+  /** FFTT identifier, e.g. "GE3P1" (#275) — persisted so playersPerGameFor() can be re-derived. Absent for divisions created from a payload that has none. */
+  identifier?: string
   /** FFTT id of the parent division (#236); the local match may not exist yet — see importDivisions. */
   parentId?: string
 }
@@ -1268,7 +1268,11 @@ app.post('/games/import', async (c) => {
     const group = touchedGroups.get(ctx.groupId) ??
       { ...ctx.group, isArchived: false, teamIds: [...ctx.group.teamIds] }
 
-    const teamIdFor = (side: FfttMatchTeam): string | null => {
+    // NOT named teamIdFor: it used to be, which shadowed the imported
+    // teamIdFor(clubId, phaseId, number) and turned the call below into a
+    // recursive one with the wrong arguments. It returned null, and every
+    // opponent team was inserted with a NULL id (#284).
+    const resolveOrCreateTeam = (side: FfttMatchTeam): string | null => {
       const existing = resolver.resolve(side, ctx.phaseId!)
       if (existing) return existing
       const clubId = clubIdFor(side)
@@ -1277,6 +1281,10 @@ app.post('/games/import', async (c) => {
       // construction — the old "suffix the FFTT id when it's taken" hack is
       // gone. The FFTT team id lives in team_id.
       const id = teamIdFor(clubId, ctx.phaseId!, side.teamNumber)
+      // Belt and braces (#284): never queue a team without an id. The bug this
+      // guards against pushed 84 NULL-id rows into production before anyone
+      // noticed, because the caller only checks the RETURN value.
+      if (!id) return null
       createdTeams.push({
         id, teamId: side.teamId, clubId, phaseId: ctx.phaseId, number: side.teamNumber,
         groupId: group.id, gameLocationId: '',
@@ -1306,8 +1314,8 @@ app.post('/games/import', async (c) => {
         }
         continue
       }
-      const homeId = teamIdFor(m.home)
-      const awayId = teamIdFor(m.away)
+      const homeId = resolveOrCreateTeam(m.home)
+      const awayId = resolveOrCreateTeam(m.away)
       if (!homeId || !awayId) { skippedMatches++; continue }
       // A manually created game for the same pairing on the same journée
       // counts as existing — never duplicate it.
@@ -1598,7 +1606,7 @@ app.post('/schedule-documents/import', async (c) => {
   const touchedGroups = new Map<string, GroupState>()
   const createdMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
   const updatedMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
-  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string; date: string | null }> = []
+  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string; date: string | null; gameId?: string }> = []
   // Every match_day that gained a game (created here, or an already-existing
   // one from an earlier FFTT/doc import) — recomputed (derived date) after
   // the batch, then re-read to build updatedMatchDays from the authoritative
@@ -1741,8 +1749,12 @@ app.post('/schedule-documents/import', async (c) => {
         if (!pairingsByMatchDay.has(mdId)) pairingsByMatchDay.set(mdId, new Set())
         pairingsByMatchDay.get(mdId)!.add(`${homeId}|${awayId}`)
         pairingsByMatchDay.get(mdId)!.add(`${awayId}|${homeId}`)
-        // Derived (#282); a PDF calendar carries no FFTT match id.
-        createdGames.push({ id: gameIdFor(mdId, homeId, awayId), matchDayId: mdId, homeTeamId: homeId, awayTeamId: awayId, date: m.date ?? j.date })
+        // Derived (#282); a PDF calendar carries no FFTT match id, so gameId
+        // stays undefined and the insert binds NULL.
+        createdGames.push({
+          id: gameIdFor(mdId, homeId, awayId), matchDayId: mdId,
+          homeTeamId: homeId, awayTeamId: awayId, date: m.date ?? j.date,
+        })
         touchedMatchDayIds.add(mdId)
       }
     }

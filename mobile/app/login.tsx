@@ -67,8 +67,8 @@ export default function LoginScreen() {
     setBusy(true)
     setError(null)
     try {
-      const { devCode } = await requestCode(email.trim())
-      setDevCode(devCode ?? null)
+      const { devCode: issuedCode } = await requestCode(email.trim())
+      setDevCode(issuedCode ?? null)
       setStep('code')
     } catch (e) {
       setError(authErrorMessage(e))
