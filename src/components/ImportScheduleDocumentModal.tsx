@@ -155,7 +155,9 @@ export function ImportScheduleDocumentModal({
           date: j.date!,
           matches: j.matches.map((m) => ({
             homeName: m.homeName, homeNumber: m.homeNumber, awayName: m.awayName, awayNumber: m.awayNumber,
-            date: m.date,
+            // The document states each match's own day AND time (#289) — a
+            // calendar is the one source that actually knows them.
+            date: m.date, time: m.time,
           })),
         })),
     }

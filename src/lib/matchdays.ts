@@ -40,3 +40,55 @@ export function deriveMatchDayDate(gamesForMatchDay: Game[], currentDate: string
 
 /** A specific game's own date, falling back to its match day's (derived) date when unset. */
 export const gameDate = (game: Game, matchDay: MatchDay): string => game.date ?? matchDay.date
+
+/** Monday and Sunday (YYYY-MM-DD) of the ISO week containing `isoDate`. */
+export function isoWeekRange(isoDate: string): { start: string; end: string } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  const backToMonday = (d.getUTCDay() + 6) % 7
+  const start = new Date(d)
+  start.setUTCDate(start.getUTCDate() - backToMonday)
+  const end = new Date(start)
+  end.setUTCDate(end.getUTCDate() + 6)
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+}
+
+/** How a game should be presented: a real slot, or only the journée's week. */
+export interface GameSchedule {
+  /** The date to show; null when only the week is known. */
+  date: string | null
+  /** The time to show; '' when unknown. Always the HOME team's, never the viewer's. */
+  time: string
+  /** Monday–Sunday of the journée, set only when `date` is null. */
+  week: { start: string; end: string } | null
+}
+
+/**
+ * When a game actually happens, as far as we can honestly say (#287).
+ *
+ * A fixture is only on a real date once the home club's playing day is known:
+ * the FFTT calendar publishes a nominal weekend date, and the import moves a
+ * home fixture back to that club's day. For an opponent auto-created by the
+ * import we know neither its day nor its time, so its nominal date is a guess
+ * — showing "dim. 8 nov. 19h30" claims a slot nobody confirmed, and the 19h30
+ * was the *viewing* team's default, which has nothing to do with an away game.
+ *
+ * So: an explicit game date/time always wins. Otherwise, if the home team has
+ * a default day, the stored date is real and its default time applies. Failing
+ * that, only the journée's week is known.
+ */
+export function gameSchedule(
+  game: Pick<Game, 'date' | 'time'> | undefined,
+  matchDay: Pick<MatchDay, 'date'>,
+  homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
+): GameSchedule {
+  // A game without its own date sits on the journée's — that has always been
+  // the fallback, and it must stay one: requiring game.date would push every
+  // manually created fixture into the "unconfirmed" branch.
+  const date = game?.date ?? matchDay.date
+  const time = game?.time || homeTeam?.defaultTime || ''
+  if (game?.time) return { date, time, week: null }
+  if (homeTeam?.defaultDay) return { date, time, week: null }
+  return { date: null, time: '', week: isoWeekRange(date) }
+}

@@ -4,7 +4,7 @@ import { authApp, bearer, userFromToken, type Env } from './auth'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation } from '../../src/lib/ffttClub'
-import { gameIdFor, teamIdFor } from '../../src/lib/entityIds'
+import { gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
@@ -1029,12 +1029,40 @@ interface GamesGroupContext {
 // its division/phase and the matching pool's matches out of the validated
 // client-fetched payload. A division absent from the payload means the
 // browser couldn't fetch it from apiv2.
-async function gamesImportContext(db: Env['Bindings']['DB'], groupIds: string[], poolsRaw: unknown): Promise<GamesGroupContext[]> {
+async function gamesImportContext(
+  db: Env['Bindings']['DB'], groupIds: string[], poolsRaw: unknown,
+  /** When set, keep only the fixtures this team plays (#287). */
+  onlyTeamId: string | null = null,
+): Promise<GamesGroupContext[]> {
   const groupRows = await db.prepare('SELECT id, division_id, number, team_ids FROM groups').all()
   const groupById = new Map(groupRows.results.map((g) => [g.id as string, g]))
   const divisionRows = await db.prepare('SELECT id, display_name, phase_id FROM divisions').all()
   const divisionById = new Map(divisionRows.results.map((d) => [d.id as string, d]))
   const poolsByDivision = parsePoolsPayload(poolsRaw)
+
+  // A team-scoped import matches FFTT sides by the team's FFTT id when it has
+  // one, and by (club affiliation, number) otherwise — the same two keys the
+  // resolver uses, so a team created by the PDF import is still recognised.
+  let onlyTeam: { ffttId: string | null; affiliation: string | null; number: number | null } | null = null
+  if (onlyTeamId) {
+    const row = await db.prepare(
+      `SELECT t.team_id, t.number, c.affiliation_number
+       FROM teams t LEFT JOIN clubs c ON c.id = t.club_id WHERE t.id = ?`,
+    ).bind(onlyTeamId).first() as { team_id: string | null; number: number | null; affiliation_number: string | null } | null
+    if (row) {
+      onlyTeam = {
+        ffttId: row.team_id, affiliation: row.affiliation_number,
+        number: row.number,
+      }
+    }
+  }
+  const playedByOnlyTeam = (side: FfttMatchTeam) => {
+    if (!onlyTeam) return true
+    if (onlyTeam.ffttId && side.teamId === onlyTeam.ffttId) return true
+    return !!onlyTeam.affiliation
+      && side.clubIdentifier === onlyTeam.affiliation
+      && side.teamNumber === onlyTeam.number
+  }
 
   return groupIds.map((groupId): GamesGroupContext => {
     const g = groupById.get(groupId)
@@ -1062,7 +1090,10 @@ async function gamesImportContext(db: Env['Bindings']['DB'], groupIds: string[],
       const published = pools.some((p) => p.matches.length > 0)
       return { ...identity, error: published ? 'pool_not_found' : 'calendar_not_published' }
     }
-    return { ...identity, matches: pool.matches }
+    const matches = onlyTeam
+      ? pool.matches.filter((m) => playedByOnlyTeam(m.home) || playedByOnlyTeam(m.away))
+      : pool.matches
+    return { ...identity, matches }
   })
 }
 
@@ -1075,9 +1106,15 @@ function makeTeamResolver(
   const teamByIdPhase = new Map(teamRows.map((t) => [`${t.id}|${t.phase_id}`, t.id as string]))
   const teamByClubNumberPhase = new Map(teamRows.map((t) => [`${t.club_id}|${t.number}|${t.phase_id}`, t.id as string]))
   const teamIds = new Set(teamRows.map((t) => t.id as string))
+  // Each team's playing day, so the games import can put a home fixture on it (#287).
+  const defaultDayById = new Map(teamRows.map((t) => [t.id as string, (t.default_day as string | null) ?? '']))
   return {
     clubByAffiliation,
     teamIds,
+    /** The team's default playing day, '' when unknown or newly created without one. */
+    defaultDayOf(teamId: string): string {
+      return defaultDayById.get(teamId) ?? ''
+    },
     resolve(side: FfttMatchTeam, phaseId: string): string | null {
       const byId = teamByIdPhase.get(`${side.teamId}|${phaseId}`)
       if (byId) return byId
@@ -1100,8 +1137,9 @@ function makeTeamResolver(
       }
       return null
     },
-    register(teamId: string, clubId: string, number: number, phaseId: string, ffttTeamId: string) {
+    register(teamId: string, clubId: string, number: number, phaseId: string, ffttTeamId: string, defaultDay = '') {
       teamIds.add(teamId)
+      defaultDayById.set(teamId, defaultDay)
       teamByIdPhase.set(`${ffttTeamId}|${phaseId}`, teamId)
       teamByClubNumberPhase.set(`${clubId}|${number}|${phaseId}`, teamId)
     },
@@ -1136,18 +1174,36 @@ app.post('/fftt/games-preview', async (c) => {
   const b = await c.req.json()
   const groupIds = parseGroupIds(b.groupIds)
   if (groupIds.length === 0) return c.json({ error: 'invalid_params' }, 400)
+  // Optional scope (#287): importing from a team card imports that team's
+  // fixtures only, not every match of its pool.
+  const onlyTeamId = typeof b.teamId === 'string' && b.teamId ? b.teamId : null
   const db = c.env.DB
-  const ctxs = await gamesImportContext(db, groupIds, b.pools)
+  const ctxs = await gamesImportContext(db, groupIds, b.pools, onlyTeamId)
 
   const [clubRows, teamRows, mdRows, gameRows] = await Promise.all([
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
-    db.prepare('SELECT id, club_id, phase_id, number FROM teams').all(),
+    db.prepare('SELECT id, club_id, phase_id, number, default_day FROM teams').all(),
     db.prepare('SELECT id, group_id, number FROM match_days').all(),
-    db.prepare('SELECT id FROM games').all(),
+    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date, game_id FROM games').all(),
   ])
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
   const matchDayKeys = new Set(mdRows.results.map((m) => `${m.group_id}|${m.number}`))
-  const gameIds = new Set(gameRows.results.map((g) => g.id as string))
+  const matchDayIdByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m.id as string]))
+  // A game already imported from a PDF carries no FFTT match id, so the id
+  // check alone counted it as new and the preview promised matches the import
+  // then skipped (#289). Recognise it by its pairing on the same journée —
+  // the same second key the import itself uses.
+  const ffttGameIds = new Set(
+    gameRows.results.flatMap((g) => (g.game_id ? [g.game_id as string] : [g.id as string])),
+  )
+  const existingByPairing = new Map<string, { id: string; date: string | null }>()
+  for (const g of gameRows.results) {
+    const key = (home: unknown, away: unknown) => `${g.match_day_id}|${home}|${away}`
+    const entry = { id: g.id as string, date: (g.date as string | null) ?? null }
+    existingByPairing.set(key(g.home_team_id, g.away_team_id), entry)
+    existingByPairing.set(key(g.away_team_id, g.home_team_id), entry)
+  }
+  const gameIds = ffttGameIds
 
   const newClubIdentifiers = new Set<string>()
   const newTeamKeys = new Set<string>()
@@ -1163,7 +1219,7 @@ app.post('/fftt/games-preview', async (c) => {
       }
     }
     const rounds = new Set<number>()
-    let newGames = 0, existingGames = 0, newMatchDays = 0
+    let newGames = 0, existingGames = 0, newMatchDays = 0, dateMismatches = 0
     const groupNewTeams = new Set<string>()
     const seenRounds = new Set<number>()
     for (const m of ctx.matches) {
@@ -1172,8 +1228,20 @@ app.post('/fftt/games-preview', async (c) => {
         seenRounds.add(m.round)
         if (!matchDayKeys.has(`${ctx.groupId}|${m.round}`)) newMatchDays++
       }
-      if (gameIds.has(m.id)) existingGames++
-      else newGames++
+      // Already here, by FFTT match id or by pairing on the same journée.
+      const mdId = matchDayIdByKey.get(`${ctx.groupId}|${m.round}`)
+      const homeId = resolver.resolve(m.home, ctx.phaseId!)
+      const awayId = resolver.resolve(m.away, ctx.phaseId!)
+      const byPairing = mdId && homeId && awayId
+        ? existingByPairing.get(`${mdId}|${homeId}|${awayId}`)
+        : undefined
+      if (gameIds.has(m.id) || byPairing) {
+        existingGames++
+        const storedDate = byPairing
+          ? byPairing.date
+          : gameRows.results.find((g) => (g.game_id ?? g.id) === m.id)?.date ?? null
+        if (storedDate && storedDate !== m.date) dateMismatches++
+      } else newGames++
       for (const side of [m.home, m.away]) {
         if (resolver.resolve(side, ctx.phaseId!)) continue
         groupNewTeams.add(`${side.clubIdentifier}|${side.teamName}`)
@@ -1192,6 +1260,10 @@ app.post('/fftt/games-preview', async (c) => {
       newMatchDays,
       newGames,
       existingGames,
+      // Already present but on another date than FFTT now publishes (#289) —
+      // a PDF calendar's real slot, or a genuine reschedule. Never applied
+      // silently; the import only touches them when asked.
+      dateMismatches,
       newTeams: groupNewTeams.size,
     }
   })
@@ -1211,12 +1283,18 @@ app.post('/games/import', async (c) => {
   const b = await c.req.json()
   const groupIds = parseGroupIds(b.groupIds)
   if (groupIds.length === 0) return c.json({ error: 'invalid_params' }, 400)
+  const onlyTeamId = typeof b.teamId === 'string' && b.teamId ? b.teamId : null
+  // Opt-in (#289): an existing game's date is only replaced by FFTT's when
+  // asked. A PDF calendar states the real slot — day AND time — while FFTT
+  // publishes a nominal weekend date, so overwriting by default would trade
+  // good data for worse. Left off, a re-import still adds what is missing.
+  const updateDates = b.updateDates === true
   const db = c.env.DB
-  const ctxs = await gamesImportContext(db, groupIds, b.pools)
+  const ctxs = await gamesImportContext(db, groupIds, b.pools, onlyTeamId)
 
   const [clubRows, teamRows, mdRows, gameRows] = await Promise.all([
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
-    db.prepare('SELECT id, club_id, phase_id, number FROM teams').all(),
+    db.prepare('SELECT id, club_id, phase_id, number, default_day FROM teams').all(),
     db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
     db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date FROM games').all(),
   ])
@@ -1225,11 +1303,17 @@ app.post('/games/import', async (c) => {
   const gameIds = new Set(gameRows.results.map((g) => g.id as string))
   const existingGameDateById = new Map(gameRows.results.map((g) => [g.id as string, g.date as string | null]))
   const pairingsByMatchDay = new Map<string, Set<string>>()
+  // The row behind a pairing, so its date can be adjusted rather than only
+  // recognised (#289).
+  const existingGameByPairing = new Map<string, { id: string; date: string | null }>()
   for (const g of gameRows.results) {
     const key = g.match_day_id as string
     if (!pairingsByMatchDay.has(key)) pairingsByMatchDay.set(key, new Set())
     pairingsByMatchDay.get(key)!.add(`${g.home_team_id}|${g.away_team_id}`)
     pairingsByMatchDay.get(key)!.add(`${g.away_team_id}|${g.home_team_id}`)
+    const entry = { id: g.id as string, date: (g.date as string | null) ?? null }
+    existingGameByPairing.set(`${key}|${g.home_team_id}|${g.away_team_id}`, entry)
+    existingGameByPairing.set(`${key}|${g.away_team_id}|${g.home_team_id}`, entry)
   }
 
   const createdClubs: Array<Record<string, unknown>> = []
@@ -1290,7 +1374,7 @@ app.post('/games/import', async (c) => {
         groupId: group.id, gameLocationId: '',
         defaultDay: '', defaultTime: '', captainId: '', playerIds: [], isArchived: false,
       })
-      resolver.register(id, clubId, side.teamNumber, ctx.phaseId!, side.teamId)
+      resolver.register(id, clubId, side.teamNumber, ctx.phaseId!, side.teamId, '')
       if (!group.teamIds.includes(id)) group.teamIds.push(id)
       touchedGroups.set(group.id, group)
       return id
@@ -1308,7 +1392,7 @@ app.post('/games/import', async (c) => {
 
       if (gameIds.has(m.id)) {
         existingGames++
-        if (existingGameDateById.get(m.id) !== m.date) {
+        if (updateDates && existingGameDateById.get(m.id) !== m.date) {
           updatedGames.push({ id: m.id, date: m.date })
           touchedMatchDayIds.add(md.id as string)
         }
@@ -1317,19 +1401,33 @@ app.post('/games/import', async (c) => {
       const homeId = resolveOrCreateTeam(m.home)
       const awayId = resolveOrCreateTeam(m.away)
       if (!homeId || !awayId) { skippedMatches++; continue }
-      // A manually created game for the same pairing on the same journée
-      // counts as existing — never duplicate it.
+      // A game for the same pairing on the same journée already exists —
+      // created by hand or by the PDF import, which carries no FFTT match id.
+      // Never duplicate it; adjust its date only when asked (#289).
       const pairings = pairingsByMatchDay.get(md.id as string)
-      if (pairings?.has(`${homeId}|${awayId}`)) { existingGames++; continue }
+      if (pairings?.has(`${homeId}|${awayId}`)) {
+        existingGames++
+        const existing = existingGameByPairing.get(`${md.id}|${homeId}|${awayId}`)
+        if (updateDates && existing && existing.date !== m.date) {
+          updatedGames.push({ id: existing.id, date: m.date })
+          touchedMatchDayIds.add(md.id as string)
+        }
+        continue
+      }
       if (!pairingsByMatchDay.has(md.id as string)) pairingsByMatchDay.set(md.id as string, new Set())
       pairingsByMatchDay.get(md.id as string)!.add(`${homeId}|${awayId}`)
       pairingsByMatchDay.get(md.id as string)!.add(`${awayId}|${homeId}`)
       gameIds.add(m.id)
       // Derived local id, FFTT match id kept in game_id (#282) — the dedup
       // above still matches on the FFTT id, which is why it has its own column.
+      // The home team plays on its own day (#287): FFTT's nominal weekend
+      // date moves back to the preceding occurrence of default_day. Away games
+      // keep FFTT's date — they are played at the opponent's venue on the
+      // opponent's day.
       createdGames.push({
         id: gameIdFor(md.id as string, homeId, awayId), gameId: m.id,
-        matchDayId: md.id, homeTeamId: homeId, awayTeamId: awayId, date: m.date,
+        matchDayId: md.id, homeTeamId: homeId, awayTeamId: awayId,
+        date: homeGameDate(m.date, resolver.defaultDayOf(homeId)),
       })
       touchedMatchDayIds.add(md.id as string)
     }
@@ -1423,7 +1521,7 @@ app.post('/games/import', async (c) => {
 // which assume every id is FFTT-issued.
 
 interface ScheduleDocTeamInput { name: string; number: number; affiliationNumber: string }
-interface ScheduleDocMatchInput { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null }
+interface ScheduleDocMatchInput { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null; time: string }
 interface ScheduleDocJourneeInput { number: number; date: string; matches: ScheduleDocMatchInput[] }
 interface ScheduleDocInput {
   seasonId: string
@@ -1473,6 +1571,9 @@ function parseScheduleDocJournees(raw: unknown): ScheduleDocJourneeInput[] {
         matches.push({
           homeName: y.homeName.trim().slice(0, 80), homeNumber: y.homeNumber,
           awayName: y.awayName.trim().slice(0, 80), awayNumber: y.awayNumber, date,
+          // "19h30" and the like; kept short and free-form, same as the team
+          // default it stands in for.
+          time: typeof y.time === 'string' ? y.time.trim().slice(0, 10) : '',
         })
       }
     }
@@ -1565,7 +1666,7 @@ app.post('/schedule-documents/import', async (c) => {
     db.prepare('SELECT id, phase_id, display_name, rank, players_per_game FROM divisions').all(),
     db.prepare('SELECT id, division_id, number, team_ids FROM groups').all(),
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
-    db.prepare('SELECT id, club_id, phase_id, number FROM teams').all(),
+    db.prepare('SELECT id, club_id, phase_id, number, default_day FROM teams').all(),
     db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
     db.prepare('SELECT id, match_day_id, home_team_id, away_team_id FROM games').all(),
   ])
@@ -1606,7 +1707,7 @@ app.post('/schedule-documents/import', async (c) => {
   const touchedGroups = new Map<string, GroupState>()
   const createdMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
   const updatedMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
-  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string; date: string | null; gameId?: string }> = []
+  const createdGames: Array<{ id: string; matchDayId: string; homeTeamId: string; awayTeamId: string; date: string | null; time?: string; gameId?: string }> = []
   // Every match_day that gained a game (created here, or an already-existing
   // one from an earlier FFTT/doc import) — recomputed (derived date) after
   // the batch, then re-read to build updatedMatchDays from the authoritative
@@ -1754,6 +1855,9 @@ app.post('/schedule-documents/import', async (c) => {
         createdGames.push({
           id: gameIdFor(mdId, homeId, awayId), matchDayId: mdId,
           homeTeamId: homeId, awayTeamId: awayId, date: m.date ?? j.date,
+          // A document states the real slot, so the game carries it outright
+          // (#289) instead of leaning on the home club's defaults.
+          time: m.time || undefined,
         })
         touchedMatchDayIds.add(mdId)
       }
@@ -1790,8 +1894,8 @@ app.post('/schedule-documents/import', async (c) => {
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, NULL, ?, ?)')
-        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date, g.gameId ?? null)),
+      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.time ?? null, g.date, g.gameId ?? null)),
     // Last: recompute every touched journée's derived date from its (now
     // fully written) games (#271).
     ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),

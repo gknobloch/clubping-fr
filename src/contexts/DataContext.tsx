@@ -173,6 +173,8 @@ export interface FfttGamesGroupPreview {
   newMatchDays?: number
   newGames?: number
   existingGames?: number
+  /** Already present, but on a different date than FFTT now publishes (#289). */
+  dateMismatches?: number
   /** Opponent teams that would be auto-created for this group. */
   newTeams?: number
 }
@@ -230,7 +232,7 @@ export interface FfttGroupsImportResult {
 // the "preview" is the confirmation table built from data already in this
 // context, and this single call both validates and persists.
 export interface ScheduleDocImportTeam { name: string; number: number; affiliationNumber: string }
-export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null }
+export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null; time?: string }
 export interface ScheduleDocImportJournee { number: number; date: string; matches: ScheduleDocImportMatch[] }
 
 export interface ScheduleDocImportInput {
@@ -326,9 +328,9 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   /** Import a club's FFTT teams with the chosen defaults (venue / day / time). */
   importFfttTeams: (clubId: string, teams: TeamImportOverride[]) => Promise<FfttTeamsImportResult | null>
   /** Preview the FFTT calendars of the given groups (#231); null on failure. */
-  fetchGamesPreview: (groupIds: string[]) => Promise<FfttGamesPreview | null>
+  fetchGamesPreview: (groupIds: string[], teamId?: string) => Promise<FfttGamesPreview | null>
   /** Import the FFTT calendars (journées + matchs, auto-creating opponents). */
-  importFfttGames: (groupIds: string[]) => Promise<FfttGamesImportResult | null>
+  importFfttGames: (groupIds: string[], teamId?: string, updateDates?: boolean) => Promise<FfttGamesImportResult | null>
   /** Preview a division's FFTT groups/pools (#237); null on failure. */
   fetchGroupsPreview: (divisionId: string) => Promise<FfttGroupsPreview | null>
   /** Import a division's FFTT groups not already present locally. */
@@ -699,7 +701,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   //     whatever tiers 0-1 still didn't resolve.
   const gamesPayloadRef = useRef<Record<string, Array<{ divisionId: string; pools: FfttPool[] }>>>({})
 
-  const fetchGamesPreview = useCallback(async (groupIds: string[]): Promise<FfttGamesPreview | null> => {
+  const fetchGamesPreview = useCallback(async (groupIds: string[], teamId?: string): Promise<FfttGamesPreview | null> => {
     try {
       // Requested groups with an FFTT-aligned (numeric) division id;
       // non-numeric ones predate the FFTT imports and can't be queried.
@@ -762,7 +764,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       const r = await fetch('/api/fftt/games-preview', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ groupIds, pools }),
+        body: JSON.stringify({ groupIds, pools, ...(teamId ? { teamId } : {}) }),
       })
       if (!r.ok) return null
       gamesPayloadRef.current[groupIds.join(',')] = pools
@@ -772,14 +774,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [groups, teams, clubs])
 
-  const importFfttGames = useCallback(async (groupIds: string[]): Promise<FfttGamesImportResult | null> => {
+  const importFfttGames = useCallback(async (groupIds: string[], teamId?: string, updateDates?: boolean): Promise<FfttGamesImportResult | null> => {
     try {
       const pools = gamesPayloadRef.current[groupIds.join(',')]
       if (!pools) return null
       const r = await fetch('/api/games/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ groupIds, pools }),
+        body: JSON.stringify({ groupIds, pools, ...(teamId ? { teamId } : {}), ...(updateDates ? { updateDates: true } : {}) }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttGamesImportResult

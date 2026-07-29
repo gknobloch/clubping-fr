@@ -86,9 +86,12 @@ test.describe('General admin — Games FFTT import', () => {
     await expect(page.getByText('Adversaires créés : 1 équipe et 1 club.')).toBeVisible()
 
     // The import sends exactly the pools the preview resolved (the tier-2
-    // apiv2 poule 1 mocked above), never a re-fetched list.
+    // apiv2 poule 1 mocked above), never a re-fetched list. From /equipes it
+    // is also scoped to that one team (#287) — its pool's other fixtures are
+    // not imported.
     expect(importBody).toEqual({
       groupIds: ['group-1'],
+      teamId: 'team-1',
       pools: [{ divisionId: '198609', pools: [{ id: '9001', poolNumber: 1, matches: [] }] }],
     })
   })
@@ -155,6 +158,64 @@ test.describe('General admin — Games FFTT import', () => {
 
     expect(previewedGroupIds).toContain('group-1')
     expect(previewedGroupIds).toContain('group-2')
+  })
+
+  // #289: a game already present on another date is reported, never silently
+  // re-dated. The import only carries updateDates when the box is ticked.
+  test('offers to take FFTT dates for games already present on another date', async ({ page }) => {
+    await page.route(PREVIEW, (route) => route.fulfill({
+      json: {
+        groups: [{
+          groupId: 'group-1', groupNumber: 1, divisionName: 'GE 1',
+          rounds: 7, matches: 28, newMatchDays: 0, newGames: 0,
+          existingGames: 28, dateMismatches: 3, newTeams: 0,
+        }],
+        totals: { newClubs: 0, newTeams: 0 },
+      },
+    }))
+    let body: { updateDates?: boolean } | undefined
+    await page.route(IMPORT, (route) => {
+      body = route.request().postDataJSON()
+      return route.fulfill({ json: { ...importResult, createdGames: [], createdMatchDays: [], updatedMatchDays: [] } })
+    })
+
+    await page.goto('/equipes')
+    await page.getByRole('button', { name: 'Importer les matchs' }).first().click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('3 à une autre date')).toBeVisible()
+
+    // Nothing new to add and the box unticked: there is genuinely nothing to do.
+    const box = dialog.getByRole('checkbox')
+    await expect(box).not.toBeChecked()
+    await expect(dialog.getByRole('button', { name: 'Rien à importer' })).toBeDisabled()
+    expect(body?.updateDates).toBeUndefined()
+  })
+
+  test('sends updateDates once the box is ticked', async ({ page }) => {
+    await page.route(PREVIEW, (route) => route.fulfill({
+      json: {
+        groups: [{
+          groupId: 'group-1', groupNumber: 1, divisionName: 'GE 1',
+          rounds: 7, matches: 28, newMatchDays: 0, newGames: 0,
+          existingGames: 28, dateMismatches: 3, newTeams: 0,
+        }],
+        totals: { newClubs: 0, newTeams: 0 },
+      },
+    }))
+    let body: { updateDates?: boolean } | undefined
+    await page.route(IMPORT, (route) => {
+      body = route.request().postDataJSON()
+      return route.fulfill({ json: { ...importResult, createdGames: [], createdMatchDays: [], updatedMatchDays: [] } })
+    })
+
+    await page.goto('/equipes')
+    await page.getByRole('button', { name: 'Importer les matchs' }).first().click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('checkbox').check()
+    // Adjusting dates is work in itself, so the button acts even with no new match.
+    await dialog.getByRole('button', { name: /Mettre à jour/ }).click()
+    await expect(page.getByText(/Aucun match à importer/)).toBeVisible()
+    expect(body?.updateDates).toBe(true)
   })
 
   test('reports when the FFTT API is unreachable', async ({ page }) => {

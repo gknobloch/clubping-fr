@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gameIdFor, teamIdFor } from './entityIds'
+import { gameIdFor, homeGameDate, teamIdFor } from './entityIds'
 
 describe('teamIdFor', () => {
   it('derives a readable id from club, phase and number', () => {
@@ -40,5 +40,37 @@ describe('gameIdFor', () => {
 
   it('distinguishes the same pairing across journées', () => {
     expect(gameIdFor('md-1', 'team-A', 'team-B')).not.toBe(gameIdFor('md-2', 'team-A', 'team-B'))
+  })
+})
+
+describe('homeGameDate', () => {
+  it('moves a Sunday fixture back to the preceding Thursday', () => {
+    // The reported case: J1 dim. 20 sept. for a Thursday team -> jeudi 17 sept.
+    expect(homeGameDate('2026-09-20', 'Jeudi')).toBe('2026-09-17')
+  })
+
+  it('leaves a fixture already on the team’s day alone', () => {
+    expect(homeGameDate('2026-09-17', 'Jeudi')).toBe('2026-09-17')
+  })
+
+  it('never moves more than six days back', () => {
+    // Friday -> preceding Saturday is 6 days back, not 1 day forward.
+    expect(homeGameDate('2026-09-18', 'Samedi')).toBe('2026-09-12')
+  })
+
+  it('crosses a month boundary correctly', () => {
+    expect(homeGameDate('2026-10-04', 'Jeudi')).toBe('2026-10-01')
+    expect(homeGameDate('2026-11-01', 'Jeudi')).toBe('2026-10-29')
+  })
+
+  it('is stable when there is no usable default day', () => {
+    expect(homeGameDate('2026-09-20', undefined)).toBe('2026-09-20')
+    expect(homeGameDate('2026-09-20', '')).toBe('2026-09-20')
+    expect(homeGameDate('2026-09-20', 'Thursday')).toBe('2026-09-20')
+  })
+
+  it('leaves a malformed date untouched', () => {
+    expect(homeGameDate('', 'Jeudi')).toBe('')
+    expect(homeGameDate('20/09/2026', 'Jeudi')).toBe('20/09/2026')
   })
 })

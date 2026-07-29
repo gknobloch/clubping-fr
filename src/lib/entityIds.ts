@@ -41,3 +41,36 @@ export function teamIdFor(clubId: string, phaseId: string, number: number | stri
 export function gameIdFor(matchDayId: string, homeTeamId: string, awayTeamId: string): string {
   return `game-${strip(matchDayId, 'md-')}-${strip(homeTeamId, 'team-')}-${strip(awayTeamId, 'team-')}`
 }
+
+// ---------------------------------------------------------------------------
+// Home-game date (#287)
+// ---------------------------------------------------------------------------
+
+const DAY_INDEX: Record<string, number> = {
+  Dimanche: 0, Lundi: 1, Mardi: 2, Mercredi: 3, Jeudi: 4, Vendredi: 5, Samedi: 6,
+}
+
+/**
+ * Move an FFTT fixture date back to the team's own playing day (#287).
+ *
+ * FFTT publishes a nominal date — usually the weekend — but a club that plays
+ * midweek plays the preceding occurrence of its day: a fixture dated
+ * Sunday 20 September for a Thursday team is played Thursday 17 September.
+ *
+ * Only ever moves BACKWARDS, never past a week, and only for the HOME team:
+ * an away game is played at the opponent's venue on the opponent's day, so it
+ * keeps the FFTT date. A team with no default day, an unrecognized one, or one
+ * that already matches the fixture, is returned unchanged.
+ */
+export function homeGameDate(ffttDate: string, defaultDay: string | undefined): string {
+  const target = DAY_INDEX[(defaultDay ?? '').trim()]
+  if (target === undefined) return ffttDate
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ffttDate)) return ffttDate
+  // Parsed as UTC so the weekday never shifts with the runtime's timezone.
+  const d = new Date(`${ffttDate}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return ffttDate
+  const delta = (d.getUTCDay() - target + 7) % 7
+  if (delta === 0) return ffttDate
+  d.setUTCDate(d.getUTCDate() - delta)
+  return d.toISOString().slice(0, 10)
+}

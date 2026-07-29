@@ -2,9 +2,10 @@ import { useState, useMemo, useCallback, Fragment, useRef, useEffect, useLayoutE
 import { createPortal } from 'react-dom'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
+import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
-import { gameDate } from '@/lib/matchdays'
+import { gameDate, gameSchedule } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { ClubLogo } from '@/components/ClubLogo'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
@@ -402,11 +403,13 @@ export function MatchDaysPage() {
 
   /** Groups of the selected phase that contain at least one team — the FFTT
    *  calendar import scope for this page (#231). */
-  const importableGroupIds = useMemo(() => {
-    const divIds = new Set(divisions.filter((d) => d.phaseId === selectedPhaseId).map((d) => d.id))
-    const populated = new Set(teams.filter((t) => !t.isArchived).map((t) => t.groupId))
-    return groups.filter((g) => divIds.has(g.divisionId) && populated.has(g.id)).map((g) => g.id)
-  }, [divisions, groups, teams, selectedPhaseId])
+  const importScopeClubId = hasClubScope ? user?.clubId : undefined
+  const importableGroupIds = useMemo(
+    () => importableGroupIdsFor({
+      phaseId: selectedPhaseId, divisions, groups, teams, clubId: importScopeClubId,
+    }),
+    [divisions, groups, teams, selectedPhaseId, importScopeClubId],
+  )
 
   /** All teams of the user's club in the selected phase (one block per team; each team has its own group's match-days). */
   const userClubId = user?.clubId
@@ -708,7 +711,10 @@ export function MatchDaysPage() {
     if (!md || !team) return
     setGameEditForm({
       date: game ? gameDate(game, md) : md.date,
-      time: game?.time ?? team.defaultTime ?? '',
+      // The home club's time, never the viewing team's (#287).
+      time: game
+        ? gameSchedule(game, md, teams.find((t) => t.id === game.homeTeamId)).time
+        : team.defaultTime ?? '',
       isHome: game ? game.homeTeamId === teamId : true,
       opponentTeamId: game
         ? game.homeTeamId === teamId
@@ -933,6 +939,7 @@ export function MatchDaysPage() {
         <ImportGamesModal
           onClose={() => setImportGamesOpen(false)}
           groupIds={importableGroupIds}
+          clubId={importScopeClubId}
           context={`${selectedPhase?.displayName ?? ''} — toutes les poules avec équipes`}
         />
       )}
@@ -1087,16 +1094,36 @@ export function MatchDaysPage() {
                               <span className="block">J{md.number}</span>
                               {game ? (
                                 <>
-                                  <span className="block text-xs font-normal text-slate-500">
-                                    {new Date(md.date + 'Z').toLocaleDateString('fr-FR', {
-                                      weekday: 'short',
-                                      day: 'numeric',
-                                      month: 'short',
-                                    })}
-                                    {(game.time ?? team.defaultTime) && (
-                                      <span className="ml-1">{game.time ?? team.defaultTime}</span>
-                                    )}
-                                  </span>
+                                  {/* A fixture only has a real slot once the
+                                      HOME club's playing day is known (#287).
+                                      Otherwise all we honestly have is the
+                                      journée's week — showing the FFTT nominal
+                                      date next to the viewing team's default
+                                      time claimed a slot nobody confirmed. */}
+                                  {(() => {
+                                    const sched = gameSchedule(
+                                      game, md, teams.find((t) => t.id === game.homeTeamId),
+                                    )
+                                    const short = (iso: string) =>
+                                      new Date(iso + 'Z').toLocaleDateString('fr-FR', {
+                                        weekday: 'short', day: 'numeric', month: 'short',
+                                      })
+                                    return sched.date ? (
+                                      <span className="block text-xs font-normal text-slate-500">
+                                        {short(sched.date)}
+                                        {sched.time && <span className="ml-1">{sched.time}</span>}
+                                      </span>
+                                    ) : sched.week ? (
+                                      <span
+                                        className="block text-xs font-normal text-amber-700"
+                                        title="Date et heure non confirmées : le jour de jeu du club recevant n’est pas connu."
+                                      >
+                                        <span aria-hidden="true">⚠ </span>
+                                        <span className="sr-only">Date à confirmer, </span>
+                                        {short(sched.week.start)} – {short(sched.week.end)}
+                                      </span>
+                                    ) : null
+                                  })()}
                                   {opponentId && (
                                     <span className="mt-0.5 flex items-center justify-center gap-1 text-xs text-slate-600">
                                       <span
