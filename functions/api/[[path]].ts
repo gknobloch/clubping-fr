@@ -172,6 +172,12 @@ app.get('/data', async (c) => {
     games: gamesR.results.map(r => ({
       id: r.id, matchDayId: r.match_day_id, homeTeamId: r.home_team_id,
       awayTeamId: r.away_team_id, ...(r.time ? { time: r.time } : {}),
+      // #292: this was missing. Games have owned their date since #271, but
+      // the payload never carried it, so every client-side game.date was
+      // undefined and the UI silently fell back to match_days.date — the MIN
+      // across the journée. A Sunday fixture in a mostly-Saturday round showed
+      // the Saturday.
+      ...(r.date ? { date: r.date } : {}),
       ...(r.game_id ? { gameId: r.game_id } : {}),
     })),
     // (game_id, player_id) is the primary key since 0033 (#282) — no surrogate id.
