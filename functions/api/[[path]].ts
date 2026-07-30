@@ -179,6 +179,7 @@ app.get('/data', async (c) => {
       // the Saturday.
       ...(r.date ? { date: r.date } : {}),
       ...(r.game_id ? { gameId: r.game_id } : {}),
+      ...(r.source ? { source: r.source } : {}),
     })),
     // (game_id, player_id) is the primary key since 0033 (#282) — no surrogate id.
     gameAvailabilities: availsR.results.map(r => ({
@@ -1302,22 +1303,32 @@ app.post('/games/import', async (c) => {
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
     db.prepare('SELECT id, club_id, phase_id, number, default_day FROM teams').all(),
     db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
-    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date FROM games').all(),
+    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date, game_id, source FROM games').all(),
   ])
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
   const matchDayByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m]))
   const gameIds = new Set(gameRows.results.map((g) => g.id as string))
   const existingGameDateById = new Map(gameRows.results.map((g) => [g.id as string, g.date as string | null]))
+  // A slot agreed between clubs is never overwritten by an import (#294).
+  const manualGameIds = new Set(
+    gameRows.results.flatMap((g) => (g.source === 'manual' ? [g.id as string] : [])),
+  )
+  /** Games that carry no FFTT match id yet and can adopt the one FFTT just gave. */
+  const ffttIdBackfill: Array<{ id: string; ffttId: string }> = []
+  let manualKept = 0
   const pairingsByMatchDay = new Map<string, Set<string>>()
   // The row behind a pairing, so its date can be adjusted rather than only
   // recognised (#289).
-  const existingGameByPairing = new Map<string, { id: string; date: string | null }>()
+  const existingGameByPairing = new Map<string, { id: string; date: string | null; ffttId: string | null; source: string | null }>()
   for (const g of gameRows.results) {
     const key = g.match_day_id as string
     if (!pairingsByMatchDay.has(key)) pairingsByMatchDay.set(key, new Set())
     pairingsByMatchDay.get(key)!.add(`${g.home_team_id}|${g.away_team_id}`)
     pairingsByMatchDay.get(key)!.add(`${g.away_team_id}|${g.home_team_id}`)
-    const entry = { id: g.id as string, date: (g.date as string | null) ?? null }
+    const entry = {
+      id: g.id as string, date: (g.date as string | null) ?? null,
+      ffttId: (g.game_id as string | null) ?? null, source: (g.source as string | null) ?? null,
+    }
     existingGameByPairing.set(`${key}|${g.home_team_id}|${g.away_team_id}`, entry)
     existingGameByPairing.set(`${key}|${g.away_team_id}|${g.home_team_id}`, entry)
   }
@@ -1398,7 +1409,8 @@ app.post('/games/import', async (c) => {
 
       if (gameIds.has(m.id)) {
         existingGames++
-        if (updateDates && existingGameDateById.get(m.id) !== m.date) {
+        if (manualGameIds.has(m.id)) manualKept++
+        else if (updateDates && existingGameDateById.get(m.id) !== m.date) {
           updatedGames.push({ id: m.id, date: m.date })
           touchedMatchDayIds.add(md.id as string)
         }
@@ -1414,7 +1426,13 @@ app.post('/games/import', async (c) => {
       if (pairings?.has(`${homeId}|${awayId}`)) {
         existingGames++
         const existing = existingGameByPairing.get(`${md.id}|${homeId}|${awayId}`)
-        if (updateDates && existing && existing.date !== m.date) {
+        // Adopt the FFTT match id (#294): a game created from a PDF has none,
+        // so every later import had to fall back to matching by pairing. Once
+        // it carries the id, the stronger key applies — and this says nothing
+        // about the slot, so it happens even for a manually agreed one.
+        if (existing && !existing.ffttId) ffttIdBackfill.push({ id: existing.id, ffttId: m.id })
+        if (existing?.source === 'manual') manualKept++
+        else if (updateDates && existing && existing.date !== m.date) {
           updatedGames.push({ id: existing.id, date: m.date })
           touchedMatchDayIds.add(md.id as string)
         }
@@ -1462,10 +1480,14 @@ app.post('/games/import', async (c) => {
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, NULL, ?, ?)')
+      db.prepare("INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id, source) VALUES (?, ?, ?, ?, NULL, ?, ?, 'fftt')")
         .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.date, g.gameId ?? null)),
     ...updatedGames.map((g) =>
-      db.prepare('UPDATE games SET date = ? WHERE id = ?').bind(g.date, g.id)),
+      // Re-dated from FFTT, so that is now the source of the slot.
+      db.prepare("UPDATE games SET date = ?, source = 'fftt' WHERE id = ?").bind(g.date, g.id)),
+    // Adopt the FFTT match id where the game had none (#294).
+    ...ffttIdBackfill.map((g) =>
+      db.prepare('UPDATE games SET game_id = ? WHERE id = ? AND game_id IS NULL').bind(g.ffttId, g.id)),
     // Last: recompute every touched journée's derived date from its (now
     // fully written) games.
     ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),
@@ -1510,6 +1532,10 @@ app.post('/games/import', async (c) => {
     updatedGames,
     skippedGroups,
     existingGames,
+    /** Already present and agreed by hand, so left exactly as they are (#294). */
+    manualKept,
+    /** Games that gained their FFTT match id in this run (#294). */
+    ffttIdsBackfilled: ffttIdBackfill.length,
     skippedMatches,
   })
 })
@@ -1526,7 +1552,7 @@ app.post('/games/import', async (c) => {
 // team-by-club-number-phase) but not their NUMERIC_ID-gated payload shapes,
 // which assume every id is FFTT-issued.
 
-interface ScheduleDocTeamInput { name: string; number: number; affiliationNumber: string }
+interface ScheduleDocTeamInput { name: string; number: number; affiliationNumber: string; day: string; time: string }
 interface ScheduleDocMatchInput { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null; time: string }
 interface ScheduleDocJourneeInput { number: number; date: string; matches: ScheduleDocMatchInput[] }
 interface ScheduleDocInput {
@@ -1551,7 +1577,12 @@ function parseScheduleDocTeams(raw: unknown): ScheduleDocTeamInput[] {
     if (typeof x.name !== 'string' || !x.name.trim()) continue
     if (typeof x.number !== 'number' || !Number.isInteger(x.number) || x.number < 1 || x.number > 99) continue
     if (typeof x.affiliationNumber !== 'string' || !/^\d{8}$/.test(x.affiliationNumber)) continue
-    out.push({ name: x.name.trim().slice(0, 80), number: x.number, affiliationNumber: x.affiliationNumber })
+    out.push({
+      name: x.name.trim().slice(0, 80), number: x.number, affiliationNumber: x.affiliationNumber,
+      // "Samedi" / "16h00" from the roster table (#294).
+      day: typeof x.day === 'string' ? x.day.trim().slice(0, 12) : '',
+      time: typeof x.time === 'string' ? x.time.trim().slice(0, 10) : '',
+    })
   }
   return out
 }
@@ -1664,6 +1695,10 @@ app.post('/schedule-documents/import', async (c) => {
     .map(parseScheduleDocInput)
     .filter((s): s is ScheduleDocInput => s !== null)
   if (schedules.length === 0) return c.json({ error: 'invalid_params' }, 400)
+  // Opt-in, mirroring the FFTT import (#289/#294): the document is
+  // authoritative on day and time, but refreshing an existing game is still
+  // the user's call.
+  const updateSlots = b.updateSlots === true
 
   const db = c.env.DB
   const [seasonRows, phaseRows, divisionRows, groupRows, clubRows, teamRows, mdRows, gameRows] = await Promise.all([
@@ -1674,7 +1709,7 @@ app.post('/schedule-documents/import', async (c) => {
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
     db.prepare('SELECT id, club_id, phase_id, number, default_day FROM teams').all(),
     db.prepare('SELECT id, group_id, number, date FROM match_days').all(),
-    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id FROM games').all(),
+    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date, time, source FROM games').all(),
   ])
 
   const seasonById = new Map(seasonRows.results.map((s) => [s.id as string, s]))
@@ -1698,11 +1733,20 @@ app.post('/schedule-documents/import', async (c) => {
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
   const matchDayByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m]))
   const pairingsByMatchDay = new Map<string, Set<string>>()
+  /** Existing games by (journée, home, away), so the document — which is
+   *  authoritative on day and time — can refresh them instead of skipping. */
+  const docExistingByPairing = new Map<string, { id: string; date: string | null; time: string | null; source: string | null }>()
   for (const g of gameRows.results) {
     const key = g.match_day_id as string
     if (!pairingsByMatchDay.has(key)) pairingsByMatchDay.set(key, new Set())
     pairingsByMatchDay.get(key)!.add(`${g.home_team_id}|${g.away_team_id}`)
     pairingsByMatchDay.get(key)!.add(`${g.away_team_id}|${g.home_team_id}`)
+    const entry = {
+      id: g.id as string, date: (g.date as string | null) ?? null,
+      time: (g.time as string | null) ?? null, source: (g.source as string | null) ?? null,
+    }
+    docExistingByPairing.set(`${key}|${g.home_team_id}|${g.away_team_id}`, entry)
+    docExistingByPairing.set(`${key}|${g.away_team_id}|${g.home_team_id}`, entry)
   }
 
   const createdPhases: Array<{ id: string; seasonId: string; name: string; displayName: string; status: string }> = []
@@ -1710,6 +1754,8 @@ app.post('/schedule-documents/import', async (c) => {
   const createdGroupIds = new Set<string>()
   const createdClubs: Array<{ id: string; affiliationNumber: string; displayName: string; isArchived: boolean; addresses: []; channels: [] }> = []
   const createdTeams: Array<Record<string, unknown>> = []
+  /** Existing teams with no playing day recorded, to seed from the roster (#294). */
+  const teamDefaultsToFill: Array<{ id: string; day: string; time: string }> = []
   const touchedGroups = new Map<string, GroupState>()
   const createdMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
   const updatedMatchDays: Array<{ id: string; groupId: string; number: number; date: string }> = []
@@ -1721,6 +1767,11 @@ app.post('/schedule-documents/import', async (c) => {
   const touchedMatchDayIds = new Set<string>()
   const skippedSchedules: Array<{ index: number; reason: string }> = []
   const skippedMatchDetails: Array<{ side: 'home' | 'away'; name: string; number: number }> = []
+  /** Existing games whose slot differs from the document's (#294). */
+  let slotMismatches = 0
+  /** Existing games left alone because their slot was agreed by hand. */
+  let manualKept = 0
+  const updatedGameSlots: Array<{ id: string; date: string | null; time: string | null }> = []
   let existingGames = 0
   let skippedMatches = 0
 
@@ -1802,9 +1853,18 @@ app.post('/schedule-documents/import', async (c) => {
         teamId = teamIdFor(clubId, phaseId, t.number)
         createdTeams.push({
           id: teamId, clubId, phaseId, number: t.number, groupId,
-          gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', playerIds: [], isArchived: false,
+          // The roster states this club's playing day and time (#294), which
+          // is what lets a fixture show a real slot instead of the journée's
+          // week — an opponent created by the FFTT import has neither.
+          gameLocationId: '', defaultDay: t.day, defaultTime: t.time,
+          captainId: '', playerIds: [], isArchived: false,
         })
-        resolver.register(teamId, clubId, t.number, phaseId, side.teamId)
+        resolver.register(teamId, clubId, t.number, phaseId, side.teamId, t.day)
+      } else if (t.day || t.time) {
+        // Already known, but possibly without a playing day — adopt the
+        // document's rather than leave the team blank. Never overwrite a day
+        // already recorded: that one may have been set by hand.
+        teamDefaultsToFill.push({ id: teamId, day: t.day, time: t.time })
       }
       if (!group.teamIds.includes(teamId)) group.teamIds.push(teamId)
       const normalizedName = normalizeTeamNameKey(t.name)
@@ -1852,7 +1912,24 @@ app.post('/schedule-documents/import', async (c) => {
         // Dedup by pairing-on-journée, not by game id: unlike the FFTT games
         // import, these ids have no stable external source, so re-uploading
         // the same document must still recognize matches already imported.
-        if (pairings?.has(`${homeId}|${awayId}`)) { existingGames++; continue }
+        if (pairings?.has(`${homeId}|${awayId}`)) {
+          existingGames++
+          // The document states the real day and time, so an existing game
+          // gets refreshed rather than skipped (#294) — but only when asked,
+          // and never when its slot was agreed by hand.
+          const existing = docExistingByPairing.get(`${mdId}|${homeId}|${awayId}`)
+          const docDate = m.date ?? j.date
+          if (existing) {
+            if (existing.source === 'manual') manualKept++
+            else if ((docDate && existing.date !== docDate) || (m.time && existing.time !== m.time)) {
+              if (updateSlots) {
+                updatedGameSlots.push({ id: existing.id, date: docDate, time: m.time || null })
+                touchedMatchDayIds.add(mdId)
+              } else slotMismatches++
+            }
+          }
+          continue
+        }
         if (!pairingsByMatchDay.has(mdId)) pairingsByMatchDay.set(mdId, new Set())
         pairingsByMatchDay.get(mdId)!.add(`${homeId}|${awayId}`)
         pairingsByMatchDay.get(mdId)!.add(`${awayId}|${homeId}`)
@@ -1899,8 +1976,18 @@ app.post('/schedule-documents/import', async (c) => {
     ...createdMatchDays.map((m) =>
       db.prepare('INSERT OR IGNORE INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
         .bind(m.id, m.groupId, m.number, m.date)),
+    // Seed a playing day/time on teams that have none (#294) — COALESCE-style
+    // guards so a value already recorded (possibly by hand) is never replaced.
+    ...teamDefaultsToFill.filter((t) => !!t.day).map((t) =>
+      db.prepare("UPDATE teams SET default_day = ? WHERE id = ? AND (default_day IS NULL OR default_day = '')").bind(t.day, t.id)),
+    ...teamDefaultsToFill.filter((t) => !!t.time).map((t) =>
+      db.prepare("UPDATE teams SET default_time = ? WHERE id = ? AND (default_time IS NULL OR default_time = '')").bind(t.time, t.id)),
+    // Refresh the slot of games the document knows better (#294).
+    ...updatedGameSlots.map((g) =>
+      db.prepare("UPDATE games SET date = ?, time = coalesce(?, time), source = 'document' WHERE id = ? AND coalesce(source, '') <> 'manual'")
+        .bind(g.date, g.time, g.id)),
     ...createdGames.map((g) =>
-      db.prepare('INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      db.prepare("INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'document')")
         .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.time ?? null, g.date, g.gameId ?? null)),
     // Last: recompute every touched journée's derived date from its (now
     // fully written) games (#271).
@@ -1949,6 +2036,11 @@ app.post('/schedule-documents/import', async (c) => {
     createdGames,
     skippedSchedules,
     existingGames,
+    /** Existing games whose slot differs from the document's (#294). */
+    slotMismatches,
+    /** Left exactly as they are because their slot was agreed by hand. */
+    manualKept,
+    updatedGameSlots: updatedGameSlots.length,
     skippedMatches,
     skippedMatchDetails,
   })
@@ -2569,6 +2661,9 @@ app.patch('/games/:id', async (c) => {
   if ('awayTeamId' in p) { s.push('away_team_id = ?'); v.push(p.awayTeamId) }
   if ('time' in p) { s.push('time = ?'); v.push(p.time ?? null) }
   if ('date' in p) { s.push('date = ?'); v.push(p.date ?? null) }
+  // Changing a slot by hand is a decision, not an import (#294): mark it so no
+  // later import overwrites it, and so the UI can show it was negotiated.
+  if ('time' in p || 'date' in p) { s.push("source = 'manual'") }
   if (!s.length) return c.json({ ok: true })
   // A date (or a match-day move) can shift the derived date of whichever
   // match_day(s) this game belongs to before/after — capture the prior one
