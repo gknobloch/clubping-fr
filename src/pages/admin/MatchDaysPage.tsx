@@ -1076,20 +1076,30 @@ export function MatchDaysPage() {
                               : game.homeTeamId
                             : null
                           const isHome = game ? game.homeTeamId === team.id : false
+                          // An away fixture is played at the opponent's venue
+                          // on their day, so its slot is not this club's to
+                          // set (#294). A general admin manages every club and
+                          // keeps both; a club admin only gets its home games.
+                          const canEditSlot = isAdmin && (user?.role === 'general_admin' || isHome)
                           return (
                             <th
                               key={md.id}
                               colSpan={2}
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => openGameEditModal(team.id, md.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault()
-                                  openGameEditModal(team.id, md.id)
-                                }
-                              }}
-                              className="whitespace-nowrap border-l border-slate-200 px-2 py-2 text-center font-medium text-slate-700 cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-inset"
+                              {...(canEditSlot ? {
+                                role: 'button',
+                                tabIndex: 0,
+                                onClick: () => openGameEditModal(team.id, md.id),
+                                onKeyDown: (e: React.KeyboardEvent) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    openGameEditModal(team.id, md.id)
+                                  }
+                                },
+                                title: undefined,
+                              } : {
+                                title: game ? 'Match à l’extérieur : la date et l’heure sont fixées par le club recevant.' : undefined,
+                              })}
+                              className={`whitespace-nowrap border-l border-slate-200 px-2 py-2 text-center font-medium text-slate-700 ${canEditSlot ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-inset' : ''}`}
                             >
                               <span className="block">J{md.number}</span>
                               {game ? (
@@ -1112,6 +1122,17 @@ export function MatchDaysPage() {
                                       <span className="block text-xs font-normal text-slate-500">
                                         {short(sched.date)}
                                         {sched.time && <span className="ml-1">{sched.time}</span>}
+                                        {/* Agreed between clubs rather than imported (#294) — worth
+                                            seeing, since no import will overwrite it. */}
+                                        {game.source === 'manual' && (
+                                          <span
+                                            className="ml-1 text-accent-600"
+                                            title="Date et heure fixées manuellement : conservées lors des imports."
+                                          >
+                                            <span aria-hidden="true">✎</span>
+                                            <span className="sr-only">Modifié manuellement</span>
+                                          </span>
+                                        )}
                                       </span>
                                     ) : sched.week ? (
                                       <span

@@ -231,7 +231,7 @@ export interface FfttGroupsImportResult {
 // maps to — so unlike the FFTT flows there is no server preview round trip;
 // the "preview" is the confirmation table built from data already in this
 // context, and this single call both validates and persists.
-export interface ScheduleDocImportTeam { name: string; number: number; affiliationNumber: string }
+export interface ScheduleDocImportTeam { name: string; number: number; affiliationNumber: string; day?: string; time?: string }
 export interface ScheduleDocImportMatch { homeName: string; homeNumber: number; awayName: string; awayNumber: number; date: string | null; time?: string }
 export interface ScheduleDocImportJournee { number: number; date: string; matches: ScheduleDocImportMatch[] }
 

@@ -147,7 +147,12 @@ export function ImportScheduleDocumentModal({
       newGroupNumber: p.poolNumber,
       teams: p.teams
         .filter((t) => t.affiliationValid)
-        .map((t) => ({ name: t.name, number: t.number, affiliationNumber: t.affiliationNumber })),
+        // The roster states each team's playing day and time (#294) — the one
+        // source that actually knows them for an opponent club.
+        .map((t) => ({
+          name: t.name, number: t.number, affiliationNumber: t.affiliationNumber,
+          day: t.day, time: t.time,
+        })),
       journees: p.journees
         .filter((j) => !!j.date)
         .map((j) => ({
