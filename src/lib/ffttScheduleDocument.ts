@@ -88,7 +88,34 @@ function normalizeTeamNumber(raw: string): number {
 }
 
 const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
-const JOURNEE_RE = /^Journ[ée]e\s+(\d+)\s*:\s*(.+)$/i
+// The journée number gets the same OCR tolerance as team numbers above, for
+// the same reason and from a real document: a Poule 22 PDF came back as
+// "Journée S : du 16 au 22 novembre 2026" — tesseract read the 5 as an S.
+// With a digits-only pattern that header stopped being a header, so its four
+// match rows silently appended to journée 4, which then held two rounds and
+// dated the strays inside the wrong week (#298).
+//
+// Only the classic shape confusions, and only inside a line that already says
+// "Journée … :" followed by something — narrow enough that no ordinary line
+// can be mistaken for a header.
+const JOURNEE_NUMBER_RE_SRC = '[0-9OoQIl|ZzSsGbTBgq]{1,2}'
+const JOURNEE_RE = new RegExp(`^Journ[ée]e\\s+(${JOURNEE_NUMBER_RE_SRC})\\s*:\\s*(.+)$`, 'i')
+
+const OCR_DIGITS: Record<string, string> = {
+  O: '0', o: '0', Q: '0',
+  I: '1', l: '1', '|': '1',
+  Z: '2', z: '2',
+  S: '5', s: '5',
+  G: '6', b: '6',
+  T: '7',
+  B: '8',
+  g: '9', q: '9',
+}
+
+/** "S" → 5, "1O" → 10; NaN when the token still isn't a number. */
+function normalizeJourneeNumber(raw: string): number {
+  return Number([...raw].map((ch) => OCR_DIGITS[ch] ?? ch).join(''))
+}
 // A real OCR pass inserted one or two stray standalone underscores between
 // the home team's number and "contre" ("... BARR TT 4 _ contre ...", "...
 // BARR TT 4 __ contre ...") — noise from a faint table rule or vertical
@@ -254,7 +281,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
         const parsed = parseJourneeDate(jm[2].trim())
         if (!parsed) warnings.push(`Date de la journée ${jm[1]} illisible : "${jm[2].trim()}"`)
         current = {
-          number: Number(jm[1]),
+          number: normalizeJourneeNumber(jm[1]),
           dateType: parsed?.type ?? 'fixed',
           date: parsed?.date ?? null,
           rangeEndDate: parsed?.rangeEndDate ?? null,
@@ -264,6 +291,9 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
         continue
       }
       if (!current) continue
+      // The template's trailing "Edition du 15/07/2026" is not a match row;
+      // warning about it every time only buries the warnings that matter.
+      if (/^edition\s+du\b/i.test(line)) continue
       const mm = MATCH_RE.exec(line)
       if (!mm) {
         warnings.push(`Ligne de match illisible (journée ${current.number}) : "${line}"`)
