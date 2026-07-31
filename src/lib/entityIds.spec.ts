@@ -74,3 +74,19 @@ describe('homeGameDate', () => {
     expect(homeGameDate('20/09/2026', 'Jeudi')).toBe('20/09/2026')
   })
 })
+
+describe('homeGameDate — applied consistently on create and update (#299)', () => {
+  it('gives the same answer however many times it is applied', () => {
+    // Re-dating an already-shifted fixture must be a no-op, not a move back
+    // to the nominal date: the FFTT import used to write m.date raw when
+    // updating, so a second run put every home game back on the Sunday.
+    const nominal = '2026-11-22'
+    const once = homeGameDate(nominal, 'Jeudi')
+    expect(once).toBe('2026-11-19')
+    expect(homeGameDate(once, 'Jeudi')).toBe(once)
+  })
+
+  it('leaves an away fixture on the nominal date when the home club is unknown', () => {
+    expect(homeGameDate('2026-11-22', '')).toBe('2026-11-22')
+  })
+})

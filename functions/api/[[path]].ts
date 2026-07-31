@@ -1255,7 +1255,12 @@ app.post('/fftt/games-preview', async (c) => {
         const storedDate = byPairing
           ? byPairing.date
           : gameRows.results.find((g) => (g.game_id ?? g.id) === m.id)?.date ?? null
-        if (storedDate && storedDate !== m.date) dateMismatches++
+        // Compare against the date an import would actually write — the home
+        // club's day, not FFTT's nominal weekend (#299). Comparing to m.date
+        // raw reported every correctly-shifted home fixture as "à une autre
+        // date", offering to move it back onto the Sunday.
+        const wouldWrite = homeGameDate(m.date, resolver.defaultDayOf(homeId ?? ''))
+        if (storedDate && storedDate !== wouldWrite) dateMismatches++
       } else newGames++
       for (const side of [m.home, m.away]) {
         if (resolver.resolve(side, ctx.phaseId!)) continue
@@ -1420,9 +1425,17 @@ app.post('/games/import', async (c) => {
       if (gameIds.has(m.id)) {
         existingGames++
         if (manualGameIds.has(m.id)) manualKept++
-        else if (updateDates && existingGameDateById.get(m.id) !== m.date) {
-          updatedGames.push({ id: m.id, date: m.date })
-          touchedMatchDayIds.add(md.id as string)
+        else if (updateDates) {
+          // Re-dating must apply the SAME rule as creating (#299): the home
+          // club plays on its own day, so FFTT's nominal weekend date moves
+          // back to it. Writing m.date raw here undid the shift the creating
+          // import had already applied — a second run put every home fixture
+          // back on the Sunday.
+          const at = homeGameDate(m.date, resolver.defaultDayOf(resolver.resolve(m.home, ctx.phaseId!) ?? ''))
+          if (existingGameDateById.get(m.id) !== at) {
+            updatedGames.push({ id: m.id, date: at })
+            touchedMatchDayIds.add(md.id as string)
+          }
         }
         continue
       }
@@ -1442,9 +1455,13 @@ app.post('/games/import', async (c) => {
         // about the slot, so it happens even for a manually agreed one.
         if (existing && !existing.ffttId) ffttIdBackfill.push({ id: existing.id, ffttId: m.id })
         if (existing?.source === 'manual') manualKept++
-        else if (updateDates && existing && existing.date !== m.date) {
-          updatedGames.push({ id: existing.id, date: m.date })
-          touchedMatchDayIds.add(md.id as string)
+        else if (updateDates && existing) {
+          // Same shift as on creation (#299).
+          const at = homeGameDate(m.date, resolver.defaultDayOf(homeId))
+          if (existing.date !== at) {
+            updatedGames.push({ id: existing.id, date: at })
+            touchedMatchDayIds.add(md.id as string)
+          }
         }
         continue
       }
