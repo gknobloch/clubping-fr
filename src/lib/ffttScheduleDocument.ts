@@ -313,6 +313,42 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
     j.matches.forEach((m, i) => { m.date = perMatch[i] ?? best ?? j.date })
   }
 
+  // Sanity checks on the assembled journées (#298).
+  //
+  // A "Journée N" header lost while extracting text from the document is
+  // invisible otherwise: its match rows simply append to the journée still
+  // open, which then holds two rounds' fixtures and resolves the strays inside
+  // the WRONG week. That happened on a real Poule 22 import — J5's four
+  // matches landed in J4, dated inside 2-8 November instead of 16-22 — and
+  // raised nothing at all, because every line parsed perfectly well as a match
+  // of J4.
+  //
+  // Two cheap invariants catch it: a team plays at most once per journée, and
+  // journée numbers run consecutively.
+  const normalizeName = (n: string) => stripAccents(n.toLowerCase()).replace(/[^a-z0-9]+/g, '')
+  for (const j of journees) {
+    const seen = new Map<string, number>()
+    for (const m of j.matches) {
+      for (const key of [
+        `${normalizeName(m.homeName)}|${m.homeNumber}`,
+        `${normalizeName(m.awayName)}|${m.awayNumber}`,
+      ]) seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    const repeated = [...seen.values()].filter((n) => n > 1).length
+    if (repeated > 0) {
+      warnings.push(
+        `Journée ${j.number} : ${repeated} équipe(s) y jouent plusieurs fois. L'en-tête d'une ` +
+        'journée suivante a probablement été perdu à la lecture du document, et ses matchs ont ' +
+        'été rattachés à celle-ci — vérifiez avant d\'importer.',
+      )
+    }
+  }
+  const numbers = journees.map((j) => j.number)
+  const highest = numbers.length ? Math.max(...numbers) : 0
+  for (let n = 1; n < highest; n++) {
+    if (!numbers.includes(n)) warnings.push(`Journée ${n} absente du document.`)
+  }
+
   return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings }
 }
 

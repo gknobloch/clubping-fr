@@ -201,6 +201,10 @@ export interface FfttGamesImportResult {
   updatedGames: Game[]
   skippedGroups: Array<{ groupId: string; reason: 'group_not_found' | 'fftt_unavailable' | 'pool_not_found' | 'calendar_not_published' }>
   existingGames: number
+  /** Already present and agreed by hand, left exactly as they are (#294). */
+  manualKept?: number
+  /** Games that gained their FFTT match id in this run (#294). */
+  ffttIdsBackfilled?: number
   skippedMatches: number
 }
 
@@ -265,6 +269,10 @@ export interface ScheduleDocImportResult {
   createdGames: Game[]
   skippedSchedules: Array<{ index: number; reason: string }>
   existingGames: number
+  /** Already present with a different date/time than the document states (#298). */
+  slotMismatches?: number
+  /** Existing games whose date/time this run took from the document (#298). */
+  updatedGameSlots?: number
   /** Matches whose home/away team name couldn't be joined back to a roster entry (OCR variance between the roster line and that match's line) — not imported. */
   skippedMatches: number
   /** Which side(s) of each skipped match couldn't be resolved, and what name/number the parser read (bounded to 30 entries). */
@@ -338,7 +346,7 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   /** Import a division's FFTT groups not already present locally. */
   importFfttGroups: (divisionId: string) => Promise<FfttGroupsImportResult | null>
   /** Import schedule documents (PDF/image, #260) confirmed by the admin; null on failure. */
-  importScheduleDocuments: (schedules: ScheduleDocImportInput[]) => Promise<ScheduleDocImportResult | null>
+  importScheduleDocuments: (schedules: ScheduleDocImportInput[], updateSlots?: boolean) => Promise<ScheduleDocImportResult | null>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
@@ -863,13 +871,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   // --- Schedule document import (#260, no server preview — see the type note above) ---
   const importScheduleDocuments = useCallback(async (
-    schedules: ScheduleDocImportInput[],
+    schedules: ScheduleDocImportInput[], updateSlots?: boolean,
   ): Promise<ScheduleDocImportResult | null> => {
     try {
       const r = await fetch('/api/schedule-documents/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ schedules }),
+        body: JSON.stringify({ schedules, ...(updateSlots ? { updateSlots: true } : {}) }),
       })
       if (!r.ok) {
         console.error('schedule-documents/import failed', r.status, await r.text().catch(() => ''))
