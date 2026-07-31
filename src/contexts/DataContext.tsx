@@ -175,6 +175,8 @@ export interface FfttGamesGroupPreview {
   existingGames?: number
   /** Already present, but on a different date than FFTT now publishes (#289). */
   dateMismatches?: number
+  /** Already present but with no FFTT match id, which the import would link (#294). */
+  ffttIdsToLink?: number
   /** Opponent teams that would be auto-created for this group. */
   newTeams?: number
 }

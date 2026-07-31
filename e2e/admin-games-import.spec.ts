@@ -218,6 +218,39 @@ test.describe('General admin — Games FFTT import', () => {
     expect(body?.updateDates).toBe(true)
   })
 
+  // #294: after importing a calendar from a document, every game exists but
+  // none carries an FFTT match id. The preview said "0 nouveau match · 7 déjà
+  // présents" and disabled the button, so the ids could never be linked.
+  test('can link existing games to FFTT when there is nothing new to import', async ({ page }) => {
+    await page.route(PREVIEW, (route) => route.fulfill({
+      json: {
+        groups: [{
+          groupId: 'group-1', groupNumber: 3, divisionName: 'GE Elite',
+          rounds: 7, matches: 7, newMatchDays: 0, newGames: 0,
+          existingGames: 7, dateMismatches: 0, ffttIdsToLink: 7, newTeams: 0,
+        }],
+        totals: { newClubs: 0, newTeams: 0 },
+      },
+    }))
+    let body: Record<string, unknown> | undefined
+    await page.route(IMPORT, (route) => {
+      body = route.request().postDataJSON()
+      return route.fulfill({ json: { ...importResult, createdGames: [], createdMatchDays: [], updatedMatchDays: [] } })
+    })
+
+    await page.goto('/equipes')
+    await page.getByRole('button', { name: 'Importer les matchs' }).first().click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('7 à relier à la FFTT')).toBeVisible()
+
+    const confirm = dialog.getByRole('button', { name: /Relier 7 matchs à la FFTT/ })
+    await expect(confirm).toBeEnabled()
+    await confirm.click()
+    expect(body).toBeDefined()
+    // Linking needs no opt-in: it fills a blank and never touches the slot.
+    expect(body?.updateDates).toBeUndefined()
+  })
+
   test('reports when the FFTT API is unreachable', async ({ page }) => {
     await page.route(PREVIEW, (route) => route.fulfill({ status: 502, json: { error: 'fftt_unavailable' } }))
 

@@ -53,6 +53,14 @@ export function ImportGamesModal({
   const rows = [...(preview?.groups ?? [])].sort((a, b) =>
     teamNameOf(a.groupId).localeCompare(teamNameOf(b.groupId), 'fr', { numeric: true }))
   const mismatchTotal = rows.reduce((n, g) => n + (g.dateMismatches ?? 0), 0)
+  // Linking an existing game to its FFTT match id is work in its own right
+  // (#294): a calendar imported from a document has no FFTT id, so every later
+  // import had to fall back to matching by pairing. It needs no opt-in — it
+  // fills a blank and never touches the slot — but the preview has to count it,
+  // or with nothing new to create the confirm button stays disabled and the
+  // link can never happen. That is exactly what "Rien à importer" was hiding.
+  const linkTotal = rows.reduce((n, g) => n + (g.ffttIdsToLink ?? 0), 0)
+  const willUpdateDates = updateDates && mismatchTotal > 0
 
   useEffect(() => {
     let cancelled = false
@@ -72,6 +80,7 @@ export function ImportGamesModal({
 
   const importableGroups = (preview?.groups ?? []).filter((g) => !g.error)
   const totalNewGames = importableGroups.reduce((n, g) => n + (g.newGames ?? 0), 0)
+  const hasWork = totalNewGames > 0 || linkTotal > 0 || willUpdateDates
 
   const handleImport = async () => {
     setImporting(true)
@@ -175,6 +184,7 @@ export function ImportGamesModal({
                               {` · ${g.dateMismatches} à une autre date`}
                             </span>
                           ) : null}
+                          {g.ffttIdsToLink ? ` · ${g.ffttIdsToLink} à relier à la FFTT` : ''}
                           {g.newTeams ? ` · ${plural(g.newTeams, 'adversaire')} à créer` : ''}
                         </span>
                       </>
@@ -216,18 +226,18 @@ export function ImportGamesModal({
               <button
                 type="button"
                 onClick={handleImport}
-                disabled={importing || (totalNewGames === 0 && !(updateDates && mismatchTotal > 0))}
+                disabled={importing || !hasWork}
                 className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
               >
                 {importing
                   ? 'Import…'
-                  : totalNewGames === 0
-                    // Adjusting dates is work in its own right (#289): with
-                    // nothing new to add, the button must still act on it.
-                    ? (updateDates && mismatchTotal > 0
-                        ? `Mettre à jour ${plural(mismatchTotal, 'date')}`
-                        : 'Rien à importer')
-                    : `Importer ${plural(totalNewGames, 'match')}`}
+                  : totalNewGames > 0
+                    ? `Importer ${plural(totalNewGames, 'match')}`
+                    : willUpdateDates
+                      ? `Mettre à jour ${plural(mismatchTotal, 'date')}`
+                      : linkTotal > 0
+                        ? `Relier ${plural(linkTotal, 'match')} à la FFTT`
+                        : 'Rien à importer'}
               </button>
             </div>
           )}

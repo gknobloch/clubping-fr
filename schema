@@ -1,0 +1,3695 @@
+Fields
+abstractClub
+id: ID!
+: AbstractClubItem
+abstractOrganizations
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id_list: [Int]
+name: String
+identifier: String
+identifier_list: [String]
+order: [AbstractOrganizationFilter_order]
+where: Iterable
+organizationType: String
+organizationType_list: Iterable
+: AbstractOrganizationCollectionCursorConnection
+accountantFunctions
+first: Int
+last: Int
+before: String
+after: String
+responsability_external: Boolean
+: AccountantFunctionCollectionCursorConnection
+An accountant in an organization.
+
+accountants
+first: Int
+last: Int
+before: String
+after: String
+order: [AccountantFilter_order]
+exists: [AccountantFilter_exists]
+accountantFunctions_endDate: [AccountantFilter_accountantFunctions_endDate]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+person: String
+person__ne__: String
+person_list: [String]
+person__ne___list: [String]
+person_id: Int
+person_id__ne__: Int
+person_id_list: [Int]
+person_id__ne___list: [Int]
+club: String
+club__ne__: String
+club_list: [String]
+club__ne___list: [String]
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+third: String
+third__ne__: String
+third_list: [String]
+third__ne___list: [String]
+third_id: Int
+third_id__ne__: Int
+third_id_list: [Int]
+third_id__ne___list: [Int]
+accountantFunctions_responsability_identifier: String
+accountantFunctions_responsability_identifier__ne__: String
+accountantFunctions_responsability_identifier_list: [String]
+accountantFunctions_responsability_identifier__ne___list: [String]
+person_licence_identifier: String
+person_licence_identifier__ne__: String
+person_licence_identifier_list: [String]
+person_licence_identifier__ne___list: [String]
+accountantFunctions_responsability_external: Boolean
+: AccountantCollectionCursorConnection
+An accountant in an organization.
+
+accountingEntries
+first: Int
+last: Int
+before: String
+after: String
+date: [AccountingEntryFilter_date]
+order: [AccountingEntryFilter_order]
+: AccountingEntryCollectionCursorConnection
+accounts
+first: Int
+last: Int
+before: String
+after: String
+or: [AccountFilter_or]
+order: [AccountFilter_order]
+: AccountCollectionCursorConnection
+Account is the class representing an user account. Used to log in, define creator or editor of other entities.
+
+addresses
+first: Int
+last: Int
+before: String
+after: String
+: AddressCollectionCursorConnection
+The mailing address.
+
+affiliateProcesses
+first: Int
+last: Int
+before: String
+after: String
+: AffiliateProcessCollectionCursorConnection
+This class allow to keep an history of affiliation for each club.
+
+answer
+id: ID!
+: AnswerItem
+Actual answer to a of a .
+
+articles
+first: Int
+last: Int
+before: String
+after: String
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+type_name: String
+type_name__ne__: String
+type_name_list: [String]
+type_name__ne___list: [String]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+type_identifier: String
+type_identifier__ne__: String
+type_identifier_list: [String]
+type_identifier__ne___list: [String]
+order: [ArticleFilter_order]
+: ArticleCollectionCursorConnection
+assignment
+id: ID!
+: AssignmentItem
+Notice - Managed through Employment.
+
+balances
+first: Int
+last: Int
+before: String
+after: String
+: BalanceCollectionCursorConnection
+bonusPoint
+id: ID!
+: BonusPointItem
+branches
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+: BranchCollectionCursorConnection
+categories
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+categoryType: String
+categoryType__ne__: String
+categoryType_list: [String]
+categoryType__ne___list: [String]
+divisions_id: Int
+divisions_id__ne__: Int
+divisions_id_list: [Int]
+divisions_id__ne___list: [Int]
+order: [CategoryFilter_order]
+enabled: Boolean
+: CategoryCollectionCursorConnection
+An list item, e.g. a step in a checklist or how-to description.
+
+certificates
+first: Int
+last: Int
+before: String
+after: String
+order: [CertificateFilter_order]
+: CertificateCollectionCursorConnection
+classification
+id: ID!
+: ClassificationItem
+clubEvents
+first: Int
+last: Int
+before: String
+after: String
+order: [ClubEventFilter_order]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+type_id: Int
+type_id__ne__: Int
+type_id_list: [Int]
+type_id__ne___list: [Int]
+: ClubEventCollectionCursorConnection
+An ATP.
+
+clubEventTypes
+first: Int
+last: Int
+before: String
+after: String
+: ClubEventTypeCollectionCursorConnection
+An ATP.
+
+clubGroup
+id: ID!
+: ClubGroupItem
+ClubGroup is a group of club to allow small club to participate to team contest.
+
+clubHistories
+first: Int
+last: Int
+before: String
+after: String
+: ClubHistoryCollectionCursorConnection
+Class ClubHistory.
+
+clubMemberships
+first: Int
+last: Int
+before: String
+after: String
+membershipType_invisible: Boolean
+membershipType_internal: Boolean
+season_current: Boolean
+membershipType_identifier: String
+membershipType_identifier__ne__: String
+membershipType_identifier_list: [String]
+membershipType_identifier__ne___list: [String]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+licence_owningClub_id: Int
+licence_owningClub_id__ne__: Int
+licence_owningClub_id_list: [Int]
+licence_owningClub_id__ne___list: [Int]
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+order: [ClubMembershipFilter_order]
+endDate: [ClubMembershipFilter_endDate]
+licence_lastRenewal_renewalDate: [ClubMembershipFilter_licence_lastRenewal_renewalDate]
+licence_lastRenewal_renewalEndDate: [ClubMembershipFilter_licence_lastRenewal_renewalEndDate]
+licence_identifier: [ClubMembershipFilter_licence_identifier]
+search: String
+exists: [ClubMembershipFilter_exists]
+: ClubMembershipCollectionCursorConnection
+clubMembershipTypes
+first: Int
+last: Int
+before: String
+after: String
+invisible: Boolean
+internal: Boolean
+clubTypes_id: Int
+clubTypes_id__ne__: Int
+clubTypes_id_list: [Int]
+clubTypes_id__ne___list: [Int]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+order: [ClubMembershipTypeFilter_order]
+: ClubMembershipTypeCollectionCursorConnection
+clubPermissions
+first: Int
+last: Int
+before: String
+after: String
+order: [ClubPermissionFilter_order]
+validFrom: [ClubPermissionFilter_validFrom]
+validUntil: [ClubPermissionFilter_validUntil]
+: ClubPermissionCollectionCursorConnection
+ClubPermission defines user permissions on a Club instance.
+
+clubs
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+approvalNumber: String
+approvalNumber__ne__: String
+approvalNumber_list: [String]
+approvalNumber__ne___list: [String]
+committee_identifier: String
+committee_identifier__ne__: String
+committee_identifier_list: [String]
+committee_identifier__ne___list: [String]
+committee_id: Int
+committee_id__ne__: Int
+committee_id_list: [Int]
+committee_id__ne___list: [Int]
+league_id: Int
+league_id__ne__: Int
+league_id_list: [Int]
+league_id__ne___list: [Int]
+town_postalCode: String
+town_postalCode_list: [String]
+town_postalCode__ne__: String
+town_name: String
+town_name_list: [String]
+town_name__ne__: String
+town_id: Int
+town_id__ne__: Int
+town_id_list: [Int]
+town_id__ne___list: [Int]
+affiliateProcesses_season: String
+affiliateProcesses_season__ne__: String
+affiliateProcesses_season_list: [String]
+affiliateProcesses_season__ne___list: [String]
+affiliateProcesses_season_id: Int
+affiliateProcesses_season_id__ne__: Int
+affiliateProcesses_season_id_list: [Int]
+affiliateProcesses_season_id__ne___list: [Int]
+name: String
+name_list: [String]
+name__ne__: String
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+characteristics_id: Int
+characteristics_id__ne__: Int
+characteristics_id_list: [Int]
+characteristics_id__ne___list: [Int]
+clubType_id: Int
+clubType_id__ne__: Int
+clubType_id_list: [Int]
+clubType_id__ne___list: [Int]
+owningLicences_licenceType_id: Int
+owningLicences_licenceType_id_list: [Int]
+owningLicences_licenceType_id__ne__: Int
+owningLicences_person_speakers_session_training_type_id: Int
+owningLicences_person_speakers_session_training_type_id__ne__: Int
+owningLicences_person_speakers_session_training_type_id_list: [Int]
+owningLicences_person_speakers_session_training_type_id__ne___list: [Int]
+owningLicences_person_speakers_session_training_nature_id: Int
+owningLicences_person_speakers_session_training_nature_id__ne__: Int
+owningLicences_person_speakers_session_training_nature_id_list: [Int]
+owningLicences_person_speakers_session_training_nature_id__ne___list: [Int]
+owningLicences_person_participants_session_training_type_id: Int
+owningLicences_person_participants_session_training_type_id__ne__: Int
+owningLicences_person_participants_session_training_type_id_list: [Int]
+owningLicences_person_participants_session_training_type_id__ne___list: [Int]
+owningLicences_person_participants_session_training_nature_id: Int
+owningLicences_person_participants_session_training_nature_id__ne__: Int
+owningLicences_person_participants_session_training_nature_id_list: [Int]
+owningLicences_person_participants_session_training_nature_id__ne___list: [Int]
+order: [ClubFilter_order]
+lastAffiliateProcess_validationEndDate: [ClubFilter_lastAffiliateProcess_validationEndDate]
+archive: Boolean
+lastAffiliateProcess_season_current: Boolean
+lastAffiliateProcess_season_previous: Boolean
+exists: [ClubFilter_exists]
+or: [ClubFilter_or]
+availableFor: String
+where: Iterable
+search: String
+removedRightsCount: [ClubFilter_removedRightsCount]
+committee_league_id: Int
+committee_league_id__ne__: Int
+committee_league_id_list: [Int]
+committee_league_id__ne___list: [Int]
+committee_league_zone_id: Int
+committee_league_zone_id__ne__: Int
+committee_league_zone_id_list: [Int]
+committee_league_zone_id__ne___list: [Int]
+committee_league_zone_federation_id: Int
+committee_league_zone_federation_id__ne__: Int
+committee_league_zone_federation_id_list: [Int]
+committee_league_zone_federation_id__ne___list: [Int]
+: ClubCollectionCursorConnection
+Club is the lowest organization, owned by a committee.
+
+clubSportHalls
+first: Int
+last: Int
+before: String
+after: String
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+sportHall_id: Int
+sportHall_id__ne__: Int
+sportHall_id_list: [Int]
+sportHall_id__ne___list: [Int]
+order: [ClubSportHallFilter_order]
+: ClubSportHallCollectionCursorConnection
+clubTypes
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+allowedForTeamContests: Boolean
+order: [ClubTypeFilter_order]
+: ClubTypeCollectionCursorConnection
+Type of club.
+
+commissionCases
+first: Int
+last: Int
+before: String
+after: String
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+decision_id: Int
+decision_id__ne__: Int
+decision_id_list: [Int]
+decision_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+order: [CommissionCaseFilter_order]
+: CommissionCaseCollectionCursorConnection
+commissionPlayers
+first: Int
+last: Int
+before: String
+after: String
+: CommissionPlayerCollectionCursorConnection
+commissionTrainers
+first: Int
+last: Int
+before: String
+after: String
+: CommissionTrainerCollectionCursorConnection
+committeePermissions
+first: Int
+last: Int
+before: String
+after: String
+order: [CommitteePermissionFilter_order]
+: CommitteePermissionCollectionCursorConnection
+CommitteePermission defines user permissions on a Committee instance.
+
+committees
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+or: [CommitteeFilter_or]
+league_id: Int
+league_id__ne__: Int
+league_id_list: [Int]
+league_id__ne___list: [Int]
+id: Int
+id_list: [Int]
+name: String
+identifier: String
+identifier_list: [String]
+order: [CommitteeFilter_order]
+where: Iterable
+organizationType: String
+organizationType_list: Iterable
+: CommitteeCollectionCursorConnection
+Committee is the fourth higher organization, owned by a league, owning clubs.
+
+contactPoints
+first: Int
+last: Int
+before: String
+after: String
+: ContactPointCollectionCursorConnection
+A contact point—for example, a Customer Complaints department.
+
+contacts
+first: Int
+last: Int
+before: String
+after: String
+: ContactCollectionCursorConnection
+contactTypes
+first: Int
+last: Int
+before: String
+after: String
+order: [ContactTypeFilter_order]
+enabled: Boolean
+: ContactTypeCollectionCursorConnection
+An list item, e.g. a step in a checklist or how-to description.
+
+contestEngagements
+first: Int
+last: Int
+before: String
+after: String
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+contest_id: Int
+contest_id__ne__: Int
+contest_id_list: [Int]
+contest_id__ne___list: [Int]
+contest_formula: String
+contest_formula__ne__: String
+contest_formula_list: [String]
+contest_formula__ne___list: [String]
+contest_organization_id: Int
+contest_organization_id__ne__: Int
+contest_organization_id_list: [Int]
+contest_organization_id__ne___list: [Int]
+contest_season_id: Int
+contest_season_id__ne__: Int
+contest_season_id_list: [Int]
+contest_season_id__ne___list: [Int]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+licence_identifier: String
+licence_identifier__ne__: String
+licence_identifier_list: [String]
+licence_identifier__ne___list: [String]
+licence_league_id: Int
+licence_league_id__ne__: Int
+licence_league_id_list: [Int]
+licence_league_id__ne___list: [Int]
+licence_league_identifier: String
+licence_league_identifier__ne__: String
+licence_league_identifier_list: [String]
+licence_league_identifier__ne___list: [String]
+licence_lastRenewal_categoryAdmin_id: Int
+licence_lastRenewal_categoryAdmin_id__ne__: Int
+licence_lastRenewal_categoryAdmin_id_list: [Int]
+licence_lastRenewal_categoryAdmin_id__ne___list: [Int]
+licence_lastRenewal_categorySport_id: Int
+licence_lastRenewal_categorySport_id__ne__: Int
+licence_lastRenewal_categorySport_id_list: [Int]
+licence_lastRenewal_categorySport_id__ne___list: [Int]
+licence_owningClub_committee_id: Int
+licence_owningClub_committee_id__ne__: Int
+licence_owningClub_committee_id_list: [Int]
+licence_owningClub_committee_id__ne___list: [Int]
+licence_owningClub_committee_league_id: Int
+licence_owningClub_committee_league_id__ne__: Int
+licence_owningClub_committee_league_id_list: [Int]
+licence_owningClub_committee_league_id__ne___list: [Int]
+licence_owningClub_id: Int
+licence_owningClub_id__ne__: Int
+licence_owningClub_id_list: [Int]
+licence_owningClub_id__ne___list: [Int]
+licence_owningClub_identifier: String
+licence_owningClub_identifier_list: [String]
+licence_owningClub_identifier__ne__: String
+licence_owningClub_name: String
+licence_owningClub_name_list: [String]
+licence_owningClub_name__ne__: String
+licence_person_familyName: String
+licence_person_familyName__ne__: String
+licence_person_familyName_list: [String]
+licence_person_familyName__ne___list: [String]
+licence_person_gender_id: Int
+licence_person_gender_id__ne__: Int
+licence_person_gender_id_list: [Int]
+licence_person_gender_id__ne___list: [Int]
+licence_person_givenName: String
+licence_person_givenName__ne__: String
+licence_person_givenName_list: [String]
+licence_person_givenName__ne___list: [String]
+order: [ContestEngagementFilter_order]
+: ContestEngagementCollectionCursorConnection
+contestIdentifiers
+first: Int
+last: Int
+before: String
+after: String
+order: [ContestIdentifierFilter_order]
+: ContestIdentifierCollectionCursorConnection
+Represents a contest identifier and coefficient.
+
+contestPaymentEntries
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+contest_id: Int
+contest_id__ne__: Int
+contest_id_list: [Int]
+contest_id__ne___list: [Int]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+: ContestPaymentEntryCollectionCursorConnection
+contestResults
+first: Int
+last: Int
+before: String
+after: String
+order: [ContestResultFilter_order]
+: ContestResultCollectionCursorConnection
+Represents a result for a contest.
+
+contests
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+name: String
+name_list: [String]
+name__ne__: String
+coefficient: Float
+coefficient__ne__: Float
+coefficient_list: [Float]
+coefficient__ne___list: [Float]
+divisions_organization_id: Int
+divisions_organization_id__ne__: Int
+divisions_organization_id_list: [Int]
+divisions_organization_id__ne___list: [Int]
+divisions_tours_participations_opponent_team_clubs_id: Int
+divisions_tours_participations_opponent_team_clubs_id__ne__: Int
+divisions_tours_participations_opponent_team_clubs_id_list: [Int]
+divisions_tours_participations_opponent_team_clubs_id__ne___list: [Int]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+formula: String
+formula__ne__: String
+formula_list: [String]
+formula__ne___list: [String]
+teams_clubs_id: Int
+teams_clubs_id__ne__: Int
+teams_clubs_id_list: [Int]
+teams_clubs_id__ne___list: [Int]
+openToEveryone: Boolean
+allowClubRegistration: Boolean
+season_current: Boolean
+allowLicenseeRegistration: Boolean
+order: [ContestFilter_order]
+or: [ContestFilter_or]
+engagementEndDate: [ContestFilter_engagementEndDate]
+where: Iterable
+: ContestCollectionCursorConnection
+Represents a sport event.
+
+contracts
+first: Int
+last: Int
+before: String
+after: String
+person_id: Int
+person_id__ne__: Int
+person_id_list: [Int]
+person_id__ne___list: [Int]
+order: [ContractFilter_order]
+startDate: [ContractFilter_startDate]
+endDate: [ContractFilter_endDate]
+: ContractCollectionCursorConnection
+countries
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name_list: [String]
+name__ne__: String
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+or: [CountryFilter_or]
+order: [CountryFilter_order]
+: CountryCollectionCursorConnection
+credit
+id: ID!
+: CreditItem
+days
+first: Int
+last: Int
+before: String
+after: String
+order: [DayFilter_order]
+: DayCollectionCursorConnection
+Represents a period (group of days) during the current season.
+
+debit
+id: ID!
+: DebitItem
+decisionTypes
+first: Int
+last: Int
+before: String
+after: String
+order: [DecisionTypeFilter_order]
+enabled: Boolean
+: DecisionTypeCollectionCursorConnection
+An list item, e.g. a step in a checklist or how-to description.
+
+dependOns
+first: Int
+last: Int
+before: String
+after: String
+: DependOnCollectionCursorConnection
+An edition.
+
+details
+first: Int
+last: Int
+before: String
+after: String
+participant_id: Int
+participant_id__ne__: Int
+participant_id_list: [Int]
+participant_id__ne___list: [Int]
+speaker_id: Int
+speaker_id__ne__: Int
+speaker_id_list: [Int]
+speaker_id__ne___list: [Int]
+module_id: Int
+module_id__ne__: Int
+module_id_list: [Int]
+module_id__ne___list: [Int]
+moduleOverheads_id: Int
+moduleOverheads_id__ne__: Int
+moduleOverheads_id_list: [Int]
+moduleOverheads_id__ne___list: [Int]
+moduleSubventions_id: Int
+moduleSubventions_id__ne__: Int
+moduleSubventions_id_list: [Int]
+moduleSubventions_id__ne___list: [Int]
+moduleOpcas_id: Int
+moduleOpcas_id__ne__: Int
+moduleOpcas_id_list: [Int]
+moduleOpcas_id__ne___list: [Int]
+order: [DetailFilter_order]
+: DetailCollectionCursorConnection
+details of training costs.
+
+diplomas
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+family_identifier: String
+family_identifier__ne__: String
+family_identifier_list: [String]
+family_identifier__ne___list: [String]
+nature_identifier: String
+nature_identifier__ne__: String
+nature_identifier_list: [String]
+nature_identifier__ne___list: [String]
+order: [DiplomaFilter_order]
+enabled: Boolean
+ffttOnly: Boolean
+: DiplomaCollectionCursorConnection
+An list item, e.g. a training diploma.
+
+divisionPreRegistrations
+first: Int
+last: Int
+before: String
+after: String
+division_confirmationEndDate: String
+division_confirmationEndDate__ne__: String
+division_confirmationEndDate_list: [String]
+division_confirmationEndDate__ne___list: [String]
+division_contest_id: Int
+division_contest_id__ne__: Int
+division_contest_id_list: [Int]
+division_contest_id__ne___list: [Int]
+division_id: Int
+division_id__ne__: Int
+division_id_list: [Int]
+division_id__ne___list: [Int]
+division_organization_id: Int
+division_organization_id__ne__: Int
+division_organization_id_list: [Int]
+division_organization_id__ne___list: [Int]
+licence_person_familyName: String
+licence_person_familyName__ne__: String
+licence_person_familyName_list: [String]
+licence_person_familyName__ne___list: [String]
+status: String
+status__ne__: String
+status_list: [String]
+status__ne___list: [String]
+division_contest_season_current: Boolean
+order: [DivisionPreRegistrationFilter_order]
+: DivisionPreRegistrationCollectionCursorConnection
+divisionResults
+first: Int
+last: Int
+before: String
+after: String
+order: [DivisionResultFilter_order]
+opponent_licences_identifier: String
+opponent_licences_identifier__ne__: String
+opponent_licences_identifier_list: [String]
+opponent_licences_identifier__ne___list: [String]
+node_contest_formula: String
+node_contest_formula__ne__: String
+node_contest_formula_list: [String]
+node_contest_formula__ne___list: [String]
+node_contest_season_id: Int
+node_contest_season_id__ne__: Int
+node_contest_season_id_list: [Int]
+node_contest_season_id__ne___list: [Int]
+node_criteriumFormula: String
+node_criteriumFormula__ne__: String
+node_criteriumFormula_list: [String]
+node_criteriumFormula__ne___list: [String]
+: DivisionResultCollectionCursorConnection
+Represents a result for a division.
+
+divisions
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+categories_id: Int
+categories_id__ne__: Int
+categories_id_list: [Int]
+categories_id__ne___list: [Int]
+contest: String
+contest__ne__: String
+contest_list: [String]
+contest__ne___list: [String]
+contest_formula: String
+contest_formula__ne__: String
+contest_formula_list: [String]
+contest_formula__ne___list: [String]
+contest_id: Int
+contest_id__ne__: Int
+contest_id_list: [Int]
+contest_id__ne___list: [Int]
+contest_season_id: Int
+contest_season_id__ne__: Int
+contest_season_id_list: [Int]
+contest_season_id__ne___list: [Int]
+contest_type: String
+contest_type__ne__: String
+contest_type_list: [String]
+contest_type__ne___list: [String]
+name: String
+name_list: [String]
+name__ne__: String
+genders_id: Int
+genders_id__ne__: Int
+genders_id_list: [Int]
+genders_id__ne___list: [Int]
+genders_identifier: String
+genders_identifier__ne__: String
+genders_identifier_list: [String]
+genders_identifier__ne___list: [String]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+phase_id: Int
+phase_id__ne__: Int
+phase_id_list: [Int]
+phase_id__ne___list: [Int]
+phase_name: String
+phase_name__ne__: String
+phase_name_list: [String]
+phase_name__ne___list: [String]
+tours_participations_opponent_team_clubs_id: Int
+tours_participations_opponent_team_clubs_id__ne__: Int
+tours_participations_opponent_team_clubs_id_list: [Int]
+tours_participations_opponent_team_clubs_id__ne___list: [Int]
+search: String
+or: [DivisionFilter_or]
+organizationType: String
+organizationType_list: Iterable
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+order: [DivisionFilter_order]
+: DivisionCollectionCursorConnection
+Contest implementation for an organization and with sport filters like category, club type, ...
+
+editionParameters
+first: Int
+last: Int
+before: String
+after: String
+: EditionParameterCollectionCursorConnection
+An edition.
+
+editionQueries
+first: Int
+last: Int
+before: String
+after: String
+: EditionQueryCollectionCursorConnection
+A query in edition.
+
+editions
+first: Int
+last: Int
+before: String
+after: String
+: EditionCollectionCursorConnection
+An edition.
+
+employments
+first: Int
+last: Int
+before: String
+after: String
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+club: String
+club__ne__: String
+club_list: [String]
+club__ne___list: [String]
+order: [EmploymentFilter_order]
+organizationType: String
+organizationType_list: Iterable
+: EmploymentCollectionCursorConnection
+establishments
+first: Int
+last: Int
+before: String
+after: String
+: EstablishmentCollectionCursorConnection
+A particular physical business or branch of an organization. Examples of LocalBusiness include a restaurant, a particular branch of a restaurant chain, a branch of a bank, a medical practice, a club, a bowling alley, etc.
+
+establishmentTypes
+first: Int
+last: Int
+before: String
+after: String
+: EstablishmentTypeCollectionCursorConnection
+eTransactionConfs
+first: Int
+last: Int
+before: String
+after: String
+: ETransactionConfCollectionCursorConnection
+events
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name_list: [String]
+name__ne__: String
+season: String
+season__ne__: String
+season_list: [String]
+season__ne___list: [String]
+order: [EventFilter_order]
+: EventCollectionCursorConnection
+eventSession
+id: ID!
+: EventSessionItem
+An ATP.
+
+examination
+id: ID!
+: ExaminationItem
+families
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+branch_id: Int
+branch_id__ne__: Int
+branch_id_list: [Int]
+branch_id__ne___list: [Int]
+: FamilyCollectionCursorConnection
+favoriteDirectories
+first: Int
+last: Int
+before: String
+after: String
+order: [FavoriteDirectoryFilter_order]
+: FavoriteDirectoryCollectionCursorConnection
+A folder containing a collection of favorites.
+
+favorites
+first: Int
+last: Int
+before: String
+after: String
+url: String
+url__ne__: String
+url_list: [String]
+url__ne___list: [String]
+exists: [FavoriteFilter_exists]
+order: [FavoriteFilter_order]
+: FavoriteCollectionCursorConnection
+An URL saved by an Account.
+
+federationPermissions
+first: Int
+last: Int
+before: String
+after: String
+order: [FederationPermissionFilter_order]
+: FederationPermissionCollectionCursorConnection
+FederationPermission defines user permissions on a Federation instance.
+
+federations
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+id: Int
+id_list: [Int]
+name: String
+identifier: String
+identifier_list: [String]
+order: [FederationFilter_order]
+where: Iterable
+organizationType: String
+organizationType_list: Iterable
+: FederationCollectionCursorConnection
+file
+id: ID!
+: File
+files
+first: Int
+last: Int
+before: String
+after: String
+: FileCursorConnection
+formAnswers
+first: Int
+last: Int
+before: String
+after: String
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+form_id: Int
+form_id__ne__: Int
+form_id_list: [Int]
+form_id__ne___list: [Int]
+form_published: Boolean
+form_endDate: [FormAnswerFilter_form_endDate]
+order: [FormAnswerFilter_order]
+: FormAnswerCollectionCursorConnection
+FormAnswer links a form with a target entity (<club | organization | person>) and its answers.
+
+forms
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name_list: [String]
+name__ne__: String
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+published: Boolean
+exists: [FormFilter_exists]
+order: [FormFilter_order]
+: FormCollectionCursorConnection
+Form handles an instance of a FormTemplate for another Entity (such as LabelApplication).
+
+formTemplates
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+name: String
+name_list: [String]
+name__ne__: String
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+exists: [FormTemplateFilter_exists]
+order: [FormTemplateFilter_order]
+: FormTemplateCollectionCursorConnection
+FormTemplate wraps a list of , is used by
+
+instance.
+games
+first: Int
+last: Int
+before: String
+after: String
+players_licence_id: Int
+players_licence_id__ne__: Int
+players_licence_id_list: [Int]
+players_licence_id__ne___list: [Int]
+players_licence_identifier: String
+players_licence_identifier__ne__: String
+players_licence_identifier_list: [String]
+players_licence_identifier__ne___list: [String]
+contest_season_id: Int
+contest_season_id__ne__: Int
+contest_season_id_list: [Int]
+contest_season_id__ne___list: [Int]
+contest_season_current: Boolean
+doubleOpposition: Boolean
+exists: [GameFilter_exists]
+order: [GameFilter_order]
+: GameCollectionCursorConnection
+Represents a player of a game.
+
+graduations
+first: Int
+last: Int
+before: String
+after: String
+person_id: Int
+person_id__ne__: Int
+person_id_list: [Int]
+person_id__ne___list: [Int]
+diploma_family_identifier: String
+diploma_family_identifier__ne__: String
+diploma_family_identifier_list: [String]
+diploma_family_identifier__ne___list: [String]
+diploma_nature_identifier: String
+diploma_nature_identifier__ne__: String
+diploma_nature_identifier_list: [String]
+diploma_nature_identifier__ne___list: [String]
+diploma_position: [GraduationFilter_diploma_position]
+startDate: [GraduationFilter_startDate]
+endDate: [GraduationFilter_endDate]
+: GraduationCollectionCursorConnection
+groupAssignments
+first: Int
+last: Int
+before: String
+after: String
+: GroupAssignmentCollectionCursorConnection
+groupResults
+first: Int
+last: Int
+before: String
+after: String
+order: [GroupResultFilter_order]
+: GroupResultCollectionCursorConnection
+Represents a result for a group.
+
+groups
+first: Int
+last: Int
+before: String
+after: String
+tour: String
+tour__ne__: String
+tour_list: [String]
+tour__ne___list: [String]
+tour_id: Int
+tour_id__ne__: Int
+tour_id_list: [Int]
+tour_id__ne___list: [Int]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+exists: [GroupFilter_exists]
+order: [GroupFilter_order]
+invisible: Boolean
+: GroupCollectionCursorConnection
+helpModules
+first: Int
+last: Int
+before: String
+after: String
+order: [HelpModuleFilter_order]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+exists: [HelpModuleFilter_exists]
+: HelpModuleCollectionCursorConnection
+helpPages
+first: Int
+last: Int
+before: String
+after: String
+regexp: Iterable
+: HelpPageCollectionCursorConnection
+highLevelApplications
+first: Int
+last: Int
+before: String
+after: String
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+mjs_id: Int
+mjs_id__ne__: Int
+mjs_id_list: [Int]
+mjs_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+status: String
+status__ne__: String
+status_list: [String]
+status__ne___list: [String]
+order: [HighLevelApplicationFilter_order]
+: HighLevelApplicationCollectionCursorConnection
+historyActions
+first: Int
+last: Int
+before: String
+after: String
+licence_identifier: String
+licence_identifier__ne__: String
+licence_identifier_list: [String]
+licence_identifier__ne___list: [String]
+licence_owningClub_id: Int
+licence_owningClub_id__ne__: Int
+licence_owningClub_id_list: [Int]
+licence_owningClub_id__ne___list: [Int]
+licence_person_familyName: String
+licence_person_familyName_list: [String]
+licence_person_familyName__ne__: String
+licence_person_givenName: String
+licence_person_givenName_list: [String]
+licence_person_givenName__ne__: String
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+order: [HistoryActionFilter_order]
+: HistoryActionCollectionCursorConnection
+institutions
+first: Int
+last: Int
+before: String
+after: String
+order: [InstitutionFilter_order]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+exists: [InstitutionFilter_exists]
+: InstitutionCollectionCursorConnection
+An institution.
+
+internshipAccountants
+first: Int
+last: Int
+before: String
+after: String
+internship_id: Int
+internship_id__ne__: Int
+internship_id_list: [Int]
+internship_id__ne___list: [Int]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+order: [InternshipAccountantFilter_order]
+: InternshipAccountantCollectionCursorConnection
+internshipParticipants
+first: Int
+last: Int
+before: String
+after: String
+internship_id: Int
+internship_id__ne__: Int
+internship_id_list: [Int]
+internship_id__ne___list: [Int]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+internship_type: String
+internship_type__ne__: String
+internship_type_list: [String]
+internship_type__ne___list: [String]
+order: [InternshipParticipantFilter_order]
+: InternshipParticipantCollectionCursorConnection
+internships
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+valid: Boolean
+search: String
+order: [InternshipFilter_order]
+: InternshipCollectionCursorConnection
+jobs
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+family_id: Int
+family_id__ne__: Int
+family_id_list: [Int]
+family_id__ne___list: [Int]
+: JobCollectionCursorConnection
+journalNumbers
+first: Int
+last: Int
+before: String
+after: String
+order: [JournalNumberFilter_order]
+journal: String
+journal__ne__: String
+journal_list: [String]
+journal__ne___list: [String]
+journal_id: Int
+journal_id__ne__: Int
+journal_id_list: [Int]
+journal_id__ne___list: [Int]
+: JournalNumberCollectionCursorConnection
+journals
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+order: [JournalFilter_order]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+: JournalCollectionCursorConnection
+labelApplications
+first: Int
+last: Int
+before: String
+after: String
+label_id: Int
+label_id__ne__: Int
+label_id_list: [Int]
+label_id__ne___list: [Int]
+leagueReview_league: String
+leagueReview_league__ne__: String
+leagueReview_league_list: [String]
+leagueReview_league__ne___list: [String]
+leagueReview_status: Int
+leagueReview_status__ne__: Int
+leagueReview_status_list: [Int]
+leagueReview_status__ne___list: [Int]
+federationReview_federation: String
+federationReview_federation__ne__: String
+federationReview_federation_list: [String]
+federationReview_federation__ne___list: [String]
+federationReview_status: Int
+federationReview_status__ne__: Int
+federationReview_status_list: [Int]
+federationReview_status__ne___list: [Int]
+label_name: String
+label_name_list: [String]
+label_name__ne__: String
+club_name: String
+club_name_list: [String]
+club_name__ne__: String
+club_identifier: String
+club_identifier_list: [String]
+club_identifier__ne__: String
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+definitiveStatus: Boolean
+order: [LabelApplicationFilter_order]
+dateCreated: [LabelApplicationFilter_dateCreated]
+dateModified: [LabelApplicationFilter_dateModified]
+startDate: [LabelApplicationFilter_startDate]
+endDate: [LabelApplicationFilter_endDate]
+: LabelApplicationCollectionCursorConnection
+labelResort
+id: ID!
+: LabelResortItem
+labels
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+name: String
+name_list: [String]
+name__ne__: String
+order: [LabelFilter_order]
+: LabelCollectionCursorConnection
+leaguePermissions
+first: Int
+last: Int
+before: String
+after: String
+order: [LeaguePermissionFilter_order]
+: LeaguePermissionCollectionCursorConnection
+LeaguePermission defines user permissions one a League instance.
+
+leagues
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+zone_id: Int
+zone_id__ne__: Int
+zone_id_list: [Int]
+zone_id__ne___list: [Int]
+id: Int
+id_list: [Int]
+name: String
+identifier: String
+identifier_list: [String]
+order: [LeagueFilter_order]
+where: Iterable
+organizationType: String
+organizationType_list: Iterable
+: LeagueCollectionCursorConnection
+League is the third higher organization, owned by a zone, owning committees.
+
+licenceContracts
+first: Int
+last: Int
+before: String
+after: String
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+order: [LicenceContractFilter_order]
+: LicenceContractCollectionCursorConnection
+licenceFee
+id: ID!
+: LicenceFeeItem
+Licence fee.
+
+licenceLocks
+first: Int
+last: Int
+before: String
+after: String
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+startDate: [LicenceLockFilter_startDate]
+endDate: [LicenceLockFilter_endDate]
+order: [LicenceLockFilter_order]
+: LicenceLockCollectionCursorConnection
+licenceMutations
+first: Int
+last: Int
+before: String
+after: String
+decision: Int
+decision__ne__: Int
+decision_list: [Int]
+decision__ne___list: [Int]
+decisionMaker_identifier: String
+decisionMaker_identifier__ne__: String
+decisionMaker_identifier_list: [String]
+decisionMaker_identifier__ne___list: [String]
+decisionMaker: String
+decisionMaker__ne__: String
+decisionMaker_list: [String]
+decisionMaker__ne___list: [String]
+decisionMaker_id: Int
+decisionMaker_id__ne__: Int
+decisionMaker_id_list: [Int]
+decisionMaker_id__ne___list: [Int]
+licence_identifier: String
+licence_identifier__ne__: String
+licence_identifier_list: [String]
+licence_identifier__ne___list: [String]
+licence_person_familyName: String
+licence_person_familyName_list: [String]
+licence_person_familyName__ne__: String
+licence_person_givenName: String
+licence_person_givenName_list: [String]
+licence_person_givenName__ne__: String
+toClub: String
+toClub__ne__: String
+toClub_list: [String]
+toClub__ne___list: [String]
+toClub_town_postalCode: String
+toClub_town_postalCode_list: [String]
+toClub_town_postalCode__ne__: String
+toClub_committee_id: Int
+toClub_committee_id__ne__: Int
+toClub_committee_id_list: [Int]
+toClub_committee_id__ne___list: [Int]
+toClub_committee_league_id: Int
+toClub_committee_league_id__ne__: Int
+toClub_committee_league_id_list: [Int]
+toClub_committee_league_id__ne___list: [Int]
+toClub_committee_league_zone_id: Int
+toClub_committee_league_zone_id__ne__: Int
+toClub_committee_league_zone_id_list: [Int]
+toClub_committee_league_zone_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+or: [LicenceMutationFilter_or]
+apply: Boolean
+season_current: Boolean
+external: Boolean
+toClubValidated: Boolean
+order: [LicenceMutationFilter_order]
+dateCreated: [LicenceMutationFilter_dateCreated]
+: LicenceMutationCollectionCursorConnection
+licencePreRegistration
+id: ID!
+: LicencePreRegistration
+licencePreRegistrations
+first: Int
+last: Int
+before: String
+after: String
+committee_id: Int
+committee_id__ne__: Int
+committee_id_list: [Int]
+committee_id__ne___list: [Int]
+committee_identifier: String
+committee_identifier__ne__: String
+committee_identifier_list: [String]
+committee_identifier__ne___list: [String]
+fullName: String
+fullName__ne__: String
+fullName_list: [String]
+fullName__ne___list: [String]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+licenceType_id: Int
+licenceType_id__ne__: Int
+licenceType_id_list: [Int]
+licenceType_id__ne___list: [Int]
+season: String
+season__ne__: String
+season_list: [String]
+season__ne___list: [String]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+league_id: Int
+league_id__ne__: Int
+league_id_list: [Int]
+league_id__ne___list: [Int]
+league_identifier: String
+league_identifier__ne__: String
+league_identifier_list: [String]
+league_identifier__ne___list: [String]
+owningClub: String
+owningClub__ne__: String
+owningClub_list: [String]
+owningClub__ne___list: [String]
+owningClub_id: Int
+owningClub_id__ne__: Int
+owningClub_id_list: [Int]
+owningClub_id__ne___list: [Int]
+owningClub_identifier: String
+owningClub_identifier_list: [String]
+owningClub_identifier__ne__: String
+owningClub_name: String
+owningClub_name_list: [String]
+owningClub_name__ne__: String
+owningClub_committee_id: Int
+owningClub_committee_id__ne__: Int
+owningClub_committee_id_list: [Int]
+owningClub_committee_id__ne___list: [Int]
+owningClub_committee_identifier: String
+owningClub_committee_identifier__ne__: String
+owningClub_committee_identifier_list: [String]
+owningClub_committee_identifier__ne___list: [String]
+owningClub_committee_league_id: Int
+owningClub_committee_league_id__ne__: Int
+owningClub_committee_league_id_list: [Int]
+owningClub_committee_league_id__ne___list: [Int]
+owningClub_committee_league_identifier: String
+owningClub_committee_league_identifier__ne__: String
+owningClub_committee_league_identifier_list: [String]
+owningClub_committee_league_identifier__ne___list: [String]
+owningClub_committee_league_zone_id: Int
+owningClub_committee_league_zone_id__ne__: Int
+owningClub_committee_league_zone_id_list: [Int]
+owningClub_committee_league_zone_id__ne___list: [Int]
+owningClub_committee_league_zone_federation_id: Int
+owningClub_committee_league_zone_federation_id__ne__: Int
+owningClub_committee_league_zone_federation_id_list: [Int]
+owningClub_committee_league_zone_federation_id__ne___list: [Int]
+owningClub_town_postalCode: String
+owningClub_town_postalCode_list: [String]
+owningClub_town_postalCode__ne__: String
+owningClub_town_name: String
+owningClub_town_name_list: [String]
+owningClub_town_name__ne__: String
+owningClub_clubType_id: Int
+owningClub_clubType_id__ne__: Int
+owningClub_clubType_id_list: [Int]
+owningClub_clubType_id__ne___list: [Int]
+address_addressLocality: String
+address_addressLocality__ne__: String
+address_addressLocality_list: [String]
+address_addressLocality__ne___list: [String]
+address_postalCode: String
+address_postalCode_list: [String]
+address_postalCode__ne__: String
+gender_id: Int
+gender_id__ne__: Int
+gender_id_list: [Int]
+gender_id__ne___list: [Int]
+gender_identifier: String
+gender_identifier__ne__: String
+gender_identifier_list: [String]
+gender_identifier__ne___list: [String]
+familyName: String
+familyName__ne__: String
+familyName_list: [String]
+familyName__ne___list: [String]
+birthName: String
+birthName__ne__: String
+birthName_list: [String]
+birthName__ne___list: [String]
+givenName: String
+givenName__ne__: String
+givenName_list: [String]
+givenName__ne___list: [String]
+birthDate: String
+birthDate__ne__: String
+birthDate_list: [String]
+birthDate__ne___list: [String]
+zone_identifier: String
+zone_identifier__ne__: String
+zone_identifier_list: [String]
+zone_identifier__ne___list: [String]
+status: String
+status__ne__: String
+status_list: [String]
+status__ne___list: [String]
+or: [LicencePreRegistrationFilter_or]
+order: [LicencePreRegistrationFilter_order]
+season_current: Boolean
+season_previous: Boolean
+owningClub_lastAffiliateProcess_season_current: Boolean
+owningClub_lastAffiliateProcess_season_previous: Boolean
+renewalDate: [LicencePreRegistrationFilter_renewalDate]
+renewalEndDate: [LicencePreRegistrationFilter_renewalEndDate]
+exists: [LicencePreRegistrationFilter_exists]
+: LicencePreRegistrationCursorConnection
+licenceRenewals
+first: Int
+last: Int
+before: String
+after: String
+licence_identifier: String
+licence_identifier_list: [String]
+licence_identifier__ne__: String
+licence_person_id: Int
+licence_person_id__ne__: Int
+licence_person_id_list: [Int]
+licence_person_id__ne___list: [Int]
+licence_person_gender_id: Int
+licence_person_gender_id__ne__: Int
+licence_person_gender_id_list: [Int]
+licence_person_gender_id__ne___list: [Int]
+licence_person_gender_identifier: String
+licence_person_gender_identifier__ne__: String
+licence_person_gender_identifier_list: [String]
+licence_person_gender_identifier__ne___list: [String]
+licence_person_familyName: String
+licence_person_familyName_list: [String]
+licence_person_familyName__ne__: String
+licence_person_givenName: String
+licence_person_givenName_list: [String]
+licence_person_givenName__ne__: String
+order: [LicenceRenewalFilter_order]
+: LicenceRenewalCollectionCursorConnection
+licences
+first: Int
+last: Int
+before: String
+after: String
+clubMemberships_club: String
+clubMemberships_club__ne__: String
+clubMemberships_club_list: [String]
+clubMemberships_club__ne___list: [String]
+clubMemberships_club_id: Int
+clubMemberships_club_id__ne__: Int
+clubMemberships_club_id_list: [Int]
+clubMemberships_club_id__ne___list: [Int]
+clubMemberships_club_identifier: String
+clubMemberships_club_identifier_list: [String]
+clubMemberships_club_identifier__ne__: String
+clubMemberships_club_clubType_id: Int
+clubMemberships_club_clubType_id__ne__: Int
+clubMemberships_club_clubType_id_list: [Int]
+clubMemberships_club_clubType_id__ne___list: [Int]
+clubMemberships_membershipType_id: Int
+clubMemberships_membershipType_id__ne__: Int
+clubMemberships_membershipType_id_list: [Int]
+clubMemberships_membershipType_id__ne___list: [Int]
+committee_id: Int
+committee_id__ne__: Int
+committee_id_list: [Int]
+committee_id__ne___list: [Int]
+committee_identifier: String
+committee_identifier__ne__: String
+committee_identifier_list: [String]
+committee_identifier__ne___list: [String]
+fullName: String
+fullName__ne__: String
+fullName_list: [String]
+fullName__ne___list: [String]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+lastRenewal_categoryAdmin_id: Int
+lastRenewal_categoryAdmin_id__ne__: Int
+lastRenewal_categoryAdmin_id_list: [Int]
+lastRenewal_categoryAdmin_id__ne___list: [Int]
+lastRenewal_categorySport_id: Int
+lastRenewal_categorySport_id__ne__: Int
+lastRenewal_categorySport_id_list: [Int]
+lastRenewal_categorySport_id__ne___list: [Int]
+lastRenewal_licenceType_id: Int
+lastRenewal_licenceType_id__ne__: Int
+lastRenewal_licenceType_id_list: [Int]
+lastRenewal_licenceType_id__ne___list: [Int]
+lastRenewal_owningClub_id: Int
+lastRenewal_owningClub_id__ne__: Int
+lastRenewal_owningClub_id_list: [Int]
+lastRenewal_owningClub_id__ne___list: [Int]
+lastRenewal_season: String
+lastRenewal_season__ne__: String
+lastRenewal_season_list: [String]
+lastRenewal_season__ne___list: [String]
+lastRenewal_season_id: Int
+lastRenewal_season_id__ne__: Int
+lastRenewal_season_id_list: [Int]
+lastRenewal_season_id__ne___list: [Int]
+league_id: Int
+league_id__ne__: Int
+league_id_list: [Int]
+league_id__ne___list: [Int]
+league_identifier: String
+league_identifier__ne__: String
+league_identifier_list: [String]
+league_identifier__ne___list: [String]
+licenceType_id: Int
+licenceType_id__ne__: Int
+licenceType_id_list: [Int]
+licenceType_id__ne___list: [Int]
+owningClub: String
+owningClub__ne__: String
+owningClub_list: [String]
+owningClub__ne___list: [String]
+owningClub_id: Int
+owningClub_id__ne__: Int
+owningClub_id_list: [Int]
+owningClub_id__ne___list: [Int]
+owningClub_identifier: String
+owningClub_identifier_list: [String]
+owningClub_identifier__ne__: String
+owningClub_committee_id: Int
+owningClub_committee_id__ne__: Int
+owningClub_committee_id_list: [Int]
+owningClub_committee_id__ne___list: [Int]
+owningClub_committee_identifier: String
+owningClub_committee_identifier__ne__: String
+owningClub_committee_identifier_list: [String]
+owningClub_committee_identifier__ne___list: [String]
+owningClub_committee_league_id: Int
+owningClub_committee_league_id__ne__: Int
+owningClub_committee_league_id_list: [Int]
+owningClub_committee_league_id__ne___list: [Int]
+owningClub_committee_league_identifier: String
+owningClub_committee_league_identifier__ne__: String
+owningClub_committee_league_identifier_list: [String]
+owningClub_committee_league_identifier__ne___list: [String]
+owningClub_committee_league_zone_id: Int
+owningClub_committee_league_zone_id__ne__: Int
+owningClub_committee_league_zone_id_list: [Int]
+owningClub_committee_league_zone_id__ne___list: [Int]
+owningClub_committee_league_zone_federation_id: Int
+owningClub_committee_league_zone_federation_id__ne__: Int
+owningClub_committee_league_zone_federation_id_list: [Int]
+owningClub_committee_league_zone_federation_id__ne___list: [Int]
+owningClub_town_postalCode: String
+owningClub_town_postalCode_list: [String]
+owningClub_town_postalCode__ne__: String
+owningClub_town_name: String
+owningClub_town_name_list: [String]
+owningClub_town_name__ne__: String
+owningClub_clubType_id: Int
+owningClub_clubType_id__ne__: Int
+owningClub_clubType_id_list: [Int]
+owningClub_clubType_id__ne___list: [Int]
+person_address_addressLocality: String
+person_address_addressLocality__ne__: String
+person_address_addressLocality_list: [String]
+person_address_addressLocality__ne___list: [String]
+person_address_postalCode: String
+person_address_postalCode_list: [String]
+person_address_postalCode__ne__: String
+person_gender_id: Int
+person_gender_id__ne__: Int
+person_gender_id_list: [Int]
+person_gender_id__ne___list: [Int]
+person_gender_identifier: String
+person_gender_identifier__ne__: String
+person_gender_identifier_list: [String]
+person_gender_identifier__ne___list: [String]
+person_familyName: String
+person_familyName__ne__: String
+person_familyName_list: [String]
+person_familyName__ne___list: [String]
+person_birthName: String
+person_birthName__ne__: String
+person_birthName_list: [String]
+person_birthName__ne___list: [String]
+person_givenName: String
+person_givenName__ne__: String
+person_givenName_list: [String]
+person_givenName__ne___list: [String]
+person_birthDate: String
+person_birthDate__ne__: String
+person_birthDate_list: [String]
+person_birthDate__ne___list: [String]
+person_id: Int
+person_id__ne__: Int
+person_id_list: [Int]
+person_id__ne___list: [Int]
+person_responsabilities_accountantFunctions_responsability_identifier: String
+person_responsabilities_accountantFunctions_responsability_identifier__ne__: String
+person_responsabilities_accountantFunctions_responsability_identifier_list: [String]
+person_responsabilities_accountantFunctions_responsability_identifier__ne___list: [String]
+renewals_categorySport_id: Int
+renewals_categorySport_id__ne__: Int
+renewals_categorySport_id_list: [Int]
+renewals_categorySport_id__ne___list: [Int]
+renewals_licenceType_id: Int
+renewals_licenceType_id__ne__: Int
+renewals_licenceType_id_list: [Int]
+renewals_licenceType_id__ne___list: [Int]
+renewals_season: String
+renewals_season__ne__: String
+renewals_season_list: [String]
+renewals_season__ne___list: [String]
+renewals_season_id: Int
+renewals_season_id__ne__: Int
+renewals_season_id_list: [Int]
+renewals_season_id__ne___list: [Int]
+sanctions_season_id: Int
+sanctions_season_id__ne__: Int
+sanctions_season_id_list: [Int]
+sanctions_season_id__ne___list: [Int]
+sanctions_type_identifier: String
+sanctions_type_identifier__ne__: String
+sanctions_type_identifier_list: [String]
+sanctions_type_identifier__ne___list: [String]
+zone_identifier: String
+zone_identifier__ne__: String
+zone_identifier_list: [String]
+zone_identifier__ne___list: [String]
+or: [LicenceFilter_or]
+order: [LicenceFilter_order]
+archive: Boolean
+lastRenewal_season_current: Boolean
+lastRenewal_season_previous: Boolean
+owningClub_lastAffiliateProcess_season_current: Boolean
+owningClub_lastAffiliateProcess_season_previous: Boolean
+person_account_enabled: Boolean
+renewals_renewalDate: [LicenceFilter_renewals_renewalDate]
+renewals_renewalEndDate: [LicenceFilter_renewals_renewalEndDate]
+lastRenewal_renewalDate: [LicenceFilter_lastRenewal_renewalDate]
+lastRenewal_renewalEndDate: [LicenceFilter_lastRenewal_renewalEndDate]
+exists: [LicenceFilter_exists]
+search: String
+lastRanking_federationRanking: [LicenceFilter_lastRanking_federationRanking]
+where: Iterable
+availableFor: String
+: LicenceCollectionCursorConnection
+licenceTypes
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+ownerType: String
+ownerType__ne__: String
+ownerType_list: [String]
+ownerType__ne___list: [String]
+allowedForIndividualContests: Boolean
+allowedForTeamContests: Boolean
+includedInStatistics: Boolean
+specificPrice: Boolean
+order: [LicenceTypeFilter_order]
+: LicenceTypeCollectionCursorConnection
+matrix
+id: ID!
+: MatrixItem
+memberFunction
+id: ID!
+: MemberFunctionItem
+members
+first: Int
+last: Int
+before: String
+after: String
+order: [MemberFilter_order]
+person: String
+person__ne__: String
+person_list: [String]
+person__ne___list: [String]
+institution_id: Int
+institution_id__ne__: Int
+institution_id_list: [Int]
+institution_id__ne___list: [Int]
+: MemberCollectionCursorConnection
+A member of an institution.
+
+moduleParticipations
+first: Int
+last: Int
+before: String
+after: String
+: ModuleParticipationCollectionCursorConnection
+A FFTT training speaker.
+
+modules
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+training_id: Int
+training_id__ne__: Int
+training_id_list: [Int]
+training_id__ne___list: [Int]
+order: [ModuleFilter_order]
+: ModuleCollectionCursorConnection
+A FFTT training.
+
+moduleSessions
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+session_id: Int
+session_id__ne__: Int
+session_id_list: [Int]
+session_id__ne___list: [Int]
+order: [ModuleSessionFilter_order]
+: ModuleSessionCollectionCursorConnection
+A FFTT training.
+
+monthlyRanking
+id: ID!
+: MonthlyRankingItem
+mutationParameters
+first: Int
+last: Int
+before: String
+after: String
+order: [MutationParameterFilter_order]
+: MutationParameterCollectionCursorConnection
+mutationPoint
+id: ID!
+: MutationPointItem
+mutationPrice
+id: ID!
+: MutationPriceItem
+news
+first: Int
+last: Int
+before: String
+after: String
+startDate: [NewsFilter_startDate]
+endDate: [NewsFilter_endDate]
+title: String
+title_list: [String]
+title__ne__: String
+state: Int
+state__ne__: Int
+state_list: [Int]
+state__ne___list: [Int]
+category: String
+category__ne__: String
+category_list: [String]
+category__ne___list: [String]
+category_id: Int
+category_id__ne__: Int
+category_id_list: [Int]
+category_id__ne___list: [Int]
+resourceCategory: String
+resourceCategory__ne__: String
+resourceCategory_list: [String]
+resourceCategory__ne___list: [String]
+resourceCategory_id: Int
+resourceCategory_id__ne__: Int
+resourceCategory_id_list: [Int]
+resourceCategory_id__ne___list: [Int]
+resourceCategory_identifier: String
+resourceCategory_identifier__ne__: String
+resourceCategory_identifier_list: [String]
+resourceCategory_identifier__ne___list: [String]
+type: Int
+type__ne__: Int
+type_list: [Int]
+type__ne___list: [Int]
+order: [NewsFilter_order]
+exists: [NewsFilter_exists]
+: NewsCollectionCursorConnection
+node
+id: ID!
+: Node
+notifications
+first: Int
+last: Int
+before: String
+after: String
+startDate: [NotificationFilter_startDate]
+endDate: [NotificationFilter_endDate]
+title: String
+title_list: [String]
+title__ne__: String
+level: Int
+level__ne__: Int
+level_list: [Int]
+level__ne___list: [Int]
+forAll: Boolean
+order: [NotificationFilter_order]
+: NotificationCollectionCursorConnection
+notificationStates
+first: Int
+last: Int
+before: String
+after: String
+: NotificationStateCollectionCursorConnection
+officialRanking
+id: ID!
+: OfficialRankingItem
+oldArchiveClubs
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name_list: [String]
+name__ne__: String
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+order: [OldArchiveClubFilter_order]
+: OldArchiveClubCollectionCursorConnection
+Class OldArchiveClub.
+
+oldArchivedLicences
+first: Int
+last: Int
+before: String
+after: String
+: OldArchivedLicenceCollectionCursorConnection
+Class OldArchivedLicence.
+
+opponents
+first: Int
+last: Int
+before: String
+after: String
+: OpponentCollectionCursorConnection
+Represents a player of a game.
+
+oppositionGridLines
+first: Int
+last: Int
+before: String
+after: String
+: OppositionGridLineCollectionCursorConnection
+Represents a abstract group of oppositions between team or player in a round. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+oppositionGrids
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+name: String
+name_list: [String]
+name__ne__: String
+opponentCount: Int
+opponentCount__ne__: Int
+opponentCount_list: [Int]
+opponentCount__ne___list: [Int]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+format: Int
+format__ne__: Int
+format_list: [Int]
+format__ne___list: [Int]
+order: [OppositionGridFilter_order]
+: OppositionGridCollectionCursorConnection
+Represents a grid containg all abstract oppositions between teams or players for each round.
+
+oppositions
+first: Int
+last: Int
+before: String
+after: String
+: OppositionCollectionCursorConnection
+Represents a abstract opposition between teams or players. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+otherParticipations
+first: Int
+last: Int
+before: String
+after: String
+order: [OtherParticipationFilter_order]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+clubEvent_name: String
+clubEvent_name_list: [String]
+clubEvent_name__ne__: String
+clubEvent_type_id: Int
+clubEvent_type_id_list: [Int]
+clubEvent_type_id__ne__: Int
+person_familyName: String
+person_familyName__ne__: String
+person_familyName_list: [String]
+person_familyName__ne___list: [String]
+person_givenName: String
+person_givenName__ne__: String
+person_givenName_list: [String]
+person_givenName__ne___list: [String]
+: OtherParticipationCollectionCursorConnection
+An ATP.
+
+packages
+first: Int
+last: Int
+before: String
+after: String
+order: [PackageFilter_order]
+season_current: Boolean
+name: String
+name_list: [String]
+name__ne__: String
+state: String
+state__ne__: String
+state_list: [String]
+state__ne___list: [String]
+person_account_id: Int
+person_account_id__ne__: Int
+person_account_id_list: [Int]
+person_account_id__ne___list: [Int]
+person_account_username: String
+person_account_username_list: [String]
+person_account_username__ne__: String
+person_id: Int
+person_id__ne__: Int
+person_id_list: [Int]
+person_id__ne___list: [Int]
+: PackageCollectionCursorConnection
+SPIDD Package.
+
+packageTables
+first: Int
+last: Int
+before: String
+after: String
+order: [PackageTableFilter_order]
+package_id: Int
+package_id__ne__: Int
+package_id_list: [Int]
+package_id__ne___list: [Int]
+: PackageTableCollectionCursorConnection
+pageElements
+first: Int
+last: Int
+before: String
+after: String
+: PageElementCollectionCursorConnection
+pages
+first: Int
+last: Int
+before: String
+after: String
+: PageCollectionCursorConnection
+parameters
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+order: [ParameterFilter_order]
+: ParameterCollectionCursorConnection
+partials
+first: Int
+last: Int
+before: String
+after: String
+: PartialCollectionCursorConnection
+A query in edition.
+
+participantPaymentEntries
+first: Int
+last: Int
+before: String
+after: String
+participant_session_id: Int
+participant_session_id__ne__: Int
+participant_session_id_list: [Int]
+participant_session_id__ne___list: [Int]
+participant_id: Int
+participant_id__ne__: Int
+participant_id_list: [Int]
+participant_id__ne___list: [Int]
+: ParticipantPaymentEntryCollectionCursorConnection
+A FFTT training session payment entry.
+
+participants
+first: Int
+last: Int
+before: String
+after: String
+person_licence_owningClub_id: Int
+person_licence_owningClub_id__ne__: Int
+person_licence_owningClub_id_list: [Int]
+person_licence_owningClub_id__ne___list: [Int]
+session_id: Int
+session_id__ne__: Int
+session_id_list: [Int]
+session_id__ne___list: [Int]
+session_training_diploma_nature_identifier: String
+session_training_diploma_nature_identifier__ne__: String
+session_training_diploma_nature_identifier_list: [String]
+session_training_diploma_nature_identifier__ne___list: [String]
+order: [ParticipantFilter_order]
+: ParticipantCollectionCursorConnection
+A FFTT training speaker.
+
+participations
+first: Int
+last: Int
+before: String
+after: String
+opponent_id: Int
+opponent_id__ne__: Int
+opponent_id_list: [Int]
+opponent_id__ne___list: [Int]
+opponent_licences_id: Int
+opponent_licences_id__ne__: Int
+opponent_licences_id_list: [Int]
+opponent_licences_id__ne___list: [Int]
+opponent_team_id: Int
+opponent_team_id__ne__: Int
+opponent_team_id_list: [Int]
+opponent_team_id__ne___list: [Int]
+tour: String
+tour__ne__: String
+tour_list: [String]
+tour__ne___list: [String]
+tour_division: String
+tour_division__ne__: String
+tour_division_list: [String]
+tour_division__ne___list: [String]
+tour_division_id: Int
+tour_division_id__ne__: Int
+tour_division_id_list: [Int]
+tour_division_id__ne___list: [Int]
+tour_division_contest: String
+tour_division_contest__ne__: String
+tour_division_contest_list: [String]
+tour_division_contest__ne___list: [String]
+tour_position: Int
+tour_position__ne__: Int
+tour_position_list: [Int]
+tour_position__ne___list: [Int]
+tour_division_doubleOpposition: Boolean
+exists: [ParticipationFilter_exists]
+order: [ParticipationFilter_order]
+: ParticipationCollectionCursorConnection
+payments
+first: Int
+last: Int
+before: String
+after: String
+: PaymentCollectionCursorConnection
+people
+first: Int
+last: Int
+before: String
+after: String
+organization_id: Int
+account_username: String
+account_username__ne__: String
+account_username_list: [String]
+account_username__ne___list: [String]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+familyName: String
+familyName__ne__: String
+familyName_list: [String]
+familyName__ne___list: [String]
+birthName: String
+birthName__ne__: String
+birthName_list: [String]
+birthName__ne___list: [String]
+givenName: String
+givenName__ne__: String
+givenName_list: [String]
+givenName__ne___list: [String]
+fullName: String
+fullName_list: [String]
+fullName__ne__: String
+licence_identifier: String
+licence_identifier__ne__: String
+licence_identifier_list: [String]
+licence_identifier__ne___list: [String]
+gender_id: Int
+gender_id__ne__: Int
+gender_id_list: [Int]
+gender_id__ne___list: [Int]
+licence_owningClub_id: Int
+licence_owningClub_id__ne__: Int
+licence_owningClub_id_list: [Int]
+licence_owningClub_id__ne___list: [Int]
+licence_licenceType_id: Int
+licence_licenceType_id__ne__: Int
+licence_licenceType_id_list: [Int]
+licence_licenceType_id__ne___list: [Int]
+licence_clubMemberships_club: String
+licence_clubMemberships_club__ne__: String
+licence_clubMemberships_club_list: [String]
+licence_clubMemberships_club__ne___list: [String]
+licence_clubMemberships_club_id: Int
+licence_clubMemberships_club_id__ne__: Int
+licence_clubMemberships_club_id_list: [Int]
+licence_clubMemberships_club_id__ne___list: [Int]
+licence_lastRenewal_season: String
+licence_lastRenewal_season__ne__: String
+licence_lastRenewal_season_list: [String]
+licence_lastRenewal_season__ne___list: [String]
+contactPoints_contactType: String
+contactPoints_contactType__ne__: String
+contactPoints_contactType_list: [String]
+contactPoints_contactType__ne___list: [String]
+contactPoints_contactType_identifier: String
+contactPoints_contactType_identifier__ne__: String
+contactPoints_contactType_identifier_list: [String]
+contactPoints_contactType_identifier__ne___list: [String]
+responsabilities_club_id: Int
+responsabilities_club_id__ne__: Int
+responsabilities_club_id_list: [Int]
+responsabilities_club_id__ne___list: [Int]
+responsabilities_accountantFunctions_responsability_identifier: String
+responsabilities_accountantFunctions_responsability_identifier__ne__: String
+responsabilities_accountantFunctions_responsability_identifier_list: [String]
+responsabilities_accountantFunctions_responsability_identifier__ne___list: [String]
+speakers_session_organization_id: Int
+speakers_session_organization_id__ne__: Int
+speakers_session_organization_id_list: [Int]
+speakers_session_organization_id__ne___list: [Int]
+speakers_session_training_type_id: Int
+speakers_session_training_type_id__ne__: Int
+speakers_session_training_type_id_list: [Int]
+speakers_session_training_type_id__ne___list: [Int]
+speakers_session_training_nature_id: Int
+speakers_session_training_nature_id__ne__: Int
+speakers_session_training_nature_id_list: [Int]
+speakers_session_training_nature_id__ne___list: [Int]
+speakers_session_training_id: Int
+speakers_session_training_id__ne__: Int
+speakers_session_training_id_list: [Int]
+speakers_session_training_id__ne___list: [Int]
+speakers_session_id: Int
+speakers_session_id__ne__: Int
+speakers_session_id_list: [Int]
+speakers_session_id__ne___list: [Int]
+participants_session_organization_id: Int
+participants_session_organization_id__ne__: Int
+participants_session_organization_id_list: [Int]
+participants_session_organization_id__ne___list: [Int]
+participants_session_training_type_id: Int
+participants_session_training_type_id__ne__: Int
+participants_session_training_type_id_list: [Int]
+participants_session_training_type_id__ne___list: [Int]
+participants_session_training_nature_id: Int
+participants_session_training_nature_id__ne__: Int
+participants_session_training_nature_id_list: [Int]
+participants_session_training_nature_id__ne___list: [Int]
+participants_session_training_id: Int
+participants_session_training_id__ne__: Int
+participants_session_training_id_list: [Int]
+participants_session_training_id__ne___list: [Int]
+participants_session_id: Int
+participants_session_id__ne__: Int
+participants_session_id_list: [Int]
+participants_session_id__ne___list: [Int]
+oldArchiveLicence_owningClub_identifier: String
+oldArchiveLicence_owningClub_identifier__ne__: String
+oldArchiveLicence_owningClub_identifier_list: [String]
+oldArchiveLicence_owningClub_identifier__ne___list: [String]
+order: [PersonFilter_order]
+exists: [PersonFilter_exists]
+speakers_session_valide: Boolean
+participants_session_valide: Boolean
+or: [PersonFilter_or]
+excludeTransfer: Boolean
+excludeMutation: Boolean
+birthDate: [PersonFilter_birthDate]
+licence_lastRenewal_renewalEndDate: [PersonFilter_licence_lastRenewal_renewalEndDate]
+participants_session_startDate: [PersonFilter_participants_session_startDate]
+participants_session_endDate: [PersonFilter_participants_session_endDate]
+speakers_session_startDate: [PersonFilter_speakers_session_startDate]
+speakers_session_endDate: [PersonFilter_speakers_session_endDate]
+where: Iterable
+search: String
+: PersonCollectionCursorConnection
+A person.
+
+period
+id: ID!
+: PeriodItem
+phases
+first: Int
+last: Int
+before: String
+after: String
+order: [PhaseFilter_order]
+: PhaseCollectionCursorConnection
+Represents a flag that can be bound to days of the current season.
+
+player
+id: ID!
+: PlayerItem
+Represents a player of a game.
+
+playerOppositionSheetLines
+first: Int
+last: Int
+before: String
+after: String
+: PlayerOppositionSheetLineCollectionCursorConnection
+Represents a abstract opposition between team players. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+playerOppositionSheets
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+name: String
+name_list: [String]
+name__ne__: String
+opponentCount: Int
+opponentCount__ne__: Int
+opponentCount_list: [Int]
+opponentCount__ne___list: [Int]
+oppositionCount: Int
+oppositionCount__ne__: Int
+oppositionCount_list: [Int]
+oppositionCount__ne___list: [Int]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+order: [PlayerOppositionSheetFilter_order]
+: PlayerOppositionSheetCollectionCursorConnection
+Represents a grid containg all abstract oppositions between team players.
+
+pointScale
+id: ID!
+: PointScaleItem
+represent a point scale.
+
+poolOpponents
+first: Int
+last: Int
+before: String
+after: String
+order: [PoolOpponentFilter_order]
+where: Iterable
+opponent_team_clubs_id: Int
+opponent_team_clubs_id__ne__: Int
+opponent_team_clubs_id_list: [Int]
+opponent_team_clubs_id__ne___list: [Int]
+opponent_team_clubs_identifier: String
+opponent_team_clubs_identifier__ne__: String
+opponent_team_clubs_identifier_list: [String]
+opponent_team_clubs_identifier__ne___list: [String]
+pool: String
+pool__ne__: String
+pool_list: [String]
+pool__ne___list: [String]
+pool_id: Int
+pool_id__ne__: Int
+pool_id_list: [Int]
+pool_id__ne___list: [Int]
+pool_group_tour: String
+pool_group_tour__ne__: String
+pool_group_tour_list: [String]
+pool_group_tour__ne___list: [String]
+pool_group_tour_division_phase_id: Int
+pool_group_tour_division_phase_id__ne__: Int
+pool_group_tour_division_phase_id_list: [Int]
+pool_group_tour_division_phase_id__ne___list: [Int]
+pool_group_tour_division_genders_identifier: String
+pool_group_tour_division_genders_identifier__ne__: String
+pool_group_tour_division_genders_identifier_list: [String]
+pool_group_tour_division_genders_identifier__ne___list: [String]
+pool_group_tour_division_contest_season_current: Boolean
+exists: [PoolOpponentFilter_exists]
+: PoolOpponentCollectionCursorConnection
+poolResults
+first: Int
+last: Int
+before: String
+after: String
+order: [PoolResultFilter_order]
+: PoolResultCollectionCursorConnection
+Represents a result for a pool.
+
+pools
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+group_id: Int
+group_id__ne__: Int
+group_id_list: [Int]
+group_id__ne___list: [Int]
+group_tour_division_id: Int
+group_tour_division_id__ne__: Int
+group_tour_division_id_list: [Int]
+group_tour_division_id__ne___list: [Int]
+group_tour_division_contest_type: String
+group_tour_division_contest_type__ne__: String
+group_tour_division_contest_type_list: [String]
+group_tour_division_contest_type__ne___list: [String]
+poolOpponents_opponent_team_clubs_id: Int
+poolOpponents_opponent_team_clubs_id__ne__: Int
+poolOpponents_opponent_team_clubs_id_list: [Int]
+poolOpponents_opponent_team_clubs_id__ne___list: [Int]
+group_tour_division_contest_season_current: Boolean
+order: [PoolFilter_order]
+: PoolCollectionCursorConnection
+ppspass
+id: ID!
+: ppspass
+ppspasses
+first: Int
+last: Int
+before: String
+after: String
+: ppspassCursorConnection
+prizes
+first: Int
+last: Int
+before: String
+after: String
+order: [PrizeFilter_order]
+: PrizeCollectionCursorConnection
+Prize is an award win by a club during a season.
+
+qualification
+id: ID!
+: QualificationItem
+Notice - Managed through Employment.
+
+question
+id: ID!
+: QuestionItem
+Question basically mirrors a HTML element, belongs to a .
+
+questionAnswer
+id: ID!
+: QuestionAnswerItem
+Middle-entity to map a <FormTemplate's Question> to multiple answers.
+
+questionOption
+id: ID!
+: QuestionOptionItem
+QuestionOption represents an option of a with multiple choices possible from a .
+
+refereeAssignments
+first: Int
+last: Int
+before: String
+after: String
+: RefereeAssignmentCollectionCursorConnection
+Represents an assignment of a licence as a judge for a given tour.
+
+refereeLists
+first: Int
+last: Int
+before: String
+after: String
+: RefereeListCollectionCursorConnection
+Represents an list of licence assignments as judges for a given tour.
+
+referentials
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+order: [ReferentialFilter_order]
+enabled: Boolean
+: ReferentialCollectionCursorConnection
+responsabilities
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+order: [ResponsabilityFilter_order]
+enabled: Boolean
+external: Boolean
+exists: [ResponsabilityFilter_exists]
+: ResponsabilityCollectionCursorConnection
+review
+id: ID!
+: ReviewItem
+roundGrids
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+name: String
+name_list: [String]
+name__ne__: String
+opponentCount: Int
+opponentCount__ne__: Int
+opponentCount_list: [Int]
+opponentCount__ne___list: [Int]
+type: Int
+type__ne__: Int
+type_list: [Int]
+type__ne___list: [Int]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+order: [RoundGridFilter_order]
+: RoundGridCollectionCursorConnection
+Represents a grid containing all points earned by each player regarding their position.
+
+rounds
+first: Int
+last: Int
+before: String
+after: String
+: RoundCollectionCursorConnection
+Represents a date in a contest. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+sanctionCases
+first: Int
+last: Int
+before: String
+after: String
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+contest_id: Int
+contest_id__ne__: Int
+contest_id_list: [Int]
+contest_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+status: Int
+status__ne__: Int
+status_list: [Int]
+status__ne___list: [Int]
+decision: Boolean
+order: [SanctionCaseFilter_order]
+: SanctionCaseCollectionCursorConnection
+sanctions
+first: Int
+last: Int
+before: String
+after: String
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+purged: Boolean
+order: [SanctionFilter_order]
+: SanctionCollectionCursorConnection
+scoringGridLines
+first: Int
+last: Int
+before: String
+after: String
+: ScoringGridLineCollectionCursorConnection
+Represents a abstract opposition between team players. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+scoringGrids
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+name: String
+name_list: [String]
+name__ne__: String
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+order: [ScoringGridFilter_order]
+: ScoringGridCollectionCursorConnection
+Represents a grid containg all points earned by player regarding their position.
+
+seasons
+first: Int
+last: Int
+before: String
+after: String
+startDate: [SeasonFilter_startDate]
+endDate: [SeasonFilter_endDate]
+current: Boolean
+order: [SeasonFilter_order]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+: SeasonCollectionCursorConnection
+A sport season.
+
+settings_club
+id: ID!
+: settings_clubItem
+sheetMatchPlayers
+first: Int
+last: Int
+before: String
+after: String
+player_id: Int
+player_id__ne__: Int
+player_id_list: [Int]
+player_id__ne___list: [Int]
+or: [SheetMatchPlayerFilter_or]
+: SheetMatchPlayerCollectionCursorConnection
+shortcutCollections
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+availableParent: String
+availableParentWith: Iterable
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+order: [ShortcutCollectionFilter_order]
+: ShortcutCollectionCollectionCursorConnection
+Contest implementation for an organization and with sport filters like category, club type, ...
+
+shortcuts
+first: Int
+last: Int
+before: String
+after: String
+: ShortcutCollectionCursorConnection
+speakers
+first: Int
+last: Int
+before: String
+after: String
+session_id: Int
+session_id__ne__: Int
+session_id_list: [Int]
+session_id__ne___list: [Int]
+order: [SpeakerFilter_order]
+: SpeakerCollectionCursorConnection
+A FFTT training speaker.
+
+sportHalls
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name_list: [String]
+name__ne__: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+town_name: String
+town_name_list: [String]
+town_name__ne__: String
+clubs_club_identifier: String
+clubs_club_identifier_list: [String]
+clubs_club_identifier__ne__: String
+clubs_club_id: Int
+clubs_club_id__ne__: Int
+clubs_club_id_list: [Int]
+clubs_club_id__ne___list: [Int]
+specificHall: Boolean
+order: [SportHallFilter_order]
+exists: [SportHallFilter_exists]
+or: [SportHallFilter_or]
+search: String
+: SportHallCollectionCursorConnection
+sportMatchChange
+id: ID!
+: SportMatchChangeItem
+Represents a change of a certain type on a specific field for a sportMatch. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+sportMatchChangeRequest
+id: ID!
+: SportMatchChangeRequestItem
+SportMatchChangeRequest is a request/demand made by a club to change one or more properties of a sportMatch.
+
+sportMatches
+first: Int
+last: Int
+before: String
+after: String
+changeRequests_applicantClub_id: Int
+changeRequests_applicantClub_id__ne__: Int
+changeRequests_applicantClub_id_list: [Int]
+changeRequests_applicantClub_id__ne___list: [Int]
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+day_position: Int
+day_position__ne__: Int
+day_position_list: [Int]
+day_position__ne___list: [Int]
+division_id: Int
+division_id__ne__: Int
+division_id_list: [Int]
+division_id__ne___list: [Int]
+division_contest_id: Int
+division_contest_id__ne__: Int
+division_contest_id_list: [Int]
+division_contest_id__ne___list: [Int]
+division_contest_season_current: Boolean
+division_contest_season_current__ne__: Boolean
+division_contest_season_current_list: [Boolean]
+division_contest_season_current__ne___list: [Boolean]
+division_contest_type: String
+division_contest_type__ne__: String
+division_contest_type_list: [String]
+division_contest_type__ne___list: [String]
+division_organization_id: Int
+division_organization_id__ne__: Int
+division_organization_id_list: [Int]
+division_organization_id__ne___list: [Int]
+division_organization_identifier: String
+division_organization_identifier__ne__: String
+division_organization_identifier_list: [String]
+division_organization_identifier__ne___list: [String]
+group_id: Int
+group_id__ne__: Int
+group_id_list: [Int]
+group_id__ne___list: [Int]
+pool_id: Int
+pool_id__ne__: Int
+pool_id_list: [Int]
+pool_id__ne___list: [Int]
+pool_name: String
+pool_name__ne__: String
+pool_name_list: [String]
+pool_name__ne___list: [String]
+roundNumber: Int
+roundNumber__ne__: Int
+roundNumber_list: [Int]
+roundNumber__ne___list: [Int]
+tour_id: Int
+tour_id__ne__: Int
+tour_id_list: [Int]
+tour_id__ne___list: [Int]
+or: [SportMatchFilter_or]
+date: [SportMatchFilter_date]
+order: [SportMatchFilter_order]
+exists: [SportMatchFilter_exists]
+: SportMatchCollectionCursorConnection
+stockArticles
+first: Int
+last: Int
+before: String
+after: String
+order: [StockArticleFilter_order]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+: StockArticleCollectionCursorConnection
+stockArticleVersions
+first: Int
+last: Int
+before: String
+after: String
+order: [StockArticleVersionFilter_order]
+article_id: Int
+article_id__ne__: Int
+article_id_list: [Int]
+article_id__ne___list: [Int]
+article_organization_id: Int
+article_organization_id__ne__: Int
+article_organization_id_list: [Int]
+article_organization_id__ne___list: [Int]
+: StockArticleVersionCollectionCursorConnection
+stockMovement
+id: ID!
+: StockMovementItem
+structureAccountants
+first: Int
+last: Int
+before: String
+after: String
+structure_id: Int
+structure_id__ne__: Int
+structure_id_list: [Int]
+structure_id__ne___list: [Int]
+order: [StructureAccountantFilter_order]
+: StructureAccountantCollectionCursorConnection
+structureParticipants
+first: Int
+last: Int
+before: String
+after: String
+structure_id: Int
+structure_id__ne__: Int
+structure_id_list: [Int]
+structure_id__ne___list: [Int]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+licence_identifier: [StructureParticipantFilter_licence_identifier]
+order: [StructureParticipantFilter_order]
+: StructureParticipantCollectionCursorConnection
+structures
+first: Int
+last: Int
+before: String
+after: String
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+valid: Boolean
+order: [StructureFilter_order]
+: StructureCollectionCursorConnection
+subscriptions
+first: Int
+last: Int
+before: String
+after: String
+order: [SubscriptionFilter_order]
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+format: String
+format__ne__: String
+format_list: [String]
+format__ne___list: [String]
+journal_id: Int
+journal_id__ne__: Int
+journal_id_list: [Int]
+journal_id__ne___list: [Int]
+organization: String
+organization__ne__: String
+organization_list: [String]
+organization__ne___list: [String]
+person: String
+person__ne__: String
+person_list: [String]
+person__ne___list: [String]
+person_id: Int
+person_id__ne__: Int
+person_id_list: [Int]
+person_id__ne___list: [Int]
+season_id: Int
+season_id__ne__: Int
+season_id_list: [Int]
+season_id__ne___list: [Int]
+type: String
+type__ne__: String
+type_list: [String]
+type__ne___list: [String]
+or: [SubscriptionFilter_or]
+where: Iterable
+journal_firstJournalNumber: [SubscriptionFilter_journal_firstJournalNumber]
+journal_lastJournalNumber: [SubscriptionFilter_journal_lastJournalNumber]
+fromNumber: [SubscriptionFilter_fromNumber]
+toNumber: [SubscriptionFilter_toNumber]
+search: String
+: SubscriptionCollectionCursorConnection
+table
+id: ID!
+: TableItem
+tableResults
+first: Int
+last: Int
+before: String
+after: String
+order: [TableResultFilter_order]
+: TableResultCollectionCursorConnection
+Represents a result for a tournament table.
+
+team
+id: ID!
+: Team
+a club team.
+
+teamPasses
+first: Int
+last: Int
+before: String
+after: String
+club_id: Int
+club_id__ne__: Int
+club_id_list: [Int]
+club_id__ne___list: [Int]
+division_contest_id: Int
+division_contest_id__ne__: Int
+division_contest_id_list: [Int]
+division_contest_id__ne___list: [Int]
+division_id: Int
+division_id__ne__: Int
+division_id_list: [Int]
+division_id__ne___list: [Int]
+division_phase_id: Int
+division_phase_id__ne__: Int
+division_phase_id_list: [Int]
+division_phase_id__ne___list: [Int]
+where: Iterable
+: TeamPassCollectionCursorConnection
+teams
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+position: Int
+position__ne__: Int
+position_list: [Int]
+position__ne___list: [Int]
+contest_id: Int
+contest_id__ne__: Int
+contest_id_list: [Int]
+contest_id__ne___list: [Int]
+name: String
+name_list: [String]
+name__ne__: String
+clubs_id: Int
+clubs_id__ne__: Int
+clubs_id_list: [Int]
+clubs_id__ne___list: [Int]
+opponents_poolOpponents_pool_id: Int
+opponents_poolOpponents_pool_id__ne__: Int
+opponents_poolOpponents_pool_id_list: [Int]
+opponents_poolOpponents_pool_id__ne___list: [Int]
+opponents_participations_tour_division_id: Int
+opponents_participations_tour_division_id__ne__: Int
+opponents_participations_tour_division_id_list: [Int]
+opponents_participations_tour_division_id__ne___list: [Int]
+order: [TeamFilter_order]
+: TeamCursorConnection
+a club team.
+
+technicalEmployments
+first: Int
+last: Int
+before: String
+after: String
+order: [TechnicalEmploymentFilter_order]
+: TechnicalEmploymentCollectionCursorConnection
+thirds
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+name: String
+name_list: [String]
+name__ne__: String
+siret: String
+siret_list: [String]
+siret__ne__: String
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+siege_mainAddress_postalCode: String
+siege_mainAddress_postalCode_list: [String]
+siege_mainAddress_postalCode__ne__: String
+siege_mainAddress_addressLocality: String
+siege_mainAddress_addressLocality_list: [String]
+siege_mainAddress_addressLocality__ne__: String
+: ThirdCollectionCursorConnection
+tourGridLines
+first: Int
+last: Int
+before: String
+after: String
+: TourGridLineCollectionCursorConnection
+tourGrids
+first: Int
+last: Int
+before: String
+after: String
+: TourGridCollectionCursorConnection
+tournamentColumnHeaders
+first: Int
+last: Int
+before: String
+after: String
+: TournamentColumnHeaderCollectionCursorConnection
+Represents a tournament table column header. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+tournamentRequest
+id: ID!
+: TournamentRequestItem
+tournamentResponse
+id: ID!
+: TournamentResponseItem
+tournamentSlots
+first: Int
+last: Int
+before: String
+after: String
+: TournamentSlotCollectionCursorConnection
+Represents a tournament table slot. Is created/updated through its parent only. That's why it has its parent (de)normalization groups.
+
+tournamentTables
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+exists: [TournamentTableFilter_exists]
+enabled: Boolean
+order: [TournamentTableFilter_order]
+: TournamentTableCollectionCursorConnection
+Represents a tournament table.
+
+tourRegistrations
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+status: String
+status__ne__: String
+status_list: [String]
+status__ne___list: [String]
+tour_confirmationEndDate: String
+tour_confirmationEndDate__ne__: String
+tour_confirmationEndDate_list: [String]
+tour_confirmationEndDate__ne___list: [String]
+tour_division_contest_id: Int
+tour_division_contest_id__ne__: Int
+tour_division_contest_id_list: [Int]
+tour_division_contest_id__ne___list: [Int]
+tour_division_organization_id: Int
+tour_division_organization_id__ne__: Int
+tour_division_organization_id_list: [Int]
+tour_division_organization_id__ne___list: [Int]
+tour_division_id: Int
+tour_division_id__ne__: Int
+tour_division_id_list: [Int]
+tour_division_id__ne___list: [Int]
+tour_id: Int
+tour_id__ne__: Int
+tour_id_list: [Int]
+tour_id__ne___list: [Int]
+tour_position: Int
+tour_position__ne__: Int
+tour_position_list: [Int]
+tour_position__ne___list: [Int]
+tour_division_contest_season_current: Boolean
+tour_date: [TourRegistrationFilter_tour_date]
+or: [TourRegistrationFilter_or]
+exists: [TourRegistrationFilter_exists]
+order: [TourRegistrationFilter_order]
+registrationOwner: String
+: TourRegistrationCollectionCursorConnection
+tourResults
+first: Int
+last: Int
+before: String
+after: String
+order: [TourResultFilter_order]
+opponent_licences_identifier: String
+opponent_licences_identifier__ne__: String
+opponent_licences_identifier_list: [String]
+opponent_licences_identifier__ne___list: [String]
+node_division_contest_id: Int
+node_division_contest_id__ne__: Int
+node_division_contest_id_list: [Int]
+node_division_contest_id__ne___list: [Int]
+node_division_contest_formula: String
+node_division_contest_formula__ne__: String
+node_division_contest_formula_list: [String]
+node_division_contest_formula__ne___list: [String]
+node_division_contest_season_id: Int
+node_division_contest_season_id__ne__: Int
+node_division_contest_season_id_list: [Int]
+node_division_contest_season_id__ne___list: [Int]
+node_division_criteriumFormula: String
+node_division_criteriumFormula__ne__: String
+node_division_criteriumFormula_list: [String]
+node_division_criteriumFormula__ne___list: [String]
+groupResult_node_id: Int
+groupResult_node_id__ne__: Int
+groupResult_node_id_list: [Int]
+groupResult_node_id__ne___list: [Int]
+groupResult_node_name: String
+groupResult_node_name__ne__: String
+groupResult_node_name_list: [String]
+groupResult_node_name__ne___list: [String]
+: TourResultCollectionCursorConnection
+Represents a result for a tour.
+
+tours
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+division_id: Int
+division_id__ne__: Int
+division_id_list: [Int]
+division_id__ne___list: [Int]
+division: String
+division__ne__: String
+division_list: [String]
+division__ne___list: [String]
+division_contest_id: Int
+division_contest_id__ne__: Int
+division_contest_id_list: [Int]
+division_contest_id__ne___list: [Int]
+order: [TourFilter_order]
+position: [TourFilter_position]
+: TourCollectionCursorConnection
+towns
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name_list: [String]
+name__ne__: String
+postalCode: String
+postalCode__ne__: String
+postalCode_list: [String]
+postalCode__ne___list: [String]
+order: [TownFilter_order]
+or: [TownFilter_or]
+: TownCollectionCursorConnection
+A city.
+
+trainers
+first: Int
+last: Int
+before: String
+after: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+licence_id: Int
+licence_id__ne__: Int
+licence_id_list: [Int]
+licence_id__ne___list: [Int]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+type_id: Int
+type_id__ne__: Int
+type_id_list: [Int]
+type_id__ne___list: [Int]
+role_id: Int
+role_id__ne__: Int
+role_id_list: [Int]
+role_id__ne___list: [Int]
+order: [TrainerFilter_order]
+: TrainerCollectionCursorConnection
+Formateur pour Rôle de formateur.
+
+trainings
+first: Int
+last: Int
+before: String
+after: String
+name: String
+name__ne__: String
+name_list: [String]
+name__ne___list: [String]
+identifier: String
+identifier__ne__: String
+identifier_list: [String]
+identifier__ne___list: [String]
+type_id: Int
+type_id__ne__: Int
+type_id_list: [Int]
+type_id__ne___list: [Int]
+nature_id: Int
+nature_id__ne__: Int
+nature_id_list: [Int]
+nature_id__ne___list: [Int]
+accountant_id: Int
+accountant_id__ne__: Int
+accountant_id_list: [Int]
+accountant_id__ne___list: [Int]
+sessions_organization_id: Int
+sessions_organization_id__ne__: Int
+sessions_organization_id_list: [Int]
+sessions_organization_id__ne___list: [Int]
+order: [TrainingFilter_order]
+active: Boolean
+sessions_valide: Boolean
+iff: Boolean
+exists: [TrainingFilter_exists]
+: TrainingCollectionCursorConnection
+A FFTT training.
+
+trainingSessions
+first: Int
+last: Int
+before: String
+after: String
+availableFor: String
+identifier: String
+identifier_list: [String]
+identifier__ne__: String
+id: Int
+id__ne__: Int
+id_list: [Int]
+id__ne___list: [Int]
+training_nature_id: Int
+training_nature_id__ne__: Int
+training_nature_id_list: [Int]
+training_nature_id__ne___list: [Int]
+training_type_id: Int
+training_type_id__ne__: Int
+training_type_id_list: [Int]
+training_type_id__ne___list: [Int]
+training_id: Int
+training_id__ne__: Int
+training_id_list: [Int]
+training_id__ne___list: [Int]
+organization_id: Int
+organization_id__ne__: Int
+organization_id_list: [Int]
+organization_id__ne___list: [Int]
+order: [TrainingSessionFilter_order]
+where: Iterable
+valide: Boolean
+visibleForLicence: Boolean
+startDate: [TrainingSessionFilter_startDate]
+endDate: [TrainingSessionFilter_endDate]
+: TrainingSessionCollectionCursorConnection
+A FFTT training.
+
+transactions
+first: Int
+last: Int
+before: String
+after: String
+payment_paymentDate: [TransactionFilter_payment_paymentDate]
+order: [TransactionFilter_order]
+exists: [TransactionFilter_exists]
+: TransactionCollectionCursorConnection
+transfer
+id: ID!
+: TransferItem
+values
+first: Int
+last: Int
+before: String
+after: String
+: ValueCollectionCursorConnection
+An edition.
+
+warnings
+first: Int
+last: Int
+before: String
+after: String
+sportMatches_tour_id: Int
+sportMatches_tour_id__ne__: Int
+sportMatches_tour_id_list: [Int]
+sportMatches_tour_id__ne___list: [Int]
+participations_tour_id: Int
+participations_tour_id__ne__: Int
+participations_tour_id_list: [Int]
+participations_tour_id__ne___list: [Int]
+or: [WarningFilter_or]
+: WarningCollectionCursorConnection
+zonePermissions
+first: Int
+last: Int
+before: String
+after: String
+order: [ZonePermissionFilter_order]
+: ZonePermissionCollectionCursorConnection
+ZonePermission defines user permissions on a Zone instance.
+
+zones
+first: Int
+last: Int
+before: String
+after: String
+federation_id: Int
+federation_id_list: [Int]
+availableFor: String
+id: Int
+id_list: [Int]
+name: String
+identifier: String
+identifier_list: [String]
+order: [ZoneFilter_order]
+where: Iterable
+organizationType: String
+organizationType_list: Iterable
+: ZoneCollectionCursorConnection

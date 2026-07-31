@@ -1203,10 +1203,13 @@ app.post('/fftt/games-preview', async (c) => {
   const ffttGameIds = new Set(
     gameRows.results.flatMap((g) => (g.game_id ? [g.game_id as string] : [g.id as string])),
   )
-  const existingByPairing = new Map<string, { id: string; date: string | null }>()
+  const existingByPairing = new Map<string, { id: string; date: string | null; ffttId: string | null }>()
   for (const g of gameRows.results) {
     const key = (home: unknown, away: unknown) => `${g.match_day_id}|${home}|${away}`
-    const entry = { id: g.id as string, date: (g.date as string | null) ?? null }
+    const entry = {
+      id: g.id as string, date: (g.date as string | null) ?? null,
+      ffttId: (g.game_id as string | null) ?? null,
+    }
     existingByPairing.set(key(g.home_team_id, g.away_team_id), entry)
     existingByPairing.set(key(g.away_team_id, g.home_team_id), entry)
   }
@@ -1226,7 +1229,7 @@ app.post('/fftt/games-preview', async (c) => {
       }
     }
     const rounds = new Set<number>()
-    let newGames = 0, existingGames = 0, newMatchDays = 0, dateMismatches = 0
+    let newGames = 0, existingGames = 0, newMatchDays = 0, dateMismatches = 0, ffttIdsToLink = 0
     const groupNewTeams = new Set<string>()
     const seenRounds = new Set<number>()
     for (const m of ctx.matches) {
@@ -1244,6 +1247,11 @@ app.post('/fftt/games-preview', async (c) => {
         : undefined
       if (gameIds.has(m.id) || byPairing) {
         existingGames++
+        // Present but with no FFTT match id — imported from a document. The
+        // import adopts the id (#294), which is real work even when there is
+        // nothing new to create, so the preview has to report it or the
+        // confirm button stays disabled and the link never happens.
+        if (byPairing && !byPairing.ffttId) ffttIdsToLink++
         const storedDate = byPairing
           ? byPairing.date
           : gameRows.results.find((g) => (g.game_id ?? g.id) === m.id)?.date ?? null
@@ -1271,6 +1279,8 @@ app.post('/fftt/games-preview', async (c) => {
       // a PDF calendar's real slot, or a genuine reschedule. Never applied
       // silently; the import only touches them when asked.
       dateMismatches,
+      /** Existing games that would gain their FFTT match id (#294). */
+      ffttIdsToLink,
       newTeams: groupNewTeams.size,
     }
   })
