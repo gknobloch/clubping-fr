@@ -1,0 +1,42 @@
+// Typechecking for the Cloudflare API (#285).
+//
+// The root tsconfig.json has "include": ["src"], so until now `npm run build`
+// compiled the frontend and never looked at functions/ — the largest file in
+// the project, and the one that talks to the database. That is how #284
+// shipped: a local helper shadowed an imported one and was called with three
+// arguments instead of one, which `tsc` rejects instantly.
+//
+// Two type environments, not one. This project deliberately gets ONLY
+// @cloudflare/workers-types, with no "node": wrangler.toml sets no
+// nodejs_compat flag, so `import { webcrypto } from 'node:crypto'` does not
+// exist at runtime here. Adding @types/node to silence the test file would
+// make that import compile and then fail in production — the exact class of
+// mistake this config is meant to catch. The test runs under vitest in Node,
+// so it is checked separately by tsconfig.functions.test.json.
+{
+  "compilerOptions": {
+    // Matches the workers runtime rather than the browser: no DOM lib, since
+    // anything reaching for `document` or `DOMParser` here is a bug.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["functions"],
+  "exclude": ["functions/**/*.test.ts", "functions/**/*.spec.ts"]
+}

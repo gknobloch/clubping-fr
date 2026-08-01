@@ -22,6 +22,20 @@ const strip = (value: string, prefix: string) =>
   value.startsWith(prefix) ? value.slice(prefix.length) : value
 
 /**
+ * Local club id from an FFTT affiliation number: `club-fftt-<8 digits>`, or
+ * null when the number is not exactly 8 digits (#275).
+ *
+ * Lives here rather than next to the rest of the club import (#285): that
+ * module parses XML with DOMParser, and the API — which needs this id — runs
+ * in a worker with no DOM. Pulling the browser module into a worker-typed
+ * project to reach three lines of string handling is the wrong dependency.
+ */
+export function clubIdFromAffiliation(affiliationNumber: string | undefined): string | null {
+  const n = (affiliationNumber ?? '').trim()
+  return /^\d{8}$/.test(n) ? `club-fftt-${n}` : null
+}
+
+/**
  * Local team id: `team-<club>-<phase>-<number>`, e.g.
  * `team-06680011-27-1-3` for club-fftt-06680011, phase-27-1, team 3.
  *

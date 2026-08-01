@@ -2,8 +2,13 @@
 import { describe, it, expect } from 'vitest'
 import { webcrypto } from 'node:crypto'
 
-// Cloudflare Workers expose Web Crypto as the global `crypto`; provide it in Node.
-if (!globalThis.crypto) (globalThis as unknown as { crypto: Crypto }).crypto = webcrypto as unknown as Crypto
+// Cloudflare Workers expose Web Crypto as the global `crypto`; provide it in
+// Node. Node has had it natively since 19, so this is a no-op on current
+// runtimes — kept for older ones. Read and write through the same cast: the
+// worker types declare `crypto` as a bare global, not a property of
+// globalThis, so `globalThis.crypto` does not typecheck (#285).
+const globalWithCrypto = globalThis as unknown as { crypto?: Crypto }
+if (!globalWithCrypto.crypto) globalWithCrypto.crypto = webcrypto as unknown as Crypto
 
 import { genOtp, hashOtp, verifyOidcJwt } from './auth'
 
@@ -46,12 +51,18 @@ async function makeSignedJwt(
   payload: Record<string, unknown>,
   kid = 'test-key',
 ): Promise<{ token: string; jwks: { keys: unknown[] } }> {
-  const { publicKey, privateKey } = await crypto.subtle.generateKey(
+  // workers-types types generateKey as `CryptoKey | CryptoKeyPair` — it has no
+  // per-algorithm overloads narrowing it the way the DOM lib does. RSASSA is
+  // asymmetric, so a pair is what comes back.
+  const { publicKey, privateKey } = (await crypto.subtle.generateKey(
     { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
     true,
     ['sign', 'verify'],
-  )
-  const jwk = (await crypto.subtle.exportKey('jwk', publicKey)) as Record<string, unknown>
+  )) as CryptoKeyPair
+  // Likewise exportKey: 'jwk' yields a JsonWebKey, but the signature returns
+  // `ArrayBuffer | JsonWebKey`. JsonWebKey has no index signature, hence the
+  // hop through unknown.
+  const jwk = (await crypto.subtle.exportKey('jwk', publicKey)) as unknown as Record<string, unknown>
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid }))
   const body = b64url(JSON.stringify(payload))
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, enc.encode(`${header}.${body}`))

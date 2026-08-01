@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gameIdFor, homeGameDate, teamIdFor } from './entityIds'
+import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from './entityIds'
 
 describe('teamIdFor', () => {
   it('derives a readable id from club, phase and number', () => {
@@ -88,5 +88,20 @@ describe('homeGameDate — applied consistently on create and update (#299)', ()
 
   it('leaves an away fixture on the nominal date when the home club is unknown', () => {
     expect(homeGameDate('2026-11-22', '')).toBe('2026-11-22')
+  })
+})
+
+describe('clubIdFromAffiliation', () => {
+  it('builds the FFTT-aligned id from an 8-digit affiliation number', () => {
+    expect(clubIdFromAffiliation('06680011')).toBe('club-fftt-06680011')
+    expect(clubIdFromAffiliation('  06680011  ')).toBe('club-fftt-06680011')
+  })
+
+  it('returns null when there is no usable number, so the caller can fall back', () => {
+    expect(clubIdFromAffiliation('')).toBeNull()
+    expect(clubIdFromAffiliation(undefined)).toBeNull()
+    expect(clubIdFromAffiliation('123')).toBeNull()
+    expect(clubIdFromAffiliation('0668001A')).toBeNull()
+    expect(clubIdFromAffiliation('066800110')).toBeNull()
   })
 })

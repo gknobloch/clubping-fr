@@ -198,6 +198,33 @@ export interface GameSelection {
 }
 
 /**
+ * The whole dataset the app holds — and, byte for byte, the body of
+ * GET /api/data.
+ *
+ * It lives here rather than inside DataContext (#285) so both ends of that
+ * request are checked against the same declaration: the API annotates its
+ * response with it, the client asserts the response is it. Before, the server
+ * built anonymous object literals and the client asserted a shape it could not
+ * see, so a field could be renamed or dropped on one side with nothing to
+ * notice. Note the limit: a field that is optional here (Game.date, say) can
+ * still go missing from the payload without a type error — see #292.
+ */
+export interface DataState {
+  divisions: Division[]
+  clubs: Club[]
+  seasons: Season[]
+  phases: Phase[]
+  groups: Group[]
+  teams: Team[]
+  players: Player[]
+  matchDays: MatchDay[]
+  games: Game[]
+  gameAvailabilities: GameAvailability[]
+  gameSelections: GameSelection[]
+  users: User[]
+}
+
+/**
  * A person in the system. Every player is a user (isPlayer = true); some users
  * (admins) are not players. Person fields are populated when isPlayer is true.
  */

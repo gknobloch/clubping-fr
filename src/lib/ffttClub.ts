@@ -131,20 +131,11 @@ export function defaultSelectedFields(fields: ClubSyncField[]): Set<ClubSyncFiel
   return new Set(fields.filter((f) => !f.unchanged && !f.unavailable).map((f) => f.key))
 }
 
-/** Whether a club detail carries any usable game-venue information at all. */
-/**
- * FFTT-aligned club id (#275): `club-fftt-<affiliationNumber>`, the format the
- * games and schedule-document imports already produce for the clubs they
- * auto-create (clubIdFor). Returns null when the number isn't a usable FFTT
- * affiliation number, in which case the caller falls back to a generated id —
- * a club can legitimately have no number (its column is nullable since
- * migration 0019).
- */
-export function clubIdFromAffiliation(affiliationNumber: string | undefined): string | null {
-  const n = (affiliationNumber ?? '').trim()
-  return /^\d{8}$/.test(n) ? `club-fftt-${n}` : null
-}
+// clubIdFromAffiliation used to live here. It moved to entityIds.ts in #285 so
+// the API can derive a club id without this module's DOMParser following it
+// into a worker. Its rationale (#275) travelled with it.
 
+/** Whether a club detail carries any usable game-venue information at all. */
 export function hasVenueInfo(d: Pick<FfttClubDetail, 'street' | 'postalCode' | 'city'>): boolean {
   return Boolean(d.street || d.postalCode || d.city)
 }

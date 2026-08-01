@@ -1,0 +1,17 @@
+// Typechecking for the API's own vitest tests (#285).
+//
+// Same worker types as tsconfig.functions.json — the tests import worker code,
+// which uses D1Database and the global Web Crypto — plus @types/node, because
+// these tests run under Node and legitimately reach for node:crypto to supply
+// the `crypto` global the workers runtime provides for free.
+//
+// Kept apart from the worker project on purpose: node types belong to the test
+// environment, not to the deployed code. See tsconfig.functions.json.
+{
+  "extends": "./tsconfig.functions.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": ["functions/**/*.test.ts", "functions/**/*.spec.ts"],
+  "exclude": []
+}
