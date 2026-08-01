@@ -1,10 +1,14 @@
 import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, bearer, userFromToken, type Env } from './auth'
+import { jsonParseIds, jsonParseStringMap } from './rows'
+import type { Address, ClubChannel, DataState } from '../../src/types'
+import type {
+  SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
+} from './rows'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
-import { clubIdFromAffiliation } from '../../src/lib/ffttClub'
-import { gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
+import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
@@ -45,10 +49,6 @@ app.route('/auth', authApp)
 
 // --- Helpers ---
 const bool = (v: unknown) => v === 1 || v === true
-const jsonParse = (v: unknown): unknown => {
-  if (typeof v === 'string') { try { return JSON.parse(v) } catch { return v } }
-  return v ?? []
-}
 const jsonStr = (v: unknown) => JSON.stringify(v)
 
 // --- GET /api/data — return all entities ---
@@ -59,19 +59,19 @@ app.get('/data', async (c) => {
     groupsR, teamsR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
   ] = await Promise.all([
-    db.prepare('SELECT * FROM seasons').all(),
-    db.prepare('SELECT * FROM phases').all(),
-    db.prepare('SELECT * FROM divisions').all(),
-    db.prepare('SELECT * FROM clubs').all(),
-    db.prepare('SELECT * FROM club_addresses').all(),
-    db.prepare('SELECT * FROM club_channels ORDER BY sort_order').all(),
-    db.prepare('SELECT * FROM groups').all(),
-    db.prepare('SELECT * FROM teams').all(),
-    db.prepare('SELECT * FROM match_days').all(),
-    db.prepare('SELECT * FROM games').all(),
-    db.prepare('SELECT * FROM game_availabilities').all(),
-    db.prepare('SELECT * FROM game_selections').all(),
-    db.prepare('SELECT * FROM users').all(),
+    db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
+    db.prepare('SELECT * FROM phases').all<PhaseRow>(),
+    db.prepare('SELECT * FROM divisions').all<DivisionRow>(),
+    db.prepare('SELECT * FROM clubs').all<ClubRow>(),
+    db.prepare('SELECT * FROM club_addresses').all<ClubAddressRow>(),
+    db.prepare('SELECT * FROM club_channels ORDER BY sort_order').all<ClubChannelRow>(),
+    db.prepare('SELECT * FROM groups').all<GroupRow>(),
+    db.prepare('SELECT * FROM teams').all<TeamRow>(),
+    db.prepare('SELECT * FROM match_days').all<MatchDayRow>(),
+    db.prepare('SELECT * FROM games').all<GameRow>(),
+    db.prepare('SELECT * FROM game_availabilities').all<GameAvailabilityRow>(),
+    db.prepare('SELECT * FROM game_selections').all<GameSelectionRow>(),
+    db.prepare('SELECT * FROM users').all<UserRow>(),
     // Only the version marker — the image bytes are served separately so this
     // bulk payload stays light.
     db.prepare('SELECT user_id, updated_at FROM player_avatars').all(),
@@ -84,9 +84,9 @@ app.get('/data', async (c) => {
     clubLogosR.results.map((r) => [r.club_id as string, r.updated_at as string]),
   )
 
-  const addrByClub = new Map<string, unknown[]>()
+  const addrByClub = new Map<string, Address[]>()
   for (const a of addressesR.results) {
-    const cid = a.club_id as string
+    const cid = a.club_id
     if (!addrByClub.has(cid)) addrByClub.set(cid, [])
     addrByClub.get(cid)!.push({
       id: a.id, label: a.label, street: a.street,
@@ -95,9 +95,9 @@ app.get('/data', async (c) => {
   }
 
   // Channels are pre-sorted by sort_order in the query above.
-  const channelsByClub = new Map<string, unknown[]>()
+  const channelsByClub = new Map<string, ClubChannel[]>()
   for (const ch of channelsR.results) {
-    const cid = ch.club_id as string
+    const cid = ch.club_id
     if (!channelsByClub.has(cid)) channelsByClub.set(cid, [])
     channelsByClub.get(cid)!.push({
       id: ch.id, type: ch.type, link: ch.link, sortOrder: ch.sort_order,
@@ -109,18 +109,23 @@ app.get('/data', async (c) => {
   // source of truth for a team's division, and the stored copy had drifted on
   // 24 of 148 production rows. Still projected onto the Team payload so the UI
   // can read it directly — derived here, never stored.
-  const divisionByGroup = new Map(groupsR.results.map(g => [g.id as string, g.division_id as string]))
+  const divisionByGroup = new Map(groupsR.results.map(g => [g.id, g.division_id]))
 
-  return c.json({
+  // Annotated with the shared contract (#285) so a field renamed or dropped
+  // here fails the build instead of reaching the client as undefined.
+  const payload: DataState = {
     seasons: seasonsR.results.map(r => ({
       id: r.id, displayName: r.display_name, status: r.status,
     })),
     phases: phasesR.results.map(r => ({
       id: r.id, seasonId: r.season_id, name: r.name, displayName: r.display_name,
-      // Fallback for databases that haven't run migration 0012 yet: PR
-      // previews share the production D1 but never run migrations, so the
-      // old is_active/is_archived columns may still be what exists.
-      status: r.status ?? (bool(r.is_active) ? 'active' : bool(r.is_archived) ? 'archived' : 'upcoming'),
+      // There used to be a fallback here reading the pre-0012 is_active /
+      // is_archived columns, on the grounds that PR previews shared the
+      // production D1 and never ran migrations. Both halves are now false:
+      // #296 gave previews their own migrated database, and 0012 dropped
+      // those columns everywhere, so the fallback could only ever have
+      // returned 'upcoming'. Typing the row (#285) is what surfaced it.
+      status: r.status,
     })),
     divisions: divisionsR.results.map(r => ({
       id: r.id, phaseId: r.phase_id, displayName: r.display_name,
@@ -130,23 +135,23 @@ app.get('/data', async (c) => {
       ...(r.parent_id ? { parentId: r.parent_id } : {}),
     })),
     clubs: clubsR.results.map(r => ({
-      id: r.id, affiliationNumber: r.affiliation_number, displayName: r.display_name,
+      id: r.id, affiliationNumber: r.affiliation_number ?? '', displayName: r.display_name,
       isArchived: bool(r.is_archived),
-      addresses: addrByClub.get(r.id as string) ?? [],
-      channels: channelsByClub.get(r.id as string) ?? [],
-      ...(logoUpdatedAt.has(r.id as string)
-        ? { logoUpdatedAt: logoUpdatedAt.get(r.id as string) }
+      addresses: addrByClub.get(r.id) ?? [],
+      channels: channelsByClub.get(r.id) ?? [],
+      ...(logoUpdatedAt.has(r.id)
+        ? { logoUpdatedAt: logoUpdatedAt.get(r.id) }
         : {}),
     })),
     groups: groupsR.results.map(r => ({
-      id: r.id, divisionId: r.division_id, number: r.number, teamIds: jsonParse(r.team_ids),
+      id: r.id, divisionId: r.division_id, number: r.number, teamIds: jsonParseIds(r.team_ids),
       isArchived: bool(r.is_archived),
       ...(r.group_id ? { groupId: r.group_id } : {}),
     })),
     // Players are the projection of users where is_player = 1.
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
-      id: r.id, firstName: r.first_name, lastName: r.last_name,
-      licenseNumber: r.license_number, email: r.email, phone: r.phone ?? '',
+      id: r.id, firstName: r.first_name ?? '', lastName: r.last_name ?? '',
+      licenseNumber: r.license_number ?? '', email: r.email, phone: r.phone,
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
       status: r.status, clubId: r.club_id ?? '',
@@ -161,8 +166,8 @@ app.get('/data', async (c) => {
       defaultDay: r.default_day, defaultTime: r.default_time, captainId: r.captain_id,
       isArchived: bool(r.is_archived),
       ...(r.team_id ? { teamId: r.team_id } : {}),
-      playerIds: jsonParse(r.player_ids),
-      ...(r.roster_initial_points ? { rosterInitialPoints: jsonParse(r.roster_initial_points) } : {}),
+      playerIds: jsonParseIds(r.player_ids),
+      ...(r.roster_initial_points ? { rosterInitialPoints: jsonParseStringMap(r.roster_initial_points) } : {}),
       ...(r.color ? { color: r.color } : {}),
       ...(r.whatsapp_link ? { whatsappLink: r.whatsapp_link } : {}),
     })),
@@ -187,7 +192,7 @@ app.get('/data', async (c) => {
       ...(r.overridden_by ? { overriddenBy: r.overridden_by } : {}),
     })),
     gameSelections: selectionsR.results.map(r => ({
-      gameId: r.game_id, teamId: r.team_id, playerIds: jsonParse(r.player_ids),
+      gameId: r.game_id, teamId: r.team_id, playerIds: jsonParseIds(r.player_ids),
     })),
     users: usersR.results.map(r => ({
       id: r.id, email: r.email, role: r.role, isPlayer: bool(r.is_player),
@@ -200,7 +205,8 @@ app.get('/data', async (c) => {
       ...(r.status ? { status: r.status } : {}),
       ...(r.club_id ? { clubId: r.club_id } : {}),
     })),
-  })
+  }
+  return c.json(payload)
 })
 
 // --- Seasons ---
@@ -765,7 +771,7 @@ app.post('/teams/import', async (c) => {
   const groupRows = await db.prepare('SELECT id, division_id, number, team_ids, is_archived, group_id FROM groups').all()
   const groups = groupRows.results.map((g) => ({
     id: g.id as string, divisionId: g.division_id as string, number: g.number as number,
-    teamIds: (jsonParse(g.team_ids) as string[]) ?? [], isArchived: bool(g.is_archived),
+    teamIds: jsonParseIds(g.team_ids), isArchived: bool(g.is_archived),
     groupId: (g.group_id as string | null) ?? undefined,
   }))
   const existing = await clubTeamKeys(db, clubId)
@@ -1078,7 +1084,7 @@ async function gamesImportContext(
     if (!division) return { groupId, error: 'group_not_found' }
     const group = {
       id: groupId, divisionId: g.division_id as string, number: g.number as number,
-      teamIds: (jsonParse(g.team_ids) as string[]) ?? [],
+      teamIds: jsonParseIds(g.team_ids),
     }
     // Even error rows keep the division/poule identity so the UI can name
     // them ("GE 2 Phase 1 · Poule 9") instead of a raw group id.
@@ -1717,7 +1723,7 @@ function closestRosterNameForNumber(
 }
 
 app.post('/schedule-documents/import', async (c) => {
-  const b = await c.req.json()
+  const b = await c.req.json<Record<string, unknown>>()
   const schedules = (Array.isArray(b.schedules) ? b.schedules.slice(0, 10) : [])
     .map(parseScheduleDocInput)
     .filter((s): s is ScheduleDocInput => s !== null)
@@ -1750,7 +1756,7 @@ app.post('/schedule-documents/import', async (c) => {
   type GroupState = { id: string; divisionId: string; number: number; teamIds: string[]; isArchived: boolean }
   const groupById = new Map<string, GroupState>(groupRows.results.map((g) => [g.id as string, {
     id: g.id as string, divisionId: g.division_id as string, number: g.number as number,
-    teamIds: (jsonParse(g.team_ids) as string[]) ?? [], isArchived: false,
+    teamIds: jsonParseIds(g.team_ids), isArchived: false,
   }]))
   const groupNumbersByDivision = new Map<string, Set<number>>()
   for (const g of groupById.values()) {
@@ -2622,7 +2628,7 @@ app.delete('/teams/:id', async (c) => {
   // Remove team from group's team_ids
   const groupsR = await db.prepare('SELECT id, team_ids FROM groups').all()
   for (const g of groupsR.results) {
-    const teamIds: string[] = jsonParse(g.team_ids) as string[]
+    const teamIds = jsonParseIds(g.team_ids)
     if (teamIds.includes(id)) {
       await db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?')
         .bind(jsonStr(teamIds.filter(t => t !== id)), g.id).run()

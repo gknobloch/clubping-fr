@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { UserRow } from './rows'
 
 // Shared environment for the whole API. Secrets/vars are configured as
 // Cloudflare Pages bindings (see wrangler.toml notes).
@@ -191,20 +192,9 @@ async function sendOtpEmail(env: Env['Bindings'], to: string, code: string): Pro
 // ---------------------------------------------------------------------------
 // Users / sessions
 // ---------------------------------------------------------------------------
-type UserRow = {
-  id: string
-  email: string
-  role: string
-  is_player: number
-  first_name: string | null
-  last_name: string | null
-  license_number: string | null
-  phone: string | null
-  birth_date: string | null
-  birth_place: string | null
-  status: string | null
-  club_id: string | null
-}
+// UserRow used to be declared here, looser (role and status as plain strings).
+// It moved to rows.ts in #285 so the users table has one shape shared with the
+// rest of the API rather than two that can drift apart.
 
 function serializeUser(r: UserRow) {
   return {

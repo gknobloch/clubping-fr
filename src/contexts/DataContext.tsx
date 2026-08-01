@@ -13,6 +13,7 @@ import type {
   Address,
   Club,
   ClubChannel,
+  DataState,
   Organization,
   Season,
   SeasonStatus,
@@ -26,7 +27,6 @@ import type {
   GameSelection,
   AvailabilityStatus,
   AvailabilityOverriddenBy,
-  User,
 } from '@/types'
 import {
   mockDivisions,
@@ -45,8 +45,7 @@ import {
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
-import { clubIdFromAffiliation } from '@/lib/ffttClub'
-import { gameIdFor, teamIdFor } from '@/lib/entityIds'
+import { clubIdFromAffiliation, gameIdFor, teamIdFor } from '@/lib/entityIds'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
 import {
@@ -59,20 +58,8 @@ import { deriveMatchDayDate } from '@/lib/matchdays'
 const demotedSeasonStatus = (seasonId: string, newSeasonId: string): SeasonStatus =>
   Number(seasonId) < Number(newSeasonId) ? 'archived' : 'upcoming'
 
-interface DataState {
-  divisions: Division[]
-  clubs: Club[]
-  seasons: Season[]
-  phases: Phase[]
-  groups: Group[]
-  teams: Team[]
-  players: Player[]
-  matchDays: MatchDay[]
-  games: Game[]
-  gameAvailabilities: GameAvailability[]
-  gameSelections: GameSelection[]
-  users: User[]
-}
+// DataState moved to src/types (#285): it is the GET /api/data contract, so
+// the API is annotated with the same declaration this file asserts against.
 
 function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
