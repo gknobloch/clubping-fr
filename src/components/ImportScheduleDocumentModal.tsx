@@ -374,8 +374,9 @@ export function ImportScheduleDocumentModal({
                         {!blocked && (
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="block text-xs font-medium text-slate-500">Division</label>
+                              <label htmlFor={`sched-div-${entry.id}`} className="block text-xs font-medium text-slate-500">Division</label>
                               <select
+                                id={`sched-div-${entry.id}`}
                                 value={entry.divisionChoice}
                                 onChange={(e) => changeDivision(entry, e.target.value)}
                                 className={selectClass}
@@ -387,8 +388,9 @@ export function ImportScheduleDocumentModal({
                               </select>
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500">Groupe</label>
+                              <label htmlFor={`sched-group-${entry.id}`} className="block text-xs font-medium text-slate-500">Groupe</label>
                               <select
+                                id={`sched-group-${entry.id}`}
                                 value={entry.groupChoice}
                                 onChange={(e) => updateEntry(entry.id, { groupChoice: e.target.value })}
                                 className={selectClass}
