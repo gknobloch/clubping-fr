@@ -67,6 +67,12 @@ export interface ParsedScheduleDocument {
   journees: ParsedScheduleJournee[]
   /** Non-fatal parse issues surfaced to the admin for manual review. */
   warnings: string[]
+  /**
+   * Issues that make the document unimportable (#299). A warning invites a
+   * look; an error means the parse is provably wrong and importing it would
+   * write bad data — the admin cannot override it, only fix the document.
+   */
+  errors: string[]
 }
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
@@ -88,7 +94,34 @@ function normalizeTeamNumber(raw: string): number {
 }
 
 const ROSTER_RE = new RegExp(`^(\\d+)\\s+(.+?)\\s+(${TEAM_NUMBER_RE_SRC})[.,']?\\s+(${DAY_RE_SRC})\\s+(\\d{1,2}h\\d{0,2})\\s+(\\S+)$`)
-const JOURNEE_RE = /^Journ[ée]e\s+(\d+)\s*:\s*(.+)$/i
+// The journée number gets the same OCR tolerance as team numbers above, for
+// the same reason and from a real document: a Poule 22 PDF came back as
+// "Journée S : du 16 au 22 novembre 2026" — tesseract read the 5 as an S.
+// With a digits-only pattern that header stopped being a header, so its four
+// match rows silently appended to journée 4, which then held two rounds and
+// dated the strays inside the wrong week (#298).
+//
+// Only the classic shape confusions, and only inside a line that already says
+// "Journée … :" followed by something — narrow enough that no ordinary line
+// can be mistaken for a header.
+const JOURNEE_NUMBER_RE_SRC = '[0-9OoQIl|ZzSsGbTBgq]{1,2}'
+const JOURNEE_RE = new RegExp(`^Journ[ée]e\\s+(${JOURNEE_NUMBER_RE_SRC})\\s*:\\s*(.+)$`, 'i')
+
+const OCR_DIGITS: Record<string, string> = {
+  O: '0', o: '0', Q: '0',
+  I: '1', l: '1', '|': '1',
+  Z: '2', z: '2',
+  S: '5', s: '5',
+  G: '6', b: '6',
+  T: '7',
+  B: '8',
+  g: '9', q: '9',
+}
+
+/** "S" → 5, "1O" → 10; NaN when the token still isn't a number. */
+function normalizeJourneeNumber(raw: string): number {
+  return Number([...raw].map((ch) => OCR_DIGITS[ch] ?? ch).join(''))
+}
 // A real OCR pass inserted one or two stray standalone underscores between
 // the home team's number and "contre" ("... BARR TT 4 _ contre ...", "...
 // BARR TT 4 __ contre ...") — noise from a faint table rule or vertical
@@ -208,6 +241,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
   const divisionLabel = lines[headerIdx].slice(0, poolMatch.index).trim()
 
   const warnings: string[] = []
+  const errors: string[] = []
 
   let phaseNumber: number | null = null
   let seasonLabel = ''
@@ -254,7 +288,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
         const parsed = parseJourneeDate(jm[2].trim())
         if (!parsed) warnings.push(`Date de la journée ${jm[1]} illisible : "${jm[2].trim()}"`)
         current = {
-          number: Number(jm[1]),
+          number: normalizeJourneeNumber(jm[1]),
           dateType: parsed?.type ?? 'fixed',
           date: parsed?.date ?? null,
           rangeEndDate: parsed?.rangeEndDate ?? null,
@@ -264,6 +298,9 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
         continue
       }
       if (!current) continue
+      // The template's trailing "Edition du 15/07/2026" is not a match row;
+      // warning about it every time only buries the warnings that matter.
+      if (/^edition\s+du\b/i.test(line)) continue
       const mm = MATCH_RE.exec(line)
       if (!mm) {
         warnings.push(`Ligne de match illisible (journée ${current.number}) : "${line}"`)
@@ -313,7 +350,46 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
     j.matches.forEach((m, i) => { m.date = perMatch[i] ?? best ?? j.date })
   }
 
-  return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings }
+  // Sanity checks on the assembled journées (#298).
+  //
+  // A "Journée N" header lost while extracting text from the document is
+  // invisible otherwise: its match rows simply append to the journée still
+  // open, which then holds two rounds' fixtures and resolves the strays inside
+  // the WRONG week. That happened on a real Poule 22 import — J5's four
+  // matches landed in J4, dated inside 2-8 November instead of 16-22 — and
+  // raised nothing at all, because every line parsed perfectly well as a match
+  // of J4.
+  //
+  // Two cheap invariants catch it: a team plays at most once per journée, and
+  // journée numbers run consecutively.
+  const normalizeName = (n: string) => stripAccents(n.toLowerCase()).replace(/[^a-z0-9]+/g, '')
+  for (const j of journees) {
+    const seen = new Map<string, number>()
+    for (const m of j.matches) {
+      for (const key of [
+        `${normalizeName(m.homeName)}|${m.homeNumber}`,
+        `${normalizeName(m.awayName)}|${m.awayNumber}`,
+      ]) seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    const repeated = [...seen.values()].filter((n) => n > 1).length
+    if (repeated > 0) {
+      // A team plays once per journée, always — so this is not a judgement
+      // call the admin can make, it is a proven mis-parse. Almost certainly a
+      // lost "Journée N" header whose fixtures fell into the previous round.
+      errors.push(
+        `Journée ${j.number} : ${repeated} équipe(s) y jouent plusieurs fois, ce qui est ` +
+        "impossible. L'en-tête d'une journée a probablement été perdu à la lecture du " +
+        'document et ses matchs rattachés à celle-ci. Ce fichier ne peut pas être importé.',
+      )
+    }
+  }
+  const numbers = journees.map((j) => j.number)
+  const highest = numbers.length ? Math.max(...numbers) : 0
+  for (let n = 1; n < highest; n++) {
+    if (!numbers.includes(n)) warnings.push(`Journée ${n} absente du document.`)
+  }
+
+  return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings, errors }
 }
 
 /**

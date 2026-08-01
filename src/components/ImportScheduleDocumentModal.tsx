@@ -45,6 +45,7 @@ export function ImportScheduleDocumentModal({
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(false)
+  const [updateSlots, setUpdateSlots] = useState(true)
   const [imported, setImported] = useState<ScheduleDocImportResult | null>(null)
 
   const updateEntry = (id: string, patch: Partial<FileEntry>) =>
@@ -134,7 +135,10 @@ export function ImportScheduleDocumentModal({
   }
 
   const readyEntries = entries.filter((e): e is FileEntry & { parsed: ParsedScheduleDocument } =>
-    e.status === 'ready' && !!e.parsed && !e.seasonMissing && e.parsed.seasonId !== null && e.parsed.phaseNumber !== null)
+    e.status === 'ready' && !!e.parsed && !e.seasonMissing && e.parsed.seasonId !== null
+    && e.parsed.phaseNumber !== null
+    // A document the parser proved wrong is never importable (#299).
+    && e.parsed.errors.length === 0)
 
   const buildPayload = (entry: FileEntry & { parsed: ParsedScheduleDocument }): ScheduleDocImportInput => {
     const p = entry.parsed
@@ -147,7 +151,12 @@ export function ImportScheduleDocumentModal({
       newGroupNumber: p.poolNumber,
       teams: p.teams
         .filter((t) => t.affiliationValid)
-        .map((t) => ({ name: t.name, number: t.number, affiliationNumber: t.affiliationNumber })),
+        // The roster states each team's playing day and time (#294) — the one
+        // source that actually knows them for an opponent club.
+        .map((t) => ({
+          name: t.name, number: t.number, affiliationNumber: t.affiliationNumber,
+          day: t.day, time: t.time,
+        })),
       journees: p.journees
         .filter((j) => !!j.date)
         .map((j) => ({
@@ -170,7 +179,7 @@ export function ImportScheduleDocumentModal({
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importScheduleDocuments(readyEntries.map(buildPayload))
+    const result = await importScheduleDocuments(readyEntries.map(buildPayload), updateSlots)
     setImporting(false)
     if (result) {
       setImported(result)
@@ -211,6 +220,23 @@ export function ImportScheduleDocumentModal({
         </p>
 
         <div className="mt-4 space-y-4">
+          {!imported && readyEntries.length > 0 && (
+            <label className="mb-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <input
+                type="checkbox"
+                checked={updateSlots}
+                onChange={(e) => setUpdateSlots(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
+              />
+              <span className="text-sm text-slate-700">
+                Mettre à jour la date et l’heure des matchs déjà présents
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Le document indique le vrai créneau de chaque rencontre, là où la FFTT publie une
+                  date de week-end théorique. Un créneau modifié à la main n’est jamais écrasé.
+                </span>
+              </span>
+            </label>
+          )}
           {imported && (
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 space-y-1">
               <p className="text-sm text-green-800">
@@ -218,6 +244,16 @@ export function ImportScheduleDocumentModal({
                   ? 'Aucun match à importer : le calendrier est déjà à jour.'
                   : `${plural(imported.createdGames.length, 'match')} importé${imported.createdGames.length > 1 ? 's' : ''}.`}
               </p>
+              {!!imported.updatedGameSlots && (
+                <p className="text-sm text-green-800">
+                  {plural(imported.updatedGameSlots, 'match')} recalé{imported.updatedGameSlots > 1 ? 's' : ''} sur la date et l’heure du document.
+                </p>
+              )}
+              {!!imported.slotMismatches && (
+                <p className="text-sm text-amber-700">
+                  {plural(imported.slotMismatches, 'match')} déjà présent{imported.slotMismatches > 1 ? 's' : ''} à une autre date/heure, conservé{imported.slotMismatches > 1 ? 's' : ''}.
+                </p>
+              )}
               {(imported.createdDivisions.length > 0 || imported.createdGroups.length > 0) && (
                 <p className="text-sm text-green-800">
                   {imported.createdDivisions.length > 0 && `${plural(imported.createdDivisions.length, 'division')} créée${imported.createdDivisions.length > 1 ? 's' : ''}`}
@@ -382,6 +418,11 @@ export function ImportScheduleDocumentModal({
                           {p.journees.some((j) => j.dateType === 'range') && ' · dates approximatives à confirmer'}
                         </p>
 
+                        {p.errors.length > 0 && (
+                          <ul className="mt-2 space-y-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                            {p.errors.map((e, i) => <li key={i}>{e}</li>)}
+                          </ul>
+                        )}
                         {p.warnings.length > 0 && (
                           <details className="text-xs text-slate-400">
                             <summary className="cursor-pointer">{plural(p.warnings.length, 'avertissement')} de lecture</summary>

@@ -179,6 +179,12 @@ export interface Game {
   time?: string
   /** This game's own date (#271); falls back to its match day's (derived) date when unset. */
   date?: string
+  /**
+   * Where this game's date and time come from (#294): 'fftt' or 'document'
+   * for an import, 'manual' once a human set the slot — which no import then
+   * overwrites. Absent for games predating the field.
+   */
+  source?: 'fftt' | 'document' | 'manual'
   /** FFTT match id, when this game came from FFTT (#282). */
   gameId?: string
 }

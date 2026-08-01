@@ -405,7 +405,11 @@ export const mockGames: Game[] = [
   { id: 'g8-6', matchDayId: 'md-g7-6', homeTeamId: 'opp-kembs-4', awayTeamId: 'team-8' },
   { id: 'g8-7', matchDayId: 'md-g7-7', homeTeamId: 'opp-illzach-11', awayTeamId: 'team-8' },
   // "Retour" fixtures (see mockMatchDays) — future games for team-1 and team-7.
-  { id: 'g1-8', matchDayId: 'md-g1-8', homeTeamId: 'team-1', awayTeamId: 'opp-etival-1' },
+  // Its own date and time, two days after its journée's (#292): an FFTT round
+  // spans a week and a club can play another day, so a game must show ITS
+  // date, not the journée's derived one. `date` was missing from /api/data
+  // entirely, and this is what covers that path end to end.
+  { id: 'g1-8', matchDayId: 'md-g1-8', homeTeamId: 'team-1', awayTeamId: 'opp-etival-1', date: '2026-08-13', time: '9h30', source: 'manual' },
   { id: 'g7-8', matchDayId: 'md-g6-8', homeTeamId: 'team-7', awayTeamId: 'opp-huningue-3' },
 ]
 
