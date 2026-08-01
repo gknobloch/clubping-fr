@@ -135,7 +135,10 @@ export function ImportScheduleDocumentModal({
   }
 
   const readyEntries = entries.filter((e): e is FileEntry & { parsed: ParsedScheduleDocument } =>
-    e.status === 'ready' && !!e.parsed && !e.seasonMissing && e.parsed.seasonId !== null && e.parsed.phaseNumber !== null)
+    e.status === 'ready' && !!e.parsed && !e.seasonMissing && e.parsed.seasonId !== null
+    && e.parsed.phaseNumber !== null
+    // A document the parser proved wrong is never importable (#299).
+    && e.parsed.errors.length === 0)
 
   const buildPayload = (entry: FileEntry & { parsed: ParsedScheduleDocument }): ScheduleDocImportInput => {
     const p = entry.parsed
@@ -415,6 +418,11 @@ export function ImportScheduleDocumentModal({
                           {p.journees.some((j) => j.dateType === 'range') && ' · dates approximatives à confirmer'}
                         </p>
 
+                        {p.errors.length > 0 && (
+                          <ul className="mt-2 space-y-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                            {p.errors.map((e, i) => <li key={i}>{e}</li>)}
+                          </ul>
+                        )}
                         {p.warnings.length > 0 && (
                           <details className="text-xs text-slate-400">
                             <summary className="cursor-pointer">{plural(p.warnings.length, 'avertissement')} de lecture</summary>

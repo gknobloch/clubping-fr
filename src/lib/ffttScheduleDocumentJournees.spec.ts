@@ -17,9 +17,12 @@ Mercredi 20h WILLER SUR THUR 1 contre OSTHEIM CPPC 1 -
 Jeudi 19h30 RIXHEIM PPA 4 contre KEMBS TT 2 -`
 
 describe('journée sanity checks', () => {
-  it('warns when a lost header merges two rounds into one', () => {
-    const r = parseScheduleDocumentLines(missingHeader.split('\n')) as { warnings: string[] }
-    expect(r.warnings.join(' ')).toMatch(/Journée 4 : 4 équipe\(s\) y jouent plusieurs fois/)
+  it('refuses a document where a lost header merged two rounds', () => {
+    // A team plays once per journée, always — so this is a proven mis-parse,
+    // not a judgement call, and the entry must be unimportable (#299).
+    const r = parseScheduleDocumentLines(missingHeader.split('\n')) as { errors: string[]; warnings: string[] }
+    expect(r.errors.join(' ')).toMatch(/Journée 4 : 4 équipe\(s\) y jouent plusieurs fois, ce qui est impossible/)
+    expect(r.errors.join(' ')).toMatch(/ne peut pas être importé/)
   })
 
   it('warns about a gap in the journée numbering', () => {
@@ -40,7 +43,8 @@ Mardi 20h15 KEMBS TT 2 contre WILLER SUR THUR 1 -
 Journée 2 : du 28 sept au 04 octobre 2026
 Mercredi 20h WILLER SUR THUR 1 contre OSTHEIM CPPC 1 -
 Jeudi 19h30 RIXHEIM PPA 4 contre KEMBS TT 2 -`
-    const r = parseScheduleDocumentLines(ok.split('\n')) as { warnings: string[] }
+    const r = parseScheduleDocumentLines(ok.split('\n')) as { warnings: string[]; errors: string[] }
     expect(r.warnings).toEqual([])
+    expect(r.errors).toEqual([])
   })
 })

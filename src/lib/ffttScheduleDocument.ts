@@ -67,6 +67,12 @@ export interface ParsedScheduleDocument {
   journees: ParsedScheduleJournee[]
   /** Non-fatal parse issues surfaced to the admin for manual review. */
   warnings: string[]
+  /**
+   * Issues that make the document unimportable (#299). A warning invites a
+   * look; an error means the parse is provably wrong and importing it would
+   * write bad data — the admin cannot override it, only fix the document.
+   */
+  errors: string[]
 }
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
@@ -235,6 +241,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
   const divisionLabel = lines[headerIdx].slice(0, poolMatch.index).trim()
 
   const warnings: string[] = []
+  const errors: string[] = []
 
   let phaseNumber: number | null = null
   let seasonLabel = ''
@@ -366,10 +373,13 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
     }
     const repeated = [...seen.values()].filter((n) => n > 1).length
     if (repeated > 0) {
-      warnings.push(
-        `Journée ${j.number} : ${repeated} équipe(s) y jouent plusieurs fois. L'en-tête d'une ` +
-        'journée suivante a probablement été perdu à la lecture du document, et ses matchs ont ' +
-        'été rattachés à celle-ci — vérifiez avant d\'importer.',
+      // A team plays once per journée, always — so this is not a judgement
+      // call the admin can make, it is a proven mis-parse. Almost certainly a
+      // lost "Journée N" header whose fixtures fell into the previous round.
+      errors.push(
+        `Journée ${j.number} : ${repeated} équipe(s) y jouent plusieurs fois, ce qui est ` +
+        "impossible. L'en-tête d'une journée a probablement été perdu à la lecture du " +
+        'document et ses matchs rattachés à celle-ci. Ce fichier ne peut pas être importé.',
       )
     }
   }
@@ -379,7 +389,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
     if (!numbers.includes(n)) warnings.push(`Journée ${n} absente du document.`)
   }
 
-  return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings }
+  return { divisionLabel, poolNumber, phaseLabel, phaseNumber, seasonLabel, seasonId, teams, journees, warnings, errors }
 }
 
 /**
