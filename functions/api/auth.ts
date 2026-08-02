@@ -177,10 +177,10 @@ async function sendOtpEmail(env: Env['Bindings'], to: string, code: string): Pro
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM ?? 'Ping Club <onboarding@resend.dev>',
+      from: env.RESEND_FROM ?? 'Club Ping <onboarding@resend.dev>',
       to: [to],
       subject: `Votre code de connexion : ${code}`,
-      text: `Votre code de connexion Ping Club est : ${code}\n\nIl expire dans 10 minutes.`,
+      text: `Votre code de connexion Club Ping est : ${code}\n\nIl expire dans 10 minutes.`,
     }),
   })
   if (!res.ok) {

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Ping Club",
-    "slug": "pingclub-fr",
+    "name": "Club Ping",
+    "slug": "clubping-fr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "ppc",
+    "scheme": "clubping",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "fr.pingclub.app",
+      "bundleIdentifier": "fr.clubping.app",
       "usesAppleSignIn": true
     },
     "android": {
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e293b"
       },
-      "package": "fr.pingclub.app"
+      "package": "fr.clubping.app"
     },
     "web": {
       "bundler": "metro",

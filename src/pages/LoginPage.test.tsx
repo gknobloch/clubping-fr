@@ -5,7 +5,7 @@ import { LoginPage } from './LoginPage'
 describe('LoginPage', () => {
   it('renders the email sign-in step', () => {
     render(<LoginPage />)
-    expect(screen.getByRole('heading', { name: /Ping Club/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Club Ping/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/Adresse e-mail/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Recevoir un code/i })).toBeInTheDocument()
   })

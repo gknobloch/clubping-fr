@@ -37,7 +37,7 @@ export function AppShell() {
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" className="font-display text-lg font-semibold text-slate-800">
-            Ping Club
+            Club Ping
           </Link>
           <nav className="flex items-center gap-4">
             <Link to="/" className={navLinkClass(location.pathname === '/')}>

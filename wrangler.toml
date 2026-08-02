@@ -1,4 +1,4 @@
-name = "ping-pong-club"
+name = "clubping-fr"
 pages_build_output_dir = "./dist"
 compatibility_date = "2025-01-01"
 
@@ -6,8 +6,8 @@ compatibility_date = "2025-01-01"
 # deployment (the `main` branch); every other branch gets [env.preview] below.
 [[d1_databases]]
 binding = "DB"
-database_name = "ping-pong-club-db"
-database_id = "11b715a2-d479-4bdd-9474-8ba49ce74c6c"
+database_name = "clubping-fr-prod"
+database_id = "e9978079-2659-4fc1-a7ba-a189180029ec"
 
 # Preview — every PR/branch deployment (#296).
 #
@@ -16,12 +16,12 @@ database_id = "11b715a2-d479-4bdd-9474-8ba49ce74c6c"
 # 500 on every query touching a column its migration adds), and merely trying
 # a preview wrote to real data.
 #
-# pingclub-db-dev is a copy of production, migrated by preview.yml before each
+# clubping-fr-dev is a copy of production, migrated by preview.yml before each
 # preview deploy. Refresh it deliberately with `npm run db:refresh:dev`.
 [[env.preview.d1_databases]]
 binding = "DB"
-database_name = "pingclub-db-dev"
-database_id = "6a20526a-d888-489d-bf53-2245afdc0856"
+database_name = "clubping-fr-dev"
+database_id = "033f804f-e2d5-48e3-a5f5-8e3b34dd2411"
 
 # Auth config (see docs/AUTH_SETUP.md).
 # This project manages plain vars through wrangler.toml (the Cloudflare dashboard
@@ -30,10 +30,10 @@ database_id = "6a20526a-d888-489d-bf53-2245afdc0856"
 # (or `wrangler pages secret put RESEND_API_KEY`) — never committed.
 # Locally, all of these come from `.dev.vars` (see .dev.vars.example).
 [vars]
-RESEND_FROM = "Ping Club <no-reply@mail.leskno.fr>"
+RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # Comma-separated accepted OIDC audiences — fill in once OAuth clients exist (#100):
 #   GOOGLE_CLIENT_IDS = "web-id,ios-id,android-id"
-#   APPLE_CLIENT_IDS  = "fr.pingclub.web,fr.pingclub.app"
+#   APPLE_CLIENT_IDS  = "fr.clubping.web,fr.clubping.app"
 
 # Named environments do NOT inherit `vars` (nor `d1_databases`): anything the
 # preview needs has to be repeated here, or a preview deployment silently loses
@@ -43,4 +43,4 @@ RESEND_FROM = "Ping Club <no-reply@mail.leskno.fr>"
 # the preview environment too — set it in the dashboard, or with
 # `wrangler pages secret put RESEND_API_KEY --env preview`.
 [env.preview.vars]
-RESEND_FROM = "Ping Club <no-reply@mail.leskno.fr>"
+RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"

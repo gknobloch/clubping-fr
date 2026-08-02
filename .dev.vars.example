@@ -10,14 +10,14 @@
 RESEND_API_KEY=
 # Verified sender. Resend's shared onboarding@resend.dev only delivers to the
 # Resend account owner's address; use a verified domain for real users.
-RESEND_FROM=Ping Club <onboarding@resend.dev>
+RESEND_FROM=Club Ping <onboarding@resend.dev>
 
 # --- OAuth accepted audiences (comma-separated, PUBLIC) ---
 # The backend verifies each OIDC id_token's `aud` against these lists.
 # Google: include every client id that can issue a token — web + iOS + Android.
 GOOGLE_CLIENT_IDS=
 # Apple: include the web Service ID *and* the native app bundle id
-# (com.ppclub.app), since their id_tokens carry different `aud` values.
+# (fr.clubping.app), since their id_tokens carry different `aud` values.
 APPLE_CLIENT_IDS=
 
 # --- Session guard (#98) ---

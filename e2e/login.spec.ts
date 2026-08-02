@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 test.describe('Login and home', () => {
   test('unauthenticated user sees login page', async ({ page }) => {
     await page.goto('/login')
-    await expect(page.getByRole('heading', { name: /Ping Club/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Club Ping/i })).toBeVisible()
     await expect(page.getByPlaceholder(/Nom ou adresse email/i)).toBeVisible()
   })
 

@@ -1,4 +1,4 @@
-# Ping Club — Claude Code Project Guide
+# Club Ping — Claude Code Project Guide
 
 ## Project overview
 Mobile-friendly web app for managing table tennis club players, teams, availability, and match scheduling. French-language UI.
