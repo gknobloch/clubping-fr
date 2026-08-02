@@ -1,4 +1,4 @@
-# Ping Club — Mobile (Expo)
+# Club Ping — Mobile (Expo)
 
 Native iOS and Android app built with Expo and expo-router. Uses the same Cloudflare Pages API as the web app.
 
@@ -45,7 +45,7 @@ npm run android
 
 Set it in `mobile/.env`:
 ```
-EXPO_PUBLIC_API_URL=https://ping-pong-club.pages.dev
+EXPO_PUBLIC_API_URL=https://clubping.fr
 ```
 
 ## Project structure

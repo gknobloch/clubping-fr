@@ -27,6 +27,6 @@ test.describe('Player — Compte', () => {
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: 'Déconnexion' }).click()
     await expect(page).toHaveURL(/\/login/)
-    await expect(page.getByRole('heading', { name: /Ping Club/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Club Ping/i })).toBeVisible()
   })
 })

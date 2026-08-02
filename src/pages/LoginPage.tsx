@@ -65,7 +65,7 @@ export function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
       <div className="w-full max-w-md">
         <h1 className="font-display text-2xl font-semibold text-slate-800 text-center mb-2">
-          Ping Club
+          Club Ping
         </h1>
         <p className="text-slate-600 text-center text-sm mb-8">
           {step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}

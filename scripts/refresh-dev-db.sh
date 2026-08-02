@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Re-seed pingclub-db-dev from production (#296).
+# Re-seed clubping-fr-dev from production (#296).
 #
-# Deliberate on purpose: previews run against pingclub-db-dev, so refreshing it
+# Deliberate on purpose: previews run against clubping-fr-dev, so refreshing it
 # destroys whatever a PR was being tested with. Nothing does this automatically.
 #
 # Reads production, writes only the dev database. The export lands outside the
 # repo — it holds real member names, emails and phone numbers.
 set -euo pipefail
 
-PROD_DB="ping-pong-club-db"
-DEV_DB="pingclub-db-dev"
+PROD_DB="clubping-fr-prod"
+DEV_DB="clubping-fr-dev"
 DEST="${HOME}/d1-backups"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DUMP="${DEST}/prod-export-${STAMP}.sql"

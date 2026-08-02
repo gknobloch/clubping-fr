@@ -1,14 +1,14 @@
 {
-  "name": "fr.pingclub.webapp",
+  "name": "fr.clubping.webapp",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:full": "npm run build && npx wrangler pages dev",
-    "db:migrate:local": "for f in migrations/*.sql; do echo \"-> $f\"; wrangler d1 execute ping-pong-club-db --local --file=\"$f\" || true; done",
-    "db:migrate:remote": "for f in migrations/*.sql; do echo \"-> $f\"; wrangler d1 execute pingclub-db-dev --remote --file=\"$f\" || true; done",
-    "db:seed:local": "wrangler d1 execute ping-pong-club-db --local --file=seed.sql",
+    "db:migrate:local": "for f in migrations/*.sql; do echo \"-> $f\"; wrangler d1 execute clubping-fr-prod --local --file=\"$f\" || true; done",
+    "db:migrate:remote": "for f in migrations/*.sql; do echo \"-> $f\"; wrangler d1 execute clubping-fr-dev --remote --file=\"$f\" || true; done",
+    "db:seed:local": "wrangler d1 execute clubping-fr-prod --local --file=seed.sql",
     "typecheck": "tsc -b && tsc -p tsconfig.functions.json && tsc -p tsconfig.functions.test.json",
     "build": "npm run typecheck && vite build",
     "lint": "eslint .",
@@ -18,7 +18,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "deploy": "CLOUDFLARE_API_TOKEN=$PING_PONG_CLUB_CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=$PING_PONG_CLUB_CLOUDFLARE_ACCOUNT_ID npx wrangler pages deploy --project-name=ping-pong-club",
+    "deploy": "CLOUDFLARE_API_TOKEN=$PING_PONG_CLUB_CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=$PING_PONG_CLUB_CLOUDFLARE_ACCOUNT_ID npx wrangler pages deploy --project-name=clubping-fr",
     "db:refresh:dev": "bash scripts/refresh-dev-db.sh"
   },
   "dependencies": {

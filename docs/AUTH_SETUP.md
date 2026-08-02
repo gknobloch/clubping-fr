@@ -32,7 +32,7 @@ with no `users` row gets `403 no_account` (see issue #101).
 3. Set:
    - `RESEND_API_KEY` = the key — **secret**.
    - `RESEND_FROM` = a sender on the verified domain, e.g.
-     `Ping Club <no-reply@yourdomain.fr>`.
+     `Club Ping <no-reply@yourdomain.fr>`.
 
 > Resend's shared `onboarding@resend.dev` sender only delivers to the Resend
 > account owner's own address — fine for a first smoke test, not for real users.
@@ -50,9 +50,9 @@ client IDs** (one per platform you ship):
 
 | Platform | Client type | Extra config |
 | --- | --- | --- |
-| Web | "Web application" | Authorized JavaScript origins: your web origin(s), e.g. `http://localhost:8788`, `https://ping-pong-club.pages.dev` |
-| iOS | "iOS" | Bundle ID `fr.pingclub.app` |
-| Android | "Android" | Package `fr.pingclub.app` + SHA-1 |
+| Web | "Web application" | Authorized JavaScript origins: your web origin(s) — `https://clubping.fr`, `https://clubping-fr.pages.dev`, `http://localhost:8788` |
+| iOS | "iOS" | Bundle ID `fr.clubping.app` |
+| Android | "Android" | Package `fr.clubping.app` + SHA-1 |
 
 Then place the ids:
 
@@ -68,20 +68,20 @@ Then place the ids:
 
 In the [Apple Developer](https://developer.apple.com/account/resources) portal:
 
-1. **App ID** `fr.pingclub.app` → enable the *Sign In with Apple* capability
+1. **App ID** `fr.clubping.app` → enable the *Sign In with Apple* capability
    (used by the native iOS app; its id_token `aud` is the **bundle id**).
-2. **Service ID** (Identifiers → Services IDs), e.g. `fr.pingclub.web` →
-   enable Sign In with Apple, and add your web domain + **Return URL**
-   (`https://<your-domain>/login`). This is the **web** client id.
+2. **Service ID** (Identifiers → Services IDs), e.g. `fr.clubping.web` →
+   enable Sign In with Apple, and add the web domain `clubping.fr` +
+   **Return URL** (`https://clubping.fr/login`). This is the **web** client id.
 3. (No key needed — we only verify the id_token, never exchange the code.)
 
 Then place the values:
 
-- **Web** → `VITE_APPLE_CLIENT_ID` = the **Service ID** (`fr.pingclub.web`),
+- **Web** → `VITE_APPLE_CLIENT_ID` = the **Service ID** (`fr.clubping.web`),
   `VITE_APPLE_REDIRECT_URI` = the Return URL (defaults to `${origin}/login`).
 - **Native iOS** → nothing to set; it uses the app bundle id automatically.
 - **Backend** → `APPLE_CLIENT_IDS` = **comma-separated**: the Service ID **and**
-  the bundle id `fr.pingclub.app` (web and native tokens carry different `aud`).
+  the bundle id `fr.clubping.app` (web and native tokens carry different `aud`).
 
 ---
 

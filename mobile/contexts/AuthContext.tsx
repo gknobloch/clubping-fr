@@ -16,7 +16,7 @@ import { IS_DEPLOYED_API } from '@/constants/api'
 
 // Real session token (SecureStore) and the legacy dev user-id (AsyncStorage).
 const SESSION_KEY = 'pp-club-session'
-const DEV_USER_KEY = 'ping-pong-club-user-id'
+const DEV_USER_KEY = 'clubping-user-id'
 
 // Dev login ("pick any user") is available in dev builds (or when explicitly
 // enabled) so local dev doesn't need a real email/OAuth — but NEVER when the

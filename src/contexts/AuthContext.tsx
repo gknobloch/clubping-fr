@@ -4,7 +4,7 @@ import { mockUsers, getDisplayNameForUser, getRoleLabel } from '@/mock/data'
 import { fetchMe, logout as apiLogout, oauthLogin, requestEmailCode, verifyEmailCode } from '@/lib/authApi'
 
 const SESSION_KEY = 'pp-club-session'
-const DEV_USER_KEY = 'ping-pong-club-dev-user-id'
+const DEV_USER_KEY = 'clubping-dev-user-id'
 
 // Defensive localStorage access (guards SSR and test environments without a
 // working Storage implementation).
