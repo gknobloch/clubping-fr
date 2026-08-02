@@ -18,7 +18,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "deploy": "CLOUDFLARE_API_TOKEN=$PING_PONG_CLUB_CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=$PING_PONG_CLUB_CLOUDFLARE_ACCOUNT_ID npx wrangler pages deploy --project-name=clubping-fr",
+    "deploy": "CLOUDFLARE_API_TOKEN=$CLUBPING_FR_CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=$CLUBPING_FR_CLOUDFLARE_ACCOUNT_ID npx wrangler pages deploy --project-name=clubping-fr",
     "db:refresh:dev": "bash scripts/refresh-dev-db.sh"
   },
   "dependencies": {

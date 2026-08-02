@@ -38,10 +38,10 @@ jobs:
             npx wrangler d1 execute clubping-fr-prod --remote --file="$f" || true
           done
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PING_PONG_CLUB_CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.PING_PONG_CLUB_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLUBPING_FR_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLUBPING_FR_CLOUDFLARE_ACCOUNT_ID }}
       - run: npm run build
       - run: npx wrangler pages deploy --project-name=clubping-fr
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.PING_PONG_CLUB_CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.PING_PONG_CLUB_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLUBPING_FR_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLUBPING_FR_CLOUDFLARE_ACCOUNT_ID }}
