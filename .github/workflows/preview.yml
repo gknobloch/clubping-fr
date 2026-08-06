@@ -70,6 +70,19 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COMMIT_SHA: ${{ github.sha }}
+          # Previews are a production build, so import.meta.env.DEV is false and
+          # the dev login disappears — testing a PR meant waiting for a real
+          # Resend code (#313). This restores it for previews ONLY.
+          #
+          # Safe only because clubping-fr-dev is anonymised on refresh
+          # (scripts/anonymise-dev-db.sql): preview URLs are guessable and
+          # publicly reachable, so "sign in as anyone" there would otherwise
+          # hand out real member data.
+          #
+          # Never add this to deploy.yml — it would ship an authentication
+          # bypass against real data. src/test/workflows.spec.ts fails the
+          # build if it ever appears there.
+          VITE_DEV_LOGIN: 'true'
       - name: Deploy preview to Cloudflare Pages
         id: deploy
         run: |
