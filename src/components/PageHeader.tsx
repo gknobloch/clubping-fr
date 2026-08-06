@@ -19,14 +19,22 @@ export function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      {club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} size={56} />}
-      <div className="min-w-0 flex-1">
-        <h1 className="font-display text-2xl font-semibold text-slate-800">{title}</h1>
-        {club && <p className="text-slate-500">{club.displayName}</p>}
+    // Below sm: the actions drop under the title. The row already wrapped, but
+    // `shrink-0` sized it to max-content, so it never got narrow enough for the
+    // wrap to trigger and the whole page overflowed instead (#308). Actions
+    // keep their natural width and wrap between themselves — stretching them
+    // full-width would overflow the longest labels ("Importer depuis un
+    // fichier" is 205px on its own).
+    <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        {club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} size={56} />}
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-semibold text-slate-800">{title}</h1>
+          {club && <p className="text-slate-500">{club.displayName}</p>}
+        </div>
       </div>
       {actions && (
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
           {actions}
         </div>
       )}
