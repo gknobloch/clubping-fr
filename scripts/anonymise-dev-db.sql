@@ -39,18 +39,6 @@ UPDATE users SET
   birth_date = NULL,
   birth_place = NULL;
 
--- Legacy table, emptied by migration 0007 when players were merged into users.
--- Scrubbed anyway so that a future migration repopulating it cannot silently
--- reintroduce real data here.
-UPDATE players SET
-  first_name = 'Prénom' || rowid,
-  last_name = 'Nom' || rowid,
-  email = 'membre' || rowid || '@example.invalid',
-  phone = '0600000000',
-  license_number = printf('99%05d', rowid),
-  birth_date = NULL,
-  birth_place = NULL;
-
 -- Live production session tokens. Copying these into a less protected
 -- environment hands out authenticated access to real accounts; nothing on a
 -- preview needs them.

@@ -79,7 +79,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM users').all<UserRow>(),
     // Only the version marker — the image bytes are served separately so this
     // bulk payload stays light.
-    db.prepare('SELECT user_id, updated_at FROM player_avatars').all(),
+    db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
   ])
   const avatarUpdatedAt = new Map(
@@ -2555,7 +2555,7 @@ app.patch('/players/:id', async (c) => {
 app.get('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
   const row = await c.env.DB
-    .prepare('SELECT data, content_type, updated_at FROM player_avatars WHERE user_id = ?')
+    .prepare('SELECT data, content_type, updated_at FROM user_avatars WHERE user_id = ?')
     .bind(id)
     .first() as { data: string; content_type: string; updated_at: string } | null
   if (!row) return c.json({ error: 'not_found' }, 404)
@@ -2577,7 +2577,7 @@ app.put('/users/:id/avatar', async (c) => {
   if (!body.data) return c.json({ error: 'missing data' }, 400)
   const updatedAt = new Date().toISOString()
   await c.env.DB.prepare(
-    `INSERT INTO player_avatars (user_id, data, content_type, updated_at)
+    `INSERT INTO user_avatars (user_id, data, content_type, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        data = excluded.data, content_type = excluded.content_type, updated_at = excluded.updated_at`
@@ -2587,7 +2587,7 @@ app.put('/users/:id/avatar', async (c) => {
 
 app.delete('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM player_avatars WHERE user_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM user_avatars WHERE user_id = ?').bind(id).run()
   return c.json({ ok: true })
 })
 
