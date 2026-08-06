@@ -13,7 +13,7 @@ import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import type { Player } from '@shared/types'
 
-type EditableFields = Pick<Player, 'email' | 'phone' | 'birthDate' | 'birthPlace'>
+type EditableFields = Required<Pick<Player, 'phone' | 'birthDate' | 'birthPlace'>> & { email: string }
 
 export default function MonCompteScreen() {
   const { user, logout } = useAuth()

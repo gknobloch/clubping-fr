@@ -86,7 +86,7 @@ export function PlayersPage() {
       firstName: player.firstName,
       lastName: player.lastName,
       licenseNumber: player.licenseNumber,
-      email: player.email,
+      email: player.email ?? '',
       phone: player.phone ?? '',
       birthDate: player.birthDate ?? '',
       birthPlace: player.birthPlace ?? '',

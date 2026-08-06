@@ -199,7 +199,7 @@ function DevLogin({ standalone = false }: { standalone?: boolean }) {
     const q = query.trim().toLowerCase()
     if (!q) return devUsers
     return devUsers.filter(
-      (u) => u.email.toLowerCase().includes(q) || getDisplayNameForUser(u).toLowerCase().includes(q),
+      (u) => (u.email ?? '').toLowerCase().includes(q) || getDisplayNameForUser(u).toLowerCase().includes(q),
     )
   }, [query, devUsers])
 

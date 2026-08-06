@@ -154,7 +154,8 @@ app.get('/data', async (c) => {
     // Players are the projection of users where is_player = 1.
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
       id: r.id, firstName: r.first_name ?? '', lastName: r.last_name ?? '',
-      licenseNumber: r.license_number ?? '', email: r.email, phone: r.phone,
+      licenseNumber: r.license_number ?? '', phone: r.phone,
+      ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
       status: r.status, clubId: r.club_id ?? '',
@@ -198,7 +199,8 @@ app.get('/data', async (c) => {
       gameId: r.game_id, teamId: r.team_id, playerIds: jsonParseIds(r.player_ids),
     })),
     users: usersR.results.map(r => ({
-      id: r.id, email: r.email, role: r.role, isPlayer: bool(r.is_player),
+      id: r.id, role: r.role, isPlayer: bool(r.is_player),
+      ...(r.email ? { email: r.email } : {}),
       ...(r.first_name ? { firstName: r.first_name } : {}),
       ...(r.last_name ? { lastName: r.last_name } : {}),
       ...(r.license_number ? { licenseNumber: r.license_number } : {}),

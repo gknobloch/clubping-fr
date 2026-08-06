@@ -218,7 +218,7 @@ function DevLogin() {
     const all = q
       ? availableUsers.filter((u) => {
           const name = getDisplayName(u).toLowerCase()
-          return name.includes(q) || u.email.toLowerCase().includes(q)
+          return name.includes(q) || (u.email ?? '').toLowerCase().includes(q)
         })
       : availableUsers
     const admins = all.filter((u) => !u.isPlayer)

@@ -205,9 +205,11 @@ async function sendOtpEmail(env: Env['Bindings'], to: string, code: string): Pro
 function serializeUser(r: UserRow) {
   return {
     id: r.id,
-    email: r.email,
     role: r.role,
     isPlayer: r.is_player === 1,
+    // Omitted rather than sent as null when the member has no address (#315),
+    // matching every other optional field below and the client's `email?`.
+    ...(r.email ? { email: r.email } : {}),
     ...(r.first_name ? { firstName: r.first_name } : {}),
     ...(r.last_name ? { lastName: r.last_name } : {}),
     ...(r.license_number ? { licenseNumber: r.license_number } : {}),

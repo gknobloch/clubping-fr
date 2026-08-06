@@ -109,7 +109,8 @@ export interface Player {
   firstName: string
   lastName: string
   licenseNumber: string
-  email: string
+  /** Absent when the member has no address on file (#315). */
+  email?: string
   phone: string
   birthDate?: string
   birthPlace?: string
@@ -230,7 +231,12 @@ export interface DataState {
  */
 export interface User {
   id: string
-  email: string
+  /**
+   * Absent when the member has no address on file (#315). E-mail is also the
+   * sign-in identifier, so such a member cannot log in — which was already
+   * true of the `@ppclub.invalid` placeholders this replaced.
+   */
+  email?: string
   role: Role
   isPlayer: boolean
   firstName?: string

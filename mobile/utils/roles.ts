@@ -4,7 +4,8 @@ export function getDisplayName(user: User): string {
   if (user.firstName || user.lastName) {
     return `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
   }
-  return user.email
+  // E-mail was the last-resort label; a member may now have none (#315).
+  return user.email ?? 'Utilisateur sans nom'
 }
 
 export function getRoleLabel(role: User['role']): string {
