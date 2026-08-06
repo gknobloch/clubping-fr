@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-
-const prNumber = __PR_NUMBER__
-const commitSha = __COMMIT_SHA__
+import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
 
 function PreviewBanner() {
-  if (!prNumber) return null
-  const shortSha = commitSha ? commitSha.slice(0, 7) : ''
+  if (!IS_PR_PREVIEW) return null
+  const shortSha = COMMIT_SHA ? COMMIT_SHA.slice(0, 7) : ''
   return (
     <div className="bg-amber-500 text-white text-xs text-center py-1 px-4 font-medium">
-      Preview — PR #{prNumber}{shortSha ? ` · ${shortSha}` : ''}
+      Preview — PR #{PR_NUMBER}{shortSha ? ` · ${shortSha}` : ''}
     </div>
   )
 }
