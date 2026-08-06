@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
+import { IS_PR_PREVIEW } from '@/lib/preview'
 import { getDisplayNameForUser, mockClubs } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import type { User } from '@/types'
@@ -60,6 +61,30 @@ export function LoginPage() {
       setBusy(false)
     }
   }, [email, code, verifyCode])
+
+  // On a PR preview the OTP flow is not merely supplemented by the dev login,
+  // it is replaced by it: a preview runs against an anonymised database whose
+  // addresses are all @example.invalid, so "receive a code" could never deliver
+  // one. Offering it would be a dead end. Production and local dev are
+  // untouched — locally the backend returns the code as `devCode`, which is
+  // how the real flow stays testable (#138).
+  const devLoginOnly = DEV_LOGIN && IS_PR_PREVIEW
+
+  if (devLoginOnly) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
+        <div className="w-full max-w-md">
+          <h1 className="font-display text-2xl font-semibold text-slate-800 text-center mb-2">
+            Club Ping
+          </h1>
+          <p className="text-slate-600 text-center text-sm mb-8">
+            Préversion — choisissez un utilisateur pour continuer
+          </p>
+          <DevLogin standalone />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
@@ -160,34 +185,49 @@ export function LoginPage() {
 // ---------------------------------------------------------------------------
 // Dev-only "pick any user" login (hidden behind DEV_LOGIN). Kept as the E2E
 // login path since the E2E server runs `vite dev` with no backend.
+//
+// `standalone` drops the separator that sets it apart from the OTP form: on a
+// PR preview it is the whole login, not an alternative to something above it.
 // ---------------------------------------------------------------------------
-function DevLogin() {
+function DevLogin({ standalone = false }: { standalone?: boolean }) {
   const navigate = useNavigate()
-  const { devLoginAs, mockUsers } = useAuth()
+  const { devLoginAs, devUsers } = useAuth()
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return mockUsers
-    return mockUsers.filter(
+    if (!q) return devUsers
+    return devUsers.filter(
       (u) => u.email.toLowerCase().includes(q) || getDisplayNameForUser(u).toLowerCase().includes(q),
     )
-  }, [query, mockUsers])
+  }, [query, devUsers])
+
+  const [error, setError] = useState<string | null>(null)
 
   const handleSelect = useCallback(
-    (user: User) => {
-      devLoginAs(user.id)
-      navigate('/', { replace: true })
+    async (user: User) => {
+      setError(null)
+      try {
+        // On a preview this is a round trip that mints a real session, so it
+        // has to complete before navigating — and it can fail (#313).
+        await devLoginAs(user.id)
+        navigate('/', { replace: true })
+      } catch {
+        setError('Connexion impossible pour cet utilisateur.')
+      }
     },
     [devLoginAs, navigate],
   )
 
   return (
-    <div className="mt-8 border-t border-slate-200 pt-6">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-        Mode développement
-      </p>
+    <div className={standalone ? '' : 'mt-8 border-t border-slate-200 pt-6'}>
+      {!standalone && (
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Mode développement
+        </p>
+      )}
+      {error && <p className="mb-2 text-sm font-medium text-red-600">{error}</p>}
       <div className="relative">
         <label htmlFor="user-search" className="block text-sm font-medium text-slate-700 mb-1">
           Utilisateur

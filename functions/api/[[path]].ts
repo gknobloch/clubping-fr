@@ -23,7 +23,10 @@ const newId = (prefix: string) =>
   `${prefix}-${Date.now()}-${generatedIdCounter++}-${Math.random().toString(36).slice(2, 7)}`
 
 // Public endpoints that must work without a session (you're not logged in yet).
-const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$)/
+// `dev/` is unauthenticated by nature — it is how you obtain a session on a
+// preview. It is inert unless DEV_LOGIN_ENABLED is set, which only the preview
+// environment does (#313).
+const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$|dev\/)/
 
 // Image endpoints are served to <img> / <Image> tags, which can't send the
 // Bearer header — so GETs to them are public (read-only, non-sensitive logos /

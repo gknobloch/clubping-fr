@@ -16,8 +16,11 @@ database_id = "e9978079-2659-4fc1-a7ba-a189180029ec"
 # 500 on every query touching a column its migration adds), and merely trying
 # a preview wrote to real data.
 #
-# clubping-fr-dev is a copy of production, migrated by preview.yml before each
-# preview deploy. Refresh it deliberately with `npm run db:refresh:dev`.
+# clubping-fr-dev is an ANONYMISED copy of production, migrated by preview.yml
+# before each preview deploy. Refresh it deliberately with
+# `npm run db:refresh:dev`, which scrubs names, emails, phones and licence
+# numbers and purges sessions/OTPs on the way in (#313) — previews enable dev
+# login, so anything left here is reachable by anyone who guesses the URL.
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "clubping-fr-dev"
@@ -44,3 +47,9 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # `wrangler pages secret put RESEND_API_KEY --env preview`.
 [env.preview.vars]
 RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
+# Enables /api/auth/dev/* — sign in as any user with no credential (#313).
+# NEVER add this to the top-level [vars]: on production it is a complete
+# authentication bypass. It is defensible here only because clubping-fr-dev is
+# anonymised on refresh. src/test/workflows.spec.ts fails the build if it
+# appears in the production block.
+DEV_LOGIN_ENABLED = "true"

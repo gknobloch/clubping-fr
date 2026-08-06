@@ -13,6 +13,12 @@ export type Env = {
     // When 'true', the session guard is bypassed (local dev only — set in
     // .dev.vars so the dev user-picker login works without a real session).
     AUTH_GUARD_DISABLED?: string
+    // When 'true', /auth/dev/* will list users and mint sessions without any
+    // credential. Set ONLY on the preview environment, whose database is
+    // anonymised (#313) — in production it is a complete authentication
+    // bypass. wrangler.toml keeps it out of the top-level [vars], and
+    // src/test/workflows.spec.ts fails the build if it ever appears there.
+    DEV_LOGIN_ENABLED?: string
   }
   Variables: {
     user: UserRow
@@ -366,4 +372,43 @@ authApp.post('/logout', async (c) => {
   const token = bearer(c.req.header('Authorization'))
   if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run()
   return c.json({ ok: true })
+})
+
+// ---------------------------------------------------------------------------
+// Dev login — preview deployments only (#313)
+// ---------------------------------------------------------------------------
+//
+// Previews are a production build against a real backend, so the client-side
+// "pick any user" login cannot work: it mints no session, and every API call
+// is rejected. These two endpoints give the picker a real session instead.
+//
+// Both are a deliberate authentication bypass and exist ONLY where
+// DEV_LOGIN_ENABLED is 'true' — the preview environment, whose database is
+// anonymised. Anywhere else they answer 404, so the feature is invisible
+// rather than merely refused.
+const devLoginEnabled = (env: Env['Bindings']) => env.DEV_LOGIN_ENABLED === 'true'
+
+// The picker's list. Deliberately the preview database's own users, not the
+// mock fixtures — logging in as somebody who does not exist there is what made
+// every screen come up empty.
+authApp.get('/dev/users', async (c) => {
+  if (!devLoginEnabled(c.env)) return c.json({ error: 'not_found' }, 404)
+  const { results } = await c.env.DB.prepare(
+    'SELECT * FROM users ORDER BY last_name, first_name, email',
+  ).all<UserRow>()
+  return c.json({ users: (results ?? []).map(serializeUser) })
+})
+
+// Sign in as any user, with no credential. Issues exactly the same session as
+// the OTP and OAuth paths, so everything downstream is unchanged.
+authApp.post('/dev/login', async (c) => {
+  if (!devLoginEnabled(c.env)) return c.json({ error: 'not_found' }, 404)
+  const { userId } = await c.req.json<{ userId?: string }>()
+  if (!userId) return c.json({ error: 'invalid_user' }, 400)
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
+    .bind(userId)
+    .first<UserRow>()
+  if (!user) return c.json({ error: 'no_account' }, 403)
+  const token = await createSession(c.env.DB, user.id)
+  return c.json({ token, user: serializeUser(user) })
 })
