@@ -191,22 +191,31 @@ export function LoginPage() {
 // ---------------------------------------------------------------------------
 function DevLogin({ standalone = false }: { standalone?: boolean }) {
   const navigate = useNavigate()
-  const { devLoginAs, mockUsers } = useAuth()
+  const { devLoginAs, devUsers } = useAuth()
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return mockUsers
-    return mockUsers.filter(
+    if (!q) return devUsers
+    return devUsers.filter(
       (u) => u.email.toLowerCase().includes(q) || getDisplayNameForUser(u).toLowerCase().includes(q),
     )
-  }, [query, mockUsers])
+  }, [query, devUsers])
+
+  const [error, setError] = useState<string | null>(null)
 
   const handleSelect = useCallback(
-    (user: User) => {
-      devLoginAs(user.id)
-      navigate('/', { replace: true })
+    async (user: User) => {
+      setError(null)
+      try {
+        // On a preview this is a round trip that mints a real session, so it
+        // has to complete before navigating — and it can fail (#313).
+        await devLoginAs(user.id)
+        navigate('/', { replace: true })
+      } catch {
+        setError('Connexion impossible pour cet utilisateur.')
+      }
     },
     [devLoginAs, navigate],
   )
@@ -218,6 +227,7 @@ function DevLogin({ standalone = false }: { standalone?: boolean }) {
           Mode développement
         </p>
       )}
+      {error && <p className="mb-2 text-sm font-medium text-red-600">{error}</p>}
       <div className="relative">
         <label htmlFor="user-search" className="block text-sm font-medium text-slate-700 mb-1">
           Utilisateur

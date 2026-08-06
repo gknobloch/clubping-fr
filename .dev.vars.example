@@ -4,6 +4,15 @@
 # (RESEND_API_KEY as a *secret*; the *_CLIENT_IDS are public and may be plain vars).
 # See docs/AUTH_SETUP.md.
 
+# --- Dev login (#313) ---
+# When 'true', /api/auth/dev/* lists users and signs in as any of them with no
+# credential. Set automatically on PREVIEW deployments (wrangler.toml
+# [env.preview.vars]), whose database is anonymised. NEVER set it in
+# production — there it is a complete authentication bypass.
+# Locally it is only useful with AUTH_GUARD_DISABLED unset/false, i.e. when you
+# want to exercise the real session guard the way a preview does.
+DEV_LOGIN_ENABLED=
+
 # --- Resend (the only real secret) ---
 # Without RESEND_API_KEY the backend logs the OTP and returns it as `devCode`
 # instead of sending an email.

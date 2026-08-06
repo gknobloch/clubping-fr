@@ -1,7 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { User } from '@/types'
 import { mockUsers, getDisplayNameForUser, getRoleLabel } from '@/mock/data'
-import { fetchMe, logout as apiLogout, oauthLogin, requestEmailCode, verifyEmailCode } from '@/lib/authApi'
+import {
+  devLogin as apiDevLogin,
+  fetchDevUsers,
+  fetchMe,
+  logout as apiLogout,
+  oauthLogin,
+  requestEmailCode,
+  verifyEmailCode,
+} from '@/lib/authApi'
 
 const SESSION_KEY = 'pp-club-session'
 const DEV_USER_KEY = 'clubping-dev-user-id'
@@ -37,7 +45,9 @@ const storage = {
 // eslint-disable-next-line react-refresh/only-export-components
 export const DEV_LOGIN = import.meta.env.DEV || import.meta.env.VITE_DEV_LOGIN === 'true'
 
-// Every player is now a user, so mockUsers already covers all selectable accounts.
+// Fallback list for local `vite dev` and E2E, where there is no backend at all.
+// On a preview the real list is fetched from /api/auth/dev/users instead — see
+// devUsers below.
 const allSelectableUsers: User[] = mockUsers
 
 interface AuthContextValue {
@@ -54,8 +64,8 @@ interface AuthContextValue {
   loginWithIdToken: (provider: 'google' | 'apple', idToken: string) => Promise<void>
   logout: () => void
   /** Dev login (gated by DEV_LOGIN) */
-  mockUsers: User[]
-  devLoginAs: (userId: string) => void
+  devUsers: User[]
+  devLoginAs: (userId: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -67,6 +77,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Dev-login selection (no server session).
   const [devUserId, setDevUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // The picker's list, and whether the backend can mint a session for it.
+  // Defaults to the mock fixtures so local dev and E2E, which have no backend,
+  // behave exactly as before.
+  const [devUsers, setDevUsers] = useState<User[]>(allSelectableUsers)
+  const [serverDevLogin, setServerDevLogin] = useState(false)
+
+  // A preview exposes /api/auth/dev/users; anywhere else this 404s or fails
+  // outright, and the mock list stands (#313).
+  useEffect(() => {
+    if (!DEV_LOGIN) return
+    let cancelled = false
+    fetchDevUsers()
+      .then((users) => {
+        if (cancelled || users.length === 0) return
+        setDevUsers(users)
+        setServerDevLogin(true)
+      })
+      .catch(() => {
+        /* no server-side dev login here — keep the mock list */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Restore a persisted session on mount.
   useEffect(() => {
@@ -100,8 +134,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const devUser = useMemo(
-    () => (devUserId ? (allSelectableUsers.find((u) => u.id === devUserId) ?? null) : null),
-    [devUserId],
+    () => (devUserId ? (devUsers.find((u) => u.id === devUserId) ?? null) : null),
+    [devUserId, devUsers],
   )
 
   const user = realUser ?? devUser
@@ -144,11 +178,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setDevUserId(null)
   }, [realToken])
 
-  const devLoginAs = useCallback((userId: string) => {
-    if (!DEV_LOGIN) return
-    setDevUserId(userId)
-    storage.set(DEV_USER_KEY, userId)
-  }, [])
+  const devLoginAs = useCallback(
+    async (userId: string) => {
+      if (!DEV_LOGIN) return
+      // On a preview, take a real session — the selection alone authenticates
+      // nothing, and every API call would come back 401 (#313).
+      if (serverDevLogin) {
+        const session = await apiDevLogin(userId)
+        applySession(session.token, session.user)
+        return
+      }
+      // Local dev / E2E: no backend to ask, so the selection is the session.
+      setDevUserId(userId)
+      storage.set(DEV_USER_KEY, userId)
+    },
+    [serverDevLogin, applySession],
+  )
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -162,10 +207,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCode,
       loginWithIdToken,
       logout,
-      mockUsers: DEV_LOGIN ? allSelectableUsers : [],
+      devUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
-    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, devLoginAs],
+    // devUsers matters: the list arrives asynchronously on a preview, and
+    // omitting it would leave the picker showing the mock fallback forever.
+    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, devUsers, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

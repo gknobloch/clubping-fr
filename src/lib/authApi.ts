@@ -64,6 +64,23 @@ export async function fetchMe(token: string): Promise<User> {
   return user
 }
 
+// --- Dev login (preview deployments only, #313) -----------------------------
+// Both answer 404 unless the backend has DEV_LOGIN_ENABLED, so a rejection
+// here is the normal case and simply means "no server-side dev login" — local
+// `vite dev` has no backend at all and falls back to the mock user list.
+
+/** The preview database's own users, for the picker. */
+export async function fetchDevUsers(): Promise<User[]> {
+  const res = await fetch('/api/auth/dev/users')
+  const { users } = await parse<{ users: User[] }>(res)
+  return users
+}
+
+/** Sign in as any user, with no credential. Returns a real session. */
+export function devLogin(userId: string): Promise<AuthSession> {
+  return postJson('/auth/dev/login', { userId })
+}
+
 export async function logout(token: string): Promise<void> {
   await fetch('/api/auth/logout', {
     method: 'POST',

@@ -47,3 +47,9 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # `wrangler pages secret put RESEND_API_KEY --env preview`.
 [env.preview.vars]
 RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
+# Enables /api/auth/dev/* — sign in as any user with no credential (#313).
+# NEVER add this to the top-level [vars]: on production it is a complete
+# authentication bypass. It is defensible here only because clubping-fr-dev is
+# anonymised on refresh. src/test/workflows.spec.ts fails the build if it
+# appears in the production block.
+DEV_LOGIN_ENABLED = "true"

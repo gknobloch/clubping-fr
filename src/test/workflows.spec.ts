@@ -26,6 +26,24 @@ describe('workflows — dev login gating (#313)', () => {
   })
 })
 
+// The client flag only decides whether the picker is drawn. DEV_LOGIN_ENABLED
+// is the one that matters: it makes /api/auth/dev/* mint a session for any user
+// with no credential. In the top-level [vars] — which Cloudflare applies to the
+// production deployment — that is a complete authentication bypass against real
+// member data.
+describe('wrangler.toml — server-side dev login gating (#313)', () => {
+  const toml = readFileSync(resolve(process.cwd(), 'wrangler.toml'), 'utf8')
+  const [production, preview] = toml.split('[env.preview.vars]')
+
+  it('never enables the dev login endpoints in production', () => {
+    expect(production).not.toContain('DEV_LOGIN_ENABLED')
+  })
+
+  it('enables them for the preview environment', () => {
+    expect(preview).toMatch(/DEV_LOGIN_ENABLED\s*=\s*"true"/)
+  })
+})
+
 describe('workflows — database targets (#296, #313)', () => {
   it('runs preview migrations against the dev database, never production', () => {
     const preview = read('preview.yml')
