@@ -1406,14 +1406,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     return player
   }, [persist])
 
-  // Avatars are stored base64 in D1 behind PUT/DELETE /players/:id/avatar; the
+  // Avatars are stored base64 in D1 behind PUT/DELETE /users/:id/avatar; the
   // players list only carries avatarUpdatedAt for cache-busting, so we bump it
   // optimistically and the Avatar component refetches.
   const setAvatar = useCallback(async (id: string, base64: string, contentType: string) => {
     const now = new Date().toISOString()
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, avatarUpdatedAt: now } : p)))
     if (!persist) return
-    const res = await fetch(`/api/players/${id}/avatar`, {
+    const res = await fetch(`/api/users/${id}/avatar`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ data: base64, contentType }),
@@ -1428,7 +1428,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   const removeAvatar = useCallback(async (id: string) => {
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, avatarUpdatedAt: undefined } : p)))
-    if (persist) await fetch(`/api/players/${id}/avatar`, { method: 'DELETE', headers: authHeaders() })
+    if (persist) await fetch(`/api/users/${id}/avatar`, { method: 'DELETE', headers: authHeaders() })
   }, [persist])
 
   // --- Match Days ---

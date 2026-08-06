@@ -117,7 +117,7 @@ export interface Player {
   status: PlayerStatus
   clubId: string
   /** ISO timestamp of the player's avatar, or undefined if none. The image
-   *  itself is fetched separately via GET /api/players/:id/avatar; this acts as
+   *  itself is fetched separately via GET /api/users/:id/avatar; this acts as
    *  a cache-busting version. */
   avatarUpdatedAt?: string
 }

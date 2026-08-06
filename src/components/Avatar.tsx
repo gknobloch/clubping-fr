@@ -30,7 +30,7 @@ export function Avatar({
     }
     let active = true
     let objectUrl: string | null = null
-    fetch(`/api/players/${playerId}/avatar?v=${encodeURIComponent(avatarUpdatedAt)}`, {
+    fetch(`/api/users/${playerId}/avatar?v=${encodeURIComponent(avatarUpdatedAt)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`))))

@@ -349,7 +349,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       // Optimistic: bump the version immediately so the image refreshes.
       patchPlayerAvatar(playerId, new Date().toISOString())
       if (!apiAvailable) return
-      const res = await fetch(apiUrl(`/players/${playerId}/avatar`), {
+      const res = await fetch(apiUrl(`/users/${playerId}/avatar`), {
         method: 'PUT',
         headers: dataHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ data: base64, contentType }),
@@ -365,7 +365,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     async (playerId: string) => {
       patchPlayerAvatar(playerId, undefined)
       if (!apiAvailable) return
-      const res = await fetch(apiUrl(`/players/${playerId}/avatar`), {
+      const res = await fetch(apiUrl(`/users/${playerId}/avatar`), {
         method: 'DELETE',
         headers: dataHeaders(),
       })
