@@ -29,4 +29,20 @@ test.describe('Player — Compte', () => {
     await expect(page).toHaveURL(/\/login/)
     await expect(page.getByRole('heading', { name: /Club Ping/i })).toBeVisible()
   })
+
+  // #315 — the column is nullable, but you cannot take your own address away:
+  // it is how you sign in. Only an admin may clear it, from the Joueurs page.
+  test('refuses to let a member remove their own e-mail', async ({ page }) => {
+    await page.goto('/compte')
+    await page.getByRole('button', { name: 'Modifier' }).click()
+    await page.getByLabel('Email').fill('')
+
+    const save = page.getByRole('button', { name: 'Enregistrer' })
+    await expect(save).toBeDisabled()
+    await expect(page.getByText(/sert à vous connecter/)).toBeVisible()
+
+    // Typing one back re-enables the form; the rest of the fields still save.
+    await page.getByLabel('Email').fill('gilles@example.com')
+    await expect(save).toBeEnabled()
+  })
 })
