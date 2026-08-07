@@ -12,25 +12,73 @@ jobs:
       contents: read
       deployments: write
     steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm install -g wrangler
-      - name: Delete preview deployment
+      - name: Delete preview deployments
+        # Walks EVERY page of the deployments list (#321). The first version
+        # fetched the default page only — which is shared with production
+        # deploys — so previews older than that page survived the merge and the
+        # pr-N alias stayed pointed at the newest survivor. The job then ignored
+        # the delete responses and exited 0, reporting success either way; that
+        # is why pr-316 outlived its own merge unnoticed.
         run: |
+          set -euo pipefail
           BRANCH="pr-${{ github.event.pull_request.number }}"
-          echo "Deleting deployments for branch: $BRANCH"
-          # List and delete all deployments for this branch
-          DEPLOYMENTS=$(npx wrangler pages deployment list --project-name=clubping-fr 2>&1 || true)
-          echo "$DEPLOYMENTS"
-          # Use the Cloudflare API directly to delete deployments by branch alias
           PROJECT="clubping-fr"
-          API_URL="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT/deployments"
-          DEPS=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API_URL" | jq -r ".result[] | select(.deployment_trigger.metadata.branch == \"$BRANCH\") | .id")
-          for DEP_ID in $DEPS; do
-            echo "Deleting deployment $DEP_ID"
-            curl -s -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API_URL/$DEP_ID?force=true"
-          done
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT/deployments"
+          AUTH="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+
+          # Every deployment id on $BRANCH, across all pages. An empty page ends
+          # the walk; a failed request aborts rather than silently truncating —
+          # a short list here reads exactly like "nothing left to delete".
+          list_branch_deployments() {
+            local page=1 body count
+            while :; do
+              body=$(curl -sS --retry 3 --retry-delay 2 -H "$AUTH" "$API?per_page=100&page=$page")
+              if [ "$(jq -r '.success' <<<"$body")" != "true" ]; then
+                # stderr, not stdout: this function's stdout is captured by the
+                # caller, so a message on it would vanish into the variable.
+                echo "::error::deployments list failed on page $page: $(jq -c '.errors' <<<"$body")" >&2
+                return 1
+              fi
+              count=$(jq -r '.result | length' <<<"$body")
+              if [ "$count" -eq 0 ]; then
+                break
+              fi
+              jq -r --arg b "$BRANCH" \
+                '.result[] | select(.deployment_trigger.metadata.branch == $b) | .id' <<<"$body"
+              page=$((page + 1))
+            done
+          }
+
+          ids=$(list_branch_deployments)
+          if [ -z "$ids" ]; then
+            echo "No deployments found for $BRANCH."
+          else
+            echo "Deleting $(echo "$ids" | wc -l) deployment(s) for $BRANCH"
+            for id in $ids; do
+              response=$(curl -sS --retry 3 --retry-delay 2 -X DELETE -H "$AUTH" "$API/$id?force=true")
+              if [ "$(jq -r '.success' <<<"$response")" != "true" ]; then
+                echo "::error::failed to delete $id: $(jq -c '.errors' <<<"$response")"
+                exit 1
+              fi
+              echo "Deleted $id"
+            done
+          fi
+
+          # Prove it, rather than assuming: a success here used to mean only
+          # that curl ran.
+          remaining=$(list_branch_deployments)
+          if [ -n "$remaining" ]; then
+            echo "::error::deployments still present for $BRANCH after cleanup:"
+            echo "$remaining"
+            exit 1
+          fi
+          echo "No deployments remain for $BRANCH."
+
+          # Informational: if the alias still answers with zero deployments
+          # left, Cloudflare is retaining it on its own and that needs its own
+          # fix. Not a failure — the deployment count above is the contract.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' "https://$BRANCH.$PROJECT.pages.dev" || echo "000")
+          echo "Alias https://$BRANCH.$PROJECT.pages.dev -> HTTP $code"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLUBPING_FR_CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLUBPING_FR_CLOUDFLARE_ACCOUNT_ID }}
