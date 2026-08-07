@@ -65,6 +65,14 @@ function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+// An empty e-mail is how the forms say "no address"; the API stores NULL and
+// /api/data then omits the key, so local state holds undefined rather than ''
+// — otherwise the optimistic row would disagree with the one after a reload,
+// and `email ?? fallback` chains would pick the empty string (#315).
+function withoutEmptyEmail<T extends { email?: string }>(p: T): T {
+  return 'email' in p && !p.email ? { ...p, email: undefined } : p
+}
+
 /** Response of GET /api/seasons/fftt-current. */
 export interface FfttCurrentSeason {
   id: string
@@ -1394,13 +1402,15 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   // --- Players ---
   const updatePlayer = useCallback((id: string, patch: Partial<Player>) => {
-    setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    const local = withoutEmptyEmail(patch)
+    setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...local } : p)))
+    // The request keeps the empty key: PATCH only touches the columns it sees.
     if (persist) api(`/players/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
   }, [persist])
 
   const addPlayer = useCallback((data: Omit<Player, 'id'>) => {
     const id = nextId('player')
-    const player: Player = { ...data, id }
+    const player: Player = { ...withoutEmptyEmail(data), id }
     setPlayers((prev) => [...prev, player])
     if (persist) api('/players', { method: 'POST', body: JSON.stringify(player) })
     return player

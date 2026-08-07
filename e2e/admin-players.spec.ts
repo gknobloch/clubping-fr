@@ -35,4 +35,37 @@ test.describe('Club admin — Joueurs list', () => {
     await page.getByRole('combobox', { name: 'Statut' }).selectOption('active')
     await expect(page.getByText('Test Archivedplayer')).toHaveCount(0)
   })
+
+  // #315 — e-mail became optional, but the modal kept refusing to save without
+  // one, so an address could be typed in and never taken back out.
+  test('an e-mail can be removed and the member added without one', async ({ page }) => {
+    const row = page.getByRole('row', { name: /Joris Szulc/ })
+    await expect(row).toContainText('joris.szulc@example.com')
+    await row.getByRole('button', { name: 'Modifier' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Email').fill('')
+    const save = dialog.getByRole('button', { name: 'Enregistrer' })
+    await expect(save).toBeEnabled()
+    await save.click()
+
+    await expect(dialog).toBeHidden()
+    await expect(row).not.toContainText('joris.szulc@example.com')
+
+    // And it stays gone when the modal is reopened.
+    await row.getByRole('button', { name: 'Modifier' }).click()
+    await expect(page.getByRole('dialog').getByLabel('Email')).toHaveValue('')
+    await page.getByRole('dialog').getByRole('button', { name: 'Annuler' }).click()
+
+    await page.getByRole('button', { name: 'Ajouter un joueur' }).click()
+    const create = page.getByRole('dialog')
+    await create.getByLabel('Prénom').fill('Sans')
+    await create.getByLabel('Nom', { exact: true }).fill('Adresse')
+    await create.getByRole('button', { name: 'Enregistrer' }).click()
+
+    await page.getByPlaceholder(/Rechercher par nom/i).fill('Adresse')
+    const added = page.getByRole('row', { name: /Sans Adresse/ })
+    await expect(added).toBeVisible()
+    await expect(added).not.toContainText('@')
+  })
 })

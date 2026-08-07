@@ -2523,12 +2523,21 @@ function clearGamesOfTeam(db: Env['Bindings']['DB'], teamId: string) {
 
 // --- Players ---
 // Players are users with is_player = 1 (see #105). These routes manage that row.
+
+/**
+ * A member with no address on file must land on NULL, never on '' (#315):
+ * `users.email` is UNIQUE, so a second empty string would be rejected as a
+ * duplicate, and an empty address would still count as one for lookups.
+ */
+const emailOrNull = (email: unknown): string | null =>
+  typeof email === 'string' && email.trim() !== '' ? email.trim() : null
+
 app.post('/players', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
     `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
      VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, d.email, d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
   return c.json({ ok: true })
 })
 
@@ -2539,7 +2548,7 @@ app.patch('/players/:id', async (c) => {
   if ('firstName' in p) { s.push('first_name = ?'); v.push(p.firstName) }
   if ('lastName' in p) { s.push('last_name = ?'); v.push(p.lastName) }
   if ('licenseNumber' in p) { s.push('license_number = ?'); v.push(p.licenseNumber) }
-  if ('email' in p) { s.push('email = ?'); v.push(p.email) }
+  if ('email' in p) { s.push('email = ?'); v.push(emailOrNull(p.email)) }
   if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
   if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
   if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
