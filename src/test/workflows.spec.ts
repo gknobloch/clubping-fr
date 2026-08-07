@@ -44,6 +44,42 @@ describe('wrangler.toml — server-side dev login gating (#313)', () => {
   })
 })
 
+// #321 — the cleanup job ignored every API response and exited 0, so it
+// reported success whether or not it deleted anything. The script is shell
+// inside YAML, so nothing else can catch a regression here.
+describe('workflows — preview cleanup deletes every deployment (#321)', () => {
+  const cleanup = read('preview.yml').split('preview:')[0]
+  // Comments stripped: they discuss per_page precisely because it is banned,
+  // and an assertion that its own rationale trips is worse than none.
+  const script = cleanup
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n')
+
+  it('sends no paging parameters on the deployments listing', () => {
+    // The endpoint rejects them (8000024, "Invalid list options provided") and
+    // the whole job dies before deleting anything — which is how it shipped
+    // once already. Cloudflare's SDK types this listing as a SinglePage.
+    expect(script).not.toMatch(/per_page/)
+    expect(script).not.toMatch(/[?&]page=/)
+  })
+
+  it('fails on a delete the API rejected', () => {
+    expect(cleanup).toMatch(/failed to delete/)
+  })
+
+  it('re-checks that nothing is left, rather than assuming', () => {
+    // This is the safety net that replaces guessing about pagination: whatever
+    // the listing did or did not return, a leftover deployment fails the job.
+    expect(cleanup).toContain('remaining=$(list_branch_deployments)')
+    expect(cleanup).toMatch(/deployments still present/)
+  })
+
+  it('aborts the whole step on any failure', () => {
+    expect(cleanup).toContain('set -euo pipefail')
+  })
+})
+
 describe('workflows — database targets (#296, #313)', () => {
   it('runs preview migrations against the dev database, never production', () => {
     const preview = read('preview.yml')
