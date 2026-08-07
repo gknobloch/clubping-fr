@@ -13,7 +13,9 @@ import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhas
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
 
-const app = new Hono<Env>().basePath('/api')
+// Exported for tests: the auth middleware's public-path rules are behaviour
+// worth pinning down, and nothing else can reach them (#320).
+export const app = new Hono<Env>().basePath('/api')
 
 // Opaque generated id (#278), same shape as the web app's nextId(). The
 // counter keeps a single request that creates several rows from colliding on
@@ -31,7 +33,7 @@ const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$|dev\/)/
 // Image endpoints are served to <img> / <Image> tags, which can't send the
 // Bearer header — so GETs to them are public (read-only, non-sensitive logos /
 // avatars). Writes (PUT/DELETE) still go through the guard below.
-const PUBLIC_IMAGE_PATH = /^\/api\/(clubs\/[^/]+\/logo|players\/[^/]+\/avatar)$/
+const PUBLIC_IMAGE_PATH = /^\/api\/(clubs\/[^/]+\/logo|users\/[^/]+\/avatar)$/
 
 // Session guard (#98): every /api route except the public auth + image endpoints
 // requires a valid Bearer session. Bypassed locally via AUTH_GUARD_DISABLED so
@@ -77,7 +79,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM users').all<UserRow>(),
     // Only the version marker — the image bytes are served separately so this
     // bulk payload stays light.
-    db.prepare('SELECT user_id, updated_at FROM player_avatars').all(),
+    db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
   ])
   const avatarUpdatedAt = new Map(
@@ -154,7 +156,8 @@ app.get('/data', async (c) => {
     // Players are the projection of users where is_player = 1.
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
       id: r.id, firstName: r.first_name ?? '', lastName: r.last_name ?? '',
-      licenseNumber: r.license_number ?? '', email: r.email, phone: r.phone,
+      licenseNumber: r.license_number ?? '', phone: r.phone,
+      ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
       status: r.status, clubId: r.club_id ?? '',
@@ -198,7 +201,8 @@ app.get('/data', async (c) => {
       gameId: r.game_id, teamId: r.team_id, playerIds: jsonParseIds(r.player_ids),
     })),
     users: usersR.results.map(r => ({
-      id: r.id, email: r.email, role: r.role, isPlayer: bool(r.is_player),
+      id: r.id, role: r.role, isPlayer: bool(r.is_player),
+      ...(r.email ? { email: r.email } : {}),
       ...(r.first_name ? { firstName: r.first_name } : {}),
       ...(r.last_name ? { lastName: r.last_name } : {}),
       ...(r.license_number ? { licenseNumber: r.license_number } : {}),
@@ -2519,12 +2523,21 @@ function clearGamesOfTeam(db: Env['Bindings']['DB'], teamId: string) {
 
 // --- Players ---
 // Players are users with is_player = 1 (see #105). These routes manage that row.
+
+/**
+ * A member with no address on file must land on NULL, never on '' (#315):
+ * `users.email` is UNIQUE, so a second empty string would be rejected as a
+ * duplicate, and an empty address would still count as one for lookups.
+ */
+const emailOrNull = (email: unknown): string | null =>
+  typeof email === 'string' && email.trim() !== '' ? email.trim() : null
+
 app.post('/players', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
     `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
      VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, d.email, d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
   return c.json({ ok: true })
 })
 
@@ -2535,7 +2548,7 @@ app.patch('/players/:id', async (c) => {
   if ('firstName' in p) { s.push('first_name = ?'); v.push(p.firstName) }
   if ('lastName' in p) { s.push('last_name = ?'); v.push(p.lastName) }
   if ('licenseNumber' in p) { s.push('license_number = ?'); v.push(p.licenseNumber) }
-  if ('email' in p) { s.push('email = ?'); v.push(p.email) }
+  if ('email' in p) { s.push('email = ?'); v.push(emailOrNull(p.email)) }
   if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
   if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
   if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
@@ -2548,10 +2561,10 @@ app.patch('/players/:id', async (c) => {
 // --- Player avatars (#124) ---
 // Images are stored base64 in D1 and served here so the bulk /api/data payload
 // stays light (it only carries avatarUpdatedAt for cache-busting).
-app.get('/players/:id/avatar', async (c) => {
+app.get('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
   const row = await c.env.DB
-    .prepare('SELECT data, content_type, updated_at FROM player_avatars WHERE user_id = ?')
+    .prepare('SELECT data, content_type, updated_at FROM user_avatars WHERE user_id = ?')
     .bind(id)
     .first() as { data: string; content_type: string; updated_at: string } | null
   if (!row) return c.json({ error: 'not_found' }, 404)
@@ -2567,13 +2580,13 @@ app.get('/players/:id/avatar', async (c) => {
   })
 })
 
-app.put('/players/:id/avatar', async (c) => {
+app.put('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
   const body = await c.req.json() as { data?: string; contentType?: string }
   if (!body.data) return c.json({ error: 'missing data' }, 400)
   const updatedAt = new Date().toISOString()
   await c.env.DB.prepare(
-    `INSERT INTO player_avatars (user_id, data, content_type, updated_at)
+    `INSERT INTO user_avatars (user_id, data, content_type, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        data = excluded.data, content_type = excluded.content_type, updated_at = excluded.updated_at`
@@ -2581,9 +2594,9 @@ app.put('/players/:id/avatar', async (c) => {
   return c.json({ ok: true, avatarUpdatedAt: updatedAt })
 })
 
-app.delete('/players/:id/avatar', async (c) => {
+app.delete('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM player_avatars WHERE user_id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM user_avatars WHERE user_id = ?').bind(id).run()
   return c.json({ ok: true })
 })
 

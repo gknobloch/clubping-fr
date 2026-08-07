@@ -111,6 +111,33 @@ describe('dev login endpoints — enabled (#313)', () => {
     expect(res.status).toBe(403)
   })
 
+  // #315 — a member with no address is stored as NULL rather than a fabricated
+  // `noemail-…@ppclub.invalid`. The payload must omit the key, not carry null,
+  // so the client's `email?: string` stays honest.
+  it('omits email entirely for a member who has none', async () => {
+    const { db } = dbWith({ ...user, email: null } as unknown as typeof user)
+    const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+    const { users } = await res.json<{ users: Record<string, unknown>[] }>()
+    expect(users[0]).not.toHaveProperty('email')
+    // The rest of the record is untouched.
+    expect(users[0]).toMatchObject({ id: 'u1', role: 'club_admin', clubId: 'club-1' })
+  })
+
+  it('still issues a session for a member with no address', async () => {
+    const { db } = dbWith({ ...user, email: null } as unknown as typeof user)
+    const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'u1' }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = await res.json<{ token: string; user: Record<string, unknown> }>()
+    expect(body.token).toMatch(/^[0-9a-f]{64}$/)
+    expect(body.user).not.toHaveProperty('email')
+  })
+
   it('rejects a request with no user id', async () => {
     const { db } = dbWith(user)
     const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/login', {

@@ -198,9 +198,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updatePlayer = useCallback(
     async (id: string, patch: PlayerProfilePatch) => {
+      // The API turns an empty e-mail into NULL and then omits the key, so the
+      // optimistic row holds undefined rather than '' to match a reload (#315).
+      const local = 'email' in patch && !patch.email ? { ...patch, email: undefined } : patch
       setState((prev) => ({
         ...prev,
-        players: prev.players.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        players: prev.players.map((p) => (p.id === id ? { ...p, ...local } : p)),
       }))
       if (apiAvailable) {
         fetch(apiUrl(`/players/${id}`), {
@@ -349,7 +352,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       // Optimistic: bump the version immediately so the image refreshes.
       patchPlayerAvatar(playerId, new Date().toISOString())
       if (!apiAvailable) return
-      const res = await fetch(apiUrl(`/players/${playerId}/avatar`), {
+      const res = await fetch(apiUrl(`/users/${playerId}/avatar`), {
         method: 'PUT',
         headers: dataHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ data: base64, contentType }),
@@ -365,7 +368,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     async (playerId: string) => {
       patchPlayerAvatar(playerId, undefined)
       if (!apiAvailable) return
-      const res = await fetch(apiUrl(`/players/${playerId}/avatar`), {
+      const res = await fetch(apiUrl(`/users/${playerId}/avatar`), {
         method: 'DELETE',
         headers: dataHeaders(),
       })

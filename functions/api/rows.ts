@@ -197,7 +197,8 @@ export interface GameSelectionRow {
 
 export interface UserRow {
   id: string
-  email: string
+  /** NULL when the member has no address on file (#315). */
+  email: string | null
   /** general_admin | club_admin | player. */
   role: Role
   is_player: number

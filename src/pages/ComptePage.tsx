@@ -49,10 +49,16 @@ export function ComptePage() {
     setEditing(true)
   }
 
+  // E-mail is the sign-in identifier, so you may not take your own away: there
+  // is no way back in without one. A member who has none is a different case —
+  // they must still be able to edit the rest of their details, and an admin can
+  // clear anyone's address from the Joueurs page (#315).
+  const removingOwnEmail = !!me?.email && !form.email.trim()
+
   function saveEdit() {
-    if (!me) return
+    if (!me || removingOwnEmail) return
     updatePlayer(me.id, {
-      email: form.email,
+      email: form.email.trim(),
       phone: form.phone || undefined,
       birthDate: form.birthDate || undefined,
       birthPlace: form.birthPlace || undefined,
@@ -123,6 +129,11 @@ export function ComptePage() {
         ) : editing ? (
           <div className="mt-3 space-y-3">
             <Field label="Email" type="email" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
+            {removingOwnEmail && (
+              <p className="text-sm text-red-600">
+                Votre adresse e-mail sert à vous connecter : vous ne pouvez pas la supprimer vous-même.
+              </p>
+            )}
             <Field label="Téléphone" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Date de naissance" placeholder="JJ/MM/AAAA" value={form.birthDate} onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))} />
@@ -132,7 +143,7 @@ export function ComptePage() {
               <button type="button" onClick={() => setEditing(false)} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
                 Annuler
               </button>
-              <button type="button" onClick={saveEdit} disabled={!form.email} className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50">
+              <button type="button" onClick={saveEdit} disabled={removingOwnEmail} className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50">
                 Enregistrer
               </button>
             </div>

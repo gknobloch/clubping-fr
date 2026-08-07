@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { avatarImageSource } from '@/utils/avatarSource'
 import { colors } from '@/constants/colors'
 
-// Round player avatar. Loads the image from GET /api/players/:id/avatar
+// Round player avatar. Loads the image from GET /api/users/:id/avatar
 // (auth header + a cache-busting ?v=avatarUpdatedAt) when the player has one,
 // otherwise falls back to their initials.
 export function Avatar({

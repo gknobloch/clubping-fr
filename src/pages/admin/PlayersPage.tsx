@@ -86,7 +86,7 @@ export function PlayersPage() {
       firstName: player.firstName,
       lastName: player.lastName,
       licenseNumber: player.licenseNumber,
-      email: player.email,
+      email: player.email ?? '',
       phone: player.phone ?? '',
       birthDate: player.birthDate ?? '',
       birthPlace: player.birthPlace ?? '',
@@ -117,12 +117,15 @@ export function PlayersPage() {
   }
 
   const handleSave = () => {
+    // Sent even when empty, unlike the other optional fields: the key has to
+    // reach PATCH for the API to clear a stored address (#315).
+    const email = form.email.trim()
     if (editing) {
       updatePlayer(editing.id, {
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
-        email: form.email,
+        email,
         phone: form.phone || undefined,
         birthDate: form.birthDate || undefined,
         birthPlace: form.birthPlace || undefined,
@@ -131,12 +134,12 @@ export function PlayersPage() {
       closeModal()
       return
     }
-    if (creating && form.clubId && form.firstName && form.lastName && form.email) {
+    if (creating && form.clubId && form.firstName && form.lastName) {
       addPlayer({
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
-        email: form.email,
+        email,
         phone: form.phone,
         birthDate: form.birthDate || undefined,
         birthPlace: form.birthPlace || undefined,
@@ -302,7 +305,7 @@ export function PlayersPage() {
                 />
               </div>
               <div>
-                <label htmlFor="player-email" className="block text-sm font-medium text-slate-700">Email</label>
+                <label htmlFor="player-email" className="block text-sm font-medium text-slate-700">Email (optionnel)</label>
                 <input
                   id="player-email"
                   type="email"
@@ -401,7 +404,6 @@ export function PlayersPage() {
                 disabled={
                   !form.firstName ||
                   !form.lastName ||
-                  !form.email ||
                   (creating && !form.clubId)
                 }
                 className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"

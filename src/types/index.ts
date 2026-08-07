@@ -104,22 +104,25 @@ export interface Group {
  * fields are guaranteed populated for players, so player-facing UI can rely on
  * them. Derived from `users` by the data contexts.
  */
-export interface Player {
-  id: string
-  firstName: string
-  lastName: string
-  licenseNumber: string
-  email: string
-  phone: string
-  birthDate?: string
-  birthPlace?: string
-  status: PlayerStatus
-  clubId: string
-  /** ISO timestamp of the player's avatar, or undefined if none. The image
-   *  itself is fetched separately via GET /api/players/:id/avatar; this acts as
-   *  a cache-busting version. */
-  avatarUpdatedAt?: string
-}
+/**
+ * A member seen through the sporting lens.
+ *
+ * Since migration 0007 there is one `users` table and no `players` table, so
+ * this is the same row as `User` (declared further down) and the shared fields
+ * are derived rather than restated — they cannot drift apart (#318). Making
+ * `email` optional in #315 had to be done twice, which is what prompted this.
+ *
+ * The difference from `User` is strictness, not shape: a player always has a
+ * name, a licence, a phone, a club and a status, where a `User` — a general
+ * admin, say — need not.
+ */
+export type Player = Omit<User, 'role' | 'isPlayer'> &
+  Required<Pick<User, 'firstName' | 'lastName' | 'licenseNumber' | 'phone' | 'status' | 'clubId'>> & {
+    /** ISO timestamp of the player's avatar, or undefined if none. The image
+     *  itself is fetched separately via GET /api/users/:id/avatar; this acts as
+     *  a cache-busting version. */
+    avatarUpdatedAt?: string
+  }
 
 export interface Team {
   /** Derived at creation from (club, phase, number) (#282); opaque thereafter. */
@@ -230,7 +233,12 @@ export interface DataState {
  */
 export interface User {
   id: string
-  email: string
+  /**
+   * Absent when the member has no address on file (#315). E-mail is also the
+   * sign-in identifier, so such a member cannot log in — which was already
+   * true of the `@ppclub.invalid` placeholders this replaced.
+   */
+  email?: string
   role: Role
   isPlayer: boolean
   firstName?: string

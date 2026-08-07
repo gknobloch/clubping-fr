@@ -354,8 +354,8 @@ INSERT INTO users (id, email, role, is_player, first_name, last_name, license_nu
   ('p2-player-25', 'jordan.pesenti@example.com', 'player', 1, 'Jordan', 'Pesenti', '6718937', '', NULL, NULL, 'active', 'club-fftt-06680011')
 ;
 
--- player_avatars — a sample avatar so the authed-image round trip (GET/PUT
--- /api/players/:id/avatar) is exercisable locally. 1x1 transparent PNG.
-INSERT INTO player_avatars (user_id, data, content_type, updated_at) VALUES
+-- user_avatars — a sample avatar so the authed-image round trip (GET/PUT
+-- /api/users/:id/avatar) is exercisable locally. 1x1 transparent PNG.
+INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES
   ('p2-player-24', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'image/png', '2026-01-01T00:00:00.000Z');
 

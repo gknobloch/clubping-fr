@@ -7,7 +7,7 @@ import { getSessionToken } from '@/utils/api'
 export function avatarImageSource(playerId: string, avatarUpdatedAt: string) {
   const token = getSessionToken()
   return {
-    uri: `${apiUrl(`/players/${playerId}/avatar`)}?v=${encodeURIComponent(avatarUpdatedAt)}`,
+    uri: `${apiUrl(`/users/${playerId}/avatar`)}?v=${encodeURIComponent(avatarUpdatedAt)}`,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   }
 }
