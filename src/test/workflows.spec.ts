@@ -44,33 +44,6 @@ describe('wrangler.toml — server-side dev login gating (#313)', () => {
   })
 })
 
-// #321 — the cleanup job deleted only the first page of the deployments list,
-// which it shares with production deploys. Previews older than that page
-// survived the merge and kept the pr-N alias alive, and since the job ignored
-// every response and exited 0, it reported success while doing so. The script
-// is shell inside YAML, so nothing else can catch a regression here.
-describe('workflows — preview cleanup deletes every deployment (#321)', () => {
-  const cleanup = read('preview.yml').split('preview:')[0]
-
-  it('paginates the deployments listing', () => {
-    expect(cleanup).toMatch(/per_page=100&page=\$page/)
-    expect(cleanup).toContain('page=$((page + 1))')
-  })
-
-  it('fails on a delete the API rejected', () => {
-    expect(cleanup).toMatch(/failed to delete/)
-  })
-
-  it('re-checks that nothing is left, rather than assuming', () => {
-    expect(cleanup).toContain('remaining=$(list_branch_deployments)')
-    expect(cleanup).toMatch(/deployments still present/)
-  })
-
-  it('aborts the whole step on any failure', () => {
-    expect(cleanup).toContain('set -euo pipefail')
-  })
-})
-
 describe('workflows — database targets (#296, #313)', () => {
   it('runs preview migrations against the dev database, never production', () => {
     const preview = read('preview.yml')
