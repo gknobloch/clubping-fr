@@ -5,6 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
 import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportClubModal } from '@/components/ImportClubModal'
 
 export function ClubsPage() {
@@ -71,19 +72,22 @@ export function ClubsPage() {
         }
       />
       {archivedClubs.length > 0 && (
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-slate-300"
+            className="h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
           />
           <span className="text-sm text-slate-600">
             Afficher les clubs archivés ({archivedClubs.length})
           </span>
         </label>
       )}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      {/* overflow-x-auto, not overflow-hidden: the corners still round off, but
+          anything wider than the phone stays reachable by scrolling the table
+          rather than being clipped out of existence (#305). */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
@@ -96,7 +100,7 @@ export function ClubsPage() {
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Lieux de jeu
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-sm font-medium text-slate-700">
+              <th scope="col" className={`px-4 py-3 text-right text-sm font-medium text-slate-700 ${ACTIONS_HEADER}`}>
                 Actions
               </th>
             </tr>
@@ -118,42 +122,30 @@ export function ClubsPage() {
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {(club.addresses ?? []).map((a) => a.label).join(', ') || '—'}
                 </td>
-                <td className="px-4 py-3 text-right space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(club)}
-                    className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                  >
-                    Modifier
-                  </button>
-                  {!club.isArchived ? (
-                    <button
-                      type="button"
-                      onClick={() => handleArchive(club)}
-                      className="text-sm font-medium text-red-600 hover:text-red-800"
-                    >
-                      Archiver
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleActivate(club)}
-                        className="text-sm font-medium text-green-700 hover:text-green-900"
-                      >
-                        Activer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(club)}
-                        disabled={clubHasDependents(club)}
-                        title={clubHasDependents(club) ? 'Ce club a des équipes ou des joueurs rattachés : archivez-le plutôt que de le supprimer.' : undefined}
-                        className="text-sm font-medium text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:text-slate-300"
-                      >
-                        Supprimer
-                      </button>
-                    </>
-                  )}
+                <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
+                  <RowActions
+                    label={`Actions — ${club.displayName}`}
+                    actions={[
+                      { label: 'Modifier', onClick: () => openEdit(club) },
+                      !club.isArchived && {
+                        label: 'Archiver',
+                        tone: 'danger',
+                        onClick: () => handleArchive(club),
+                      },
+                      club.isArchived && {
+                        label: 'Activer',
+                        tone: 'success',
+                        onClick: () => handleActivate(club),
+                      },
+                      club.isArchived && {
+                        label: 'Supprimer',
+                        tone: 'danger',
+                        onClick: () => handleDelete(club),
+                        disabled: clubHasDependents(club),
+                        title: clubHasDependents(club) ? 'Ce club a des équipes ou des joueurs rattachés : archivez-le plutôt que de le supprimer.' : undefined,
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -184,7 +176,7 @@ export function ClubsPage() {
                   type="text"
                   value={form.affiliationNumber}
                   onChange={(e) => setForm((f) => ({ ...f, affiliationNumber: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div>
@@ -199,7 +191,7 @@ export function ClubsPage() {
                   type="text"
                   value={form.displayName}
                   onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
             </div>

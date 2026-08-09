@@ -236,7 +236,7 @@ export function ClubDetailView({
                 setForm((f) => ({ ...f, affiliationNumber: e.target.value }))
               }
               readOnly={!canEdit || !canEditAffiliationNumber}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-50 disabled:text-slate-600"
+              className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-50 disabled:text-slate-600"
             />
           </div>
           <div>
@@ -252,7 +252,7 @@ export function ClubDetailView({
               value={form.displayName}
               onChange={(e) => canEdit && setForm((f) => ({ ...f, displayName: e.target.value }))}
               readOnly={!canEdit}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-50 disabled:text-slate-600"
+              className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-50 disabled:text-slate-600"
             />
           </div>
         </div>
@@ -348,7 +348,7 @@ export function ClubDetailView({
                   value={addressFields.label}
                   onChange={(e) => setAddressFields((f) => ({ ...f, label: e.target.value }))}
                   placeholder="ex. Gymnase principal"
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 />
               </div>
               <div>
@@ -357,7 +357,7 @@ export function ClubDetailView({
                   type="text"
                   value={addressFields.street}
                   onChange={(e) => setAddressFields((f) => ({ ...f, street: e.target.value }))}
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 />
               </div>
               <div className="flex gap-2">
@@ -369,7 +369,7 @@ export function ClubDetailView({
                     onChange={(e) =>
                       setAddressFields((f) => ({ ...f, postalCode: e.target.value }))
                     }
-                    className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                   />
                 </div>
                 <div className="flex-[2]">
@@ -378,7 +378,7 @@ export function ClubDetailView({
                     type="text"
                     value={addressFields.city}
                     onChange={(e) => setAddressFields((f) => ({ ...f, city: e.target.value }))}
-                    className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                   />
                 </div>
               </div>
@@ -557,7 +557,7 @@ export function ClubDetailView({
                   onChange={(e) =>
                     setChannelFields((f) => ({ ...f, type: e.target.value as ClubChannelType }))
                   }
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 >
                   {CHANNEL_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>
@@ -575,7 +575,7 @@ export function ClubDetailView({
                   value={channelFields.displayName}
                   onChange={(e) => setChannelFields((f) => ({ ...f, displayName: e.target.value }))}
                   placeholder={channelTypeLabel(channelFields.type)}
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 />
               </div>
               <div>
@@ -585,7 +585,7 @@ export function ClubDetailView({
                   value={channelFields.link}
                   onChange={(e) => setChannelFields((f) => ({ ...f, link: e.target.value }))}
                   placeholder="https://..."
-                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  className="mt-0.5 w-full min-h-[44px] md:min-h-0 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 />
               </div>
             </div>

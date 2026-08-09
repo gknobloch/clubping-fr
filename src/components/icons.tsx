@@ -92,7 +92,9 @@ export function PhaseSwitchButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={dir === 'prev' ? prevLabel : nextLabel}
-      className={`rounded-lg p-1.5 ${disabled ? 'text-slate-200' : 'text-slate-500 hover:bg-slate-100'}`}
+      // 44px square below md: — the glyph stays 16px, only the target grows
+      // (#307). It was 28x28, and these two sit right next to each other.
+      className={`flex h-11 w-11 items-center justify-center rounded-lg md:h-7 md:w-7 ${disabled ? 'text-slate-200' : 'text-slate-500 hover:bg-slate-100'}`}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
         {dir === 'prev' ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}

@@ -163,13 +163,13 @@ export function PlayersPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Rechercher par nom…"
-          className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
+          className="w-64 min-h-[44px] md:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
         />
         <select
           aria-label="Statut"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as PlayerType['status'] | 'all')}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
+          className="min-h-[44px] md:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
         >
           {STATUS_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>
@@ -183,7 +183,75 @@ export function PlayersPage() {
           </span>
         )}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      {/* The table is 724px wide — «Email» alone is 280px — so below md: it is
+          swapped for a card list rather than forced into a sideways scroll
+          (#305). Contact details become tap-to-call / tap-to-mail links there,
+          which is what they are actually for on a phone. */}
+      <ul className="space-y-3 md:hidden">
+        {filteredPlayers.map((player) => (
+          <li
+            key={player.id}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <Link
+                to={`/joueurs/${player.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3 text-slate-900"
+              >
+                <Avatar
+                  playerId={player.id}
+                  avatarUpdatedAt={player.avatarUpdatedAt}
+                  firstName={player.firstName}
+                  lastName={player.lastName}
+                  size={40}
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-medium">
+                    {player.firstName} {player.lastName}
+                  </p>
+                  <p className="truncate font-mono text-xs text-slate-500">
+                    {player.licenseNumber}
+                    {!hasClubScope && ` · ${getClubName(player.clubId)}`}
+                  </p>
+                </div>
+              </Link>
+              {player.status !== 'active' && (
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                  {STATUS_LABELS[player.status]}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 border-t border-slate-100 pt-1">
+              {player.email && (
+                <a
+                  href={`mailto:${player.email}`}
+                  className="flex min-h-[44px] min-w-0 items-center text-sm text-accent-600"
+                >
+                  <span className="truncate">{player.email}</span>
+                </a>
+              )}
+              {player.phone && (
+                <a
+                  href={`tel:${player.phone}`}
+                  className="flex min-h-[44px] items-center text-sm text-accent-600"
+                >
+                  {player.phone}
+                </a>
+              )}
+              {canEditPlayers && (
+                <button
+                  type="button"
+                  onClick={() => openEdit(player)}
+                  className="ml-auto flex min-h-[44px] items-center text-sm font-medium text-accent-600"
+                >
+                  Modifier
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden rounded-xl border border-slate-200 bg-white overflow-x-auto md:block">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
@@ -280,7 +348,7 @@ export function PlayersPage() {
                     type="text"
                     value={form.firstName}
                     onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   />
                 </div>
                 <div>
@@ -290,7 +358,7 @@ export function PlayersPage() {
                     type="text"
                     value={form.lastName}
                     onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   />
                 </div>
               </div>
@@ -301,7 +369,7 @@ export function PlayersPage() {
                   type="text"
                   value={form.licenseNumber}
                   onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div>
@@ -311,7 +379,7 @@ export function PlayersPage() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div>
@@ -321,7 +389,7 @@ export function PlayersPage() {
                   type="text"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -335,7 +403,7 @@ export function PlayersPage() {
                     value={form.birthDate}
                     onChange={(e) => setForm((f) => ({ ...f, birthDate: e.target.value }))}
                     placeholder="JJ/MM/AAAA"
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   />
                 </div>
                 <div>
@@ -347,7 +415,7 @@ export function PlayersPage() {
                     type="text"
                     value={form.birthPlace}
                     onChange={(e) => setForm((f) => ({ ...f, birthPlace: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   />
                 </div>
               </div>
@@ -360,7 +428,7 @@ export function PlayersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, status: e.target.value as PlayerType['status'] }))
                     }
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     {(Object.entries(STATUS_LABELS) as [PlayerType['status'], string][]).map(
                       ([value, label]) => (
@@ -379,7 +447,7 @@ export function PlayersPage() {
                     id="player-clubId"
                     value={form.clubId}
                     onChange={(e) => setForm((f) => ({ ...f, clubId: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     {clubsForSelect.map((c) => (
                       <option key={c.id} value={c.id}>

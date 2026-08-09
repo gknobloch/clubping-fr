@@ -8,6 +8,7 @@ import { StatusRadioGroup } from '@/components/StatusRadioGroup'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
 import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 
 export function SeasonsPage() {
   const {
@@ -177,19 +178,19 @@ export function SeasonsPage() {
         </div>
       )}
       {archivedSeasons.length > 0 && (
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-slate-300"
+            className="h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
           />
           <span className="text-sm text-slate-600">
             Afficher les saisons archivées ({archivedSeasons.length})
           </span>
         </label>
       )}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
@@ -199,7 +200,7 @@ export function SeasonsPage() {
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Statut
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-sm font-medium text-slate-700">
+              <th scope="col" className={`px-4 py-3 text-right text-sm font-medium text-slate-700 ${ACTIONS_HEADER}`}>
                 Actions
               </th>
             </tr>
@@ -217,34 +218,25 @@ export function SeasonsPage() {
                     {STATUS_LABELS[season.status]}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right space-x-3">
-                  {/* Modifier stays available on archived seasons so a mistaken
-                      archive can be reverted via the status radios (#223). */}
-                  <button
-                    type="button"
-                    onClick={() => openEdit(season)}
-                    className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                  >
-                    Modifier
-                  </button>
-                  {season.status !== 'archived' && (
-                    <button
-                      type="button"
-                      onClick={() => handleArchive(season)}
-                      className="text-sm font-medium text-red-600 hover:text-red-800"
-                    >
-                      Archiver
-                    </button>
-                  )}
-                  {season.status === 'archived' && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(season)}
-                      className="text-sm font-medium text-red-600 hover:text-red-800"
-                    >
-                      Supprimer
-                    </button>
-                  )}
+                <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
+                  <RowActions
+                    label={`Actions — ${season.displayName}`}
+                    actions={[
+                      // Modifier stays available on archived seasons so a mistaken
+                      // archive can be reverted via the status radios (#223).
+                      { label: 'Modifier', onClick: () => openEdit(season) },
+                      season.status !== 'archived' && {
+                        label: 'Archiver',
+                        tone: 'danger',
+                        onClick: () => handleArchive(season),
+                      },
+                      season.status === 'archived' && {
+                        label: 'Supprimer',
+                        tone: 'danger',
+                        onClick: () => handleDelete(season),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -272,7 +264,7 @@ export function SeasonsPage() {
                   type="text"
                   value={form.displayName}
                   onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
                 {nameInvalid && (
                   <p className="mt-1 text-sm text-red-600">
