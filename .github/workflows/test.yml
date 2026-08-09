@@ -51,6 +51,28 @@ jobs:
       - run: npm run typecheck
         working-directory: mobile
 
+  # #312 — provisioning a database from scratch was quietly broken: 0001 had
+  # been edited to create the is_archived columns that 0002-0005 also add, so
+  # those four failed on any empty database. The `|| true` loop hid it, and
+  # nothing else ever built a database from nothing.
+  #
+  # This applies the whole history to an empty local D1, with the very command
+  # the deploy now uses. It needs no Cloudflare credentials — --local never
+  # leaves the runner.
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+        env:
+          npm_config_registry: 'https://registry.npmjs.org/'
+      - name: Apply every migration to an empty database
+        run: npx wrangler d1 migrations apply clubping-fr-prod --local --persist-to "$RUNNER_TEMP/d1"
+
   unit:
     runs-on: ubuntu-latest
     steps:

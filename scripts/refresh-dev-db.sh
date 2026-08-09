@@ -27,6 +27,34 @@ mkdir -p "$DEST"
 echo "→ exporting ${PROD_DB}"
 npx wrangler d1 export "$PROD_DB" --remote --output="$DUMP"
 
+# The export interleaves each table's CREATE with its INSERTs in arbitrary
+# order, so a child table's rows can arrive before its parent table exists.
+# D1 enforces foreign keys and rejects that; local sqlite3 has them off by
+# default and does not, which is why it only ever failed on the way back in.
+# Rewrite the file parents-first before going anywhere near the dev database.
+NORM="${DUMP%.sql}-ordered.sql"
+echo "→ ordering the export for load"
+python3 "$(dirname "$0")/normalise-d1-export.py" "$DUMP" "$NORM"
+
+# Everything below is destructive, and the load is the step most likely to
+# fail. Prove the file loads — with foreign keys ON, exactly as D1 will
+# enforce them — against a throwaway local database FIRST. A refresh that was
+# going to fail now fails here, with dev still intact.
+#
+# This is not hypothetical: a failed load once left clubping-fr-dev with its
+# tables dropped and nothing put back, which takes every preview down with it.
+echo "→ rehearsing the load locally"
+REHEARSAL="$(mktemp -d)"
+trap 'rm -rf "$REHEARSAL"' EXIT
+if ! { echo "PRAGMA foreign_keys=ON;"; cat "$NORM"; } \
+     | sqlite3 -bail "${REHEARSAL}/rehearsal.db" 2>"${REHEARSAL}/err"; then
+  echo "✘ the export does not load cleanly — ${DEV_DB} has NOT been touched:"
+  sed 's/^/    /' "${REHEARSAL}/err"
+  exit 1
+fi
+echo "  ✓ loads cleanly ($(sqlite3 "${REHEARSAL}/rehearsal.db" \
+  "SELECT count(*) FROM sqlite_master WHERE type='table'") tables)"
+
 echo "→ this REPLACES everything currently in ${DEV_DB}"
 read -r -p "  type 'refresh' to continue: " reply
 [ "$reply" = "refresh" ] || { echo "aborted"; exit 1; }
@@ -42,12 +70,14 @@ for t in $TABLES; do
 done
 
 echo "→ loading into ${DEV_DB}"
-npx wrangler d1 execute "$DEV_DB" --remote --file="$DUMP"
+npx wrangler d1 execute "$DEV_DB" --remote --file="$NORM"
 
+# The export carries production's d1_migrations table across with everything
+# else, so the dev database arrives already knowing what it has run (#312).
+# Normally that leaves nothing to apply; anything newer than the export lands
+# here, and a failure stops the refresh instead of being hidden.
 echo "→ applying migrations"
-for f in migrations/*.sql; do
-  npx wrangler d1 execute "$DEV_DB" --remote --file="$f" >/dev/null 2>&1 || true
-done
+npx wrangler d1 migrations apply "$DEV_DB" --remote --env preview
 
 # Not optional, and not tolerant of failure (#313): previews enable dev login,
 # so whatever survives here is reachable by anyone who guesses the preview URL.
