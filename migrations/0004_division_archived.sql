@@ -1,1 +1,16 @@
-ALTER TABLE divisions ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;
+-- Neutralised by #312. Originally: ALTER TABLE divisions ADD COLUMN is_archived.
+--
+-- 0001_initial.sql was edited after the fact and now creates is_archived on
+-- divisions itself, so this file fails with "duplicate column name: is_archived"
+-- on any database built from scratch. The old `|| true` loop swallowed that;
+-- `wrangler d1 migrations apply` does not, and would stop the whole sequence
+-- here — provisioning a new database would be impossible.
+--
+-- Every database that predates the edit already ran this file and has the
+-- column; every database built since gets it from 0001. Nothing is left for
+-- this migration to do, so it does nothing.
+--
+-- The file stays rather than being deleted: its name is recorded in
+-- d1_migrations on the existing databases, and removing it would leave a row
+-- pointing at a file that no longer exists.
+SELECT 1;

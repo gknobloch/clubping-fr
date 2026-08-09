@@ -133,6 +133,40 @@ describe('mobile — react and react-dom stay in lockstep (#326)', () => {
   })
 })
 
+// #312 — both workflows applied every migration on every run and ended the
+// command in `|| true`, so a genuine failure was indistinguishable from the
+// expected failure of re-applying a non-idempotent ALTER TABLE. It was
+// swallowed, the job stayed green, and the deploy shipped against a broken
+// schema — which is how #293 reached production.
+describe('workflows — migrations fail loudly (#312)', () => {
+  const migrationSteps = (name: string) =>
+    read(name)
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .filter((line) => /wrangler d1/.test(line))
+
+  it.each(['deploy.yml', 'preview.yml'])('%s tolerates no migration failure', (file) => {
+    const steps = migrationSteps(file)
+    expect(steps.length).toBeGreaterThan(0)
+    for (const step of steps) expect(step).not.toContain('|| true')
+  })
+
+  it.each(['deploy.yml', 'preview.yml'])('%s uses the native migration system', (file) => {
+    // `d1 execute --file` in a loop is what replayed the whole history on every
+    // run; `migrations apply` records what it has done and repeats nothing.
+    const steps = migrationSteps(file)
+    expect(steps.some((s) => s.includes('d1 migrations apply'))).toBe(true)
+    // The old form was `d1 execute --file="$f"` inside a shell loop, so match
+    // on --file= rather than on any literal path.
+    expect(steps.some((s) => /d1 execute\b.*--file=/.test(s))).toBe(false)
+  })
+
+  it('builds a database from scratch on every PR', () => {
+    // The check that would have caught 0002-0005 failing on an empty database.
+    expect(read('test.yml')).toMatch(/d1 migrations apply .* --local/)
+  })
+})
+
 describe('workflows — database targets (#296, #313)', () => {
   it('runs preview migrations against the dev database, never production', () => {
     const preview = read('preview.yml')

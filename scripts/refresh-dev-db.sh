@@ -44,10 +44,12 @@ done
 echo "→ loading into ${DEV_DB}"
 npx wrangler d1 execute "$DEV_DB" --remote --file="$DUMP"
 
+# The export carries production's d1_migrations table across with everything
+# else, so the dev database arrives already knowing what it has run (#312).
+# Normally that leaves nothing to apply; anything newer than the export lands
+# here, and a failure stops the refresh instead of being hidden.
 echo "→ applying migrations"
-for f in migrations/*.sql; do
-  npx wrangler d1 execute "$DEV_DB" --remote --file="$f" >/dev/null 2>&1 || true
-done
+npx wrangler d1 migrations apply "$DEV_DB" --remote --env preview
 
 # Not optional, and not tolerant of failure (#313): previews enable dev login,
 # so whatever survives here is reachable by anyone who guesses the preview URL.
