@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { BrandMark } from '@/components/BrandMark'
 import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
 
 function PreviewBanner() {
@@ -93,7 +94,11 @@ export function AppShell() {
       <PreviewBanner />
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Link to="/" className="whitespace-nowrap font-display text-lg font-semibold text-slate-800">
+          <Link
+            to="/"
+            className="flex items-center gap-2 whitespace-nowrap font-display text-lg font-semibold text-slate-800"
+          >
+            <BrandMark className="h-7 w-7 shrink-0" />
             Club Ping
           </Link>
 

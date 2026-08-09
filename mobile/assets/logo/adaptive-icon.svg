@@ -1,27 +1,30 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <!--
-    Android adaptive-icon foreground. Same photo crop as icon.svg, scaled into
-    the safe zone (~62%) on a transparent background. The OS composites this
-    over the backgroundColor declared in app.json (#1e293b).
+    Android adaptive-icon foreground: same mark as icon.svg on a transparent
+    background, scaled into the safe zone so the launcher can mask it to a
+    circle or a squircle without clipping the handles. The OS composites this
+    over the backgroundColor declared in app.json (#1e293b), which is why the
+    dark blade is near-white here.
+
+    The mark's own bounds are 116..908 x 176..826, so its centre is (512, 501.2);
+    recentre before scaling. The furthest point from that centre is a handle tip
+    at 439 units plus its 52-unit round cap, so at scale s it lands at 491*s from
+    the middle; 0.63 keeps it inside Android's 61% guaranteed-safe circle (312).
+    The foreground looks small on its own — the launcher crops it.
   -->
   <defs>
-    <clipPath id="frame">
-      <rect width="1024" height="1024"/>
+    <clipPath id="cp-blade">
+      <circle cx="384" cy="400" r="224"/>
     </clipPath>
-    <linearGradient id="tint" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#0a0f1c" stop-opacity="0.10"/>
-      <stop offset="100%" stop-color="#0a0f1c" stop-opacity="0.40"/>
-    </linearGradient>
-    <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
-      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.50"/>
-    </radialGradient>
   </defs>
-  <g transform="translate(512 512) scale(0.62) translate(-512 -512)">
-    <g clip-path="url(#frame)">
-      <image href="{{PHOTO}}" x="-440" y="0" width="1535" height="1024" preserveAspectRatio="none"/>
-      <rect width="1024" height="1024" fill="url(#tint)"/>
-      <rect width="1024" height="1024" fill="url(#vignette)"/>
+  <g transform="translate(512 512) scale(0.63) translate(-512 -501.2)">
+    <g stroke-width="104" stroke-linecap="round">
+      <line x1="320" y1="510.4" x2="168" y2="774.4" stroke="#eef2f7"/>
+      <line x1="704" y1="510.4" x2="856" y2="774.4" stroke="#e23b3b"/>
     </g>
+    <circle cx="384" cy="400" r="224" fill="#eef2f7"/>
+    <circle cx="640" cy="400" r="224" fill="#e23b3b"/>
+    <circle cx="640" cy="400" r="224" fill="#a63232" clip-path="url(#cp-blade)"/>
+    <circle cx="512" cy="400" r="80" fill="#ffffff"/>
   </g>
 </svg>

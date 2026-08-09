@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Club Ping">
+  <!--
+    Club Ping brand mark — "face à face": two bats leaning towards each other with
+    the ball between them. The two rubbers follow the ITTF rule (one red, one black);
+    their overlap is a deeper red, and the ball is an opaque white so it stays white
+    on any ground rather than showing the background through a knockout.
+
+    Use above 24px. Below that the handles close up on the blades — switch to
+    favicon.svg, which is the same drawing with the handles dropped.
+  -->
+  <defs>
+    <clipPath id="cp-blade">
+      <circle cx="24" cy="25" r="14"/>
+    </clipPath>
+  </defs>
+  <g transform="translate(0 .7)">
+    <g stroke-width="6.5" stroke-linecap="round">
+      <line x1="20" y1="31.9" x2="10.5" y2="48.4" stroke="#1e293b"/>
+      <line x1="44" y1="31.9" x2="53.5" y2="48.4" stroke="#e23b3b"/>
+    </g>
+    <circle cx="24" cy="25" r="14" fill="#1e293b"/>
+    <circle cx="40" cy="25" r="14" fill="#e23b3b"/>
+    <circle cx="40" cy="25" r="14" fill="#8e2a2a" clip-path="url(#cp-blade)"/>
+    <circle cx="32" cy="25" r="5" fill="#ffffff"/>
+  </g>
+</svg>

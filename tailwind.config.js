@@ -24,6 +24,8 @@ export default {
           500: '#e23b3b',
           600: '#c92f2f',
           700: '#a82626',
+          // Overlap of the two rubbers in the brand mark — see public/logo.svg.
+          750: '#8e2a2a',
           800: '#8a2020',
           900: '#721c1c',
         },

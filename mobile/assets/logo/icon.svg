@@ -1,27 +1,30 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <!--
-    App icon derived from the login welcome photo so the icon, splash, and
-    login screen share the same imagery. {{PHOTO}} is replaced with a base64
-    data URI by render.mjs at build time.
+    App icon: the Club Ping brand mark ("face à face") on the slate tile, so the
+    icon, the web favicon and the AppShell header all show the same drawing.
+    The dark blade flips to near-white here because the tile itself is slate.
+
+    Geometry mirrors public/logo.svg on a 64-unit grid, scaled x16 to 1024.
+    Splash keeps the welcome photo — see splash-icon.svg.
   -->
   <defs>
-    <clipPath id="frame">
-      <rect width="1024" height="1024"/>
+    <clipPath id="cp-blade">
+      <circle cx="384" cy="400" r="224"/>
     </clipPath>
-    <linearGradient id="tint" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#0a0f1c" stop-opacity="0.10"/>
-      <stop offset="100%" stop-color="#0a0f1c" stop-opacity="0.40"/>
-    </linearGradient>
-    <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
-      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.50"/>
-    </radialGradient>
   </defs>
-  <g clip-path="url(#frame)">
-    <!-- Photo scaled to height=1024 (preserves 1600:1067 aspect), shifted left
-         so the paddle face + ball sit visually centered in the square crop. -->
-    <image href="{{PHOTO}}" x="-440" y="0" width="1535" height="1024" preserveAspectRatio="none"/>
-    <rect width="1024" height="1024" fill="url(#tint)"/>
-    <rect width="1024" height="1024" fill="url(#vignette)"/>
+  <rect width="1024" height="1024" fill="#1e293b"/>
+  <!-- The mark's own bounds are 116..908 x 176..826 on this grid, so its centre
+       is (512, 501.2), not (512, 512). Recentre, then bump to ~82% of the tile
+       width — enough presence without pushing the handle tips into the corners
+       iOS rounds off. -->
+  <g transform="translate(512 512) scale(1.06) translate(-512 -501.2)">
+    <g stroke-width="104" stroke-linecap="round">
+      <line x1="320" y1="510.4" x2="168" y2="774.4" stroke="#eef2f7"/>
+      <line x1="704" y1="510.4" x2="856" y2="774.4" stroke="#e23b3b"/>
+    </g>
+    <circle cx="384" cy="400" r="224" fill="#eef2f7"/>
+    <circle cx="640" cy="400" r="224" fill="#e23b3b"/>
+    <circle cx="640" cy="400" r="224" fill="#a63232" clip-path="url(#cp-blade)"/>
+    <circle cx="512" cy="400" r="80" fill="#ffffff"/>
   </g>
 </svg>
