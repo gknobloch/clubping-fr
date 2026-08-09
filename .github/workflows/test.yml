@@ -21,6 +21,31 @@ jobs:
       - run: npm run build
       - run: npm run lint
 
+  # mobile/ has its own tsconfig and its own node_modules, so `npm run build`
+  # above never looks at it — which is how a type error introduced by #282 in
+  # the SHARED src/types survived there until #319 found it by hand.
+  #
+  # That sharing is the whole point of this job: mobile/tsconfig.json maps
+  # @shared/types to ../src/types/index.ts, so a web-side change to a shared
+  # type can break the app without touching a single file under mobile/.
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      # No root `npm ci`: the shared files mobile pulls in import nothing but
+      # each other, so mobile's own dependencies are enough.
+      - run: npm ci
+        working-directory: mobile
+        env:
+          npm_config_registry: 'https://registry.npmjs.org/'
+      - run: npm run typecheck
+        working-directory: mobile
+
   unit:
     runs-on: ubuntu-latest
     steps:
