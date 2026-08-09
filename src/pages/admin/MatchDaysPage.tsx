@@ -7,7 +7,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
 import { gameDate, gameSchedule } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
-import { ClubLogo } from '@/components/ClubLogo'
+import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportIcon } from '@/components/icons'
@@ -476,19 +476,6 @@ export function MatchDaysPage() {
   const [matchDayOffsetByTeamId, setMatchDayOffsetByTeamId] = useState<Record<string, number>>({})
   const [otherMatchDayOffset, setOtherMatchDayOffset] = useState(0)
 
-  const stickysentinelRef = useRef<HTMLDivElement>(null)
-  const [isStuck, setIsStuck] = useState(false)
-  useEffect(() => {
-    const el = stickysentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsStuck(!entry.isIntersecting),
-      { threshold: 0 }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
   /** Global match-day offset applied to all teams at once. */
   const [globalMatchDayOffset, setGlobalMatchDayOffset] = useState(0)
   const globalMaxMatchDays = useMemo(
@@ -824,55 +811,63 @@ export function MatchDaysPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div ref={stickysentinelRef} className="h-0" aria-hidden />
-      <div className={`sticky top-14 z-10 -mx-4 -mt-6 bg-slate-50 px-4 pb-1 sm:-mx-6 sm:px-6 ${isStuck ? 'pt-6' : 'pt-0'}`}>
-        <div className={`flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow duration-200 ${isStuck ? 'shadow-md' : ''}`}>
-        <div className="flex min-w-0 items-center gap-4">
-          {scopedClub && <ClubLogo clubId={scopedClub.id} logoUpdatedAt={scopedClub.logoUpdatedAt} size={56} />}
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-semibold text-slate-800">Journées</h1>
-            {scopedClub && <p className="text-slate-500">{scopedClub.displayName}</p>}
-          </div>
-        </div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Phase switcher */}
-          <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
+      <PageHeader
+        title="Journées"
+        club={scopedClub}
+        actions={
+          isAdmin && importableGroupIds.length > 0 ? (
             <button
               type="button"
-              onClick={() => handlePhaseChange(phases[selectedPhaseIndex - 1].id)}
-              disabled={selectedPhaseIndex <= 0}
-              className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
-              aria-label="Phase précédente"
+              onClick={() => setImportGamesOpen(true)}
+              title="Importer les matchs FFTT"
+              aria-label="Importer les matchs FFTT"
+              className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700 md:h-9 md:w-9"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <ImportIcon className="h-4 w-4" />
             </button>
-            <span className="text-xs font-medium text-slate-700 tabular-nums">
-              {selectedPhase?.displayName ?? '—'}
-            </span>
-            <button
-              type="button"
-              onClick={() => handlePhaseChange(phases[selectedPhaseIndex + 1].id)}
-              disabled={selectedPhaseIndex >= phases.length - 1}
-              className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
-              aria-label="Phase suivante"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-            {/* Team toggle buttons */}
+          ) : undefined
+        }
+        controls={
+          <>
+            {/* Phase switcher */}
+            <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
+              <button
+                type="button"
+                onClick={() => handlePhaseChange(phases[selectedPhaseIndex - 1].id)}
+                disabled={selectedPhaseIndex <= 0}
+                className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
+                aria-label="Phase précédente"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="whitespace-nowrap text-xs font-medium text-slate-700 tabular-nums">
+                {selectedPhase?.displayName ?? '—'}
+              </span>
+              <button
+                type="button"
+                onClick={() => handlePhaseChange(phases[selectedPhaseIndex + 1].id)}
+                disabled={selectedPhaseIndex >= phases.length - 1}
+                className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
+                aria-label="Phase suivante"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Team shortcuts */}
             {myClubTeamsInPhase.length > 0 && (
-              <div className="flex h-9 items-center gap-1">
-                <span className="text-xs text-slate-500 mr-1">Aller à</span>
+              <div className="flex items-center gap-1">
+                <span className="mr-1 whitespace-nowrap text-xs text-slate-500">Aller à</span>
                 {myClubTeamsInPhase.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => scrollToTeam(t.id)}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 hover:border-accent-300 hover:bg-accent-50 hover:text-accent-700 transition-colors"
+                    className="h-11 min-w-11 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition-colors hover:border-accent-300 hover:bg-accent-50 hover:text-accent-700 md:h-9 md:min-w-0"
                   >
                     {t.number}
                   </button>
@@ -881,7 +876,7 @@ export function MatchDaysPage() {
                   <button
                     type="button"
                     onClick={scrollToOtherPlayers}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 hover:border-accent-300 hover:bg-accent-50 hover:text-accent-700 transition-colors"
+                    className="h-11 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition-colors hover:border-accent-300 hover:bg-accent-50 hover:text-accent-700 md:h-9"
                   >
                     Autres
                   </button>
@@ -903,7 +898,7 @@ export function MatchDaysPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <span className="text-xs text-slate-600 tabular-nums">
+                <span className="whitespace-nowrap text-xs text-slate-600 tabular-nums">
                   {globalMatchDayOffset + 1}–{Math.min(globalMatchDayOffset + VISIBLE_MATCH_DAY_COUNT, globalMaxMatchDays)} / {globalMaxMatchDays}
                 </span>
                 <button
@@ -919,21 +914,9 @@ export function MatchDaysPage() {
                 </button>
               </div>
             )}
-
-            {isAdmin && importableGroupIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setImportGamesOpen(true)}
-                title="Importer les matchs FFTT"
-                aria-label="Importer les matchs FFTT"
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700"
-              >
-                <ImportIcon className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {importGamesOpen && (
         <ImportGamesModal
@@ -970,7 +953,7 @@ export function MatchDaysPage() {
           <section
             key={team.id}
             id={`team-${team.id}`}
-            className="overflow-hidden rounded-xl border border-slate-200 bg-white scroll-mt-[195px]"
+            className="overflow-hidden rounded-xl border border-slate-200 bg-white scroll-mt-[var(--page-scroll-offset)]"
           >
             <div
               className="border-b border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between gap-4"
@@ -1409,7 +1392,7 @@ export function MatchDaysPage() {
 
       {/* Other players (club, not in any team roster) */}
       {otherPlayers.length > 0 && otherGroupMatchDays.length > 0 && (
-        <section id="other-players" className="overflow-hidden rounded-xl border border-slate-200 bg-white scroll-mt-[195px]">
+        <section id="other-players" className="overflow-hidden rounded-xl border border-slate-200 bg-white scroll-mt-[var(--page-scroll-offset)]">
           <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="font-display text-lg font-medium text-slate-800">
               Autres joueurs du club
