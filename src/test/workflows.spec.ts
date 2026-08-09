@@ -95,7 +95,7 @@ describe('workflows — mobile typecheck runs in CI (#319)', () => {
   it('installs mobile dependencies first', () => {
     // Without them tsc cannot resolve expo/tsconfig.base and fails for the
     // wrong reason — a red job that says nothing about the code.
-    expect(test).toMatch(/run: npm ci\n\s+working-directory: mobile/)
+    expect(test).toMatch(/run: npm ci --legacy-peer-deps\n\s+working-directory: mobile/)
   })
 })
 
