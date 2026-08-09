@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Club Ping">
+  <!--
+    Small-format Club Ping mark: logo.svg with the handles dropped and the blades
+    scaled up to fill the frame. Same axis, same ball, same ball-to-blade ratio,
+    so it reads as a reduction of the logo rather than a different mark. Use below
+    24px; above that use logo.svg.
+
+    The dark blade tracks the browser's colour scheme so the mark keeps both
+    halves on a dark tab strip. Browsers that ignore the media query in an SVG
+    favicon simply get the light-mode fill.
+  -->
+  <defs>
+    <clipPath id="cp-blade">
+      <circle cx="22.3" cy="32" r="17"/>
+    </clipPath>
+    <style>
+      .ink { fill: #1e293b }
+      @media (prefers-color-scheme: dark) { .ink { fill: #e8ecf1 } }
+    </style>
+  </defs>
+  <circle class="ink" cx="22.3" cy="32" r="17"/>
+  <circle cx="41.7" cy="32" r="17" fill="#e23b3b"/>
+  <circle cx="41.7" cy="32" r="17" fill="#8e2a2a" clip-path="url(#cp-blade)"/>
+  <circle cx="32" cy="32" r="6" fill="#ffffff"/>
+</svg>
