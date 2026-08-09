@@ -81,6 +81,29 @@ test.describe('Journées sur mobile (#306)', () => {
     }
   })
 
+  // The controls used to need 416px in a 343px row, so the toolbar scrolled
+  // sideways and drew a scrollbar across a 44px control row — it read as a
+  // glitch. Phase is a select below md: precisely so the pair fits.
+  test('la barre de contrôles tient sans défiler, phase puis journée', async ({ page }) => {
+    await page.goto('/journees')
+    await page.locator('[data-testid="page-toolbar"]').waitFor()
+
+    const row = page.locator('[data-testid="page-toolbar"] > div')
+    const { client, scroll } = await row.evaluate((el) => ({
+      client: el.clientWidth,
+      scroll: el.scrollWidth,
+    }))
+    expect(scroll).toBe(client)
+
+    // Phase comes first, journée second.
+    const phase = page.locator('[data-testid="page-toolbar"] select')
+    const journee = page.getByRole('button', { name: 'Journée précédente' })
+    await expect(phase).toBeVisible()
+    const phaseLeft = await phase.evaluate((el) => el.getBoundingClientRect().left)
+    const journeeLeft = await journee.evaluate((el) => el.getBoundingClientRect().left)
+    expect(phaseLeft).toBeLessThan(journeeLeft)
+  })
+
   test('le sélecteur de journée change les matchs affichés', async ({ page }) => {
     await page.goto('/journees')
     await page.locator('main h1').waitFor()

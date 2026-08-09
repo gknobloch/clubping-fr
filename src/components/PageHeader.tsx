@@ -79,7 +79,7 @@ export function PageHeader({
               wrapping — wrapping is what let this grow to three rows on a phone,
               and the point of the sticky level is that its height stays small
               and predictable. */}
-          <div className="flex items-center gap-2 overflow-x-auto [&>*]:shrink-0">
+          <div className="scrollbar-none flex items-center gap-2 overflow-x-auto [&>*]:shrink-0">
             {controls}
           </div>
         </div>

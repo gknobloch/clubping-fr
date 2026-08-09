@@ -620,13 +620,32 @@ export function MatchDaysPage() {
         }
         controls={
           <>
-            {/* Phase switcher */}
-            <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
+            {/* Phase switcher. Below md: a select — two 44px chevrons plus the
+                full "2025/2026 Phase 1" label needs 230px, and with the journée
+                switcher beside it the row overflowed a 375px screen. A select
+                carries the same label in 60px less, and a phase is something
+                you change once a season. */}
+            <label className="min-w-0 flex-1 md:hidden">
+              <span className="sr-only">Phase</span>
+              <select
+                value={selectedPhaseId ?? ''}
+                onChange={(e) => handlePhaseChange(e.target.value)}
+                className="h-11 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700"
+              >
+                {phases.map((ph) => (
+                  <option key={ph.id} value={ph.id}>
+                    {ph.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="hidden h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:flex">
               <button
                 type="button"
                 onClick={() => handlePhaseChange(phases[selectedPhaseIndex - 1].id)}
                 disabled={selectedPhaseIndex <= 0}
-                className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                 aria-label="Phase précédente"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -640,7 +659,7 @@ export function MatchDaysPage() {
                 type="button"
                 onClick={() => handlePhaseChange(phases[selectedPhaseIndex + 1].id)}
                 disabled={selectedPhaseIndex >= phases.length - 1}
-                className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                 aria-label="Phase suivante"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -653,7 +672,7 @@ export function MatchDaysPage() {
                 where the matrix (and its two paginators) is replaced by the
                 card list (#306). */}
             {mobileMatchDayGroup && (
-              <div className="order-first flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:hidden">
+              <div className="flex h-11 shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-1 md:hidden">
                 <button
                   type="button"
                   onClick={() => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex - 1].number)}
@@ -666,7 +685,10 @@ export function MatchDaysPage() {
                   </svg>
                 </button>
                 <span className="whitespace-nowrap text-xs font-medium text-slate-700 tabular-nums">
-                  Journée {mobileMatchDayGroup.number}
+                  {/* "J8" matches the matrix's own column headers, and keeps the
+                      row inside 375px next to the phase select. */}
+                  <span className="sm:hidden">J{mobileMatchDayGroup.number}</span>
+                  <span className="hidden sm:inline">Journée {mobileMatchDayGroup.number}</span>
                 </span>
                 <button
                   type="button"
