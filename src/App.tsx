@@ -13,6 +13,7 @@ import { GroupsPage } from '@/pages/admin/GroupsPage'
 import { TeamsPage } from '@/pages/admin/TeamsPage'
 import { PlayersPage } from '@/pages/admin/PlayersPage'
 import { MatchDaysPage } from '@/pages/admin/MatchDaysPage'
+import { MatchDayDetailPage } from '@/pages/MatchDayDetailPage'
 import { MyClubPage } from '@/pages/MyClubPage'
 import { PlayerDetailPage } from '@/pages/PlayerDetailPage'
 import { TeamDetailPage } from '@/pages/TeamDetailPage'
@@ -64,6 +65,9 @@ export default function App() {
             <Route path="joueurs" element={<PlayersPage />} />
             <Route path="joueurs/:id" element={<PlayerDetailPage />} />
             <Route path="journees" element={<MatchDaysPage />} />
+            {/* Mobile entry point into a single match; renders at any width so a
+                shared link works anywhere (#306). */}
+            <Route path="journees/:gameId" element={<MatchDayDetailPage />} />
             <Route path="club" element={<MyClubPage />} />
             <Route path="compte" element={<ComptePage />} />
           </Route>

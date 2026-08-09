@@ -1,7 +1,8 @@
 // Shared domain logic — imported by the web app (@/lib/matchdays) and the
 // mobile app (@shared/lib/matchdays). Keep this module free of any
 // browser/RN/Node deps.
-import type { Team, Game, MatchDay, GameSelection } from '../types'
+import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
+import { getMondayOf, getSundayOf, todayIso } from './weeks'
 
 // Players already selected for another club team in the same journée (round
 // number), mapped to that team's number — they can't be fielded twice the
@@ -91,4 +92,77 @@ export function gameSchedule(
   if (game?.time) return { date, time, week: null }
   if (homeTeam?.defaultDay) return { date, time, week: null }
   return { date: null, time: '', week: isoWeekRange(date) }
+}
+
+// ---------------------------------------------------------------------------
+// Journées across the club
+//
+// A "journée" is a round number, but each division stores its own MatchDay row
+// for that round. Grouping them by number is what lets a screen speak of
+// "Journée 6" as one thing across every team of the club. Moved here from the
+// native app so web and native agree on what a journée is (#306).
+// ---------------------------------------------------------------------------
+
+export interface MatchDayGroup {
+  number: number
+  matchDays: MatchDay[]
+  /** Earliest game date in the round (YYYY-MM-DD). */
+  startDate: string
+  /** Latest game date in the round. */
+  endDate: string
+}
+
+/** A phase's match-days grouped by journée number, ordered by number. */
+export function getPhaseMatchDays(
+  phaseId: string,
+  matchDays: MatchDay[],
+  groups: Group[],
+  divisions: Division[],
+): MatchDayGroup[] {
+  const divPhase = new Map(divisions.map((d) => [d.id, d.phaseId]))
+  const groupToPhase = new Map<string, string>()
+  for (const g of groups) {
+    const ph = divPhase.get(g.divisionId)
+    if (ph) groupToPhase.set(g.id, ph)
+  }
+
+  const byNumber = new Map<number, MatchDay[]>()
+  for (const md of matchDays) {
+    if (groupToPhase.get(md.groupId) !== phaseId) continue
+    byNumber.set(md.number, [...(byNumber.get(md.number) ?? []), md])
+  }
+
+  return [...byNumber.entries()]
+    .map(([number, mds]) => {
+      const dates = mds.map((m) => m.date).sort()
+      return { number, matchDays: mds, startDate: dates[0], endDate: dates[dates.length - 1] }
+    })
+    .sort((a, b) => a.number - b.number)
+}
+
+/**
+ * The "active" journée: the first whose games haven't fully passed, with a
+ * weekend tolerance — a Saturday round stays active through the following
+ * Sunday, so a club looking at the app on Sunday morning still lands on
+ * yesterday's round. Falls back to the last journée when every one is past.
+ */
+export function activeMatchDayNumber(matchDayGroups: MatchDayGroup[]): number | null {
+  if (matchDayGroups.length === 0) return null
+  const today = todayIso()
+  for (const g of matchDayGroups) {
+    const effectiveEnd = getSundayOf(getMondayOf(g.endDate))
+    if (today <= effectiveEnd) return g.number
+  }
+  return matchDayGroups[matchDayGroups.length - 1].number
+}
+
+/** Date-range label, e.g. "sam. 27 oct." or "sam. 27 – dim. 28 oct.". */
+export function formatMatchDayRange(startDate: string, endDate: string): string {
+  const fmt = (d: string, withMonth: boolean) =>
+    new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      ...(withMonth ? { month: 'short' } : {}),
+    })
+  return startDate === endDate ? fmt(startDate, true) : `${fmt(startDate, false)} – ${fmt(endDate, true)}`
 }

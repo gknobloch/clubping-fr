@@ -1,6 +1,14 @@
-import { describe, it, expect } from 'vitest'
-import { deriveMatchDayDate, gameDate, gameSchedule, isoWeekRange, playersCommittedElsewhere } from './matchdays'
-import type { Team, Game, MatchDay, GameSelection } from '../types'
+import { describe, it, expect, vi } from 'vitest'
+import {
+  activeMatchDayNumber,
+  deriveMatchDayDate,
+  gameDate,
+  gameSchedule,
+  getPhaseMatchDays,
+  isoWeekRange,
+  playersCommittedElsewhere,
+} from './matchdays'
+import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
 
 const team = (id: string, number: number): Team => ({
   id, clubId: 'club-1', phaseId: 'phase-1', number, divisionId: 'div-1', groupId: 'group-1',
@@ -141,5 +149,82 @@ describe('gameSchedule', () => {
   it('uses the HOME team’s default time, not the viewer’s', () => {
     expect(gameSchedule({ date: '2026-11-06', time: undefined }, md, { defaultDay: 'Vendredi', defaultTime: '20h00' }).time)
       .toBe('20h00')
+  })
+})
+
+// #306 — these three moved here from mobile/utils so the web card list and the
+// native Journées screen agree on what "Journée N" is. Round numbers repeat
+// across divisions, so grouping by number is the whole point.
+describe('getPhaseMatchDays', () => {
+  const divisions = [
+    { id: 'div-1', phaseId: 'phase-1' },
+    { id: 'div-2', phaseId: 'phase-1' },
+    { id: 'div-9', phaseId: 'phase-2' },
+  ] as unknown as Division[]
+  const groups = [
+    { id: 'grp-1', divisionId: 'div-1' },
+    { id: 'grp-2', divisionId: 'div-2' },
+    { id: 'grp-9', divisionId: 'div-9' },
+  ] as unknown as Group[]
+
+  const mds: MatchDay[] = [
+    { id: 'a1', groupId: 'grp-1', number: 1, date: '2026-01-10' },
+    { id: 'b1', groupId: 'grp-2', number: 1, date: '2026-01-11' },
+    { id: 'a2', groupId: 'grp-1', number: 2, date: '2026-01-17' },
+    { id: 'z1', groupId: 'grp-9', number: 1, date: '2026-03-01' },
+  ]
+
+  it('groups a round across divisions and spans its dates', () => {
+    const groupsOut = getPhaseMatchDays('phase-1', mds, groups, divisions)
+    expect(groupsOut.map((g) => g.number)).toEqual([1, 2])
+    expect(groupsOut[0].matchDays.map((m) => m.id).sort()).toEqual(['a1', 'b1'])
+    // The round spans both divisions' dates, so a Sat/Sun round reads as one.
+    expect(groupsOut[0].startDate).toBe('2026-01-10')
+    expect(groupsOut[0].endDate).toBe('2026-01-11')
+  })
+
+  it('ignores match-days from another phase', () => {
+    const ids = getPhaseMatchDays('phase-1', mds, groups, divisions).flatMap((g) =>
+      g.matchDays.map((m) => m.id)
+    )
+    expect(ids).not.toContain('z1')
+  })
+
+  it('returns nothing for a phase with no match-days', () => {
+    expect(getPhaseMatchDays('phase-3', mds, groups, divisions)).toEqual([])
+  })
+})
+
+describe('activeMatchDayNumber', () => {
+  const group = (number: number, endDate: string) => ({
+    number, matchDays: [], startDate: endDate, endDate,
+  })
+
+  it('is null with nothing scheduled', () => {
+    expect(activeMatchDayNumber([])).toBeNull()
+  })
+
+  it('keeps a finished Saturday round active through the Sunday after it', () => {
+    vi.useFakeTimers()
+    try {
+      // Round ended Sat 10 Jan 2026; we are on Sun 11 Jan, still the same week.
+      vi.setSystemTime(new Date('2026-01-11T09:00:00Z'))
+      expect(activeMatchDayNumber([group(1, '2026-01-10'), group(2, '2026-01-17')])).toBe(1)
+      // Monday 12 Jan: round 1's week is over, so round 2 takes over.
+      vi.setSystemTime(new Date('2026-01-12T09:00:00Z'))
+      expect(activeMatchDayNumber([group(1, '2026-01-10'), group(2, '2026-01-17')])).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('falls back to the last round once every one is past', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-06-01T09:00:00Z'))
+      expect(activeMatchDayNumber([group(1, '2026-01-10'), group(2, '2026-01-17')])).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
