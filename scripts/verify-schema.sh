@@ -29,7 +29,10 @@ trap 'rm -rf "$WORK"' EXIT
 # The reference: every migration applied in order to an empty database.
 echo "→ building a reference schema from migrations/"
 for f in migrations/*.sql; do
-  sqlite3 -bail "$WORK/ref.db" < "$f"
+  # Output discarded, not errors: the neutralised 0002-0005 end in SELECT 1,
+  # and only their result rows would reach stdout. A real failure still stops
+  # the script, via -bail and set -e.
+  sqlite3 -bail "$WORK/ref.db" < "$f" >/dev/null
 done
 
 # Normalise: names only, sorted. Comparing full CREATE statements would drown
