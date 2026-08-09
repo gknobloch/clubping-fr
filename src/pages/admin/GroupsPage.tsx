@@ -8,6 +8,7 @@ import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportScheduleDocumentModal } from '@/components/ImportScheduleDocumentModal'
 import { PageHeader } from '@/components/PageHeader'
 import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { PhaseSwitchButton } from '@/components/icons'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
@@ -200,7 +201,7 @@ export function GroupsPage() {
             id="groups-org"
             value={organizationId}
             onChange={(e) => setOrganizationId(e.target.value)}
-            className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+            className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
           >
             <option value="">Toutes</option>
             {orgGroups.map((g) => (
@@ -220,7 +221,7 @@ export function GroupsPage() {
             id="groups-division"
             value={divisionId}
             onChange={(e) => setDivisionId(e.target.value)}
-            className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+            className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
           >
             <option value="">Choisir une division…</option>
             {divisionsInPhase.map((d) => (
@@ -231,12 +232,12 @@ export function GroupsPage() {
       </div>
 
       {archivedGroups.length > 0 && (
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-slate-300"
+            className="h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
           />
           <span className="text-sm text-slate-600">
             Afficher les groupes archivés ({archivedGroups.length})
@@ -249,7 +250,7 @@ export function GroupsPage() {
           Sélectionnez une division pour afficher ses groupes.
         </p>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -259,7 +260,7 @@ export function GroupsPage() {
                 <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                   Équipes
                 </th>
-                <th scope="col" className="px-4 py-3 text-right text-sm font-medium text-slate-700">
+                <th scope="col" className={`px-4 py-3 text-right text-sm font-medium text-slate-700 ${ACTIONS_HEADER}`}>
                   Actions
                 </th>
               </tr>
@@ -278,61 +279,36 @@ export function GroupsPage() {
                   <td className="px-4 py-3 text-sm text-slate-600">
                     {group.teamIds.map(getTeamLabel).join(', ') || '—'}
                   </td>
-                  <td className="px-4 py-3 text-right space-x-3">
-                    {!group.isArchived && (
-                      <button
-                        type="button"
-                        onClick={() => openEdit(group)}
-                        className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                      >
-                        Modifier
-                      </button>
-                    )}
-                    {!group.isArchived && isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setImportGamesFor(group)}
-                        className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                      >
-                        Importer les matchs
-                      </button>
-                    )}
-                    {!group.isArchived && isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setImportDocForGroup(group)}
-                        className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                      >
-                        Depuis un fichier
-                      </button>
-                    )}
-                    {!group.isArchived && isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => handleResetGames(group)}
-                        className="text-sm font-medium text-red-600 hover:text-red-800"
-                      >
-                        Réinitialiser les matchs
-                      </button>
-                    )}
-                    {!group.isArchived && (
-                      <button
-                        type="button"
-                        onClick={() => handleArchive(group)}
-                        className="text-sm font-medium text-red-600 hover:text-red-800"
-                      >
-                        Archiver
-                      </button>
-                    )}
-                    {group.isArchived && (
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(group)}
-                        className="text-sm font-medium text-red-600 hover:text-red-800"
-                      >
-                        Supprimer
-                      </button>
-                    )}
+                  <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
+                    <RowActions
+                      label={`Actions — groupe ${group.number}`}
+                      actions={[
+                        !group.isArchived && { label: 'Modifier', onClick: () => openEdit(group) },
+                        !group.isArchived && isAdmin && {
+                          label: 'Importer les matchs',
+                          onClick: () => setImportGamesFor(group),
+                        },
+                        !group.isArchived && isAdmin && {
+                          label: 'Depuis un fichier',
+                          onClick: () => setImportDocForGroup(group),
+                        },
+                        !group.isArchived && isAdmin && {
+                          label: 'Réinitialiser les matchs',
+                          tone: 'danger',
+                          onClick: () => handleResetGames(group),
+                        },
+                        !group.isArchived && {
+                          label: 'Archiver',
+                          tone: 'danger',
+                          onClick: () => handleArchive(group),
+                        },
+                        group.isArchived && {
+                          label: 'Supprimer',
+                          tone: 'danger',
+                          onClick: () => handleDelete(group),
+                        },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -394,7 +370,7 @@ export function GroupsPage() {
                   id="group-divisionId"
                   value={form.divisionId}
                   onChange={(e) => setForm((f) => ({ ...f, divisionId: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 >
                   {divisions.map((d) => (
                     <option key={d.id} value={d.id}>{d.displayName}</option>
@@ -411,7 +387,7 @@ export function GroupsPage() {
                   min={1}
                   value={form.number}
                   onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
             </div>

@@ -836,12 +836,12 @@ export function MatchDaysPage() {
         </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* Phase switcher */}
-          <div className="flex h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2">
+          <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
             <button
               type="button"
               onClick={() => handlePhaseChange(phases[selectedPhaseIndex - 1].id)}
               disabled={selectedPhaseIndex <= 0}
-              className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+              className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
               aria-label="Phase précédente"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -855,7 +855,7 @@ export function MatchDaysPage() {
               type="button"
               onClick={() => handlePhaseChange(phases[selectedPhaseIndex + 1].id)}
               disabled={selectedPhaseIndex >= phases.length - 1}
-              className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+              className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
               aria-label="Phase suivante"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -891,12 +891,12 @@ export function MatchDaysPage() {
 
             {/* Global match-day switcher */}
             {globalMaxMatchDays > VISIBLE_MATCH_DAY_COUNT && (
-              <div className="flex h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2">
+              <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
                 <button
                   type="button"
                   onClick={() => setGlobalOffset(globalMatchDayOffset - 1)}
                   disabled={globalMatchDayOffset <= 0}
-                  className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
                   aria-label="Journées précédentes (toutes équipes)"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -910,7 +910,7 @@ export function MatchDaysPage() {
                   type="button"
                   onClick={() => setGlobalOffset(globalMatchDayOffset + 1)}
                   disabled={globalMatchDayOffset >= globalMaxOffset}
-                  className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
                   aria-label="Journées suivantes (toutes équipes)"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1001,7 +1001,7 @@ export function MatchDaysPage() {
                       }))
                     }
                     disabled={offset <= 0}
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                    className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
                     aria-label="Journées précédentes"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1020,7 +1020,7 @@ export function MatchDaysPage() {
                       }))
                     }
                     disabled={offset >= maxOffset}
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                    className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
                     aria-label="Journées suivantes"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1621,7 +1621,7 @@ export function MatchDaysPage() {
                     onChange={(e) =>
                       setMatchDayForm((f) => ({ ...f, groupId: e.target.value }))
                     }
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     <option value="">—</option>
                     {groupOptionsInPhase.map((g) => (
@@ -1652,7 +1652,7 @@ export function MatchDaysPage() {
                   onChange={(e) =>
                     setMatchDayForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div>
@@ -1664,7 +1664,7 @@ export function MatchDaysPage() {
                   type="date"
                   value={matchDayForm.date}
                   onChange={(e) => setMatchDayForm((f) => ({ ...f, date: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
             </div>
@@ -1721,7 +1721,7 @@ export function MatchDaysPage() {
                   onChange={(e) =>
                     setGameEditForm((f) => ({ ...f, date: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div>
@@ -1736,7 +1736,7 @@ export function MatchDaysPage() {
                   onChange={(e) =>
                     setGameEditForm((f) => ({ ...f, time: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               <div>
@@ -1782,7 +1782,7 @@ export function MatchDaysPage() {
                   onChange={(e) =>
                     setGameEditForm((f) => ({ ...f, opponentTeamId: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 >
                   <option value="">—</option>
                   {gameEditOpponentOptions.map((t) => (

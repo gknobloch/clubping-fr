@@ -7,6 +7,7 @@ import { sortByName } from '@/lib/sortByName'
 import { ClockIcon, CaptainIcon, WhatsAppIcon, PhaseSwitchButton } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
 import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { RowActions } from '@/components/RowActions'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportTeamsModal } from '@/components/ImportTeamsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
@@ -343,12 +344,12 @@ export function TeamsPage() {
         />
       )}
       {archivedTeams.length > 0 && (
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-slate-300"
+            className="h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
           />
           <span className="text-sm text-slate-600">
             Afficher les équipes archivées ({archivedTeams.length})
@@ -431,43 +432,28 @@ export function TeamsPage() {
                 </div>
 
                 {isAdmin && (
-                  <div className="mt-1 flex items-center gap-3 border-t border-slate-100 pt-2">
-                    {!team.isArchived && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(team)}
-                          className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                        >
-                          Modifier
-                        </button>
-                        {team.groupId && (
-                          <button
-                            type="button"
-                            onClick={() => setImportGamesFor(team)}
-                            className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                          >
-                            Importer les matchs
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleArchive(team)}
-                          className="text-sm font-medium text-red-600 hover:text-red-800"
-                        >
-                          Archiver
-                        </button>
-                      </>
-                    )}
-                    {team.isArchived && (
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(team)}
-                        className="text-sm font-medium text-red-600 hover:text-red-800"
-                      >
-                        Supprimer
-                      </button>
-                    )}
+                  <div className="mt-1 border-t border-slate-100 pt-2">
+                    <RowActions
+                      align="left"
+                      label={`Actions — ${getClubName(team.clubId)} ${team.number}`}
+                      actions={[
+                        !team.isArchived && { label: 'Modifier', onClick: () => openEdit(team) },
+                        !team.isArchived && team.groupId && {
+                          label: 'Importer les matchs',
+                          onClick: () => setImportGamesFor(team),
+                        },
+                        !team.isArchived && {
+                          label: 'Archiver',
+                          tone: 'danger',
+                          onClick: () => handleArchive(team),
+                        },
+                        team.isArchived && {
+                          label: 'Supprimer',
+                          tone: 'danger',
+                          onClick: () => handleDelete(team),
+                        },
+                      ]}
+                    />
                   </div>
                 )}
               </div>
@@ -498,7 +484,7 @@ export function TeamsPage() {
                       setForm((f) => ({ ...f, clubId: e.target.value, gameLocationId: '', captainId: '', playerIds: [] }))
                     }
                     disabled={!!editing}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100"
                   >
                     {clubsForSelect.map((c) => (
                       <option key={c.id} value={c.id}>{c.displayName}</option>
@@ -513,7 +499,7 @@ export function TeamsPage() {
                     min={1}
                     value={form.number}
                     onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   />
                 </div>
                 <div>
@@ -548,7 +534,7 @@ export function TeamsPage() {
                       id="team-phaseId"
                       value={form.phaseId}
                       onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, divisionId: '', groupId: '' }))}
-                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                     >
                       {phases.map((p) => (
                         <option key={p.id} value={p.id}>{p.displayName}</option>
@@ -561,7 +547,7 @@ export function TeamsPage() {
                       id="team-divisionId"
                       value={form.divisionId}
                       onChange={(e) => setForm((f) => ({ ...f, divisionId: e.target.value, groupId: '' }))}
-                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                     >
                       {divisionsInPhase.map((d) => (
                         <option key={d.id} value={d.id}>{d.displayName}</option>
@@ -574,7 +560,7 @@ export function TeamsPage() {
                       id="team-groupId"
                       value={form.groupId}
                       onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))}
-                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                     >
                       {groupsInDivision.map((g) => (
                         <option key={g.id} value={g.id}>Groupe {g.number}</option>
@@ -592,7 +578,7 @@ export function TeamsPage() {
                     id="team-gameLocationId"
                     value={form.gameLocationId}
                     onChange={(e) => setForm((f) => ({ ...f, gameLocationId: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     {addressesForClub.map((a) => (
                       <option key={a.id} value={a.id}>{a.label}</option>
@@ -605,7 +591,7 @@ export function TeamsPage() {
                     id="team-defaultDay"
                     value={form.defaultDay}
                     onChange={(e) => setForm((f) => ({ ...f, defaultDay: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     <option value="">—</option>
                     {DAYS_OF_WEEK.map((d) => (
@@ -619,7 +605,7 @@ export function TeamsPage() {
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeFromParts(e.target.value, timeMinute)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      className="w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                     >
                       <option value="">—</option>
                       {HOURS.map((h) => (
@@ -631,7 +617,7 @@ export function TeamsPage() {
                       value={timeMinute}
                       onChange={(e) => setTimeFromParts(String(timeHour), e.target.value)}
                       disabled={!timeHour}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100"
+                      className="w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100"
                     >
                       {MINUTES.map((m) => (
                         <option key={m} value={m}>{m}</option>
@@ -657,7 +643,7 @@ export function TeamsPage() {
                     </button>
                   )}
                 </div>
-                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="rounded-lg border border-slate-200 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50">
                       <tr>
@@ -751,7 +737,7 @@ export function TeamsPage() {
                         }
                         e.target.value = ''
                       }}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      className="min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                     >
                       <option value="">+ Ajouter un joueur</option>
                       {availablePlayersToAdd.map((p) => (
@@ -775,7 +761,7 @@ export function TeamsPage() {
                   value={form.whatsappLink}
                   onChange={(e) => setForm((f) => ({ ...f, whatsappLink: e.target.value }))}
                   placeholder="https://chat.whatsapp.com/..."
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
             </div>

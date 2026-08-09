@@ -5,6 +5,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { ImportDivisionsModal } from '@/components/ImportDivisionsModal'
 import { PageHeader } from '@/components/PageHeader'
 import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { PhaseSwitchButton } from '@/components/icons'
 import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
@@ -212,7 +213,7 @@ export function DivisionsPage() {
           id="divisions-org"
           value={organizationId}
           onChange={(e) => setOrganizationId(e.target.value)}
-          className="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+          className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
         >
           <option value="">Toutes</option>
           {orgGroups.map((g) => (
@@ -225,19 +226,19 @@ export function DivisionsPage() {
         </select>
       </div>
       {archivedDivisions.length > 0 && (
-        <label className="flex items-center gap-2">
+        <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-slate-300"
+            className="h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
           />
           <span className="text-sm text-slate-600">
             Afficher les divisions archivées ({archivedDivisions.length})
           </span>
         </label>
       )}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
@@ -250,7 +251,7 @@ export function DivisionsPage() {
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Joueurs / match
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-sm font-medium text-slate-700">
+              <th scope="col" className={`px-4 py-3 text-right text-sm font-medium text-slate-700 ${ACTIONS_HEADER}`}>
                 Actions
               </th>
             </tr>
@@ -267,13 +268,15 @@ export function DivisionsPage() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center justify-center gap-0.5">
+                  {/* Reorder is a pair of adjacent targets, so the gap matters
+                      as much as the size does below md: (#307). */}
+                  <div className="flex items-center justify-center gap-2 md:gap-0.5">
                     <button
                       type="button"
                       onClick={() => moveDivisionUp(div.id)}
                       disabled={!getCanMoveUp(div)}
                       title="Monter"
-                      className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:pointer-events-none"
+                      className="flex h-11 w-11 items-center justify-center rounded text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:pointer-events-none md:h-8 md:w-8"
                       aria-label="Monter"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,7 +288,7 @@ export function DivisionsPage() {
                       onClick={() => moveDivisionDown(div.id)}
                       disabled={!getCanMoveDown(div)}
                       title="Descendre"
-                      className="rounded p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:pointer-events-none"
+                      className="flex h-11 w-11 items-center justify-center rounded text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:pointer-events-none md:h-8 md:w-8"
                       aria-label="Descendre"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,34 +298,23 @@ export function DivisionsPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{div.playersPerGame}</td>
-                <td className="px-4 py-3 text-right space-x-3">
-                  {!div.isArchived && (
-                    <button
-                      type="button"
-                      onClick={() => openEdit(div)}
-                      className="text-sm font-medium text-accent-600 hover:text-accent-800"
-                    >
-                      Modifier
-                    </button>
-                  )}
-                  {!div.isArchived && (
-                    <button
-                      type="button"
-                      onClick={() => handleArchive(div)}
-                      className="text-sm font-medium text-red-600 hover:text-red-800"
-                    >
-                      Archiver
-                    </button>
-                  )}
-                  {div.isArchived && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(div)}
-                      className="text-sm font-medium text-red-600 hover:text-red-800"
-                    >
-                      Supprimer
-                    </button>
-                  )}
+                <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
+                  <RowActions
+                    label={`Actions — ${div.displayName}`}
+                    actions={[
+                      !div.isArchived && { label: 'Modifier', onClick: () => openEdit(div) },
+                      !div.isArchived && {
+                        label: 'Archiver',
+                        tone: 'danger',
+                        onClick: () => handleArchive(div),
+                      },
+                      div.isArchived && {
+                        label: 'Supprimer',
+                        tone: 'danger',
+                        onClick: () => handleDelete(div),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -350,7 +342,7 @@ export function DivisionsPage() {
                     id="edit-phaseId"
                     value={form.phaseId}
                     onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, parentId: '' }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     {phases.map((p) => (
                       <option key={p.id} value={p.id}>{p.displayName}</option>
@@ -367,7 +359,7 @@ export function DivisionsPage() {
                   type="text"
                   value={form.displayName}
                   onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
               {creating && (
@@ -379,7 +371,7 @@ export function DivisionsPage() {
                     id="edit-parentId"
                     value={form.parentId}
                     onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     <option value="">Aucune (division de tête)</option>
                     {activeDivisions
@@ -403,7 +395,7 @@ export function DivisionsPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, playersPerGame: Number(e.target.value) || 1 }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
             </div>

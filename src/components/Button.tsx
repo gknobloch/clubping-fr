@@ -1,10 +1,13 @@
 import type { ButtonHTMLAttributes } from 'react'
 
-// A fixed h-9 keeps both variants pixel-identical in height: without it, the
+// A fixed height keeps both variants pixel-identical: without it, the
 // secondary variant's 1px border adds 2px to its auto height compared to the
 // primary variant, which is exactly what made header actions across pages
 // render a couple of pixels off from one another (#243 follow-up).
-const base = 'inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium disabled:opacity-50'
+// h-11 (44px) below md: is the Apple HIG / Material touch target; desktop keeps
+// the original h-9 so the chrome doesn't grow where a mouse is doing the aiming
+// (#307).
+const base = 'inline-flex h-11 md:h-9 items-center justify-center rounded-lg px-4 text-sm font-medium disabled:opacity-50'
 
 export function PrimaryButton({
   className = '',
