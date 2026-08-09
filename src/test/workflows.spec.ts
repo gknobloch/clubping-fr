@@ -95,7 +95,41 @@ describe('workflows — mobile typecheck runs in CI (#319)', () => {
   it('installs mobile dependencies first', () => {
     // Without them tsc cannot resolve expo/tsconfig.base and fails for the
     // wrong reason — a red job that says nothing about the code.
-    expect(test).toMatch(/run: npm ci --legacy-peer-deps\n\s+working-directory: mobile/)
+    expect(test).toMatch(/run: npm ci\n\s+working-directory: mobile/)
+  })
+
+  // #326 — the job shipped with --legacy-peer-deps because the lockfile carried
+  // react@19.2.0 alongside react-dom@19.2.7, a pairing React itself forbids.
+  // Pinning react-dom removed the need for the flag; putting it back would let
+  // the next such drift install quietly instead of failing here.
+  it('installs without --legacy-peer-deps (#326)', () => {
+    // Comments stripped: they name the flag precisely because it is banned.
+    const script = test
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .join('\n')
+    expect(script).not.toContain('--legacy-peer-deps')
+  })
+})
+
+// #326 — react and react-dom are released in lockstep and must be the same
+// version. react-dom is not imported by this app (it is a web-target peer of
+// @expo/metro-runtime) but npm installs it regardless, so leaving it undeclared
+// means npm resolves it to whatever is latest — which is exactly how it drifted
+// to 19.2.7 against a react pinned at 19.2.0 and broke `npm ci`.
+describe('mobile — react and react-dom stay in lockstep (#326)', () => {
+  const pkg = JSON.parse(
+    readFileSync(resolve(process.cwd(), 'mobile/package.json'), 'utf8'),
+  ) as { dependencies: Record<string, string> }
+
+  it('declares react-dom explicitly', () => {
+    expect(pkg.dependencies['react-dom']).toBeDefined()
+  })
+
+  it('pins it to the same version as react', () => {
+    // Exact pins, as expo install writes them: a range would let the two drift
+    // apart again on the next lockfile regeneration.
+    expect(pkg.dependencies['react-dom']).toBe(pkg.dependencies.react)
   })
 })
 

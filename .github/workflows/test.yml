@@ -40,13 +40,11 @@ jobs:
       # No root `npm ci`: the shared files mobile pulls in import nothing but
       # each other, so mobile's own dependencies are enough.
       #
-      # --legacy-peer-deps because mobile/package-lock.json does not satisfy
-      # npm's peer rules on its own: react is pinned to 19.2.0 (expo 55 chooses
-      # the version, it is not ours to bump), while the hoisted react-dom@19.2.7
-      # — dragged in as a peerOptional of @expo/metro-runtime, for a web target
-      # this app does not build — demands ^19.2.7. Nothing had ever run `npm ci`
-      # here, so the lockfile had never been asked to be consistent.
-      - run: npm ci --legacy-peer-deps
+      # No --legacy-peer-deps either: the lockfile satisfies npm's peer rules
+      # since #326 pinned react-dom to react's own version, as expo 55 expects.
+      # Keep it that way — the flag would hide the next such drift rather than
+      # report it.
+      - run: npm ci
         working-directory: mobile
         env:
           npm_config_registry: 'https://registry.npmjs.org/'
