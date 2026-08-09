@@ -80,6 +80,25 @@ describe('workflows — preview cleanup deletes every deployment (#321)', () => 
   })
 })
 
+// #319 — mobile/ has its own tsconfig, so `npm run build` never typechecks it.
+// A type error introduced in the SHARED src/types by #282 therefore sat in
+// mobile/contexts/DataContext.tsx until someone happened to run tsc by hand.
+// The job below is what closes that gap; this pins it in place.
+describe('workflows — mobile typecheck runs in CI (#319)', () => {
+  const test = read('test.yml')
+
+  it('typechecks mobile/ on every PR', () => {
+    expect(test).toContain('mobile-typecheck:')
+    expect(test).toMatch(/run: npm run typecheck\n\s+working-directory: mobile/)
+  })
+
+  it('installs mobile dependencies first', () => {
+    // Without them tsc cannot resolve expo/tsconfig.base and fails for the
+    // wrong reason — a red job that says nothing about the code.
+    expect(test).toMatch(/run: npm ci --legacy-peer-deps\n\s+working-directory: mobile/)
+  })
+})
+
 describe('workflows — database targets (#296, #313)', () => {
   it('runs preview migrations against the dev database, never production', () => {
     const preview = read('preview.yml')

@@ -21,6 +21,38 @@ jobs:
       - run: npm run build
       - run: npm run lint
 
+  # mobile/ has its own tsconfig and its own node_modules, so `npm run build`
+  # above never looks at it — which is how a type error introduced by #282 in
+  # the SHARED src/types survived there until #319 found it by hand.
+  #
+  # That sharing is the whole point of this job: mobile/tsconfig.json maps
+  # @shared/types to ../src/types/index.ts, so a web-side change to a shared
+  # type can break the app without touching a single file under mobile/.
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      # No root `npm ci`: the shared files mobile pulls in import nothing but
+      # each other, so mobile's own dependencies are enough.
+      #
+      # --legacy-peer-deps because mobile/package-lock.json does not satisfy
+      # npm's peer rules on its own: react is pinned to 19.2.0 (expo 55 chooses
+      # the version, it is not ours to bump), while the hoisted react-dom@19.2.7
+      # — dragged in as a peerOptional of @expo/metro-runtime, for a web target
+      # this app does not build — demands ^19.2.7. Nothing had ever run `npm ci`
+      # here, so the lockfile had never been asked to be consistent.
+      - run: npm ci --legacy-peer-deps
+        working-directory: mobile
+        env:
+          npm_config_registry: 'https://registry.npmjs.org/'
+      - run: npm run typecheck
+        working-directory: mobile
+
   unit:
     runs-on: ubuntu-latest
     steps:

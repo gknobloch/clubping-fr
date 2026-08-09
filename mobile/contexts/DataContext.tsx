@@ -242,16 +242,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const setAvailability = useCallback(
     async (playerId: string, gameId: string, status: AvailabilityStatus) => {
-      // Determine (or generate) the record ID before the state update so we
-      // can pass the same ID to the API call.
-      let recordId = `avail-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-
+      // Availabilities are keyed on (gameId, playerId) since 0033 (#282) — there
+      // is no record ID to carry, and the API upserts on that pair.
       setState((prev) => {
         const existing = prev.gameAvailabilities.find(
           (a) => a.playerId === playerId && a.gameId === gameId,
         )
         if (existing) {
-          recordId = existing.id   // reuse the server-assigned ID for the upsert
           return {
             ...prev,
             gameAvailabilities: prev.gameAvailabilities.map((a) =>
@@ -263,7 +260,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           gameAvailabilities: [
             ...prev.gameAvailabilities,
-            { id: recordId, playerId, gameId, status },
+            { playerId, gameId, status },
           ],
         }
       })
@@ -272,7 +269,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         fetch(apiUrl('/game-availabilities/set'), {
           method: 'POST',
           headers: dataHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ id: recordId, playerId, gameId, status }),
+          body: JSON.stringify({ playerId, gameId, status }),
         }).catch(() => {})
       }
     },
