@@ -32,7 +32,11 @@ npx wrangler d1 export "$PROD_DB" --remote --output="$DUMP"
 # D1 enforces foreign keys and rejects that; local sqlite3 has them off by
 # default and does not, which is why it only ever failed on the way back in.
 # Rewrite the file parents-first before going anywhere near the dev database.
-NORM="${DUMP%.sql}-ordered.sql"
+# Named `ordered-`, NOT `prod-export-…-ordered.sql`: the archive directory is
+# globbed as prod-export-*.sql to find the latest export, and a derived file
+# matching that pattern gets picked up as if it were one. It reads as an export
+# and is not one — normalise it again and you normalise your own output.
+NORM="${DEST}/ordered-${STAMP}.sql"
 echo "→ ordering the export for load"
 python3 "$(dirname "$0")/normalise-d1-export.py" "$DUMP" "$NORM"
 
