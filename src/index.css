@@ -9,6 +9,11 @@
   --color-muted-foreground: 220 9% 46%;
   --color-border: 220 13% 91%;
   --color-ring: 0 73% 56%;
+
+  /* Sticky chrome above an anchored element: AppShell's 56px app bar plus a
+     12px gutter. PageHeader raises this while a sticky toolbar is mounted —
+     see src/lib/pageScrollOffset.ts. */
+  --page-scroll-offset: 68px;
 }
 
 body {

@@ -172,24 +172,27 @@ export function GroupsPage() {
             )}
           </>
         }
+        controls={
+          phase ? (
+            <div className="flex h-11 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:h-9">
+              <PhaseSwitchButton
+                dir="prev"
+                disabled={phaseIndex <= 0}
+                onClick={() => phaseIndex > 0 && setPhaseId(orderedPhases[phaseIndex - 1].id)}
+              />
+              <span className="whitespace-nowrap font-display text-sm font-semibold text-slate-800">
+                Saison {phase.displayName}
+              </span>
+              <PhaseSwitchButton
+                dir="next"
+                disabled={phaseIndex >= orderedPhases.length - 1}
+                onClick={() => phaseIndex < orderedPhases.length - 1 && setPhaseId(orderedPhases[phaseIndex + 1].id)}
+              />
+            </div>
+          ) : undefined
+        }
       />
 
-      {/* Phase switcher */}
-      {phase && (
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-          <PhaseSwitchButton
-            dir="prev"
-            disabled={phaseIndex <= 0}
-            onClick={() => phaseIndex > 0 && setPhaseId(orderedPhases[phaseIndex - 1].id)}
-          />
-          <span className="font-display text-sm font-semibold text-slate-800">Saison {phase.displayName}</span>
-          <PhaseSwitchButton
-            dir="next"
-            disabled={phaseIndex >= orderedPhases.length - 1}
-            onClick={() => phaseIndex < orderedPhases.length - 1 && setPhaseId(orderedPhases[phaseIndex + 1].id)}
-          />
-        </div>
-      )}
 
       {/* Organization (optional filter) + Division pickers */}
       <div className="flex flex-wrap items-end gap-3">
