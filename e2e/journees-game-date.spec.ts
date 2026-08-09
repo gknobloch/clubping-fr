@@ -12,8 +12,11 @@ test.describe('Journées — a game shows its own date', () => {
     await page.goto('/journees')
 
     // Only the game carries this date; its journée is dated relative to today.
-    await expect(page.getByText(/jeu\. 13 août/).first()).toBeVisible()
-    await expect(page.getByText(/9h30/).first()).toBeVisible()
+    // `visible: true` matters since #306: the mobile card list renders the same
+    // string and sits earlier in the DOM, hidden behind `md:hidden`, so a plain
+    // .first() would resolve to it and never be visible at this width.
+    await expect(page.getByText(/jeu\. 13 août/).filter({ visible: true }).first()).toBeVisible()
+    await expect(page.getByText(/9h30/).filter({ visible: true }).first()).toBeVisible()
   })
 })
 

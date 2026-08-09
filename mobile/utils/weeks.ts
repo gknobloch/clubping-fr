@@ -1,24 +1,12 @@
 // ---------------------------------------------------------------------------
 // Week helpers — shared by the Accueil, Journées list and week-detail screens.
 // A "week" is keyed by its Monday date string (e.g. "2025-09-22").
+//
+// The date arithmetic lives in @shared/lib/weeks so the web app and this one
+// cannot drift on what a week is; only the RN-facing label stays here.
 // ---------------------------------------------------------------------------
 
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-export function getMondayOf(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00')
-  const day = d.getDay()
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day))
-  return d.toISOString().slice(0, 10)
-}
-
-export function getSundayOf(mondayStr: string): string {
-  const d = new Date(mondayStr + 'T12:00:00')
-  d.setDate(d.getDate() + 6)
-  return d.toISOString().slice(0, 10)
-}
+export { todayIso, getMondayOf, getSundayOf } from '@shared/lib/weeks'
 
 export function formatWeekRange(mondayStr: string): string {
   const mo = new Date(mondayStr + 'T12:00:00')

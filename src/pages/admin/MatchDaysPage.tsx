@@ -1,285 +1,29 @@
-import { useState, useMemo, useCallback, Fragment, useRef, useEffect, useLayoutEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'react'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
-import { gameDate, gameSchedule } from '@/lib/matchdays'
+import {
+  gameDate,
+  gameSchedule,
+  getPhaseMatchDays,
+  activeMatchDayNumber,
+  formatMatchDayRange,
+} from '@/lib/matchdays'
+import { MatchDayCards, type MatchDayCardEntry } from '@/components/MatchDayCards'
 import { sortByName } from '@/lib/sortByName'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportIcon } from '@/components/icons'
-
-/** Custom team dropdown with colored dots. Options ordered: player's team (if any), empty, then other teams. */
-function TeamSelect({
-  value,
-  onChange,
-  optionIds,
-  getLabel,
-  getColor,
-  disabled,
-  className = '',
-}: {
-  value: string | null
-  onChange: (teamId: string | null) => void
-  optionIds: (string | null)[]
-  getLabel: (teamId: string) => string
-  getColor: (teamId: string) => string | undefined
-  disabled?: boolean
-  className?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [listRect, setListRect] = useState<{ top: number; left: number; width: number } | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    // Use 'click' not 'mousedown': the list is in a portal (document.body), so ref only
-    // contains the button. On mousedown the option would be "outside" and we'd close
-    // before the option's click fired, so onChange would never run.
-    document.addEventListener('click', onOutside)
-    return () => document.removeEventListener('click', onOutside)
-  }, [open])
-
-  useLayoutEffect(() => {
-    if (!open || !buttonRef.current) {
-      setListRect(null)
-      return
-    }
-    const listHeight = 160
-    const updateRect = () => {
-      if (buttonRef.current) {
-        const r = buttonRef.current.getBoundingClientRect()
-        const spaceBelow = window.innerHeight - r.bottom
-        const top = spaceBelow < listHeight ? r.top - listHeight - 2 : r.bottom + 2
-        setListRect({ top, left: r.left, width: Math.max(r.width, 140) })
-      }
-    }
-    updateRect()
-    window.addEventListener('scroll', updateRect, true)
-    window.addEventListener('resize', updateRect)
-    return () => {
-      window.removeEventListener('scroll', updateRect, true)
-      window.removeEventListener('resize', updateRect)
-    }
-  }, [open])
-
-  const displayLabel = value ? getLabel(value) : '—'
-  const displayColor = value ? getColor(value) : undefined
-
-  const dropdownList = open && listRect && (
-    <ul
-      className="fixed max-h-48 overflow-auto rounded border border-slate-200 bg-white py-1 shadow-lg text-xs z-[100]"
-      role="listbox"
-      style={{
-        top: listRect.top,
-        left: listRect.left,
-        width: listRect.width,
-      }}
-    >
-      {optionIds.map((id) => {
-        const label = id === null ? '—' : getLabel(id)
-        const color = id === null ? undefined : getColor(id)
-        const isSelected = value === id
-        return (
-          <li
-            key={id ?? '__empty__'}
-            role="option"
-            aria-selected={isSelected}
-            onClick={() => {
-              onChange(id)
-              setOpen(false)
-            }}
-            className="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
-          >
-            {color ? (
-              <span
-                className="shrink-0 w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden
-              />
-            ) : (
-              <span className="shrink-0 w-2.5 h-2.5" aria-hidden />
-            )}
-            <span className="truncate">{label}</span>
-          </li>
-        )
-      })}
-    </ul>
-  )
-
-  return (
-    <div ref={ref} className={`relative ${className}`}>
-      <button
-        ref={buttonRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        className="w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-left text-xs flex items-center gap-1.5 min-h-[26px] hover:border-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {displayColor && (
-          <span
-            className="shrink-0 w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: displayColor }}
-            aria-hidden
-          />
-        )}
-        <span className="truncate">{displayLabel}</span>
-        <svg className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {dropdownList && createPortal(dropdownList, document.body)}
-    </div>
-  )
-}
-
-const AVAILABILITY_OPTIONS: (AvailabilityStatus | null)[] = [null, 'available', 'maybe', 'unavailable']
-const AVAILABILITY_LABELS: Record<AvailabilityStatus, string> = {
-  available: 'Oui',
-  maybe: 'Peut-être',
-  unavailable: 'Non',
-}
-const AVAILABILITY_COLORS: Record<AvailabilityStatus, string> = {
-  available: '#22c55e',
-  maybe: '#eab308',
-  unavailable: '#ef4444',
-}
-
-/** Read-only team composition label with optional colored dot. */
-function ReadOnlyCompo({ teamId, getLabel, getColor }: {
-  teamId: string | null
-  getLabel: (id: string) => string
-  getColor: (id: string) => string | undefined
-}) {
-  const color = teamId ? getColor(teamId) : undefined
-  return (
-    <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-      {color && (
-        <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden />
-      )}
-      {teamId ? getLabel(teamId) : '—'}
-    </span>
-  )
-}
-
-/** Custom availability dropdown with colored dots. */
-function AvailabilitySelect({
-  value,
-  onChange,
-  className = '',
-}: {
-  value: AvailabilityStatus | undefined
-  onChange: (status: AvailabilityStatus | null) => void
-  className?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [listRect, setListRect] = useState<{ top: number; left: number; width: number } | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('click', onOutside)
-    return () => document.removeEventListener('click', onOutside)
-  }, [open])
-
-  useLayoutEffect(() => {
-    if (!open || !buttonRef.current) {
-      setListRect(null)
-      return
-    }
-    const listHeight = 130
-    const updateRect = () => {
-      if (buttonRef.current) {
-        const r = buttonRef.current.getBoundingClientRect()
-        const spaceBelow = window.innerHeight - r.bottom
-        const top = spaceBelow < listHeight ? r.top - listHeight - 2 : r.bottom + 2
-        setListRect({ top, left: r.left, width: Math.max(r.width, 100) })
-      }
-    }
-    updateRect()
-    window.addEventListener('scroll', updateRect, true)
-    window.addEventListener('resize', updateRect)
-    return () => {
-      window.removeEventListener('scroll', updateRect, true)
-      window.removeEventListener('resize', updateRect)
-    }
-  }, [open])
-
-  const displayLabel = value ? AVAILABILITY_LABELS[value] : '—'
-  const displayColor = value ? AVAILABILITY_COLORS[value] : undefined
-
-  const dropdownList = open && listRect && (
-    <ul
-      className="fixed max-h-48 overflow-auto rounded border border-slate-200 bg-white py-1 shadow-lg text-xs z-[100]"
-      role="listbox"
-      style={{ top: listRect.top, left: listRect.left, width: listRect.width }}
-    >
-      {AVAILABILITY_OPTIONS.map((s) => {
-        const label = s === null ? '—' : AVAILABILITY_LABELS[s]
-        const color = s === null ? undefined : AVAILABILITY_COLORS[s]
-        const isSelected = (value ?? null) === s
-        return (
-          <li
-            key={s ?? '__empty__'}
-            role="option"
-            aria-selected={isSelected}
-            onClick={() => {
-              onChange(s)
-              setOpen(false)
-            }}
-            className="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
-          >
-            {color ? (
-              <span
-                className="shrink-0 w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: color }}
-                aria-hidden
-              />
-            ) : (
-              <span className="shrink-0 w-2.5 h-2.5" aria-hidden />
-            )}
-            <span className="truncate">{label}</span>
-          </li>
-        )
-      })}
-    </ul>
-  )
-
-  return (
-    <div ref={ref} className={`relative ${className}`}>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-left text-xs flex items-center gap-1.5 min-h-[26px] hover:border-slate-400"
-      >
-        {displayColor && (
-          <span
-            className="shrink-0 w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: displayColor }}
-            aria-hidden
-          />
-        )}
-        <span className="truncate">{displayLabel}</span>
-        <svg className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {dropdownList && createPortal(dropdownList, document.body)}
-    </div>
-  )
-}
+import {
+  AVAILABILITY_COLORS,
+  AVAILABILITY_LABELS,
+  AvailabilitySelect,
+  ReadOnlyCompo,
+  TeamSelect,
+} from '@/components/availabilityControls'
 
 /** Number of match-day columns visible at once before pagination kicks in. */
 const VISIBLE_MATCH_DAY_COUNT = 3
@@ -665,6 +409,50 @@ export function MatchDaysPage() {
     if (updates.length > 0) setGameSelectionBatch(updates)
   }
 
+  // --- Mobile view (#306) -------------------------------------------------
+  // Below md: the matrix is replaced by one card per team for a single
+  // journée, so the two paginators collapse into one switcher over journée
+  // numbers. Desktop keeps the matrix and its own controls untouched.
+  const matchDayGroups = useMemo(
+    () => (selectedPhaseId ? getPhaseMatchDays(selectedPhaseId, matchDays, groups, divisions) : []),
+    [selectedPhaseId, matchDays, groups, divisions]
+  )
+  const [mobileMatchDayNumber, setMobileMatchDayNumber] = useState<number | null>(null)
+  // Default — and re-default on phase change — to the active journée.
+  const effectiveMatchDayNumber = mobileMatchDayNumber ?? activeMatchDayNumber(matchDayGroups)
+  const mobileMatchDayIndex = matchDayGroups.findIndex((g) => g.number === effectiveMatchDayNumber)
+  const mobileMatchDayGroup = matchDayGroups[mobileMatchDayIndex]
+
+  const mobileEntries = useMemo<MatchDayCardEntry[]>(() => {
+    if (!mobileMatchDayGroup) return []
+    const roundIds = new Set(mobileMatchDayGroup.matchDays.map((m) => m.id))
+    const entries: MatchDayCardEntry[] = []
+    for (const team of myClubTeamsInPhase) {
+      const game = games.find(
+        (g) => roundIds.has(g.matchDayId) && (g.homeTeamId === team.id || g.awayTeamId === team.id)
+      )
+      if (!game) continue
+      const matchDay = matchDays.find((m) => m.id === game.matchDayId)
+      if (!matchDay) continue
+      const isHome = game.homeTeamId === team.id
+      const opponentId = isHome ? game.awayTeamId : game.homeTeamId
+      const roster = (team.playerIds ?? [])
+      entries.push({
+        team,
+        game,
+        matchDay,
+        opponentName: getTeamLabel(opponentId),
+        isHome,
+        dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),
+        time: game.time ?? undefined,
+        availableCount: roster.filter((pid) => getAvailability(game.id, pid) === 'available').length,
+        selectedCount: getGameSelectionPlayerIds(game.id, team.id).length,
+        playersPerGame: divisions.find((d) => d.id === team.divisionId)?.playersPerGame ?? 4,
+      })
+    }
+    return entries
+  }, [mobileMatchDayGroup, myClubTeamsInPhase, games, matchDays, divisions]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const closeMatchDayModal = () => {
     setEditingMatchDay(null)
     setCreatingMatchDay(false)
@@ -772,6 +560,9 @@ export function MatchDaysPage() {
     setMatchDayOffsetByTeamId({})
     setOtherMatchDayOffset(0)
     setGlobalMatchDayOffset(0)
+    // Re-default the mobile journée to the new phase's active one, rather than
+    // carrying over a number that may not exist there (#306).
+    setMobileMatchDayNumber(null)
   }
 
   const scrollToTeam = (teamId: string) => {
@@ -829,13 +620,32 @@ export function MatchDaysPage() {
         }
         controls={
           <>
-            {/* Phase switcher */}
-            <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
+            {/* Phase switcher. Below md: a select — two 44px chevrons plus the
+                full "2025/2026 Phase 1" label needs 230px, and with the journée
+                switcher beside it the row overflowed a 375px screen. A select
+                carries the same label in 60px less, and a phase is something
+                you change once a season. */}
+            <label className="min-w-0 flex-1 md:hidden">
+              <span className="sr-only">Phase</span>
+              <select
+                value={selectedPhaseId ?? ''}
+                onChange={(e) => handlePhaseChange(e.target.value)}
+                className="h-11 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700"
+              >
+                {phases.map((ph) => (
+                  <option key={ph.id} value={ph.id}>
+                    {ph.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="hidden h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:flex">
               <button
                 type="button"
                 onClick={() => handlePhaseChange(phases[selectedPhaseIndex - 1].id)}
                 disabled={selectedPhaseIndex <= 0}
-                className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                 aria-label="Phase précédente"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -849,7 +659,7 @@ export function MatchDaysPage() {
                 type="button"
                 onClick={() => handlePhaseChange(phases[selectedPhaseIndex + 1].id)}
                 disabled={selectedPhaseIndex >= phases.length - 1}
-                className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40 md:h-7 md:w-7"
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                 aria-label="Phase suivante"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -858,9 +668,46 @@ export function MatchDaysPage() {
               </button>
             </div>
 
-            {/* Team shortcuts */}
+            {/* Journée switcher — the single navigation control below md:,
+                where the matrix (and its two paginators) is replaced by the
+                card list (#306). */}
+            {mobileMatchDayGroup && (
+              <div className="flex h-11 shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-1 md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex - 1].number)}
+                  disabled={mobileMatchDayIndex <= 0}
+                  className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  aria-label="Journée précédente"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="whitespace-nowrap text-xs font-medium text-slate-700 tabular-nums">
+                  {/* "J8" matches the matrix's own column headers, and keeps the
+                      row inside 375px next to the phase select. */}
+                  <span className="sm:hidden">J{mobileMatchDayGroup.number}</span>
+                  <span className="hidden sm:inline">Journée {mobileMatchDayGroup.number}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex + 1].number)}
+                  disabled={mobileMatchDayIndex >= matchDayGroups.length - 1}
+                  className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  aria-label="Journée suivante"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Team shortcuts — matrix-only: they jump between the per-team
+                tables, which do not exist below md:. */}
             {myClubTeamsInPhase.length > 0 && (
-              <div className="flex items-center gap-1">
+              <div className="hidden items-center gap-1 md:flex">
                 <span className="mr-1 whitespace-nowrap text-xs text-slate-500">Aller à</span>
                 {myClubTeamsInPhase.map((t) => (
                   <button
@@ -884,9 +731,9 @@ export function MatchDaysPage() {
               </div>
             )}
 
-            {/* Global match-day switcher */}
+            {/* Global match-day switcher — matrix-only, see above. */}
             {globalMaxMatchDays > VISIBLE_MATCH_DAY_COUNT && (
-              <div className="flex h-11 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:h-9">
+              <div className="hidden h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:flex">
                 <button
                   type="button"
                   onClick={() => setGlobalOffset(globalMatchDayOffset - 1)}
@@ -930,6 +777,17 @@ export function MatchDaysPage() {
       {selectedPhaseId && myClubTeamsInPhase.length === 0 && (
         <p className="text-sm text-slate-600">Aucune équipe de votre club dans cette phase.</p>
       )}
+
+      {/* Mobile: one card per team for the selected journée. The matrix below
+          is 964px of columns and cannot fit a phone (#306). */}
+      {myClubTeamsInPhase.length > 0 && (
+        <div className="md:hidden">
+          <MatchDayCards entries={mobileEntries} />
+        </div>
+      )}
+
+      {/* Desktop: the per-team matrix, unchanged. */}
+      <div className="hidden flex-col gap-6 md:flex">
 
       {myClubTeamsInPhase.map((team) => {
         const groupMatchDays = getMatchDaysForTeam(team.id)
@@ -1389,9 +1247,14 @@ export function MatchDaysPage() {
           </section>
         )
       })}
+      </div>
 
-      {/* Other players (club, not in any team roster) */}
+
+      {/* Other players (club, not in any team roster). Another matrix, so it is
+          desktop-only like the per-team ones; on mobile a borrowed player shows
+          up in the detail of the team they were picked for (#306). */}
       {otherPlayers.length > 0 && otherGroupMatchDays.length > 0 && (
+        <div className="hidden md:block">
         <section id="other-players" className="overflow-hidden rounded-xl border border-slate-200 bg-white scroll-mt-[var(--page-scroll-offset)]">
           <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="font-display text-lg font-medium text-slate-800">
@@ -1579,6 +1442,7 @@ export function MatchDaysPage() {
             })()}
           </div>
         </section>
+        </div>
       )}
 
       {/* Create / Edit match-day modal */}

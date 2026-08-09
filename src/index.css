@@ -19,3 +19,14 @@
 body {
   @apply bg-slate-50 text-slate-900 font-sans antialiased min-h-screen;
 }
+
+/* Scrollable without the scrollbar furniture. The sticky page toolbar can
+   overflow when a screen has many controls, but a track drawn across a 44px
+   control row reads as a glitch rather than an affordance. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
