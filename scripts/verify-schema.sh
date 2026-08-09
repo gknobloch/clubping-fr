@@ -47,7 +47,16 @@ npx wrangler d1 execute "$DB" --remote "$@" --json --command \
   "SELECT type || ' ' || name AS o FROM sqlite_master
    WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name <> 'd1_migrations'
    ORDER BY 1" \
-  | python3 -c 'import sys,json; [print(r["o"]) for r in json.load(sys.stdin)[0]["results"]]' > "$WORK/live.txt"
+  | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+# wrangler answers with a list of result sets. Anything else is an error
+# payload or a hiccup, and must not be read as "the database is empty".
+if not isinstance(d, list) or not d or "results" not in d[0]:
+    sys.exit("unexpected wrangler output — not a result set:\n" + json.dumps(d)[:400])
+for r in d[0]["results"]:
+    print(r["o"])
+' > "$WORK/live.txt"
 
 echo
 if diff -u "$WORK/ref.txt" "$WORK/live.txt"; then
@@ -55,8 +64,14 @@ if diff -u "$WORK/ref.txt" "$WORK/live.txt"; then
 else
   echo
   echo "✘ ${DB} differs from what migrations/ produces."
-  echo "  '-' lines are in migrations but MISSING from the database — most"
-  echo "  likely a migration the old loop swallowed. Do NOT back-fill until"
-  echo "  this is understood: back-filling would skip it permanently."
+  echo
+  echo "  '-' lines are in migrations but MISSING from the database. This is"
+  echo "     the serious direction: most likely a migration the old loop"
+  echo "     swallowed. Do NOT back-fill — it would skip that one permanently."
+  echo
+  echo "  '+' lines are in the database but not in migrations: leftovers a"
+  echo "     failed drop or rename never cleared. Harmless to the app, and"
+  echo "     safe to back-fill past, but worth cleaning up — on the dev"
+  echo "     database, 'npm run db:refresh:dev' is the simplest way."
   exit 1
 fi
