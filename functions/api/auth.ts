@@ -403,11 +403,14 @@ function serializeDevUser(r: DevUserRow) {
   // types the column as string, but SQLite hands back a number when a single
   // team matches, so coerce before splitting.
   const captainOf = r.captain_team_numbers
-    ? String(r.captain_team_numbers)
-        .split(',')
-        .map((n) => Number(n))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b)
+    ? [
+        ...new Set(
+          String(r.captain_team_numbers)
+            .split(',')
+            .map((n) => Number(n))
+            .filter((n) => Number.isFinite(n)),
+        ),
+      ].sort((a, b) => a - b)
     : []
   return {
     ...serializeUser(r),
@@ -429,9 +432,16 @@ authApp.get('/dev/users', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT u.*,
             c.display_name AS club_name,
+            -- Scoped to the active phase (at most one at a time, across
+            -- seasons). Unscoped, a captain who has held team 5 for three
+            -- phases came back as "5, 5, 5", and past captaincies are not what
+            -- one is about to test anyway.
             (SELECT group_concat(t.number)
                FROM teams t
-              WHERE t.captain_id = u.id AND t.is_archived = 0) AS captain_team_numbers
+               JOIN phases p ON p.id = t.phase_id
+              WHERE t.captain_id = u.id
+                AND t.is_archived = 0
+                AND p.status = 'active') AS captain_team_numbers
        FROM users u
        LEFT JOIN clubs c ON c.id = u.club_id
       ORDER BY CASE u.role

@@ -206,7 +206,26 @@ describe('dev login endpoints — enabled (#313)', () => {
       await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
 
       const sql = queries.join(' ').replace(/\s+/g, ' ')
-      expect(sql).toContain('t.captain_id = u.id AND t.is_archived = 0')
+      expect(sql).toContain('t.is_archived = 0')
+    })
+
+    it('counts captaincy in the active phase only', async () => {
+      const { db, queries } = dbWithRows([user])
+      await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      // Team numbers repeat from one phase to the next, so an unscoped count
+      // showed a long-standing captain of team 5 as "5, 5, 5".
+      const sql = queries.join(' ').replace(/\s+/g, ' ')
+      expect(sql).toContain('JOIN phases p ON p.id = t.phase_id')
+      expect(sql).toContain("p.status = 'active'")
+    })
+
+    it('collapses a team number that still arrives more than once', async () => {
+      const { db } = dbWithRows([{ ...user, captain_team_numbers: '5,5,5' }])
+      const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      const { users } = await res.json<{ users: Record<string, unknown>[] }>()
+      expect(users[0].captainOf).toEqual([5])
     })
   })
 

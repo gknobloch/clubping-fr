@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { DevUser, User } from '@/types'
-import { mockClubs, mockTeams, mockUsers, getDisplayNameForUser, getRoleLabel } from '@/mock/data'
+import {
+  mockClubs,
+  mockPhases,
+  mockTeams,
+  mockUsers,
+  getDisplayNameForUser,
+  getRoleLabel,
+} from '@/mock/data'
 import {
   devLogin as apiDevLogin,
   fetchDevUsers,
@@ -49,12 +56,25 @@ export const DEV_LOGIN = import.meta.env.DEV || import.meta.env.VITE_DEV_LOGIN =
 // On a preview the real list is fetched from /api/auth/dev/users instead — see
 // devUsers below. Enriched and ordered exactly as that endpoint does (#345), so
 // the picker has one shape to render whichever list it got.
+//
+// Captaincy is scoped to the active phase, as the endpoint's subquery is: a
+// team number is reused from one phase to the next, so counting every phase
+// listed the same team once per phase it was captained.
+const activePhaseIds = new Set(
+  mockPhases.filter((p) => p.status === 'active').map((p) => p.id),
+)
+
 const allSelectableUsers: DevUser[] = mockUsers
   .map((u): DevUser => {
-    const captainOf = mockTeams
-      .filter((t) => t.captainId === u.id && !t.isArchived)
-      .map((t) => t.number)
-      .sort((a, b) => a - b)
+    const captainOf = [
+      ...new Set(
+        mockTeams
+          .filter(
+            (t) => t.captainId === u.id && !t.isArchived && activePhaseIds.has(t.phaseId),
+          )
+          .map((t) => t.number),
+      ),
+    ].sort((a, b) => a - b)
     const club = u.clubId ? mockClubs.find((c) => c.id === u.clubId) : undefined
     return {
       ...u,
