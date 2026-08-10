@@ -49,7 +49,11 @@
     "extra": {
       "googleWebClientId": "",
       "googleIosClientId": "",
-      "googleAndroidClientId": ""
-    }
+      "googleAndroidClientId": "",
+      "eas": {
+        "projectId": "917d2d0b-d20e-412f-8ab4-a5f2177f635c"
+      }
+    },
+    "owner": "gknoblochs-team"
   }
 }
