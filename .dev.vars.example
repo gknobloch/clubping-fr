@@ -6,12 +6,15 @@
 
 # --- Dev login (#313) ---
 # When 'true', /api/auth/dev/* lists users and signs in as any of them with no
-# credential. Set automatically on PREVIEW deployments (wrangler.toml
-# [env.preview.vars]), whose database is anonymised. NEVER set it in
-# production — there it is a complete authentication bypass.
-# Locally it is only useful with AUTH_GUARD_DISABLED unset/false, i.e. when you
-# want to exercise the real session guard the way a preview does.
-DEV_LOGIN_ENABLED=
+# credential — minting a REAL session, so the guard below stays on (#138). Set
+# automatically on PREVIEW deployments (wrangler.toml [env.preview.vars]), whose
+# database is anonymised. NEVER set it in production — there it is a complete
+# authentication bypass.
+# Locally it only shows up with `VITE_DEV_LOGIN=true npm run dev:full`: the
+# picker is a build-time flag, and plain `dev:full` builds for production. Plain
+# `dev:full` signs in by email OTP instead — the backend returns the code as
+# `devCode` and the login screen prints it.
+DEV_LOGIN_ENABLED=true
 
 # --- Resend (the only real secret) ---
 # Without RESEND_API_KEY the backend logs the OTP and returns it as `devCode`
@@ -30,7 +33,11 @@ GOOGLE_CLIENT_IDS=
 APPLE_CLIENT_IDS=
 
 # --- Session guard (#98) ---
-# Set to 'true' LOCALLY ONLY so the dev "pick any user" login (which has no
-# server session) can still read/write the API. NEVER set this in production —
-# keep it out of wrangler.toml. Real logins (email OTP / OAuth) work regardless.
-AUTH_GUARD_DISABLED=true
+# Left OFF (unset) on purpose: with DEV_LOGIN_ENABLED above, local dev holds a
+# real session, so the guard can run exactly as it does in production. That is
+# the point — a guard bypassed locally means auth mistakes are only ever found
+# in production, which is how the logo 401 shipped (#137, #138).
+#
+# Set it to 'true' only as an escape hatch, e.g. a local database with no users
+# to sign in as. Nothing deployed may ever set it: keep it out of wrangler.toml.
+# AUTH_GUARD_DISABLED=true

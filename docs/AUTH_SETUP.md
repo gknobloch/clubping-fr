@@ -113,7 +113,50 @@ npx wrangler pages secret put RESEND_API_KEY        # the secret (prompts for va
 
 ---
 
-## E. Verification checklist
+## E. Local development (running with the session guard on)
+
+The session guard (#98) rejects any `/api` request without a valid Bearer
+session, except the public auth endpoints and image `GET`s. **Local dev runs it
+too**, so auth mistakes fail on your machine instead of in production — which is
+how the club-logo `401` shipped unnoticed (#137, #138).
+
+What makes that workable is that local sign-in produces a **real** session:
+
+```bash
+npm run db:migrate:local && npm run db:seed:local   # users to sign in as
+npm run dev:full                                    # http://localhost:8788
+```
+
+Sign in with **email OTP**, using any seeded member's address. Without
+`RESEND_API_KEY` the backend does not send mail — it returns the code as
+`devCode` and the login screen prints it as *Code (dev) : 123456*. That is the
+production login path, exercised end to end on your machine.
+
+The "pick any user" picker is a **build-time** flag (`VITE_DEV_LOGIN`), so it is
+not drawn by `npm run dev:full`, which builds for production. To get it:
+
+```bash
+VITE_DEV_LOGIN=true npm run dev:full     # picker + DEV_LOGIN_ENABLED=true in .dev.vars
+```
+
+Then the picker signs in through `POST /api/auth/dev/login`, which mints a real
+session exactly as a preview does — so the guard stays on either way.
+
+- `npm run dev` (Vite alone, port 5173) has no backend and no proxy to one. The
+  picker falls back to the mock fixtures and there is no API to guard —
+  unchanged.
+- `AUTH_GUARD_DISABLED=true` is an **escape hatch**, not the default: it bypasses
+  the guard for every request, so anything auth-dependent becomes untestable
+  locally. Reach for it only when the local database has no users to sign in as.
+  It must never appear in `wrangler.toml` — `src/test/workflows.spec.ts` fails
+  the build if it does.
+
+Guard behaviour is covered by `functions/api/authGuard.test.ts`; new
+auth-sensitive routes belong there.
+
+---
+
+## F. Verification checklist
 
 - [ ] `POST /api/auth/email/request` no longer returns `devCode`; a real email arrives.
 - [ ] Web: the Google button renders (GIS) and Apple button is enabled (not "à configurer").

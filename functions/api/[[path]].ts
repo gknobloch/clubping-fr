@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, bearer, userFromToken, type Env } from './auth'
+import { needsSession } from './authGuard'
 import { jsonParseIds, jsonParseStringMap } from './rows'
 import type { Address, ClubChannel, DataState } from '../../src/types'
 import type {
@@ -13,8 +14,8 @@ import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhas
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
 
-// Exported for tests: the auth middleware's public-path rules are behaviour
-// worth pinning down, and nothing else can reach them (#320).
+// Exported for tests: the session guard is only observable through a real
+// request, so the suites that pin it down fetch this app directly (#320, #138).
 export const app = new Hono<Env>().basePath('/api')
 
 // Opaque generated id (#278), same shape as the web app's nextId(). The
@@ -24,24 +25,13 @@ let generatedIdCounter = 0
 const newId = (prefix: string) =>
   `${prefix}-${Date.now()}-${generatedIdCounter++}-${Math.random().toString(36).slice(2, 7)}`
 
-// Public endpoints that must work without a session (you're not logged in yet).
-// `dev/` is unauthenticated by nature — it is how you obtain a session on a
-// preview. It is inert unless DEV_LOGIN_ENABLED is set, which only the preview
-// environment does (#313).
-const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$|dev\/)/
-
-// Image endpoints are served to <img> / <Image> tags, which can't send the
-// Bearer header — so GETs to them are public (read-only, non-sensitive logos /
-// avatars). Writes (PUT/DELETE) still go through the guard below.
-const PUBLIC_IMAGE_PATH = /^\/api\/(clubs\/[^/]+\/logo|users\/[^/]+\/avatar)$/
-
-// Session guard (#98): every /api route except the public auth + image endpoints
-// requires a valid Bearer session. Bypassed locally via AUTH_GUARD_DISABLED so
-// the dev user-picker login (no server session) still works in development.
+// Session guard (#98): every /api route except the public auth + image
+// endpoints (see needsSession) requires a valid Bearer session. AUTH_GUARD_DISABLED
+// bypasses it entirely — an escape hatch for a local database with no sessions
+// to hand out, not a mode anything deployed should ever run in (#138).
 app.use('*', async (c, next) => {
-  const path = new URL(c.req.url).pathname
-  if (PUBLIC_PATH.test(path) || c.env.AUTH_GUARD_DISABLED === 'true') return next()
-  if (c.req.method === 'GET' && PUBLIC_IMAGE_PATH.test(path)) return next()
+  if (c.env.AUTH_GUARD_DISABLED === 'true') return next()
+  if (!needsSession(c.req.method, new URL(c.req.url).pathname)) return next()
   const token = bearer(c.req.header('Authorization'))
   const user = token ? await userFromToken(c.env.DB, token) : null
   if (!user) return c.json({ error: 'unauthorized' }, 401)
