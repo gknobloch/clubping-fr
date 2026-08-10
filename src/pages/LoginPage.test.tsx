@@ -17,6 +17,34 @@ describe('LoginPage', () => {
     expect(screen.queryByRole('button', { name: /Apple/i })).not.toBeInTheDocument()
   })
 
+  // #351 — the login screen is the only place a member meets the app before
+  // knowing what it does, and the mark appears nowhere else above 28px.
+  it('shows the brand mark at a size worth calling a logo', () => {
+    render(<LoginPage />)
+
+    const mark = screen.getByRole('img', { name: 'Club Ping' })
+    expect(mark).toBeInTheDocument()
+    // h-20/w-20 — the nav bar's copy is h-7, which is what prompted this.
+    expect(mark.getAttribute('class')).toContain('h-20')
+  })
+
+  it('says what the app is for', () => {
+    render(<LoginPage />)
+
+    expect(
+      screen.getByText(/joueurs, équipes, disponibilités et composition des rencontres/i),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the step caption separate from the description', () => {
+    render(<LoginPage />)
+
+    // Both are present: one explains the app, the other tells you what to do
+    // next and changes with the step.
+    expect(screen.getByText(/Le tennis de table de club au quotidien/i)).toBeInTheDocument()
+    expect(screen.getByText('Connectez-vous pour continuer')).toBeInTheDocument()
+  })
+
   it('shows the dev login picker in dev mode', () => {
     render(<LoginPage />)
     expect(screen.getByText(/Mode développement/i)).toBeInTheDocument()

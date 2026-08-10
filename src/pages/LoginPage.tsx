@@ -2,9 +2,32 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
 import { IS_PR_PREVIEW } from '@/lib/preview'
+import { BrandMark } from '@/components/BrandMark'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import type { DevUser, User } from '@/types'
+
+// Shared header for both ways in — the e-mail code form and the preview's
+// standalone picker (#313). The mark appears nowhere else above 28px, and the
+// login screen is the only place a member sees the app before knowing what it
+// does (#351).
+function LoginHeader({ caption }: { caption: string }) {
+  return (
+    <div className="mb-8 flex flex-col items-center text-center">
+      <BrandMark className="h-20 w-20 text-slate-800" title="Club Ping" />
+      <h1 className="mt-4 font-display text-3xl font-semibold text-slate-800">Club Ping</h1>
+      {/* Narrower than the form on purpose — a centred line this long is hard
+          to read at the full 448px — but wide enough to avoid a one-word last
+          line. */}
+      <p className="mt-2 max-w-sm text-balance text-sm text-slate-600">
+        Le tennis de table de club au quotidien{'\u00A0'}: joueurs, équipes, disponibilités
+        et composition des rencontres.
+      </p>
+      {/* Kept distinct from the description: this one changes with the step. */}
+      <p className="mt-4 text-sm text-slate-500">{caption}</p>
+    </div>
+  )
+}
 
 function authErrorMessage(e: unknown): string {
   switch ((e as ApiError)?.code) {
@@ -74,12 +97,7 @@ export function LoginPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
         <div className="w-full max-w-md">
-          <h1 className="font-display text-2xl font-semibold text-slate-800 text-center mb-2">
-            Club Ping
-          </h1>
-          <p className="text-slate-600 text-center text-sm mb-8">
-            Préversion — choisissez un utilisateur pour continuer
-          </p>
+          <LoginHeader caption="Préversion — choisissez un utilisateur pour continuer" />
           <DevLogin standalone />
         </div>
       </div>
@@ -89,12 +107,9 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
       <div className="w-full max-w-md">
-        <h1 className="font-display text-2xl font-semibold text-slate-800 text-center mb-2">
-          Club Ping
-        </h1>
-        <p className="text-slate-600 text-center text-sm mb-8">
-          {step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}
-        </p>
+        <LoginHeader
+          caption={step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}
+        />
 
         {error && <p className="mb-4 text-sm font-medium text-red-600 text-center">{error}</p>}
 

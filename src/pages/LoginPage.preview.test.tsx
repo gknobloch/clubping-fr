@@ -26,6 +26,15 @@ describe('LoginPage — PR preview (#313)', () => {
     expect(screen.getByPlaceholderText(/Nom ou adresse email/i)).toBeInTheDocument()
   })
 
+  it('carries the same brand header as the e-mail form (#351)', () => {
+    render(<LoginPage />)
+
+    // The preview's picker replaces the OTP form entirely, so it is the whole
+    // login screen here — it must introduce the app just the same.
+    expect(screen.getByRole('img', { name: 'Club Ping' })).toBeInTheDocument()
+    expect(screen.getByText(/Le tennis de table de club au quotidien/i)).toBeInTheDocument()
+  })
+
   it('says it is a preview rather than showing the dev-mode separator', () => {
     render(<LoginPage />)
 
