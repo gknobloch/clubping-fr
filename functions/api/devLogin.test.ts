@@ -138,6 +138,78 @@ describe('dev login endpoints — enabled (#313)', () => {
     expect(body.user).not.toHaveProperty('email')
   })
 
+  // #345 — anonymisation keeps roles but replaces every name, so the picker
+  // needs the club and the captaincy to tell the accounts apart.
+  describe('role context for the anonymised picker', () => {
+    // A db whose `all()` returns rows verbatim and records the SQL, so the
+    // serialisation can be checked independently of SQLite's ordering.
+    function dbWithRows(rows: Record<string, unknown>[]) {
+      const queries: string[] = []
+      return {
+        queries,
+        db: {
+          prepare(sql: string) {
+            queries.push(sql)
+            return { all: async () => ({ results: rows }) }
+          },
+        } as unknown as D1Database,
+      }
+    }
+
+    it('carries the club name and the captained team numbers', async () => {
+      const { db } = dbWithRows([
+        { ...user, club_name: 'Ping Club', captain_team_numbers: '3,5' },
+      ])
+      const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      const { users } = await res.json<{ users: Record<string, unknown>[] }>()
+      expect(users[0]).toMatchObject({ clubName: 'Ping Club', captainOf: [3, 5] })
+    })
+
+    it('sorts the team numbers and copes with a single one arriving as a number', async () => {
+      // group_concat yields one value for a single match, and SQLite hands it
+      // back typed as a number rather than a string.
+      const { db } = dbWithRows([
+        { ...user, id: 'u1', captain_team_numbers: 7 },
+        { ...user, id: 'u2', captain_team_numbers: '9,2' },
+      ])
+      const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      const { users } = await res.json<{ users: Record<string, unknown>[] }>()
+      expect(users[0].captainOf).toEqual([7])
+      expect(users[1].captainOf).toEqual([2, 9])
+    })
+
+    it('omits both keys for a member with no club and no captaincy', async () => {
+      const { db } = dbWithRows([
+        { ...user, club_id: null, club_name: null, captain_team_numbers: null },
+      ])
+      const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      const { users } = await res.json<{ users: Record<string, unknown>[] }>()
+      expect(users[0]).not.toHaveProperty('clubName')
+      expect(users[0]).not.toHaveProperty('captainOf')
+    })
+
+    it('asks for administrators first', async () => {
+      const { db, queries } = dbWithRows([user])
+      await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      // An unfiltered list is long; the accounts worth testing must be on top.
+      const sql = queries.join(' ').replace(/\s+/g, ' ')
+      expect(sql).toContain("WHEN 'general_admin' THEN 0")
+      expect(sql).toContain("WHEN 'club_admin' THEN 1")
+    })
+
+    it('leaves archived teams out of the captaincy', async () => {
+      const { db, queries } = dbWithRows([user])
+      await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/users')
+
+      const sql = queries.join(' ').replace(/\s+/g, ' ')
+      expect(sql).toContain('t.captain_id = u.id AND t.is_archived = 0')
+    })
+  })
+
   it('rejects a request with no user id', async () => {
     const { db } = dbWith(user)
     const res = await request({ DB: db, DEV_LOGIN_ENABLED: 'true' }, 'dev/login', {

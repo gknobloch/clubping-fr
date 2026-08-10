@@ -1,4 +1,4 @@
-import type { User } from '@/types'
+import type { DevUser, User } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Low-level helpers (web — same-origin /api)
@@ -69,10 +69,12 @@ export async function fetchMe(token: string): Promise<User> {
 // here is the normal case and simply means "no server-side dev login" — local
 // `vite dev` has no backend at all and falls back to the mock user list.
 
-/** The preview database's own users, for the picker. */
-export async function fetchDevUsers(): Promise<User[]> {
+/** The preview database's own users, for the picker. Each carries the club name
+ *  and captained team numbers, which is what tells anonymised members apart
+ *  (#345), and the list arrives with administrators first. */
+export async function fetchDevUsers(): Promise<DevUser[]> {
   const res = await fetch('/api/auth/dev/users')
-  const { users } = await parse<{ users: User[] }>(res)
+  const { users } = await parse<{ users: DevUser[] }>(res)
   return users
 }
 

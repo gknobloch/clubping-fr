@@ -390,15 +390,58 @@ authApp.post('/logout', async (c) => {
 // rather than merely refused.
 const devLoginEnabled = (env: Env['Bindings']) => env.DEV_LOGIN_ENABLED === 'true'
 
+// A user row plus the two derived columns the picker needs. Both come from the
+// LEFT JOIN / subquery below, so both are absent for a member with no club and
+// no captaincy — and undefined when a caller hands us a plain user row.
+type DevUserRow = UserRow & {
+  club_name?: string | null
+  captain_team_numbers?: string | null
+}
+
+function serializeDevUser(r: DevUserRow) {
+  // group_concat gives '3,5' (or NULL when the member captains nothing). D1
+  // types the column as string, but SQLite hands back a number when a single
+  // team matches, so coerce before splitting.
+  const captainOf = r.captain_team_numbers
+    ? String(r.captain_team_numbers)
+        .split(',')
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)
+    : []
+  return {
+    ...serializeUser(r),
+    ...(r.club_name ? { clubName: r.club_name } : {}),
+    ...(captainOf.length > 0 ? { captainOf } : {}),
+  }
+}
+
 // The picker's list. Deliberately the preview database's own users, not the
 // mock fixtures — logging in as somebody who does not exist there is what made
 // every screen come up empty.
+//
+// Anonymisation (#313) keeps roles but replaces every name with a pseudonym, so
+// the list alone no longer says who administers what (#345). Each row therefore
+// carries the club name and the teams the member captains — captaincy is
+// derived from teams.captain_id, which the client cannot see before signing in.
 authApp.get('/dev/users', async (c) => {
   if (!devLoginEnabled(c.env)) return c.json({ error: 'not_found' }, 404)
   const { results } = await c.env.DB.prepare(
-    'SELECT * FROM users ORDER BY last_name, first_name, email',
-  ).all<UserRow>()
-  return c.json({ users: (results ?? []).map(serializeUser) })
+    `SELECT u.*,
+            c.display_name AS club_name,
+            (SELECT group_concat(t.number)
+               FROM teams t
+              WHERE t.captain_id = u.id AND t.is_archived = 0) AS captain_team_numbers
+       FROM users u
+       LEFT JOIN clubs c ON c.id = u.club_id
+      ORDER BY CASE u.role
+                 WHEN 'general_admin' THEN 0
+                 WHEN 'club_admin' THEN 1
+                 ELSE 2
+               END,
+               u.last_name, u.first_name, u.email`,
+  ).all<DevUserRow>()
+  return c.json({ users: (results ?? []).map(serializeDevUser) })
 })
 
 // Sign in as any user, with no credential. Issues exactly the same session as
