@@ -42,6 +42,13 @@ describe('wrangler.toml — server-side dev login gating (#313)', () => {
   it('enables them for the preview environment', () => {
     expect(preview).toMatch(/DEV_LOGIN_ENABLED\s*=\s*"true"/)
   })
+
+  // AUTH_GUARD_DISABLED belongs to .dev.vars and nowhere else (#138). Deployed —
+  // in either environment — it turns off the session guard for every request,
+  // which no test of the app itself would notice: everything simply works.
+  it('never disables the session guard in any deployed environment', () => {
+    expect(toml).not.toContain('AUTH_GUARD_DISABLED')
+  })
 })
 
 // #321 — the cleanup job ignored every API response and exited 0, so it

@@ -1,0 +1,31 @@
+// The session guard's path decision (#98, #138), kept apart from the request
+// handling so it can be tested as what it is: a pure question about a method
+// and a path, with no database, no token, and no Hono in the way.
+//
+// It lives here rather than in `[[path]].ts` because getting it wrong fails
+// silently in one direction (an endpoint quietly public) and invisibly in the
+// other (every avatar 401s, which an <img> renders as a broken image rather
+// than an error). Both are worth pinning down on their own.
+
+// Endpoints that must work without a session — you are not logged in yet.
+// `dev/` is unauthenticated by nature: it is how you obtain a session on a
+// preview. It is inert unless DEV_LOGIN_ENABLED is set, which only the preview
+// environment and an opted-in local `.dev.vars` do (#313).
+const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$|dev\/)/
+
+// Image endpoints are served to <img> / <Image> tags, which cannot attach an
+// Authorization header — so GETs to them are public (read-only, non-sensitive
+// logos / avatars). Writes still require a session.
+const PUBLIC_IMAGE_PATH = /^\/api\/(clubs\/[^/]+\/logo|users\/[^/]+\/avatar)$/
+
+/**
+ * Whether a request must carry a valid Bearer session to be served.
+ *
+ * Takes the method and pathname only: the `AUTH_GUARD_DISABLED` bypass is a
+ * property of the environment, not of the route, and stays with the middleware.
+ */
+export function needsSession(method: string, path: string): boolean {
+  if (PUBLIC_PATH.test(path)) return false
+  if (method === 'GET' && PUBLIC_IMAGE_PATH.test(path)) return false
+  return true
+}
