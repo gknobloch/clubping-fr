@@ -23,9 +23,10 @@ describe('LoginPage', () => {
     render(<LoginPage />)
 
     const mark = screen.getByRole('img', { name: 'Club Ping' })
-    expect(mark).toBeInTheDocument()
-    // h-20/w-20 — the nav bar's copy is h-7, which is what prompted this.
-    expect(mark.getAttribute('class')).toContain('h-20')
+    // h-16 inside a 96px disc — the nav bar's copy is h-7, which is what
+    // prompted this.
+    expect(mark.getAttribute('class')).toContain('h-16')
+    expect(mark.parentElement?.className).toContain('rounded-full')
   })
 
   it('says what the app is for', () => {
