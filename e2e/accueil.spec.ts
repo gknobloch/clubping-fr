@@ -19,10 +19,16 @@ test.describe('Player — Accueil', () => {
     await expect(page.getByText('0 matchs')).toBeVisible()
   })
 
-  test('Détails opens the game modal', async ({ page }) => {
-    await page.getByRole('button', { name: 'Détails' }).click()
+  test('Aperçu opens the game modal, whose Détails leads to the round', async ({ page }) => {
+    await page.getByRole('button', { name: 'Aperçu' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByText('Disponibilités')).toBeVisible()
+
+    // The way on is a link, not a button, and the destination depends on the
+    // viewport (#347) — desktop here, so the deep-linked matrix.
+    const details = page.getByRole('dialog').getByRole('link', { name: 'Détails', exact: true })
+    await expect(details).toHaveAttribute('href', /^\/journees\?equipe=.+&match=.+/)
+
     await page.getByRole('button', { name: 'Fermer' }).click()
     await expect(page.getByRole('dialog')).not.toBeVisible()
   })

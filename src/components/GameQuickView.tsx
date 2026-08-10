@@ -159,13 +159,46 @@ export function GameQuickView({
           ))}
         </ul>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 w-full rounded-lg bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-        >
-          Fermer
-        </button>
+        {/* Two columns: the way out and the way on are peers, and stacked they
+            pushed the roster off a phone screen. */}
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-lg bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          >
+            Fermer
+          </button>
+
+          {/* Everyone gets this, not just whoever may edit the line-up: reading
+              a round is reading, and both destinations gate their own controls
+              (#347).
+
+              Two links, one per breakpoint, because the right destination
+              differs — the same split the Journées screen itself makes, and a
+              `hidden` element is not a grid item, so exactly one occupies the
+              second column at any width.
+
+              Below md: the single-match screen (#337), which is the phone
+              answer to a matrix that cannot fit 375px.
+              From md up: the matrix, deep-linked via `equipe` + `match` so it
+              lands on the team, slides its window onto this journée and rings
+              the fixture. */}
+          <Link
+            to={`/journees/${game.id}?equipe=${team.id}`}
+            onClick={onClose}
+            className="w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700 md:hidden"
+          >
+            Détails
+          </Link>
+          <Link
+            to={`/journees?equipe=${team.id}&match=${game.id}`}
+            onClick={onClose}
+            className="hidden w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700 md:block"
+          >
+            Détails
+          </Link>
+        </div>
       </div>
     </ModalShell>
   )
