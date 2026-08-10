@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
 import { IS_PR_PREVIEW } from '@/lib/preview'
-import { getDisplayNameForUser, mockClubs } from '@/mock/data'
+import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
-import type { User } from '@/types'
+import type { DevUser, User } from '@/types'
 
 function authErrorMessage(e: unknown): string {
   switch ((e as ApiError)?.code) {
@@ -182,6 +182,19 @@ export function LoginPage() {
   )
 }
 
+// A preview's database is anonymised (#313): every member has a pseudonym, so
+// the name alone no longer says who administers what. The badge is the only
+// thing left that distinguishes the accounts (#345).
+const DEV_ROLE_BADGES: Record<User['role'], { label: string; className: string }> = {
+  general_admin: { label: 'Admin général', className: 'bg-red-100 text-red-800' },
+  club_admin: { label: 'Admin club', className: 'bg-indigo-100 text-indigo-800' },
+  player: { label: 'Joueur', className: 'bg-slate-100 text-slate-600' },
+}
+
+function devRoleBadge(user: User) {
+  return DEV_ROLE_BADGES[user.role]
+}
+
 // ---------------------------------------------------------------------------
 // Dev-only "pick any user" login (hidden behind DEV_LOGIN). Kept as the E2E
 // login path since the E2E server runs `vite dev` with no backend.
@@ -198,15 +211,26 @@ function DevLogin({ standalone = false }: { standalone?: boolean }) {
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return devUsers
-    return devUsers.filter(
-      (u) => (u.email ?? '').toLowerCase().includes(q) || getDisplayNameForUser(u).toLowerCase().includes(q),
+    // Roles and club are searchable too: on an anonymised preview "admin" or
+    // "capitaine" is the only useful thing to type (#345).
+    return devUsers.filter((u) =>
+      [
+        u.email ?? '',
+        getDisplayNameForUser(u),
+        u.clubName ?? '',
+        devRoleBadge(u).label,
+        ...(u.captainOf?.length ? ['capitaine'] : []),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(q),
     )
   }, [query, devUsers])
 
   const [error, setError] = useState<string | null>(null)
 
   const handleSelect = useCallback(
-    async (user: User) => {
+    async (user: DevUser) => {
       setError(null)
       try {
         // On a preview this is a round trip that mints a real session, so it
@@ -263,12 +287,30 @@ function DevLogin({ standalone = false }: { standalone?: boolean }) {
                   }}
                   className="cursor-pointer px-4 py-3 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                 >
-                  <span className="font-medium text-slate-900">{getDisplayNameForUser(user)}</span>
-                  <span className="block text-sm text-slate-500">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-medium text-slate-900">
+                      {getDisplayNameForUser(user)}
+                    </span>
                     {(() => {
-                      const club = user.clubId ? mockClubs.find((c) => c.id === user.clubId) : null
-                      return club?.displayName ?? user.email
+                      const badge = devRoleBadge(user)
+                      return (
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badge.className}`}
+                        >
+                          {badge.label}
+                        </span>
+                      )
                     })()}
+                    {user.captainOf && user.captainOf.length > 0 && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                        Capitaine {user.captainOf.join(', ')}
+                      </span>
+                    )}
+                  </span>
+                  <span className="block text-sm text-slate-500">
+                    {/* The club comes from the payload: on a preview it is a real
+                        club that the mock fixtures know nothing about (#345). */}
+                    {user.clubName ?? user.email}
                   </span>
                 </li>
               ))

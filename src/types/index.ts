@@ -251,3 +251,16 @@ export interface User {
   /** The person's club (players have one; club_admins administer it). */
   clubId?: string
 }
+
+/**
+ * A user as listed by the preview-only dev-login picker (#313). Anonymisation
+ * leaves every member with a pseudonym, so the picker needs the two things that
+ * still tell them apart (#345): which club they belong to, and which teams they
+ * captain — captaincy is derived from `Team.captainId` and so cannot be read
+ * from the user row alone.
+ */
+export interface DevUser extends User {
+  clubName?: string
+  /** Numbers of the teams this member captains, ascending. Absent if none. */
+  captainOf?: number[]
+}
