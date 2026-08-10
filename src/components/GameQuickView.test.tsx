@@ -44,53 +44,62 @@ function renderAs(user: Record<string, unknown> | null) {
   )
 }
 
-const journeesLink = () => screen.queryByRole('link', { name: /Voir dans Journées/i })
+// Both breakpoints render a "Détails" link; CSS decides which one is a grid
+// item. happy-dom evaluates no media queries, so both are in the DOM here and
+// the classes are what distinguish them.
+const detailLinks = () => screen.queryAllByRole('link', { name: /^Détails$/i })
+const mobileLink = () => detailLinks().find((a) => a.className.includes('md:hidden'))
+const desktopLink = () => detailLinks().find((a) => a.className.includes('md:block'))
 
-describe('GameQuickView — reaching the round in context (#347)', () => {
-  // `equipe` and `match` are what MatchDaysPage deep-links on: without them it
-  // opens on the current week with nothing singled out.
-  const expectedHref = `/journees?equipe=${TEAM_ID}&match=${GAME_ID}`
+describe('GameQuickView — reaching the round (#347)', () => {
+  const asCaptain = { id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' }
 
-  it('points at the team and fixture on the Journées screen', () => {
-    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
+  it('sends a phone to the single-match screen', () => {
+    renderAs(asCaptain)
 
-    expect(journeesLink()).toHaveAttribute('href', expectedHref)
+    // The matrix cannot fit 375px, so below md: the per-match screen (#337) is
+    // the whole point of the destination.
+    expect(mobileLink()).toHaveAttribute('href', `/journees/${GAME_ID}?equipe=${TEAM_ID}`)
+  })
+
+  it('sends a wide screen to the deep-linked matrix', () => {
+    renderAs(asCaptain)
+
+    // `equipe` and `match` are what MatchDaysPage keys on: without them it
+    // opens on the current week with nothing singled out.
+    expect(desktopLink()).toHaveAttribute('href', `/journees?equipe=${TEAM_ID}&match=${GAME_ID}`)
+  })
+
+  it('shows exactly one destination per breakpoint', () => {
+    renderAs(asCaptain)
+
+    expect(detailLinks()).toHaveLength(2)
+    // A `hidden` element is not a grid item, so only one ever occupies the
+    // second column.
+    expect(mobileLink()?.className).toContain('md:hidden')
+    expect(desktopLink()?.className).toContain('hidden')
   })
 
   it('offers it to a player who is not the captain', () => {
-    // Seeing the round in context is reading; the Journées screen gates its own
-    // editing controls.
     renderAs({ id: 'p2-player-3', role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
 
-    expect(journeesLink()).toHaveAttribute('href', expectedHref)
+    expect(detailLinks()).toHaveLength(2)
   })
 
-  it('offers it to the club admin', () => {
+  it('offers it to the club admin and the general admin', () => {
     renderAs({ id: 'user-2', role: 'club_admin', isPlayer: false, clubId: 'club-fftt-06680011' })
+    expect(detailLinks()).toHaveLength(2)
 
-    expect(journeesLink()).toBeInTheDocument()
-  })
-
-  it('offers it to the general admin', () => {
     renderAs({ id: 'user-1', role: 'general_admin', isPlayer: false })
-
-    expect(journeesLink()).toBeInTheDocument()
-  })
-
-  it('does not send anyone to the single-game detail screen', () => {
-    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
-
-    // /journees/:gameId is the mobile drill-down from the Journées list (#337).
-    // Coming from the home screen the round itself is the useful destination.
-    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
-    expect(links.some((href) => href?.startsWith(`/journees/${GAME_ID}`))).toBe(false)
+    expect(detailLinks().length).toBeGreaterThan(0)
   })
 
   it('keeps the way out beside the way on', () => {
-    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
+    renderAs(asCaptain)
 
-    const row = screen.getByRole('button', { name: /Fermer/i }).parentElement
+    const row = screen.getAllByRole('button', { name: /Fermer/i })[0].parentElement
     expect(row?.className).toContain('grid-cols-2')
-    expect(row).toContainElement(journeesLink())
+    expect(row).toContainElement(mobileLink()!)
+    expect(row).toContainElement(desktopLink()!)
   })
 })

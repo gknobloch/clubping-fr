@@ -175,7 +175,10 @@ export function HomePage() {
                           onClick={() => setQuickGame({ gameId: g.id, teamId: myActiveTeam.id })}
                           className="shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800"
                         >
-                          Détails
+                          {/* "Aperçu": this opens the quick view, and "Détails"
+                              now names the button inside it that goes to the
+                              real thing. */}
+                          Aperçu
                         </button>
                       </div>
                     </div>

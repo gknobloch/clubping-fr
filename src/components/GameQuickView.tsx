@@ -170,18 +170,33 @@ export function GameQuickView({
             Fermer
           </button>
 
-          {/* Everyone gets this, not just whoever may edit the line-up: seeing
-              the round in context is reading, and the Journées screen gates its
-              own controls anyway (#347).
-              `equipe` and `match` drive the deep link — MatchDaysPage selects
-              the phase, scrolls to the team, slides its window onto this
-              journée and rings the fixture. */}
+          {/* Everyone gets this, not just whoever may edit the line-up: reading
+              a round is reading, and both destinations gate their own controls
+              (#347).
+
+              Two links, one per breakpoint, because the right destination
+              differs — the same split the Journées screen itself makes, and a
+              `hidden` element is not a grid item, so exactly one occupies the
+              second column at any width.
+
+              Below md: the single-match screen (#337), which is the phone
+              answer to a matrix that cannot fit 375px.
+              From md up: the matrix, deep-linked via `equipe` + `match` so it
+              lands on the team, slides its window onto this journée and rings
+              the fixture. */}
+          <Link
+            to={`/journees/${game.id}?equipe=${team.id}`}
+            onClick={onClose}
+            className="w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700 md:hidden"
+          >
+            Détails
+          </Link>
           <Link
             to={`/journees?equipe=${team.id}&match=${game.id}`}
             onClick={onClose}
-            className="w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700"
+            className="hidden w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700 md:block"
           >
-            Voir dans Journées
+            Détails
           </Link>
         </div>
       </div>
