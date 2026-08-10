@@ -9,6 +9,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
+import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 
 // Read-only quick view of a single game from one team's perspective — match
 // header + availabilities / line-up. Mirrors the mobile match detail screen
@@ -33,6 +34,10 @@ export function GameQuickView({
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
   const matchDay = game ? matchDays.find((md) => md.id === game.matchDayId) : undefined
+
+  // Whether to offer the line-up page. The permission comes from the shared
+  // hook (#306) rather than a second copy of the captain / club-admin rule.
+  const { canEditGameSelection } = useMatchDayEditing(team?.phaseId ?? null)
 
   const roster = useMemo(
     () =>
@@ -159,13 +164,31 @@ export function GameQuickView({
           ))}
         </ul>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 w-full rounded-lg bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-        >
-          Fermer
-        </button>
+        <div className="mt-5 space-y-2">
+          {/* Captains and club admins land here from the home screen and had no
+              way through to the line-up short of hunting the game down on
+              Journées (#347). The page it opens owns the editing — this view
+              stays read-only on purpose.
+              `equipe` is required, not decorative: that page resolves the team
+              from the query string and renders "Match introuvable." without it. */}
+          {canEditGameSelection(team.id) && (
+            <Link
+              to={`/journees/${game.id}?equipe=${team.id}`}
+              onClick={onClose}
+              className="block w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700"
+            >
+              Composer l’équipe
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-lg bg-slate-100 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          >
+            Fermer
+          </button>
+        </div>
       </div>
     </ModalShell>
   )
