@@ -2,9 +2,67 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
 import { IS_PR_PREVIEW } from '@/lib/preview'
+import { BrandMark } from '@/components/BrandMark'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import type { DevUser, User } from '@/types'
+
+// Shared header for both ways in — the e-mail code form and the preview's
+// standalone picker (#313). The mark appears nowhere else above 28px, and the
+// login screen is the only place a member sees the app before knowing what it
+// does (#351).
+/**
+ * The page around both ways in. The app dresses its content in white cards on a
+ * slate background; the login screen used to be the one place that left its
+ * form bare on the page, which is what made it look unfinished (#351).
+ *
+ * The accent wash sits behind the mark only — enough to give the screen a
+ * centre of gravity, far too faint to fight the form for attention.
+ */
+function LoginLayout({ caption, children }: { caption: string; children: React.ReactNode }) {
+  return (
+    // No `overflow-hidden` here, tempting as it is for the wash: it clips the
+    // picker's suggestion list where it runs past the fold, and with the
+    // overflow hidden there is no scrolling to it either. The wash is centred
+    // and narrower than the narrowest phone, so it never overflows on its own.
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-10">
+      {/* Centred on the mark, not on the page top, or it reads as a coloured
+          band across the header instead of a glow behind the logo. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/4 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-500/[0.07] blur-3xl"
+      />
+      <div className="relative w-full max-w-md">
+        <LoginHeader caption={caption} />
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function LoginHeader({ caption }: { caption: string }) {
+  return (
+    <div className="mb-6 flex flex-col items-center text-center">
+      {/* The mark on its own disc: it reads as a logo rather than as a drawing
+          dropped on the page, and lifts it off the wash behind it. */}
+      <span className="flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
+        <BrandMark className="h-16 w-16 text-slate-800" title="Club Ping" />
+      </span>
+      <h1 className="mt-5 font-display text-3xl font-semibold tracking-tight text-slate-800">
+        Club Ping
+      </h1>
+      {/* Narrower than the form on purpose — a centred line this long is hard
+          to read at the full 448px — but wide enough to avoid a one-word last
+          line. */}
+      <p className="mt-2 max-w-sm text-balance text-sm text-slate-600">
+        Le tennis de table de club au quotidien{'\u00A0'}: joueurs, équipes, disponibilités
+        et composition des rencontres.
+      </p>
+      {/* Kept distinct from the description: this one changes with the step. */}
+      <p className="mt-4 text-sm text-slate-500">{caption}</p>
+    </div>
+  )
+}
 
 function authErrorMessage(e: unknown): string {
   switch ((e as ApiError)?.code) {
@@ -72,30 +130,17 @@ export function LoginPage() {
 
   if (devLoginOnly) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
-        <div className="w-full max-w-md">
-          <h1 className="font-display text-2xl font-semibold text-slate-800 text-center mb-2">
-            Club Ping
-          </h1>
-          <p className="text-slate-600 text-center text-sm mb-8">
-            Préversion — choisissez un utilisateur pour continuer
-          </p>
-          <DevLogin standalone />
-        </div>
-      </div>
+      <LoginLayout caption="Préversion — choisissez un utilisateur pour continuer">
+        <DevLogin standalone />
+      </LoginLayout>
     )
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-4 py-10">
-      <div className="w-full max-w-md">
-        <h1 className="font-display text-2xl font-semibold text-slate-800 text-center mb-2">
-          Club Ping
-        </h1>
-        <p className="text-slate-600 text-center text-sm mb-8">
-          {step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}
-        </p>
-
+    <LoginLayout
+      caption={step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}
+    >
+      <>
         {error && <p className="mb-4 text-sm font-medium text-red-600 text-center">{error}</p>}
 
         {step === 'email' ? (
@@ -177,8 +222,8 @@ export function LoginPage() {
         )}
 
         {DEV_LOGIN && <DevLogin />}
-      </div>
-    </div>
+      </>
+    </LoginLayout>
   )
 }
 
