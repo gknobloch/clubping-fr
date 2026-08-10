@@ -74,12 +74,10 @@ describe('DataProvider — cold start hydration', () => {
     await waitFor(() => expect(result.current.clubs).toEqual([club('c1', 'Ping Club')]))
     expect(result.current.stale).toBe(true)
     expect(result.current.lastSyncedAt).toBe('2026-01-15T10:00:00.000Z')
-    // `loading` is still true here, even though the hydration branch sets it to
-    // false: `load()` runs in the same microtask and sets it back to true, so
-    // React only ever commits the later value. Harmless today — no screen reads
-    // DataContext's `loading` — but pinned so a future consumer finds out here
-    // rather than through a spinner over perfectly good cached data.
-    expect(result.current.loading).toBe(true)
+    // No spinner over content we can already show: hydration succeeded, so the
+    // in-flight fetch runs in 'background' mode and raises neither flag.
+    expect(result.current.loading).toBe(false)
+    expect(result.current.refreshing).toBe(false)
 
     await act(async () => {
       inflight.resolve(okResponse(payload({ clubs: [club('c1', 'Ping Club rénové')] })))
@@ -88,6 +86,24 @@ describe('DataProvider — cold start hydration', () => {
     // The fetch then wins and the stale flag drops.
     await waitFor(() => expect(result.current.stale).toBe(false))
     expect(result.current.clubs).toEqual([club('c1', 'Ping Club rénové')])
+  })
+
+  it('keeps the full-screen loading flag when there is nothing to show', async () => {
+    const inflight = deferred<unknown>()
+    mockFetch.mockReturnValue(inflight.promise)
+
+    const { result } = render()
+
+    // The other half of the branch above: with no cache there is no content to
+    // protect, so the initial fetch does own the full-screen spinner.
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    expect(result.current.loading).toBe(true)
+
+    await act(async () => {
+      inflight.resolve(okResponse(payload({ clubs: [club('c1', 'Ping Club')] })))
+    })
+
+    expect(result.current.loading).toBe(false)
   })
 
   it('starts empty and not stale when nothing is cached', async () => {

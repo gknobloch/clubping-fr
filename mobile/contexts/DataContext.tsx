@@ -117,34 +117,39 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // `mode` decides which spinner reflects the fetch: 'initial' uses the
   // full-screen loading flag, 'refresh' uses the lightweight one so the UI
-  // (pull-to-refresh, foreground refetch) doesn't blank out existing content.
-  const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
-    if (mode === 'refresh') setRefreshing(true)
-    else setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/data'), { headers: dataHeaders() })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: DataState = await res.json()
-      const syncedAt = new Date().toISOString()
-      setState(data)
-      setApiAvailable(true)
-      setStale(false)
-      setLastSyncedAt(syncedAt)
-      lastFetchAt.current = Date.now()
-      // Persist for the next cold start. Best-effort; never blocks the UI.
-      writeCache(data, syncedAt)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur réseau')
-      setApiAvailable(false)
-      // Keep whatever data we already have (cached or previously loaded) on
-      // screen and flag it as stale so the offline banner appears.
-      setStale(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
+  // (pull-to-refresh, foreground refetch) doesn't blank out existing content,
+  // and 'background' uses neither — it's the cold start that already hydrated
+  // from cache, where a spinner would hide content we can display right now.
+  const load = useCallback(
+    async (mode: 'initial' | 'refresh' | 'background' = 'initial') => {
+      if (mode === 'refresh') setRefreshing(true)
+      else if (mode === 'initial') setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(apiUrl('/data'), { headers: dataHeaders() })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data: DataState = await res.json()
+        const syncedAt = new Date().toISOString()
+        setState(data)
+        setApiAvailable(true)
+        setStale(false)
+        setLastSyncedAt(syncedAt)
+        lastFetchAt.current = Date.now()
+        // Persist for the next cold start. Best-effort; never blocks the UI.
+        writeCache(data, syncedAt)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Erreur réseau')
+        setApiAvailable(false)
+        // Keep whatever data we already have (cached or previously loaded) on
+        // screen and flag it as stale so the offline banner appears.
+        setStale(true)
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [],
+  )
 
   const refresh = useCallback(() => load('refresh'), [load])
 
@@ -162,7 +167,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setStale(true)
         setLoading(false)
       }
-      if (!cancelled) load()
+      // 'background' when the cache gave us something to show: the fetch must
+      // not raise `loading` again, or React would only commit that later value
+      // and the spinner would cover the cached content for the whole request.
+      if (!cancelled) load(cached ? 'background' : 'initial')
     })()
 
     // Refetch when the session token changes (e.g. after login/logout). On
