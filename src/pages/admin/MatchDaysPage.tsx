@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
@@ -144,6 +145,14 @@ export function MatchDaysPage() {
     () => phases.find((p) => p.status === 'active')?.id ?? phases[0]?.id ?? ''
   )
   const [importGamesOpen, setImportGamesOpen] = useState(false)
+
+  // Deep link into one fixture (#347). Read once: the params stay in the URL so
+  // the view survives a reload, but re-applying them would fight the user's own
+  // navigation afterwards.
+  const [deepLinkParams] = useSearchParams()
+  const deepLinkTeamId = deepLinkParams.get('equipe')
+  const deepLinkGameId = deepLinkParams.get('match')
+  const [highlight, setHighlight] = useState<{ teamId: string; matchDayId: string } | null>(null)
 
   /** Groups of the selected phase that contain at least one team — the FFTT
    *  calendar import scope for this page (#231). */
@@ -576,8 +585,10 @@ export function MatchDaysPage() {
     document.getElementById('other-players')?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  // Scroll to hash target or user's team on initial load
+  // Scroll to hash target or user's team on initial load. Skipped when a deep
+  // link named a fixture — that effect below does its own, better-aimed scroll.
   useEffect(() => {
+    if (deepLinkGameId && deepLinkTeamId) return
     const hash = window.location.hash.slice(1)
     let target = hash
     if (!target && user?.isPlayer) {
@@ -590,6 +601,105 @@ export function MatchDaysPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Deep link from a game elsewhere in the app (`?equipe=…&match=…`, #347):
+   * select the fixture's phase, slide that team's window onto its journée,
+   * scroll the team into view and ring the fixture so it is findable in a
+   * matrix of otherwise identical cells.
+   *
+   * Runs once, and only once the data it needs has arrived — DataContext
+   * hydrates asynchronously, so on a cold load the first render has no games.
+   */
+  const deepLinkDoneRef = useRef(false)
+  useEffect(() => {
+    if (deepLinkDoneRef.current) return
+    if (!deepLinkGameId || !deepLinkTeamId) return
+    const game = games.find((g) => g.id === deepLinkGameId)
+    const team = teams.find((t) => t.id === deepLinkTeamId)
+    const matchDay = game ? matchDays.find((m) => m.id === game.matchDayId) : undefined
+    if (!game || !team || !matchDay) return
+    deepLinkDoneRef.current = true
+
+    setSelectedPhaseId(team.phaseId)
+    // Claim the phase so the smart-offset effect does not re-centre on the
+    // current week and undo the positioning below.
+    autoPositionedPhaseRef.current = team.phaseId
+    setMobileMatchDayNumber(matchDay.number)
+
+    // Put the journée inside the visible window, one column in where possible
+    // so its neighbours give it context.
+    const teamMatchDays = matchDays
+      .filter((m) => m.groupId === team.groupId)
+      .sort((a, b) => a.number - b.number)
+    const index = teamMatchDays.findIndex((m) => m.id === matchDay.id)
+    if (index >= 0) {
+      const maxOffset = Math.max(0, teamMatchDays.length - VISIBLE_MATCH_DAY_COUNT)
+      const offset = Math.max(0, Math.min(maxOffset, index - 1))
+      setMatchDayOffsetByTeamId((prev) => ({ ...prev, [team.id]: offset }))
+      setGlobalMatchDayOffset(offset)
+    }
+
+    setHighlight({ teamId: team.id, matchDayId: matchDay.id })
+  }, [deepLinkGameId, deepLinkTeamId, games, teams, matchDays])
+
+  /**
+   * Scroll to the deep-linked team, once. Deliberately not folded into the
+   * effect above: that one re-runs whenever DataContext hands back new array
+   * identities, and its cleanup would clear this timer before it ever fired
+   * while the `done` guard skipped scheduling a replacement.
+   */
+  const deepLinkScrolledRef = useRef(false)
+  useEffect(() => {
+    if (!highlight) return
+    // Poll for the section rather than guessing a delay: the matrix renders
+    // only once DataContext has the games, which on a cold load is well after
+    // any fixed timeout would have fired — and firing early once would burn
+    // the "only once" guard on a scroll that never happened.
+    //
+    // The guard is read inside the tick, not around the interval: StrictMode
+    // runs this effect, cleans up, then runs it again, so a ref set up front
+    // would let the cleanup cancel the only scroll ever scheduled.
+    let tries = 0
+    const tick = setInterval(() => {
+      if (deepLinkScrolledRef.current || tries++ > 40) {
+        clearInterval(tick)
+        return
+      }
+      const el = document.getElementById(`team-${highlight.teamId}`)
+      if (!el) return
+      deepLinkScrolledRef.current = true
+      clearInterval(tick)
+      el.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+    return () => clearInterval(tick)
+  }, [highlight])
+
+  /**
+   * The ring is a "look here", not a state: the first click or scroll means the
+   * user has found it. Listeners are armed only after the smooth scroll above
+   * has settled — otherwise that very scroll clears the highlight before it is
+   * ever seen.
+   */
+  useEffect(() => {
+    if (!highlight) return
+    const clear = () => setHighlight(null)
+    const arm = setTimeout(() => {
+      window.addEventListener('click', clear, { once: true })
+      window.addEventListener('wheel', clear, { once: true })
+      window.addEventListener('touchmove', clear, { once: true })
+      window.addEventListener('keydown', clear, { once: true })
+      window.addEventListener('scroll', clear, { once: true })
+    }, 1200)
+    return () => {
+      clearTimeout(arm)
+      window.removeEventListener('click', clear)
+      window.removeEventListener('wheel', clear)
+      window.removeEventListener('touchmove', clear)
+      window.removeEventListener('keydown', clear)
+      window.removeEventListener('scroll', clear)
+    }
+  }, [highlight])
 
   /** Groups in this phase where we have at least one team (for "add match day" modal). */
   const groupOptionsInPhase = useMemo(() => {
@@ -940,7 +1050,11 @@ export function MatchDaysPage() {
                               } : {
                                 title: game ? 'Match à l’extérieur : la date et l’heure sont fixées par le club recevant.' : undefined,
                               })}
-                              className={`whitespace-nowrap border-l border-slate-200 px-2 py-2 text-center font-medium text-slate-700 ${canEditSlot ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-inset' : ''}`}
+                              className={`whitespace-nowrap border-l border-slate-200 px-2 py-2 text-center font-medium text-slate-700 ${canEditSlot ? 'cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-inset' : ''} ${
+                                highlight?.teamId === team.id && highlight?.matchDayId === md.id
+                                  ? 'bg-accent-50 ring-2 ring-inset ring-accent-500'
+                                  : ''
+                              }`}
                             >
                               <span className="block">J{md.number}</span>
                               {game ? (

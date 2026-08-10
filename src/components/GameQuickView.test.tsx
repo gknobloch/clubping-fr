@@ -8,9 +8,8 @@ import {
   mockUsers,
 } from '@/mock/data'
 
-// AuthContext is mocked rather than driven through the dev-login picker: the
-// component and the useMatchDayEditing hook behind it both read `useAuth`, so
-// one mock decides who is looking.
+// AuthContext is mocked rather than driven through the dev-login picker, so one
+// mock decides who is looking at the modal.
 const authState = vi.hoisted(() => ({
   user: null as Record<string, unknown> | null,
 }))
@@ -45,48 +44,53 @@ function renderAs(user: Record<string, unknown> | null) {
   )
 }
 
-const compoLink = () => screen.queryByRole('link', { name: /Composer l’équipe/i })
+const journeesLink = () => screen.queryByRole('link', { name: /Voir dans Journées/i })
 
-describe('GameQuickView — reaching the line-up (#347)', () => {
-  it('offers the captain a way through to the line-up page', () => {
+describe('GameQuickView — reaching the round in context (#347)', () => {
+  // `equipe` and `match` are what MatchDaysPage deep-links on: without them it
+  // opens on the current week with nothing singled out.
+  const expectedHref = `/journees?equipe=${TEAM_ID}&match=${GAME_ID}`
+
+  it('points at the team and fixture on the Journées screen', () => {
     renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
 
-    // The quick view stays read-only; the page it links to owns the editing.
-    // `equipe` matters: MatchDayDetailPage resolves the team from the query
-    // string and renders "Match introuvable." if it is missing.
-    expect(compoLink()).toHaveAttribute('href', `/journees/${GAME_ID}?equipe=${TEAM_ID}`)
+    expect(journeesLink()).toHaveAttribute('href', expectedHref)
   })
 
-  it('offers it to the club admin too', () => {
+  it('offers it to a player who is not the captain', () => {
+    // Seeing the round in context is reading; the Journées screen gates its own
+    // editing controls.
+    renderAs({ id: 'p2-player-3', role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
+
+    expect(journeesLink()).toHaveAttribute('href', expectedHref)
+  })
+
+  it('offers it to the club admin', () => {
     renderAs({ id: 'user-2', role: 'club_admin', isPlayer: false, clubId: 'club-fftt-06680011' })
 
-    expect(compoLink()).toBeInTheDocument()
+    expect(journeesLink()).toBeInTheDocument()
   })
 
-  it('does not offer it to a player who is not the captain', () => {
-    renderAs({ id: 'p2-player-3', role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
-
-    expect(compoLink()).not.toBeInTheDocument()
-  })
-
-  it('does not offer it to the general admin, who has no line-up say', () => {
-    // Matches canEditGameSelection: a global admin administers, they do not
-    // pick who plays.
+  it('offers it to the general admin', () => {
     renderAs({ id: 'user-1', role: 'general_admin', isPlayer: false })
 
-    expect(compoLink()).not.toBeInTheDocument()
+    expect(journeesLink()).toBeInTheDocument()
   })
 
-  it('does not offer it to a club admin from another club', () => {
-    renderAs({ id: 'other', role: 'club_admin', isPlayer: false, clubId: 'club-other' })
+  it('does not send anyone to the single-game detail screen', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
 
-    expect(compoLink()).not.toBeInTheDocument()
+    // /journees/:gameId is the mobile drill-down from the Journées list (#337).
+    // Coming from the home screen the round itself is the useful destination.
+    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(links.some((href) => href?.startsWith(`/journees/${GAME_ID}`))).toBe(false)
   })
 
-  it('still shows the match itself to everyone', () => {
-    renderAs({ id: 'p2-player-3', role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
+  it('keeps the way out beside the way on', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
 
-    expect(screen.getByText(/Disponibilités/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Fermer/i })).toBeInTheDocument()
+    const row = screen.getByRole('button', { name: /Fermer/i }).parentElement
+    expect(row?.className).toContain('grid-cols-2')
+    expect(row).toContainElement(journeesLink())
   })
 })

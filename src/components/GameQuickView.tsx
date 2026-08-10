@@ -9,7 +9,6 @@ import { ModalShell } from '@/components/ModalShell'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
-import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 
 // Read-only quick view of a single game from one team's perspective — match
 // header + availabilities / line-up. Mirrors the mobile match detail screen
@@ -34,10 +33,6 @@ export function GameQuickView({
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
   const matchDay = game ? matchDays.find((md) => md.id === game.matchDayId) : undefined
-
-  // Whether to offer the line-up page. The permission comes from the shared
-  // hook (#306) rather than a second copy of the captain / club-admin rule.
-  const { canEditGameSelection } = useMatchDayEditing(team?.phaseId ?? null)
 
   const roster = useMemo(
     () =>
@@ -164,23 +159,9 @@ export function GameQuickView({
           ))}
         </ul>
 
-        <div className="mt-5 space-y-2">
-          {/* Captains and club admins land here from the home screen and had no
-              way through to the line-up short of hunting the game down on
-              Journées (#347). The page it opens owns the editing — this view
-              stays read-only on purpose.
-              `equipe` is required, not decorative: that page resolves the team
-              from the query string and renders "Match introuvable." without it. */}
-          {canEditGameSelection(team.id) && (
-            <Link
-              to={`/journees/${game.id}?equipe=${team.id}`}
-              onClick={onClose}
-              className="block w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700"
-            >
-              Composer l’équipe
-            </Link>
-          )}
-
+        {/* Two columns: the way out and the way on are peers, and stacked they
+            pushed the roster off a phone screen. */}
+        <div className="mt-5 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -188,6 +169,20 @@ export function GameQuickView({
           >
             Fermer
           </button>
+
+          {/* Everyone gets this, not just whoever may edit the line-up: seeing
+              the round in context is reading, and the Journées screen gates its
+              own controls anyway (#347).
+              `equipe` and `match` drive the deep link — MatchDaysPage selects
+              the phase, scrolls to the team, slides its window onto this
+              journée and rings the fixture. */}
+          <Link
+            to={`/journees?equipe=${team.id}&match=${game.id}`}
+            onClick={onClose}
+            className="w-full rounded-lg bg-accent-600 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-700"
+          >
+            Voir dans Journées
+          </Link>
         </div>
       </div>
     </ModalShell>
