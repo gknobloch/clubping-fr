@@ -15,14 +15,20 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "fr.clubping.app",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e293b"
       },
-      "package": "fr.clubping.app"
+      "package": "fr.clubping.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -49,7 +55,17 @@
     "extra": {
       "googleWebClientId": "",
       "googleIosClientId": "",
-      "googleAndroidClientId": ""
+      "googleAndroidClientId": "",
+      "eas": {
+        "projectId": "917d2d0b-d20e-412f-8ab4-a5f2177f635c"
+      }
+    },
+    "owner": "gknoblochs-team",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/917d2d0b-d20e-412f-8ab4-a5f2177f635c"
     }
   }
 }
