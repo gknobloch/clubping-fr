@@ -51,6 +51,33 @@ jobs:
       - run: npm run typecheck
         working-directory: mobile
 
+  # #148 — the mobile app shipped #141/#143/#146/#147 with no test runner at
+  # all, against the project rule that new features carry unit tests. jest-expo
+  # is the harness; this is where it runs.
+  #
+  # Kept apart from mobile-typecheck for the same reason `unit` is kept apart
+  # from `build` on the web side: a red job should say which of the two broke.
+  # It is also a different kind of check — the typecheck would have caught the
+  # #282 type error but executes nothing, which is exactly why the offline cache
+  # went untested.
+  mobile-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      # Same as above: mobile's own dependencies are enough, and no
+      # --legacy-peer-deps (#326).
+      - run: npm ci
+        working-directory: mobile
+        env:
+          npm_config_registry: 'https://registry.npmjs.org/'
+      - run: npm run test:run
+        working-directory: mobile
+
   # #312 — provisioning a database from scratch was quietly broken: 0001 had
   # been edited to create the is_archived columns that 0002-0005 also add, so
   # those four failed on any empty database. The `|| true` loop hid it, and

@@ -38,6 +38,17 @@ npm run ios
 npm run android
 ```
 
+## Tests
+
+Unit tests run on [jest-expo](https://docs.expo.dev/develop/unit-testing/), separately from the web app's Vitest suite (own config, own `node_modules`). Both `npm run typecheck` and `npm run test:run` run on every PR.
+
+```bash
+npm run test:run   # single run (what CI runs)
+npm test           # watch mode
+```
+
+Tests live next to the code they cover (`utils/offlineCache.test.ts`, `contexts/DataContext.test.tsx`). `@react-native-async-storage/async-storage` is replaced by its official in-memory mock in `jest.setup.js`.
+
 ## Environment
 
 | Variable | Default | Description |

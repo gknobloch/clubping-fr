@@ -112,6 +112,39 @@ describe('workflows — mobile typecheck runs in CI (#319)', () => {
   })
 })
 
+// #148 — the mobile app had no test runner, so "all new features should include
+// unit tests" (CLAUDE.md) was unenforceable there. The harness only helps if it
+// runs on every PR, and nothing in the mobile app can check its own CI wiring.
+describe('workflows — mobile unit tests run in CI (#148)', () => {
+  const test = read('test.yml')
+
+  it('runs the mobile suite on every PR', () => {
+    expect(test).toContain('mobile-unit:')
+    expect(test).toMatch(/run: npm run test:run\n\s+working-directory: mobile/)
+  })
+
+  it('installs mobile dependencies first', () => {
+    expect(test).toMatch(/run: npm ci\n\s+working-directory: mobile/)
+  })
+})
+
+describe('mobile — the test harness stays wired up (#148)', () => {
+  const pkg = JSON.parse(
+    readFileSync(resolve(process.cwd(), 'mobile/package.json'), 'utf8'),
+  ) as { scripts: Record<string, string>; devDependencies: Record<string, string> }
+
+  it('exposes a non-interactive test:run script', () => {
+    // CI calls this one; `test` is the watch mode and would hang the job.
+    expect(pkg.scripts['test:run']).toBe('jest')
+  })
+
+  it('declares jest-expo', () => {
+    // The preset is what makes React Native modules importable under Jest;
+    // plain jest would fail on the first `react-native` import.
+    expect(pkg.devDependencies['jest-expo']).toBeDefined()
+  })
+})
+
 // #326 — react and react-dom are released in lockstep and must be the same
 // version. react-dom is not imported by this app (it is a web-target peer of
 // @expo/metro-runtime) but npm installs it regardless, so leaving it undeclared
