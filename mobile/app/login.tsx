@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const welcomeBg = require('../assets/welcome-bg.jpg')
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
+import { BrandMark } from '@/components/BrandMark'
 import { getRoleLabel, getDisplayName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import type { ApiError } from '@/utils/api'
@@ -108,6 +109,12 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.brandBlock}>
+              {/* The mark on its own disc, as on the web: it reads as a logo
+                  rather than as a drawing dropped on the photo, and lifts it
+                  off the wash behind it (#366). */}
+              <View style={styles.markDisc}>
+                <BrandMark size={44} label="Club Ping" />
+              </View>
               <Text style={styles.brand}>Club Ping</Text>
               <Text style={styles.tagline}>
                 {step === 'email' ? 'Connectez-vous pour continuer' : `Code envoyé à ${email}`}
@@ -309,6 +316,20 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 64, paddingBottom: 24 },
   brandBlock: { paddingHorizontal: 6 },
+  markDisc: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   brand: {
     fontSize: 34,
     // The one place the product name is set this large — the display face, as

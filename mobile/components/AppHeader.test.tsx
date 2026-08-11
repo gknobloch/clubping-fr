@@ -56,26 +56,31 @@ it('drops the account button where it would lead nowhere new', () => {
   expect(screen.queryByLabelText('Mon compte')).toBeNull()
 })
 
-it('shows no back chevron on a tab screen', () => {
+it('shows the brand mark instead of a back chevron on a tab screen', () => {
   renderHeader(<AppHeader title="Accueil" />)
 
   expect(screen.queryByLabelText('Retour')).toBeNull()
+  // The left slot is reserved for the chevron either way, so the mark rides
+  // along for free — and puts the brand on every screen (#366).
+  expect(screen.getByTestId('brand-mark')).toBeTruthy()
 })
 
-it('goes back from a pushed screen', () => {
+it('goes back from a pushed screen, the chevron taking the mark\u2019s place', () => {
   renderHeader(<AppHeader title="Joueur" showBack />)
 
+  expect(screen.queryByTestId('brand-mark')).toBeNull()
   fireEvent.press(screen.getByLabelText('Retour'))
 
   expect(mockRouter.back).toHaveBeenCalled()
 })
 
-it('hides the chevron when there is nothing to go back to', () => {
+it('falls back to the mark when there is nothing to go back to', () => {
   mockRouter.canGoBack.mockReturnValue(false)
 
   renderHeader(<AppHeader title="Joueur" showBack />)
 
   expect(screen.queryByLabelText('Retour')).toBeNull()
+  expect(screen.getByTestId('brand-mark')).toBeTruthy()
 })
 
 it('renders nothing for the account of a signed-out user', () => {

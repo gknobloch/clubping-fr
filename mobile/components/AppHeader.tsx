@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { displayFonts } from '@/constants/typography'
 import { AccountHeaderButton } from '@/components/AccountHeaderButton'
+import { BrandMark } from '@/components/BrandMark'
 
 // ---------------------------------------------------------------------------
 // The app's one header (#365)
@@ -46,7 +47,7 @@ export function AppHeader({
         {/* router.back() rather than the native stack's own back: the first
             detail screen pushed onto the shared stack has nothing beneath it
             there, but plenty in the navigation history (#153). */}
-        {showBack && router.canGoBack() && (
+        {showBack && router.canGoBack() ? (
           <TouchableOpacity
             onPress={() => router.back()}
             hitSlop={10}
@@ -55,6 +56,11 @@ export function AppHeader({
           >
             <Ionicons name="chevron-back" size={26} color="#fff" />
           </TouchableOpacity>
+        ) : (
+          // The slot is reserved for the chevron anyway, so the mark costs no
+          // layout — and it puts the brand on every screen rather than on the
+          // login page alone (#366). White: the bar is always dark navy.
+          <BrandMark size={30} color="#fff" ballColor={colors.primary} />
         )}
       </View>
 
