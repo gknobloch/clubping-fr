@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
 import { IS_PR_PREVIEW } from '@/lib/preview'
 import { BrandMark } from '@/components/BrandMark'
@@ -35,6 +35,13 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
       <div className="relative w-full max-w-md">
         <LoginHeader caption={caption} />
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
+        {/* The stores want the policy reachable from the app itself, not only
+            from the listing (#356). Muted: it is a legal footnote, not a way in. */}
+        <p className="mt-6 text-center text-xs text-slate-400">
+          <Link className="underline hover:text-slate-600" to="/confidentialite">
+            Politique de confidentialité
+          </Link>
+        </p>
       </div>
     </div>
   )
