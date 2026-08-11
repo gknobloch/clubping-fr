@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
-import { authApp, bearer, userFromToken, type Env } from './auth'
+import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseIds, jsonParseStringMap } from './rows'
 import type { Address, ClubChannel, DataState } from '../../src/types'
@@ -32,7 +32,8 @@ const newId = (prefix: string) =>
 app.use('*', async (c, next) => {
   if (c.env.AUTH_GUARD_DISABLED === 'true') return next()
   if (!needsSession(c.req.method, new URL(c.req.url).pathname)) return next()
-  const token = bearer(c.req.header('Authorization'))
+  // Bearer (mobile) or the session cookie (web, #370).
+  const token = requestToken(c.req)
   const user = token ? await userFromToken(c.env.DB, token) : null
   if (!user) return c.json({ error: 'unauthorized' }, 401)
   c.set('user', user)
