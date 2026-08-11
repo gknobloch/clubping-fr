@@ -12,6 +12,7 @@ import { getTeamName, getRoleLabel } from '@/utils/roles'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import type { Player } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 type EditableFields = Required<Pick<Player, 'phone' | 'birthDate' | 'birthPlace'>> & { email: string }
 
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: 'center', justifyContent: 'center',
   },
-  initials: { color: '#fff', fontWeight: '700', fontSize: 26 },
+  initials: { color: '#fff', fontFamily: fonts.bold, fontSize: 26 },
   cameraBadge: {
     position: 'absolute', right: -2, bottom: -2,
     width: 30, height: 30, borderRadius: 15,
@@ -318,24 +319,24 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: colors.bg,
   },
-  name: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
+  name: { fontSize: 22, fontFamily: fonts.bold, color: colors.textPrimary },
   roleBadge: {
     backgroundColor: colors.accentSoft, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  roleText: { fontSize: 12, fontWeight: '600', color: colors.accent },
+  roleText: { fontSize: 12, fontFamily: fonts.semiBold, color: colors.accent },
   section: {
     backgroundColor: colors.card, marginHorizontal: 16, borderRadius: 12,
     borderWidth: 1, borderColor: colors.border, padding: 16, gap: 8,
   },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: {
-    fontSize: 12, fontWeight: '600', color: colors.textSecondary,
+    fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  editLink: { fontSize: 13, fontWeight: '600', color: colors.accent },
+  editLink: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   infoLabel: { fontSize: 14, color: colors.textSecondary },
-  infoValue: { fontSize: 14, color: colors.textPrimary, fontWeight: '500', flexShrink: 1, textAlign: 'right' },
+  infoValue: { fontSize: 14, color: colors.textPrimary, fontFamily: fonts.medium, flexShrink: 1, textAlign: 'right' },
   phoneLink: { color: '#25D366' },
   teamRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
@@ -343,13 +344,13 @@ const styles = StyleSheet.create({
   },
   colorDot: { width: 10, height: 10, borderRadius: 5 },
   teamName: { flex: 1, fontSize: 15, color: colors.textPrimary },
-  cap: { fontSize: 11, fontWeight: '600', color: colors.accent },
+  cap: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.accent },
   logoutBtn: {
     marginHorizontal: 16, marginTop: 8, borderRadius: 12,
     borderWidth: 1, borderColor: colors.accentSoftBorder, backgroundColor: colors.accentSoft,
     paddingVertical: 14, alignItems: 'center',
   },
-  logoutText: { fontSize: 15, fontWeight: '600', color: '#dc2626' },
+  logoutText: { fontSize: 15, fontFamily: fonts.semiBold, color: '#dc2626' },
   // Modal
   modalContainer: { flex: 1, backgroundColor: colors.bg },
   modalHeader: {
@@ -357,15 +358,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  modalTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  modalTitle: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
   modalCancel: { fontSize: 15, color: colors.textSecondary },
-  modalSave: { fontSize: 15, fontWeight: '600', color: colors.accent },
+  modalSave: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.accent },
   modalScroll: { padding: 16, gap: 16 },
   field: {
     backgroundColor: colors.card, borderRadius: 12,
     borderWidth: 1, borderColor: colors.border, padding: 14, gap: 6,
   },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
+  fieldLabel: { fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
   // letterSpacing pinned to 0 so iOS placeholders track normally (#118).
   fieldInput: { fontSize: 16, color: colors.textPrimary, letterSpacing: 0 },
 })

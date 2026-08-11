@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // Stacked < title > switcher used to page through phases / match-days.
 // Shared by the Journées and Équipes screens.
@@ -33,7 +34,7 @@ const sw = StyleSheet.create({
   },
   btn: { padding: 6 },
   center: { alignItems: 'center', flex: 1 },
-  title: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  titleLarge: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  title: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  titleLarge: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary },
   subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
 })

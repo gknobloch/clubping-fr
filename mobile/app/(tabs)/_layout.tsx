@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { TabBar } from '@/components/TabBar'
+import { displayFonts } from '@/constants/typography'
 
 type IconName = ComponentProps<typeof Ionicons>['name']
 
@@ -21,7 +22,7 @@ export default function TabLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.primary },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontFamily: displayFonts.semiBold },
       }}
     >
       <Tabs.Screen

@@ -7,6 +7,7 @@ import { Switcher } from '@/components/Switcher'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { colors } from '@/constants/colors'
 import { useMemo, useState } from 'react'
+import { fonts } from '@/constants/typography'
 
 export default function EquipesScreen() {
   const { teams, clubs, phases, divisions, refreshing, refresh } = useAppData()
@@ -96,11 +97,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardBody: { flex: 1, gap: 4 },
-  teamName: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  teamName: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
   levelBadge: {
     alignSelf: 'flex-start',
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     backgroundColor: colors.bg,
     borderWidth: 1,

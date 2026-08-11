@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // Neutral pill with a team-coloured dot, used wherever a team is tagged
 // (match header, player quick view) so they all look identical.
@@ -34,7 +35,7 @@ const tb = StyleSheet.create({
   badgeDanger: { borderColor: colors.danger },
   dot: { width: 8, height: 8, borderRadius: 2 },
   dotLarge: { width: 10, height: 10, borderRadius: 3 },
-  txt: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  txt: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary },
   txtLarge: { fontSize: 13 },
   txtDanger: { color: colors.danger },
 })

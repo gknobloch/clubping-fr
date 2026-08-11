@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
 import { todayIso } from '@/utils/weeks'
+import { fonts } from '@/constants/typography'
 
 // Days-until label from a YYYY-MM-DD match date.
 function countdownLabel(dateStr: string): string {
@@ -102,7 +103,7 @@ const s = StyleSheet.create({
   badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   badges: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   badge: {
-    fontSize: 11, fontWeight: '600', color: colors.textSecondary,
+    fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary,
     backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, overflow: 'hidden',
   },
@@ -111,15 +112,15 @@ const s = StyleSheet.create({
     backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
   },
   labelMine: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  labelTxt: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  labelTxt: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary },
   labelTxtMine: { color: colors.accent },
   countdown: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
   },
-  countdownTxt: { fontSize: 12, fontWeight: '600', color: colors.warning },
+  countdownTxt: { fontSize: 12, fontFamily: fonts.semiBold, color: colors.warning },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  title: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.textPrimary, lineHeight: 21 },
+  title: { flex: 1, fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, lineHeight: 21 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
 })

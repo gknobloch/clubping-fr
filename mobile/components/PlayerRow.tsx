@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors } from '@/constants/colors'
 import { AVAIL, ALL_STATUSES } from '@/constants/availability'
 import type { AvailabilityStatus, Player } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 // A roster row: an optional "selected for the line-up" check, the player's
 // name, and the OUI/PE/NON availability pills (re-tapping the active one
@@ -93,10 +94,10 @@ const pr = StyleSheet.create({
     backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center',
   },
   checkPlaceholder: { width: 18 },
-  checkTxt: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  checkTxt: { color: '#fff', fontSize: 10, fontFamily: fonts.bold },
   nameBtn: { flex: 1 },
   name: { fontSize: 14, color: colors.textPrimary },
-  nameMe: { fontWeight: '700', color: colors.accent },
+  nameMe: { fontFamily: fonts.bold, color: colors.accent },
   nameLocked: { color: colors.textSecondary },
   pills: { flexDirection: 'row', gap: 5 },
   pill: {
@@ -105,7 +106,7 @@ const pr = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   pillDisabled: { opacity: 0.5 },
-  pillTxt: { fontSize: 11, fontWeight: '700' },
+  pillTxt: { fontSize: 11, fontFamily: fonts.bold },
   // Occupies the same footprint as the 3 pills (3 × 44 + 2 × 5 gap = 142 wide)
   // with matching vertical padding + border so "Renfort" / "Joue en …" rows
   // keep the same height as roster rows, and the label stays centered.
@@ -119,7 +120,7 @@ const pr = StyleSheet.create({
   },
   slotTag: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',

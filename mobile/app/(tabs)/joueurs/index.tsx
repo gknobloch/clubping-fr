@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
 import { sortByName } from '@shared/lib/sortByName'
 import { Avatar } from '@/components/Avatar'
+import { fonts } from '@/constants/typography'
 
 const STATUS_LABELS = {
   active: 'Actif',
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardBody: { flex: 1 },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  name: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   statusBadge: {
     backgroundColor: '#dcfce7',
@@ -126,6 +127,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   statusBadgeMuted: { backgroundColor: '#f1f5f9' },
-  statusText: { fontSize: 11, fontWeight: '600', color: '#16a34a' },
+  statusText: { fontSize: 11, fontFamily: fonts.semiBold, color: '#16a34a' },
   statusTextMuted: { color: colors.textSecondary },
 })

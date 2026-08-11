@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // Pick black or white text for legibility on top of an arbitrary team colour.
 function readableTextOn(hex?: string): string {
@@ -41,5 +42,5 @@ export function TeamColorBadge({
 
 const styles = StyleSheet.create({
   badge: { alignItems: 'center', justifyContent: 'center' },
-  num: { fontWeight: '800' },
+  num: { fontFamily: fonts.extraBold },
 })

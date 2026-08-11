@@ -6,6 +6,7 @@ import { AVAIL } from '@/constants/availability'
 import { isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
 import type { AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 export interface SelectionData {
   matchDayId: string
@@ -147,9 +148,9 @@ const sel = StyleSheet.create({
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: colors.border, alignSelf: 'center', marginBottom: 12,
   },
-  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  title: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 8 },
   sectionLabel: {
-    fontSize: 11, fontWeight: '700', color: colors.textSecondary,
+    fontSize: 11, fontFamily: fonts.bold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4,
   },
   list: { marginBottom: 16 },
@@ -162,11 +163,11 @@ const sel = StyleSheet.create({
     borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
   },
   checkActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  checkMark: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  checkMark: { color: '#fff', fontSize: 12, fontFamily: fonts.bold },
   playerName: { flex: 1, fontSize: 15, color: colors.textPrimary },
-  playerNamePicked: { fontWeight: '600', color: colors.accent },
+  playerNamePicked: { fontFamily: fonts.semiBold, color: colors.accent },
   availChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  availTxt: { fontSize: 11, fontWeight: '600' },
+  availTxt: { fontSize: 11, fontFamily: fonts.semiBold },
   noAvail: { fontSize: 12, color: colors.border },
   playerRowLocked: { opacity: 0.45 },
   lockedTxt: { fontSize: 11, fontStyle: 'italic', color: colors.textSecondary },
@@ -175,10 +176,10 @@ const sel = StyleSheet.create({
     flex: 1, borderRadius: 10, padding: 14,
     alignItems: 'center', backgroundColor: colors.bg,
   },
-  cancelTxt: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
+  cancelTxt: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textSecondary },
   saveBtn: {
     flex: 1, borderRadius: 10, padding: 14,
     alignItems: 'center', backgroundColor: colors.accent,
   },
-  saveTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  saveTxt: { fontSize: 15, fontFamily: fonts.bold, color: '#fff' },
 })

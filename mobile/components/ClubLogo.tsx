@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { apiUrl } from '@/constants/api'
 import { getSessionToken } from '@/utils/api'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // Square club logo. Loads the image from GET /api/clubs/:id/logo (with a
 // cache-busting ?v=logoUpdatedAt) when the club has one, otherwise falls back
@@ -60,5 +61,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  initial: { color: colors.textSecondary, fontWeight: '700' },
+  initial: { color: colors.textSecondary, fontFamily: fonts.bold },
 })

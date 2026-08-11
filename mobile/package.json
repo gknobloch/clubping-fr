@@ -20,12 +20,15 @@
     "submit:android": "eas submit --platform android --profile production --latest"
   },
   "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo-google-fonts/outfit": "^0.4.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~55.0.23",
     "expo-apple-authentication": "~55.0.13",
     "expo-auth-session": "~55.0.16",
     "expo-constants": "~55.0.16",
     "expo-crypto": "~55.0.15",
+    "expo-font": "~55.0.8",
     "expo-image-manipulator": "~55.0.17",
     "expo-image-picker": "~55.0.20",
     "expo-linear-gradient": "~55.0.14",

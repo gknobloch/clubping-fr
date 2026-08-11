@@ -10,6 +10,7 @@ import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate } fr
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import type { Game, Team } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
 // Match card — consistent with the Accueil next-match header
@@ -59,7 +60,7 @@ const mc = StyleSheet.create({
   cardMine: { borderWidth: 2, borderColor: colors.accent },
   body: { flex: 1, gap: 8 },
   status: { fontSize: 13, color: colors.textSecondary },
-  statusWarn: { color: colors.warning, fontWeight: '600' },
+  statusWarn: { color: colors.warning, fontFamily: fonts.semiBold },
 })
 
 // ---------------------------------------------------------------------------

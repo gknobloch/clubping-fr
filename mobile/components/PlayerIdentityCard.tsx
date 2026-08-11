@@ -3,6 +3,7 @@ import { colors } from '@/constants/colors'
 import { Avatar } from '@/components/Avatar'
 import { ClubLogo } from '@/components/ClubLogo'
 import type { Club, PlayerStatus } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 const STATUS_LABELS: Record<PlayerStatus, string> = {
   active: 'Actif',
@@ -84,8 +85,8 @@ const s = StyleSheet.create({
     gap: 12,
   },
   text: { flex: 1, gap: 2 },
-  name: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  club: { fontSize: 16, fontWeight: '400', color: colors.textSecondary },
+  name: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary },
+  club: { fontSize: 16, fontFamily: fonts.regular, color: colors.textSecondary },
   statusBadge: {
     alignSelf: 'flex-start',
     marginTop: 2,
@@ -94,5 +95,5 @@ const s = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
-  statusText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  statusText: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary },
 })

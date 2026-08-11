@@ -22,6 +22,7 @@ import { sortByName } from '@shared/lib/sortByName'
 import { gameDate } from '@/utils/matchdays'
 import { getMondayOf, todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
 // Home screen — player dashboard
@@ -363,10 +364,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, gap: 6,
   },
   cardTitle: {
-    fontSize: 13, fontWeight: '600', color: colors.textSecondary,
+    fontSize: 13, fontFamily: fonts.semiBold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  seasonName: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
+  seasonName: { fontSize: 18, fontFamily: fonts.semiBold, color: colors.textPrimary },
 
   // Carousel dots
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: -2 },
@@ -380,7 +381,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, padding: 14, gap: 2,
   },
   tileLabel: { fontSize: 13, color: colors.textSecondary },
-  tileValue: { fontSize: 24, fontWeight: '700', color: colors.textPrimary },
+  tileValue: { fontSize: 24, fontFamily: fonts.bold, color: colors.textPrimary },
 
   // All matches row
   allMatches: {
@@ -389,7 +390,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, padding: 14,
   },
   allMatchesLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
-  allMatchesTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  allMatchesTitle: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
   allMatchesSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
   // Non-player view
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border,
   },
-  matchDayName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  matchDayName: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   matchDayDate: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   matchCount: { fontSize: 13, color: colors.textSecondary },
 })

@@ -18,6 +18,7 @@ import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { PlayerSheet } from '@/components/PlayerSheet'
 import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import type { Player } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -447,11 +448,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   identityText: { flex: 1, gap: 6 },
-  teamName: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  teamName: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary },
   levelBadge: {
     alignSelf: 'flex-start',
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     backgroundColor: colors.bg,
     borderWidth: 1,
@@ -473,7 +474,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -489,7 +490,7 @@ const styles = StyleSheet.create({
   },
   sectionListTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -509,7 +510,7 @@ const styles = StyleSheet.create({
   playerName: { fontSize: 15, color: colors.textPrimary },
   badge: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.accent,
     backgroundColor: colors.accentSoft,
     paddingHorizontal: 6,
@@ -529,7 +530,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  whatsappBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  whatsappBtnText: { color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 },
   textLink: { fontSize: 14, color: colors.accent },
   whatsappEdit: { gap: 10 },
   whatsappInput: {
@@ -544,7 +545,7 @@ const styles = StyleSheet.create({
   },
   editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20 },
   cancelLink: { fontSize: 14, color: colors.textSecondary },
-  saveLink: { fontSize: 14, color: colors.accent, fontWeight: '600' },
+  saveLink: { fontSize: 14, color: colors.accent, fontFamily: fonts.semiBold },
 
   // Roster button
   addBtn: {
@@ -557,7 +558,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
   },
-  addBtnText: { fontSize: 14, color: colors.accent, fontWeight: '500' },
+  addBtnText: { fontSize: 14, color: colors.accent, fontFamily: fonts.medium },
 
   // Phase / games buttons
   gamesBtn: {
@@ -573,7 +574,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   gamesBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  gamesBtnText: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  gamesBtnText: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   gamesBtnChevron: { fontSize: 22, color: colors.textSecondary },
 
   // Modal shared (roster picker)
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
+  modalTitle: { fontSize: 17, fontFamily: fonts.semiBold, color: colors.textPrimary },
   modalSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   modalList: { flex: 1 },
   listContent: { padding: 16, gap: 1 },
@@ -599,8 +600,8 @@ const styles = StyleSheet.create({
   footerBtn: { flex: 1, borderRadius: 10, padding: 14, alignItems: 'center' },
   footerCancel: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   footerSave: { backgroundColor: colors.accent },
-  footerCancelText: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  footerSaveText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  footerCancelText: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  footerSaveText: { fontSize: 15, fontFamily: fonts.semiBold, color: '#fff' },
 
   // Roster picker rows
   pickerRow: {
@@ -616,8 +617,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   pickerRowSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  pickerCheck: { width: 20, fontSize: 14, color: colors.accent, fontWeight: '700' },
-  pickerNameSelected: { fontWeight: '600' },
+  pickerCheck: { width: 20, fontSize: 14, color: colors.accent, fontFamily: fonts.bold },
+  pickerNameSelected: { fontFamily: fonts.semiBold },
   captainBtn: {
     marginLeft: 'auto',
     width: 24,
