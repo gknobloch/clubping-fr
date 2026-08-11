@@ -15,7 +15,11 @@ import { fonts } from '@/constants/typography'
 //   /team/…  (incl. phase-games)  → Équipes
 //   /match/…                      → Journées
 // This keeps the menu reflecting where you conceptually are (#153).
-function pathToTab(path: string, hasPlayerId: boolean): string {
+//
+// 'compte' is no longer a tab (#365) — it is reached from the header avatar —
+// so returning it here leaves every tab unhighlighted, which is what we want
+// while the account screen is open.
+export function pathToTab(path: string, hasPlayerId: boolean): string {
   if (path.startsWith('/mes-matchs')) return hasPlayerId ? 'joueurs' : 'index'
   if (path.startsWith('/player')) return 'joueurs'
   if (path.startsWith('/team')) return 'equipes'
@@ -23,6 +27,7 @@ function pathToTab(path: string, hasPlayerId: boolean): string {
   if (path.startsWith('/journees')) return 'journees'
   if (path.startsWith('/equipes')) return 'equipes'
   if (path.startsWith('/joueurs')) return 'joueurs'
+  if (path.startsWith('/club')) return 'club'
   if (path.startsWith('/compte')) return 'compte'
   return 'index' // Accueil
 }

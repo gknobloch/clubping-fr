@@ -21,6 +21,22 @@ jest.mock('expo-secure-store', () => {
   }
 })
 
+// @expo/vector-icons loads its font asynchronously and setStates when it lands
+// — often after the test has finished, which React reports as an un-acted
+// update. The icons carry no behaviour worth asserting, so render them inert
+// and keep their name queryable.
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react')
+  const { Text } = require('react-native')
+  const iconSet = (family) => {
+    const Icon = ({ name, ...props }) =>
+      React.createElement(Text, { ...props, testID: props.testID ?? `icon-${name}` }, null)
+    Icon.displayName = family
+    return Icon
+  }
+  return { Ionicons: iconSet('Ionicons') }
+})
+
 // Only ever reached by the (currently hidden) Apple button; the mock exists so
 // importing AuthContext doesn't pull the native module in.
 jest.mock('expo-apple-authentication', () => ({

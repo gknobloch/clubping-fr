@@ -123,12 +123,14 @@ mobile/
 ├── app/
 │   ├── _layout.tsx          # Root layout — DataProvider + AuthProvider + auth guard
 │   ├── login.tsx            # User selector (mock auth, matches web)
-│   └── (tabs)/
+│   └── (tabs)/              # Accueil · Club · Équipes · Journées · Joueurs (web's order)
 │       ├── _layout.tsx      # Bottom tab bar
 │       ├── index.tsx        # Accueil
-│       ├── journees/        # Match days list + game detail (availability + selection)
+│       ├── club.tsx         # Mon club — identity, addresses, channels (read-only)
 │       ├── equipes/         # Teams list + team detail
+│       ├── journees/        # Match days list + game detail (availability + selection)
 │       ├── joueurs/         # Players list + player detail
+│       └── compte.tsx       # Own profile — off the tab bar, behind the header avatar
 ├── contexts/
 │   ├── AuthContext.tsx      # Auth (AsyncStorage — mirrors web localStorage auth)
 │   └── DataContext.tsx      # Data fetching from /api/data

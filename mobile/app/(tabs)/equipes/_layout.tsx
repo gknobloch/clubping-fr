@@ -1,17 +1,9 @@
 import { Stack } from 'expo-router'
-import { colors } from '@/constants/colors'
-import { displayFonts } from '@/constants/typography'
+import { appHeader } from '@/components/AppHeader'
 
 export default function EquipesLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontFamily: displayFonts.semiBold },
-        headerBackTitle: '',
-      }}
-    >
+    <Stack screenOptions={{ header: appHeader }}>
       <Stack.Screen name="index" options={{ title: 'Équipes' }} />
     </Stack>
   )

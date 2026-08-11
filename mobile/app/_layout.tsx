@@ -88,7 +88,13 @@ export default function RootLayout() {
             <OfflineBanner />
             <AuthedRoutes fontsReady={loaded || error !== null} />
           </View>
-          <StatusBar style="auto" />
+          {/* Light content, not `auto` (#364): `auto` follows the colour
+              scheme — dark text in light mode — but what sits behind the
+              status bar is always dark, whatever the scheme. Every header is
+              colors.primary and the login screen is a dark photo, so in light
+              mode `auto` painted the clock black on navy. It looked right only
+              on a simulator set to dark. */}
+          <StatusBar style="light" />
         </AuthProvider>
       </DataProvider>
     </SafeAreaProvider>

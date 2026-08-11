@@ -65,6 +65,16 @@ afterEach(() => {
   setSessionToken(null)
 })
 
+it('shows the brand mark', async () => {
+  mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ users: [] }) })
+
+  renderScreen()
+
+  // The app had no identity anywhere before (#366); this is where a member
+  // meets it first.
+  expect(await screen.findByLabelText('Club Ping')).toBeTruthy()
+})
+
 it('lists the backend users once expanded', async () => {
   mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ users: [admin, captain] }) })
 
