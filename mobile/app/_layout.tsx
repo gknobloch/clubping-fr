@@ -14,7 +14,7 @@ import {
 import { Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { OfflineBanner } from '@/components/OfflineBanner'
-import { DataProvider, useAppData } from '@/contexts/DataContext'
+import { DataProvider } from '@/contexts/DataContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 
 // Hold the native splash until the persisted session has been restored —
@@ -57,26 +57,12 @@ function AuthedRoutes({ fontsReady }: { fontsReady: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Inner layout — has access to DataContext
-// ---------------------------------------------------------------------------
-function InnerLayout({ fontsReady }: { fontsReady: boolean }) {
-  const { users } = useAppData()
-
-  return (
-    <AuthProvider apiUsers={users}>
-      {/* Banner sits above the navigator so it pushes screen headers down
-          rather than overlapping them; it renders nothing when online. */}
-      <View style={{ flex: 1 }}>
-        <OfflineBanner />
-        <AuthedRoutes fontsReady={fontsReady} />
-      </View>
-      <StatusBar style="auto" />
-    </AuthProvider>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Root layout
+//
+// DataProvider wraps AuthProvider (not the other way round) because the
+// session token lives in a module holder both read: AuthProvider sets it on
+// login, DataProvider subscribes and refetches. Auth needs nothing from the
+// data payload — the dev picker has its own sessionless endpoint (#358).
 // ---------------------------------------------------------------------------
 export default function RootLayout() {
   // `error` is deliberately not fatal: a font that fails to load leaves the
@@ -95,7 +81,15 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <DataProvider>
-        <InnerLayout fontsReady={loaded || error !== null} />
+        <AuthProvider>
+          {/* Banner sits above the navigator so it pushes screen headers down
+              rather than overlapping them; it renders nothing when online. */}
+          <View style={{ flex: 1 }}>
+            <OfflineBanner />
+            <AuthedRoutes fontsReady={loaded || error !== null} />
+          </View>
+          <StatusBar style="auto" />
+        </AuthProvider>
       </DataProvider>
     </SafeAreaProvider>
   )

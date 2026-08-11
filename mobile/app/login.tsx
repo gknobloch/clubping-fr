@@ -21,10 +21,9 @@ import { LinearGradient } from 'expo-linear-gradient'
 const welcomeBg = require('../assets/welcome-bg.jpg')
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
 import { getRoleLabel, getDisplayName } from '@/utils/roles'
-import { sortByName } from '@shared/lib/sortByName'
 import { colors } from '@/constants/colors'
 import type { ApiError } from '@/utils/api'
-import type { User } from '@shared/types'
+import type { DevUser } from '@shared/types'
 import { displayFonts, fonts } from '@/constants/typography'
 
 // Google + Apple sign-in have been removed from the UI until the OAuth
@@ -213,26 +212,40 @@ function DevLogin() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selecting, setSelecting] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
+  // `/api/auth/dev/users` already orders the list — administrators first, then
+  // by name — so filtering is all that is left to do here. Club and role are
+  // searchable too, since that is often the only thing one knows to type.
   const users = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const all = q
-      ? availableUsers.filter((u) => {
-          const name = getDisplayName(u).toLowerCase()
-          return name.includes(q) || (u.email ?? '').toLowerCase().includes(q)
-        })
-      : availableUsers
-    const admins = all.filter((u) => !u.isPlayer)
-    const withPlayers = all
-      .filter((u) => u.isPlayer)
-      .map((u) => ({ user: u, lastName: u.lastName ?? '', firstName: u.firstName ?? '' }))
-    return [...admins, ...sortByName(withPlayers).map((x) => x.user)]
+    if (!q) return availableUsers
+    return availableUsers.filter((u) =>
+      [
+        getDisplayName(u),
+        u.email ?? '',
+        u.clubName ?? '',
+        getRoleLabel(u.role),
+        ...(u.captainOf?.length ? ['capitaine'] : []),
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(q),
+    )
   }, [availableUsers, query])
 
-  async function handleSelect(user: User) {
+  async function handleSelect(user: DevUser) {
     setSelecting(user.id)
-    await devLoginAs(user.id)
-    setSelecting(null)
+    setError(null)
+    try {
+      // A round trip that mints a real session, so it has to complete — and it
+      // can fail (#358). On success AuthedRoutes swaps the screen.
+      await devLoginAs(user.id)
+    } catch {
+      setError('Connexion impossible pour cet utilisateur.')
+    } finally {
+      setSelecting(null)
+    }
   }
 
   return (
@@ -242,29 +255,49 @@ function DevLogin() {
       </TouchableOpacity>
       {open && (
         <View style={styles.devBody}>
-          <TextInput
-            style={styles.input}
-            placeholder="Rechercher…"
-            placeholderTextColor={colors.textSecondary}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {users.map((user) => (
-            <TouchableOpacity
-              key={user.id}
-              style={styles.card}
-              onPress={() => handleSelect(user)}
-              disabled={selecting === user.id}
-            >
-              <View style={styles.cardBody}>
-                <Text style={styles.name}>{getDisplayName(user)}</Text>
-                <Text style={styles.role}>{getRoleLabel(user.role)}</Text>
-              </View>
-              {selecting === user.id && <ActivityIndicator size="small" color={colors.accent} />}
-            </TouchableOpacity>
-          ))}
+          {error && <Text style={styles.error}>{error}</Text>}
+          {availableUsers.length === 0 ? (
+            <Text style={styles.devEmpty}>
+              Aucun utilisateur : l’API locale n’expose pas la connexion dev.
+            </Text>
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Rechercher…"
+                placeholderTextColor={colors.textSecondary}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {users.length === 0 && <Text style={styles.devEmpty}>Aucun utilisateur trouvé</Text>}
+              {users.map((user) => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.card}
+                  onPress={() => handleSelect(user)}
+                  disabled={selecting === user.id}
+                >
+                  <View style={styles.cardBody}>
+                    <Text style={styles.name}>{getDisplayName(user)}</Text>
+                    <Text style={styles.role}>
+                      {[
+                        getRoleLabel(user.role),
+                        user.captainOf?.length ? `capitaine ${user.captainOf.join(', ')}` : null,
+                        user.clubName ?? null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </View>
+                  {selecting === user.id && (
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
         </View>
       )}
     </View>
@@ -351,6 +384,7 @@ const styles = StyleSheet.create({
   devSection: { marginTop: 24, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 },
   devToggle: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
   devBody: { gap: 8, marginTop: 12 },
+  devEmpty: { fontSize: 13, color: colors.textSecondary },
   card: {
     backgroundColor: colors.card,
     borderRadius: 12,

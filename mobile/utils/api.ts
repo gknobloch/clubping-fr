@@ -1,4 +1,4 @@
-import type { User } from '@shared/types'
+import type { DevUser, User } from '@shared/types'
 import { apiUrl } from '@/constants/api'
 
 // ---------------------------------------------------------------------------
@@ -112,4 +112,22 @@ export async function fetchMe(token: string): Promise<User> {
 
 export async function logout(token: string): Promise<void> {
   await authFetch('/auth/logout', { method: 'POST' }, token).catch(() => {})
+}
+
+// --- Dev login (local backend only, #358) -----------------------------------
+// Both endpoints are sessionless by design — they are how one obtains a session
+// in the first place — and answer 404 unless the backend sets
+// DEV_LOGIN_ENABLED. The picker must therefore not read the user list from
+// `GET /api/data`, which needs a session and 401s on the login screen (#138).
+
+/** The backend's own users, for the dev picker. Administrators come first. */
+export async function fetchDevUsers(): Promise<DevUser[]> {
+  const res = await fetch(apiUrl('/auth/dev/users'))
+  const { users } = await parse<{ users: DevUser[] }>(res)
+  return users
+}
+
+/** Sign in as any user, with no credential. Returns a real session. */
+export function devLogin(userId: string): Promise<AuthSession> {
+  return postJson('/auth/dev/login', { userId })
 }

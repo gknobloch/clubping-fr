@@ -47,7 +47,7 @@ npm run test:run   # single run (what CI runs)
 npm test           # watch mode
 ```
 
-Tests live next to the code they cover (`utils/offlineCache.test.ts`, `contexts/DataContext.test.tsx`). `@react-native-async-storage/async-storage` is replaced by its official in-memory mock in `jest.setup.js`.
+Tests live next to the code they cover (`utils/offlineCache.test.ts`, `contexts/DataContext.test.tsx`) — except screen tests, which go in `__tests__/`: expo-router turns every file under `app/` into a route, so a test there would be bundled into the app and break the build. Native modules (`async-storage`, `expo-secure-store`, `expo-apple-authentication`) are mocked in `jest.setup.js`.
 
 ## Environment
 
@@ -60,6 +60,14 @@ Set them in `mobile/.env` (git-ignored):
 ```
 EXPO_PUBLIC_API_URL=http://localhost:8788
 ```
+
+### Dev login against a local backend
+
+"Connexion dev (test)" lists the backend's own users, from `GET
+/api/auth/dev/users`, and signs in through `POST /api/auth/dev/login`, which
+mints a real session — the same path the web picker takes on a preview (#313).
+Both endpoints need `DEV_LOGIN_ENABLED=true` in the repo's `.dev.vars`; without
+it they answer 404 and the picker says so instead of listing anybody.
 
 Two things to know about `EXPO_PUBLIC_*`:
 
