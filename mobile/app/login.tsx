@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   TextInput,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 // Welcome background. Swap this file to change the image (see issue #113).
 // Photo: Pexels (free license, no attribution required). require() is the
@@ -98,7 +98,7 @@ export default function LoginScreen() {
         locations={[0, 0.45, 1]}
         style={StyleSheet.absoluteFill}
       />
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           style={styles.safe}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}

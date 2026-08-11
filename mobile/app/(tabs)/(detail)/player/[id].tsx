@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Linking } from 'react-native'
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -36,14 +36,14 @@ export default function PlayerDetailScreen() {
 
   if (!player) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Text style={styles.notFound}>Joueur introuvable.</Text>
-      </SafeAreaView>
+      </View>
     )
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Identity header — shared with the Accueil welcome header */}
         <PlayerIdentityCard
@@ -113,7 +113,7 @@ export default function PlayerDetailScreen() {
           onClose={() => setAvatarOpen(false)}
         />
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 

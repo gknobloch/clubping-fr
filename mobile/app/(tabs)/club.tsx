@@ -2,7 +2,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   RefreshControl,
   TouchableOpacity,
@@ -108,11 +107,11 @@ export default function ClubScreen() {
     // The tab is hidden for a member with no club, so this is the transient
     // case: the payload has not arrived yet, or the club was archived away.
     return (
-      <SafeAreaView style={s.container}>
+      <View style={s.container}>
         <View style={s.empty}>
           <Text style={s.emptyText}>Club introuvable.</Text>
         </View>
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -120,7 +119,7 @@ export default function ClubScreen() {
   const channels = [...(club.channels ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
 
   return (
-    <SafeAreaView style={s.container}>
+    <View style={s.container}>
       <ScrollView
         contentContainerStyle={s.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -154,7 +153,7 @@ export default function ClubScreen() {
           )}
         </Section>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

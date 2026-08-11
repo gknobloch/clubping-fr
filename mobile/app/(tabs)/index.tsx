@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   RefreshControl,
   useWindowDimensions,
 } from 'react-native'
@@ -177,7 +176,7 @@ export default function HomeScreen() {
   const composeGame = upcomingGames.find((g) => g.id === composeGameId)
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -348,7 +347,7 @@ export default function HomeScreen() {
           onClose={() => setComposeGameId(null)}
         />
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 

@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, RefreshControl } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -43,7 +43,7 @@ export default function EquipesScreen() {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -78,7 +78,7 @@ export default function EquipesScreen() {
           <Text style={styles.empty}>Aucune équipe pour cette phase.</Text>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

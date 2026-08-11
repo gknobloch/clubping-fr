@@ -1,5 +1,5 @@
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, RefreshControl,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, RefreshControl,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useEffect, useMemo, useState } from 'react'
@@ -132,7 +132,7 @@ export default function MesMatchsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -184,7 +184,7 @@ export default function MesMatchsScreen() {
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

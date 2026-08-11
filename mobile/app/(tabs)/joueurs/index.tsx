@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  SafeAreaView,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
@@ -44,7 +43,7 @@ export default function JoueursScreen() {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.searchBar}>
         <TextInput
           style={styles.input}
@@ -86,7 +85,7 @@ export default function JoueursScreen() {
           )
         }}
       />
-    </SafeAreaView>
+    </View>
   )
 }
 

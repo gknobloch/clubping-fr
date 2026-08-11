@@ -1,10 +1,11 @@
 import {
-  ScrollView, View, Text, StyleSheet, SafeAreaView,
+  ScrollView, View, Text, StyleSheet,
   TouchableOpacity, Modal, FlatList, Linking, TextInput, Alert,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName, canManageTeam } from '@/utils/roles'
@@ -129,9 +130,9 @@ export default function TeamDetailScreen() {
 
   if (!team) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Text style={styles.notFound}>Équipe introuvable.</Text>
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -193,7 +194,7 @@ export default function TeamDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
 
         {/* Identity header — mirrors the player header: a round team-colour
@@ -370,7 +371,7 @@ export default function TeamDetailScreen() {
           presentationStyle="pageSheet"
           onRequestClose={() => setShowRosterPicker(false)}
         >
-          <SafeAreaView style={styles.modalContainer}>
+          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Composition</Text>
               <Text style={styles.modalSubtitle}>Touchez ★ pour le capitaine</Text>
@@ -426,7 +427,7 @@ export default function TeamDetailScreen() {
           </SafeAreaView>
         </Modal>
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 
