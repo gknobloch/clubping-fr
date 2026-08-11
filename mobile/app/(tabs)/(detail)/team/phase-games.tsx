@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, StyleSheet, SafeAreaView,
+  ScrollView, View, Text, StyleSheet,
   TouchableOpacity,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -157,9 +157,9 @@ export default function PhaseGamesScreen() {
 
   if (!baseTeam) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Text style={styles.empty}>Équipe introuvable.</Text>
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -169,7 +169,7 @@ export default function PhaseGamesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
 
         {/* Phase switcher — aligned with Équipes / Mes matchs */}
@@ -304,7 +304,7 @@ export default function PhaseGamesScreen() {
           onProfile={() => openProfile(selectedPlayer)}
         />
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 

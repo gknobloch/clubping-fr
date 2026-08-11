@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, RefreshControl } from 'react-native'
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
@@ -177,7 +177,7 @@ export default function JourneesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -209,7 +209,7 @@ export default function JourneesScreen() {
         {mine.map(renderCard)}
         {others.map(renderCard)}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

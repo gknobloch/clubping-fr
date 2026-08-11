@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
@@ -67,9 +67,9 @@ export default function MatchDetailScreen() {
 
   if (!game || !team || !matchDay) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Text style={styles.notFound}>Match introuvable.</Text>
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -139,7 +139,7 @@ export default function MatchDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Summary */}
         <View style={styles.card}>
@@ -328,7 +328,7 @@ export default function MatchDetailScreen() {
           />
         )
       })()}
-    </SafeAreaView>
+    </View>
   )
 }
 

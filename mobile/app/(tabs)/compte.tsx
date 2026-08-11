@@ -1,11 +1,12 @@
 import {
-  ScrollView, View, Text, StyleSheet, SafeAreaView,
+  ScrollView, View, Text, StyleSheet,
   TouchableOpacity, Linking, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
   ActivityIndicator,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
 import { getTeamName, getRoleLabel } from '@/utils/roles'
@@ -111,7 +112,7 @@ export default function MonCompteScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Avatar */}
         <View style={styles.header}>
@@ -198,7 +199,7 @@ export default function MonCompteScreen() {
           style={styles.modalContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <SafeAreaView style={styles.modalContainer}>
+          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
             {/* Modal header */}
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setEditing(false)}>
@@ -241,7 +242,7 @@ export default function MonCompteScreen() {
           </SafeAreaView>
         </KeyboardAvoidingView>
       </Modal>
-    </SafeAreaView>
+    </View>
   )
 }
 
