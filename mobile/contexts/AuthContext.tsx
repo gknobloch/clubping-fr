@@ -2,9 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import * as AppleAuthentication from 'expo-apple-authentication'
-import type { User } from '@shared/types'
+import type { DevUser, User } from '@shared/types'
 import { getDisplayName, getRoleLabel } from '@/utils/roles'
 import {
+  devLogin as apiDevLogin,
+  fetchDevUsers,
   fetchMe,
   logout as apiLogout,
   oauthLogin,
@@ -14,7 +16,8 @@ import {
 } from '@/utils/api'
 import { IS_DEPLOYED_API } from '@/constants/api'
 
-// Real session token (SecureStore) and the legacy dev user-id (AsyncStorage).
+// Real session token (SecureStore) and the pre-#358 dev user-id (AsyncStorage),
+// kept only so an old install's leftover is cleared on logout.
 const SESSION_KEY = 'pp-club-session'
 const DEV_USER_KEY = 'clubping-user-id'
 
@@ -42,7 +45,7 @@ interface AuthContextValue {
   loginWithApple: () => Promise<void>
   logout: () => Promise<void>
   /** Dev login (gated by DEV_LOGIN) */
-  availableUsers: User[]
+  availableUsers: DevUser[]
   devLoginAs: (userId: string) => Promise<void>
 }
 
@@ -53,15 +56,15 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 // ---------------------------------------------------------------------------
 interface AuthProviderProps {
   children: React.ReactNode
-  apiUsers?: User[]
 }
 
-export function AuthProvider({ children, apiUsers = [] }: AuthProviderProps) {
-  // Real authenticated session (email OTP / OAuth).
-  const [realUser, setRealUser] = useState<User | null>(null)
+export function AuthProvider({ children }: AuthProviderProps) {
+  // Real authenticated session (email OTP / OAuth, and dev login — which now
+  // mints one too).
+  const [user, setUser] = useState<User | null>(null)
   const [realToken, setRealToken] = useState<string | null>(null)
-  // Dev-login selection (no server session).
-  const [devUserId, setDevUserId] = useState<string | null>(null)
+  // The dev picker's list, straight from the backend.
+  const [devUsers, setDevUsers] = useState<DevUser[]>([])
   const [loading, setLoading] = useState(true)
 
   // Restore a persisted session on mount.
@@ -75,7 +78,7 @@ export function AuthProvider({ children, apiUsers = [] }: AuthProviderProps) {
           try {
             const me = await fetchMe(token)
             if (!cancelled) {
-              setRealUser(me)
+              setUser(me)
               setRealToken(token)
             }
             return
@@ -83,10 +86,6 @@ export function AuthProvider({ children, apiUsers = [] }: AuthProviderProps) {
             setSessionToken(null)
             await SecureStore.deleteItemAsync(SESSION_KEY) // expired / revoked
           }
-        }
-        if (DEV_LOGIN) {
-          const stored = await AsyncStorage.getItem(DEV_USER_KEY)
-          if (stored && !cancelled) setDevUserId(stored)
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -97,23 +96,31 @@ export function AuthProvider({ children, apiUsers = [] }: AuthProviderProps) {
     }
   }, [])
 
-  // Every player is now a user, so the API user list already covers all accounts.
-  const allUsers = useMemo<User[]>(() => (DEV_LOGIN ? apiUsers : []), [apiUsers])
-
-  const devUser = useMemo(
-    () => (devUserId ? (allUsers.find((u) => u.id === devUserId) ?? null) : null),
-    [devUserId, allUsers],
-  )
-
-  const user = realUser ?? devUser
+  // The picker's list. It has to come from this sessionless endpoint: on the
+  // login screen there is no session yet, so `GET /api/data` — which used to
+  // feed the picker — answers 401 and left it empty (#358). A 404 here just
+  // means the backend has no dev login, and the picker stays empty.
+  useEffect(() => {
+    if (!DEV_LOGIN) return
+    let cancelled = false
+    fetchDevUsers()
+      .then((users) => {
+        if (!cancelled) setDevUsers(users)
+      })
+      .catch(() => {
+        /* no server-side dev login here */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // --- Real auth actions ---
   const applySession = useCallback(async (token: string, sessionUser: User) => {
     await SecureStore.setItemAsync(SESSION_KEY, token)
     setSessionToken(token) // triggers a DataContext refetch with the session
     setRealToken(token)
-    setRealUser(sessionUser)
-    setDevUserId(null)
+    setUser(sessionUser)
   }, [])
 
   const requestCode = useCallback(async (email: string) => {
@@ -153,17 +160,22 @@ export function AuthProvider({ children, apiUsers = [] }: AuthProviderProps) {
     setSessionToken(null)
     await SecureStore.deleteItemAsync(SESSION_KEY)
     await AsyncStorage.removeItem(DEV_USER_KEY)
-    setRealUser(null)
+    setUser(null)
     setRealToken(null)
-    setDevUserId(null)
   }, [realToken])
 
   // --- Dev login ---
-  const devLoginAs = useCallback(async (userId: string) => {
-    if (!DEV_LOGIN) return
-    setDevUserId(userId)
-    await AsyncStorage.setItem(DEV_USER_KEY, userId)
-  }, [])
+  // Takes a real session like every other login path: a bare selection
+  // authenticates nothing, and the local API rejects sessionless calls since
+  // #138, so the picked user landed on empty screens (#358).
+  const devLoginAs = useCallback(
+    async (userId: string) => {
+      if (!DEV_LOGIN) return
+      const session = await apiDevLogin(userId)
+      await applySession(session.token, session.user)
+    },
+    [applySession],
+  )
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -177,10 +189,12 @@ export function AuthProvider({ children, apiUsers = [] }: AuthProviderProps) {
       loginWithIdToken,
       loginWithApple,
       logout,
-      availableUsers: DEV_LOGIN ? allUsers : [],
+      availableUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
-    [user, loading, allUsers, requestCode, verifyCode, loginWithIdToken, loginWithApple, logout, devLoginAs],
+    // devUsers matters: the list arrives asynchronously, and omitting it would
+    // leave the picker empty for as long as the login screen stays mounted.
+    [user, loading, devUsers, requestCode, verifyCode, loginWithIdToken, loginWithApple, logout, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
