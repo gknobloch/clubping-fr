@@ -4,6 +4,7 @@ import { CommonActions } from '@react-navigation/native'
 import { TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
+import { displayFonts } from '@/constants/typography'
 
 // Shared "detail" screens (player, team, match, match list) live in this Stack,
 // which is registered as a hidden tab in (tabs)/_layout. Nesting them inside the
@@ -79,7 +80,7 @@ export default function DetailLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.primary },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontFamily: displayFonts.semiBold },
         headerBackVisible: false,
         headerLeft: () => <BackButton />,
       }}

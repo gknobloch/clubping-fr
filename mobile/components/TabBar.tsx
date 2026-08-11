@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useGlobalSearchParams } from 'expo-router'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // The shared detail screens (player, team, match, match list) live in the hidden
 // (detail) stack, so when you drill in no real tab is focused. We derive the
@@ -82,5 +83,5 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   item: { flex: 1, alignItems: 'center', gap: 3 },
-  label: { fontSize: 10, fontWeight: '600' },
+  label: { fontSize: 10, fontFamily: fonts.semiBold },
 })

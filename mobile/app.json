@@ -44,7 +44,8 @@
           "cameraPermission": "Autorisez l'accès à l'appareil photo pour prendre votre avatar."
         }
       ],
-      "./plugins/withDisableScriptSandboxing"
+      "./plugins/withDisableScriptSandboxing",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

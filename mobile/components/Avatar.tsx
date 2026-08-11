@@ -2,6 +2,7 @@ import { Image, View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'r
 import { useEffect, useState } from 'react'
 import { avatarImageSource } from '@/utils/avatarSource'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // Round player avatar. Loads the image from GET /api/users/:id/avatar
 // (auth header + a cache-busting ?v=avatarUpdatedAt) when the player has one,
@@ -52,5 +53,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  initials: { color: colors.textSecondary, fontWeight: '700' },
+  initials: { color: colors.textSecondary, fontFamily: fonts.bold },
 })

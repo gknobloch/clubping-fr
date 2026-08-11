@@ -25,6 +25,7 @@ import { sortByName } from '@shared/lib/sortByName'
 import { colors } from '@/constants/colors'
 import type { ApiError } from '@/utils/api'
 import type { User } from '@shared/types'
+import { displayFonts, fonts } from '@/constants/typography'
 
 // Google + Apple sign-in have been removed from the UI until the OAuth
 // client IDs are configured (#129 / #100). `loginWithIdToken` /
@@ -277,7 +278,10 @@ const styles = StyleSheet.create({
   brandBlock: { paddingHorizontal: 6 },
   brand: {
     fontSize: 34,
-    fontWeight: '800',
+    // The one place the product name is set this large — the display face, as
+    // on the web's login h1 (#360). Outfit has no 800 cut loaded; 700 at 34px
+    // carries the same weight on screen.
+    fontFamily: displayFonts.bold,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
@@ -303,7 +307,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
-  error: { color: colors.danger, fontSize: 14, fontWeight: '500' },
+  error: { color: colors.danger, fontSize: 14, fontFamily: fonts.medium },
   input: {
     backgroundColor: colors.card,
     borderRadius: 10,
@@ -325,7 +329,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontFamily: fonts.semiBold },
   btnDisabled: { opacity: 0.5 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
   divider: { flex: 1, height: 1, backgroundColor: colors.border },
@@ -338,14 +342,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  oauthBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
+  oauthBtnText: { color: colors.textPrimary, fontSize: 16, fontFamily: fonts.semiBold },
   appleBtn: { backgroundColor: '#000', borderColor: '#000' },
   appleBtnText: { color: '#fff' },
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  link: { color: colors.accent, fontSize: 14, fontWeight: '500' },
+  link: { color: colors.accent, fontSize: 14, fontFamily: fonts.medium },
   // Dev section
   devSection: { marginTop: 24, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 },
-  devToggle: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
+  devToggle: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
   devBody: { gap: 8, marginTop: 12 },
   card: {
     backgroundColor: colors.card,
@@ -357,6 +361,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardBody: { flex: 1 },
-  name: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  name: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
   role: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
 })

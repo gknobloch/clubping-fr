@@ -6,6 +6,7 @@ import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
 import type { Player, Team } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 export type PlayerHistoryEntry = {
   jNumber?: number
@@ -184,17 +185,17 @@ const s = StyleSheet.create({
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: colors.border, alignSelf: 'center', marginBottom: 12,
   },
-  name: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
+  name: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 12 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 14 },
   sectionHeading: {
-    fontSize: 12, fontWeight: '700', color: colors.textSecondary,
+    fontSize: 12, fontFamily: fonts.bold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
   rows: { gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   label: { fontSize: 14, color: colors.textSecondary },
   value: {
-    fontSize: 14, fontWeight: '600', color: colors.textPrimary,
+    fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary,
     flexShrink: 1, textAlign: 'right',
   },
   historySection: { marginTop: 16, gap: 6 },
@@ -202,13 +203,13 @@ const s = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3,
   },
   historyLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 },
-  historyJ: { fontSize: 12, fontWeight: '700', color: colors.accent, width: 18 },
+  historyJ: { fontSize: 12, fontFamily: fonts.bold, color: colors.accent, width: 18 },
   // Circle for a 1-digit team number; grows to a pill for 2-digit numbers.
   historyTeamBadge: {
     minWidth: 18, height: 18, borderRadius: 9, borderWidth: 1,
     paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center',
   },
-  historyTeamNum: { fontSize: 11, fontWeight: '700' },
+  historyTeamNum: { fontSize: 11, fontFamily: fonts.bold },
   historyDot: { fontSize: 13, color: colors.textSecondary },
   historyText: { fontSize: 14, color: colors.textPrimary, flex: 1 },
   historyDate: { fontSize: 13, color: colors.textSecondary },
@@ -218,6 +219,6 @@ const s = StyleSheet.create({
   footerBtn: { flex: 1, borderRadius: 10, padding: 14, alignItems: 'center' },
   footerClose: { backgroundColor: colors.bg },
   footerProfile: { backgroundColor: colors.accent },
-  footerCloseTxt: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  footerProfileTxt: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  footerCloseTxt: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  footerProfileTxt: { fontSize: 15, fontFamily: fonts.semiBold, color: '#fff' },
 })

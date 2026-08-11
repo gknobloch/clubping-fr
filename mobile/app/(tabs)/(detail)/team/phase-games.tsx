@@ -17,6 +17,7 @@ import { MatchHeader } from '@/components/MatchHeader'
 import { PlayerSheet } from '@/components/PlayerSheet'
 import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import type { Player } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
 // A team's full phase view: roster (with play-counts) + every match of the
@@ -324,7 +325,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -344,22 +345,22 @@ const styles = StyleSheet.create({
   },
   memberName: { flex: 1, fontSize: 14, color: colors.textPrimary },
   capBadge: {
-    fontSize: 11, fontWeight: '600', color: colors.accent,
+    fontSize: 11, fontFamily: fonts.semiBold, color: colors.accent,
     backgroundColor: colors.accentSoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
   renforceBadge: {
-    fontSize: 11, fontWeight: '500', color: colors.textSecondary,
+    fontSize: 11, fontFamily: fonts.medium, color: colors.textSecondary,
     backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
     paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
   gamesCount: {
-    fontSize: 13, fontWeight: '600', color: colors.textSecondary,
+    fontSize: 13, fontFamily: fonts.semiBold, color: colors.textSecondary,
     minWidth: 36, textAlign: 'right',
   },
 
   // Standalone label above the match-card list (parallels the Joueurs title).
   listLabel: {
-    fontSize: 12, fontWeight: '600', color: colors.textSecondary,
+    fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5,
     paddingHorizontal: 4, marginTop: 4,
   },
@@ -393,5 +394,5 @@ const styles = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
   },
   linkLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  linkText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  linkText: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
 })

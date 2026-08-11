@@ -5,6 +5,7 @@ import { AVAIL, ALL_STATUSES } from '@/constants/availability'
 import { Avatar } from '@/components/Avatar'
 import { MatchHeader } from '@/components/MatchHeader'
 import type { AvailabilityStatus, Player } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 // The Accueil hero: the player's next match, with one-tap availability, a
 // response summary, and (for captains) a shortcut to compose the line-up.
@@ -171,7 +172,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   segmentDisabled: { opacity: 0.5 },
-  segmentTxt: { fontSize: 14, fontWeight: '600' },
+  segmentTxt: { fontSize: 14, fontFamily: fonts.semiBold },
   responses: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stack: { flexDirection: 'row', marginRight: 4 },
   stackItem: { borderRadius: 12, borderWidth: 1.5, borderColor: colors.card },
@@ -179,15 +180,15 @@ const s = StyleSheet.create({
     width: 24, height: 24, borderRadius: 12, backgroundColor: colors.bg,
     alignItems: 'center', justifyContent: 'center',
   },
-  extraTxt: { fontSize: 10, fontWeight: '700', color: colors.textSecondary },
+  extraTxt: { fontSize: 10, fontFamily: fonts.bold, color: colors.textSecondary },
   responseTxt: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
-  responseWarn: { color: colors.warning, fontWeight: '600' },
+  responseWarn: { color: colors.warning, fontFamily: fonts.semiBold },
   compose: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12,
   },
   composeLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  composeTxt: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  composeTxt: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
   composeRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  composeCount: { fontSize: 14, fontWeight: '700' },
+  composeCount: { fontSize: 14, fontFamily: fonts.bold },
 })

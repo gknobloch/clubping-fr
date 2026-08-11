@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 export interface MatchSheetPlayer {
   firstName: string
@@ -161,11 +162,11 @@ const s = StyleSheet.create({
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: colors.border, alignSelf: 'center', marginBottom: 12,
   },
-  title: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  title: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary },
   matchup: { fontSize: 15, color: colors.textSecondary, marginTop: 2 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 14 },
   sectionHeading: {
-    fontSize: 12, fontWeight: '700', color: colors.textSecondary,
+    fontSize: 12, fontFamily: fonts.bold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
   joueursHead: {
@@ -177,12 +178,12 @@ const s = StyleSheet.create({
   },
   toggleBtn: { paddingHorizontal: 12, paddingVertical: 6 },
   toggleBtnActive: { backgroundColor: colors.accent },
-  toggleTxt: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, letterSpacing: 1 },
+  toggleTxt: { fontSize: 13, fontFamily: fonts.bold, color: colors.textSecondary, letterSpacing: 1 },
   toggleTxtActive: { color: '#fff' },
-  letter: { width: 22, fontSize: 16, fontWeight: '700', color: colors.accent, textAlign: 'center' },
+  letter: { width: 22, fontSize: 16, fontFamily: fonts.bold, color: colors.accent, textAlign: 'center' },
   kvRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   label: { fontSize: 15, color: colors.textSecondary },
-  value: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, flexShrink: 1, textAlign: 'right' },
+  value: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary, flexShrink: 1, textAlign: 'right' },
   playerRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, height: ROW_H,
     borderTopWidth: 1, borderTopColor: colors.border,
@@ -191,14 +192,14 @@ const s = StyleSheet.create({
   dragHandle: { paddingHorizontal: 4, paddingVertical: 8 },
   playerName: { flex: 1 },
   firstName: { fontSize: 14, color: colors.textSecondary },
-  lastName: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  lastName: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
   playerMeta: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   license: { fontSize: 15, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
-  points: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, minWidth: 64, textAlign: 'right' },
+  points: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, minWidth: 64, textAlign: 'right' },
   empty: { fontSize: 15, color: colors.textSecondary, paddingTop: 8 },
   note: { fontSize: 12, fontStyle: 'italic', color: colors.textSecondary, marginTop: 12 },
   closeBtn: {
     backgroundColor: colors.bg, borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 20,
   },
-  closeTxt: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  closeTxt: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
 })

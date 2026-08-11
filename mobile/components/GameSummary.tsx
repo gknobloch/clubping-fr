@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // Shared presentational summary for a single game/match: an optional round
 // label (e.g. "Équipe 5"), the matchup title with a home/away indicator, the
@@ -68,21 +69,21 @@ const s = StyleSheet.create({
   info: { gap: 4 },
   teamLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: fonts.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   homeIcon: { marginTop: 2 },
-  title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  title: { flex: 1, fontSize: 15, fontFamily: fonts.bold, color: colors.textPrimary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   meta: { fontSize: 13, color: colors.textSecondary },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   badges: { flexDirection: 'row', gap: 4, marginTop: 4 },
   badge: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.accent,
     backgroundColor: colors.accentSoft,
     paddingHorizontal: 8,

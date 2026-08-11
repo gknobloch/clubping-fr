@@ -3,6 +3,15 @@ import { View } from 'react-native'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
+import { useFonts } from 'expo-font'
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+  DMSans_800ExtraBold,
+} from '@expo-google-fonts/dm-sans'
+import { Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { DataProvider, useAppData } from '@/contexts/DataContext'
@@ -22,12 +31,15 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 // login visible (with the splash still up on top), so the first thing the
 // user sees once the splash dismisses is the right screen for their state.
 // ---------------------------------------------------------------------------
-function AuthedRoutes() {
+function AuthedRoutes({ fontsReady }: { fontsReady: boolean }) {
   const { isAuthenticated, loading } = useAuth()
 
+  // The splash already waits for the session; make it wait for the fonts too
+  // (#360). Dropping it earlier shows one frame in the system face before the
+  // brand faces swap in, which reads as a flicker rather than as a load.
   useEffect(() => {
-    if (!loading) SplashScreen.hideAsync().catch(() => {})
-  }, [loading])
+    if (!loading && fontsReady) SplashScreen.hideAsync().catch(() => {})
+  }, [loading, fontsReady])
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -47,7 +59,7 @@ function AuthedRoutes() {
 // ---------------------------------------------------------------------------
 // Inner layout — has access to DataContext
 // ---------------------------------------------------------------------------
-function InnerLayout() {
+function InnerLayout({ fontsReady }: { fontsReady: boolean }) {
   const { users } = useAppData()
 
   return (
@@ -56,7 +68,7 @@ function InnerLayout() {
           rather than overlapping them; it renders nothing when online. */}
       <View style={{ flex: 1 }}>
         <OfflineBanner />
-        <AuthedRoutes />
+        <AuthedRoutes fontsReady={fontsReady} />
       </View>
       <StatusBar style="auto" />
     </AuthProvider>
@@ -67,10 +79,23 @@ function InnerLayout() {
 // Root layout
 // ---------------------------------------------------------------------------
 export default function RootLayout() {
+  // `error` is deliberately not fatal: a font that fails to load leaves the
+  // system face in place, which is worse-looking but still a working app —
+  // better than holding the splash forever over a missing .ttf.
+  const [loaded, error] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+    DMSans_800ExtraBold,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+  })
+
   return (
     <SafeAreaProvider>
       <DataProvider>
-        <InnerLayout />
+        <InnerLayout fontsReady={loaded || error !== null} />
       </DataProvider>
     </SafeAreaProvider>
   )

@@ -17,6 +17,7 @@ import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
 import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
+import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
 // Match detail — one team's view of a game: availabilities (editable by the
@@ -341,7 +342,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, padding: 14, gap: 8,
   },
   sectionTitle: {
-    fontSize: 12, fontWeight: '600', color: colors.textSecondary,
+    fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2,
   },
 
@@ -351,7 +352,7 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 14,
   },
   composeLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  composeTxt: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  composeTxt: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
   composeRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  composeCount: { fontSize: 14, fontWeight: '700' },
+  composeCount: { fontSize: 14, fontFamily: fonts.bold },
 })

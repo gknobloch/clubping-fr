@@ -7,6 +7,7 @@ import { colors } from '@/constants/colors'
 import { getTeamName } from '@/utils/roles'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
+import { fonts } from '@/constants/typography'
 
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -157,7 +158,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
   },
   sectionListTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
 
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   infoLabel: { fontSize: 14, color: colors.textSecondary },
-  infoValue: { fontSize: 14, color: colors.textPrimary, fontWeight: '500', flexShrink: 1, textAlign: 'right' },
+  infoValue: { fontSize: 14, color: colors.textPrimary, fontFamily: fonts.medium, flexShrink: 1, textAlign: 'right' },
   phoneLink: { color: '#25D366' },
   teamRow: {
     flexDirection: 'row',
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
   teamName: { flex: 1, fontSize: 15, color: colors.textPrimary },
   cap: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: colors.accent,
     backgroundColor: colors.accentSoft,
     paddingHorizontal: 6,
@@ -221,6 +222,6 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   matchesLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
-  matchesTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  matchesTitle: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
   matchesSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 })

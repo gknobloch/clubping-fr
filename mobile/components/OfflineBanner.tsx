@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // French day/time formatting without relying on Intl, e.g. "24/06 à 14:05".
 function formatSyncedAt(iso: string): string | null {
@@ -50,6 +51,6 @@ const styles = StyleSheet.create({
   text: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fonts.semiBold,
   },
 })

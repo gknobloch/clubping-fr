@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router'
 import { colors } from '@/constants/colors'
+import { displayFonts } from '@/constants/typography'
 
 export default function JourneesLayout() {
   return (
@@ -7,7 +8,7 @@ export default function JourneesLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.primary },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontFamily: displayFonts.semiBold },
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Journées' }} />
