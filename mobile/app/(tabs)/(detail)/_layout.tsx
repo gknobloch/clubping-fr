@@ -1,11 +1,7 @@
 import { useEffect } from 'react'
-import { Stack, useRouter, useNavigation } from 'expo-router'
+import { Stack, useNavigation } from 'expo-router'
 import { CommonActions } from '@react-navigation/native'
-import { TouchableOpacity } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { colors } from '@/constants/colors'
-import { accountHeaderRight } from '@/components/AccountHeaderButton'
-import { displayFonts } from '@/constants/typography'
+import { AppHeader } from '@/components/AppHeader'
 
 // Shared "detail" screens (player, team, match, match list) live in this Stack,
 // which is registered as a hidden tab in (tabs)/_layout. Nesting them inside the
@@ -13,18 +9,11 @@ import { displayFonts } from '@/constants/typography'
 // jump to any section at any time (issue #153) — while the Stack still gives a
 // back button.
 //
-// The back button uses router.back() (navigation history) rather than the native
-// stack back, so it also works on the first detail screen pushed onto this stack
-// (whose own stack has nothing beneath it).
-function BackButton() {
-  const router = useRouter()
-  if (!router.canGoBack()) return null
-  return (
-    <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={{ paddingRight: 12 }}>
-      <Ionicons name="chevron-back" size={26} color="#fff" />
-    </TouchableOpacity>
-  )
-}
+// The header is the app's one AppHeader, back chevron included, so a detail
+// screen's bar is the same bar as a tab's (#365).
+const detailHeader = ({ options, route }: { options: { title?: string }; route: { name: string } }) => (
+  <AppHeader title={options.title ?? route.name} showBack />
+)
 
 // All shared detail screens share this one Stack (hosted in the hidden (detail)
 // tab). React Navigation keeps that Stack mounted across tab switches, so
@@ -77,16 +66,7 @@ function useResetDetailStackOnBlur() {
 export default function DetailLayout() {
   useResetDetailStackOnBlur()
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontFamily: displayFonts.semiBold },
-        headerRight: accountHeaderRight,
-        headerBackVisible: false,
-        headerLeft: () => <BackButton />,
-      }}
-    >
+    <Stack screenOptions={{ header: detailHeader }}>
       <Stack.Screen name="player/[id]" options={{ title: 'Joueur' }} />
       <Stack.Screen name="team/[id]" options={{ title: 'Équipe' }} />
       <Stack.Screen name="team/phase-games" options={{ title: 'Matchs' }} />

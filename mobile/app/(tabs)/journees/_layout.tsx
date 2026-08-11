@@ -1,18 +1,9 @@
 import { Stack } from 'expo-router'
-import { colors } from '@/constants/colors'
-import { accountHeaderRight } from '@/components/AccountHeaderButton'
-import { displayFonts } from '@/constants/typography'
+import { appHeader } from '@/components/AppHeader'
 
 export default function JourneesLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontFamily: displayFonts.semiBold },
-        headerRight: accountHeaderRight,
-      }}
-    >
+    <Stack screenOptions={{ header: appHeader }}>
       <Stack.Screen name="index" options={{ title: 'Journées' }} />
     </Stack>
   )

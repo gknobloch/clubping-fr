@@ -1,11 +1,9 @@
 import type { ComponentProps } from 'react'
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { colors } from '@/constants/colors'
 import { TabBar } from '@/components/TabBar'
-import { accountHeaderRight } from '@/components/AccountHeaderButton'
+import { AppHeader, appHeader } from '@/components/AppHeader'
 import { useAuth } from '@/contexts/AuthContext'
-import { displayFonts } from '@/constants/typography'
 
 type IconName = ComponentProps<typeof Ionicons>['name']
 
@@ -34,12 +32,9 @@ export default function TabLayout() {
     <Tabs
       backBehavior="history"
       tabBar={(props) => <TabBar {...props} />}
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontFamily: displayFonts.semiBold },
-        headerRight: accountHeaderRight,
-      }}
+      // One header for the whole app — the section stacks render the same
+      // component, so the bar does not shift from one tab to the next (#365).
+      screenOptions={{ header: appHeader }}
     >
       <Tabs.Screen
         name="index"
@@ -76,7 +71,8 @@ export default function TabLayout() {
         options={{
           title: 'Compte',
           tabBarItemStyle: { display: 'none' },
-          headerRight: undefined,
+          // No avatar here: this screen is where it leads.
+          header: () => <AppHeader title="Compte" showAccount={false} />,
         }}
       />
       {/* Shared detail screens (player, team, match, match list) — a hidden tab
