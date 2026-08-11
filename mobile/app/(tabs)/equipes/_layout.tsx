@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router'
 import { colors } from '@/constants/colors'
+import { accountHeaderRight } from '@/components/AccountHeaderButton'
 import { displayFonts } from '@/constants/typography'
 
 export default function EquipesLayout() {
@@ -9,6 +10,7 @@ export default function EquipesLayout() {
         headerStyle: { backgroundColor: colors.primary },
         headerTintColor: '#fff',
         headerTitleStyle: { fontFamily: displayFonts.semiBold },
+        headerRight: accountHeaderRight,
         headerBackTitle: '',
       }}
     >

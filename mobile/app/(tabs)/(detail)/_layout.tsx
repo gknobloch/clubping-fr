@@ -4,6 +4,7 @@ import { CommonActions } from '@react-navigation/native'
 import { TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
+import { accountHeaderRight } from '@/components/AccountHeaderButton'
 import { displayFonts } from '@/constants/typography'
 
 // Shared "detail" screens (player, team, match, match list) live in this Stack,
@@ -81,6 +82,7 @@ export default function DetailLayout() {
         headerStyle: { backgroundColor: colors.primary },
         headerTintColor: '#fff',
         headerTitleStyle: { fontFamily: displayFonts.semiBold },
+        headerRight: accountHeaderRight,
         headerBackVisible: false,
         headerLeft: () => <BackButton />,
       }}
