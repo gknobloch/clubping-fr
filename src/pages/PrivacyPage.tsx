@@ -15,9 +15,9 @@ import { BrandMark } from '@/components/BrandMark'
  * of the change, not a follow-up.
  */
 
-// TODO(#356): confirm before publishing to the stores. The data controller and
-// its contact address are not derivable from the codebase.
-const CONTACT_EMAIL = 'contact@clubping.fr'
+const CONTACT_EMAIL = 'clubping@leskno.fr'
+// TODO(#356): confirm before publishing to the stores. The legal entity acting
+// as data controller is not derivable from the codebase.
 const CONTROLLER = 'Club Ping'
 
 /** Last substantive review of this text. Shown to the reader; update when the content changes. */
