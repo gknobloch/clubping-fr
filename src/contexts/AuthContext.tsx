@@ -163,6 +163,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             storage.remove(SESSION_KEY) // expired / revoked
           }
         }
+        // No usable token — but the session cookie may still be there, and
+        // usually is: Safari deletes localStorage after 7 days without a visit
+        // while leaving server-set cookies alone (#370). This is what turns
+        // that from "log in again" into nothing the member notices.
+        try {
+          const me = await fetchMe()
+          if (!cancelled) setRealUser(me)
+          return
+        } catch {
+          /* no cookie session either — carry on to dev login / the form */
+        }
         if (DEV_LOGIN) {
           const stored = storage.get(DEV_USER_KEY)
           if (stored && !cancelled) setDevUserId(stored)
@@ -213,13 +224,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const logout = useCallback(() => {
-    if (realToken) apiLogout(realToken)
+    // Not gated on the token since #370: a cookie session has none to send,
+    // and skipping the call would leave the cookie in place — the next reload
+    // would sign the member straight back in. Gated on there being a session
+    // at all, because DataContext calls this on any 401, including the ones
+    // the login page makes before anybody has signed in.
+    if (realToken || realUser) apiLogout(realToken ?? undefined)
     storage.remove(SESSION_KEY)
     storage.remove(DEV_USER_KEY)
     setRealUser(null)
     setRealToken(null)
     setDevUserId(null)
-  }, [realToken])
+  }, [realToken, realUser])
 
   const devLoginAs = useCallback(
     async (userId: string) => {

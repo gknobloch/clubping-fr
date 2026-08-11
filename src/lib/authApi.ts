@@ -58,8 +58,15 @@ export function oauthLogin(provider: 'google' | 'apple', idToken: string): Promi
   return postJson('/auth/oauth', { provider, idToken })
 }
 
-export async function fetchMe(token: string): Promise<User> {
-  const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+/**
+ * The signed-in user. The token is optional since #370: with no argument the
+ * session cookie authenticates the call, which is how a browser that has lost
+ * its localStorage entry — Safari drops it after 7 days — gets its session back.
+ */
+export async function fetchMe(token?: string): Promise<User> {
+  const res = await fetch('/api/auth/me', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
   const { user } = await parse<{ user: User }>(res)
   return user
 }
@@ -83,9 +90,10 @@ export function devLogin(userId: string): Promise<AuthSession> {
   return postJson('/auth/dev/login', { userId })
 }
 
-export async function logout(token: string): Promise<void> {
+/** Revoke the session and clear its cookie. Same optional token as fetchMe. */
+export async function logout(token?: string): Promise<void> {
   await fetch('/api/auth/logout', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   }).catch(() => {})
 }

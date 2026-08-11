@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import type { UserRow } from './rows'
 
 // Shared environment for the whole API. Secrets/vars are configured as
@@ -244,6 +245,59 @@ export function bearer(authHeader: string | undefined | null): string | null {
   return m ? m[1] : null
 }
 
+// ---------------------------------------------------------------------------
+// Session cookie (#370)
+//
+// The web used to keep the session in localStorage alone. Safari caps
+// script-writable storage and deletes it after 7 days without a first-party
+// visit, so members came back to a login screen while their session still had
+// weeks to run — the browser had thrown away the key, not the server the lock.
+// A cookie set by the server is not subject to that cap.
+//
+// HttpOnly, so no script on the page can read the session; SameSite=Lax, so it
+// rides along on top-level navigations but never on a cross-site POST, which
+// is what keeps cookie auth from being a CSRF hole.
+//
+// The mobile app stays on Bearer: a native client has no cookie jar to lean
+// on, and SecureStore is subject to none of this.
+// ---------------------------------------------------------------------------
+export const SESSION_COOKIE = 'cp_session'
+
+/** The session token carried by a request's Cookie header, if any. */
+export function sessionCookie(cookieHeader: string | undefined | null): string | null {
+  if (!cookieHeader) return null
+  for (const part of cookieHeader.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq === -1) continue
+    if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue
+    const value = part.slice(eq + 1).trim()
+    return value ? decodeURIComponent(value) : null
+  }
+  return null
+}
+
+/** The credential on a request, from either scheme. */
+export function requestToken(req: {
+  header(name: string): string | undefined
+}): string | null {
+  return bearer(req.header('Authorization')) ?? sessionCookie(req.header('Cookie'))
+}
+
+/**
+ * `Set-Cookie` carrying the session, or clearing it when `token` is null.
+ *
+ * `Secure` follows the request's scheme rather than being unconditional: a
+ * local `npm run dev:full` serves http, and Safari drops a Secure cookie there
+ * — which would silently un-fix this on the machine where it gets tested.
+ */
+export function sessionCookieHeader(token: string | null, requestUrl: string): string {
+  const secure = new URL(requestUrl).protocol === 'https:' ? '; Secure' : ''
+  const attrs = `Path=/; HttpOnly; SameSite=Lax${secure}`
+  return token
+    ? `${SESSION_COOKIE}=${token}; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; ${attrs}`
+    : `${SESSION_COOKIE}=; Max-Age=0; ${attrs}`
+}
+
 export async function userFromToken(db: D1Database, token: string): Promise<UserRow | null> {
   const session = await db
     .prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?')
@@ -261,6 +315,17 @@ export async function userFromToken(db: D1Database, token: string): Promise<User
 // Routes (mounted at /api/auth)
 // ---------------------------------------------------------------------------
 export const authApp = new Hono<Env>()
+
+/**
+ * The answer to every successful sign-in: the session as a cookie for the web
+ * (#370) and in the body for the mobile app, which stores it in SecureStore.
+ * Routing them both through here is what stops a new sign-in path from minting
+ * a session and forgetting the cookie.
+ */
+function sessionResponse(c: Context<Env>, token: string, user: UserRow) {
+  c.header('Set-Cookie', sessionCookieHeader(token, c.req.url))
+  return c.json({ token, user: serializeUser(user) })
+}
 
 // Request an email OTP. Always returns ok (don't leak account existence).
 authApp.post('/email/request', async (c) => {
@@ -314,7 +379,7 @@ authApp.post('/email/verify', async (c) => {
 
   await c.env.DB.prepare('DELETE FROM auth_otp WHERE email = lower(?)').bind(email).run()
   const token = await createSession(c.env.DB, user.id)
-  return c.json({ token, user: serializeUser(user) })
+  return sessionResponse(c, token, user)
 })
 
 // Sign in with a Google/Apple ID token.
@@ -357,22 +422,25 @@ authApp.post('/oauth', async (c) => {
 
   if (!user) return c.json({ error: 'no_account' }, 403)
   const token = await createSession(db, user.id)
-  return c.json({ token, user: serializeUser(user) })
+  return sessionResponse(c, token, user)
 })
 
-// Current user from a Bearer token.
+// Current user from either credential — the cookie is how the web restores a
+// session it no longer holds a token for (#370).
 authApp.get('/me', async (c) => {
-  const token = bearer(c.req.header('Authorization'))
+  const token = requestToken(c.req)
   if (!token) return c.json({ error: 'unauthorized' }, 401)
   const user = await userFromToken(c.env.DB, token)
   if (!user) return c.json({ error: 'unauthorized' }, 401)
   return c.json({ user: serializeUser(user) })
 })
 
-// Revoke the current session.
+// Revoke the current session: the row goes, and so does the cookie — leaving
+// it would send a dead credential on every subsequent request.
 authApp.post('/logout', async (c) => {
-  const token = bearer(c.req.header('Authorization'))
+  const token = requestToken(c.req)
   if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run()
+  c.header('Set-Cookie', sessionCookieHeader(null, c.req.url))
   return c.json({ ok: true })
 })
 
@@ -465,5 +533,5 @@ authApp.post('/dev/login', async (c) => {
     .first<UserRow>()
   if (!user) return c.json({ error: 'no_account' }, 403)
   const token = await createSession(c.env.DB, user.id)
-  return c.json({ token, user: serializeUser(user) })
+  return sessionResponse(c, token, user)
 })
