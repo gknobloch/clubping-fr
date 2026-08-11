@@ -25,10 +25,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e293b"
       },
-      "package": "fr.clubping.app",
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "package": "fr.clubping.app"
     },
     "web": {
       "bundler": "metro",
