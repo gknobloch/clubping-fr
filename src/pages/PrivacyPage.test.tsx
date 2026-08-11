@@ -30,6 +30,17 @@ describe('PrivacyPage', () => {
     }
   })
 
+  // birthDate and birthPlace are optional on User, and are only there to settle
+  // eligibility for age-banded competitions — the policy must not imply the app
+  // requires them.
+  it('marks birth date and place as optional and says what they are for', () => {
+    render(<PrivacyPage />)
+    const page = document.body.textContent ?? ''
+
+    expect(page).toMatch(/Date et lieu de naissance\s*:\s*facultatifs/i)
+    expect(page).toMatch(/éligibilité à certaines compétitions/i)
+  })
+
   it('states the absence of trackers, advertising and audience measurement', () => {
     render(<PrivacyPage />)
     const page = document.body.textContent ?? ''

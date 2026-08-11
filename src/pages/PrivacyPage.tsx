@@ -69,8 +69,12 @@ export function PrivacyPage() {
             <p>L'application traite uniquement les données nécessaires à la vie du club :</p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                <strong>Identité</strong> : nom, prénom, date et lieu de naissance, numéro de
-                licence FFTT.
+                <strong>Identité</strong> : nom, prénom, numéro de licence FFTT.
+              </li>
+              <li>
+                <strong>Date et lieu de naissance</strong> : facultatifs. Ils ne servent qu'à
+                déterminer l'éligibilité à certaines compétitions, dont les catégories dépendent
+                de l'âge. L'application fonctionne sans, et ces champs peuvent rester vides.
               </li>
               <li>
                 <strong>Coordonnées</strong> : adresse e-mail, numéro de téléphone.
