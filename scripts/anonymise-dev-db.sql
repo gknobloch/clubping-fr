@@ -12,6 +12,11 @@
 -- teams, groups, games, availabilities. That is the structure and volume that
 -- makes a preview worth having (#296) — it reproduces layout and pagination
 -- bugs that seed data, with its handful of rows, does not.
+--
+-- Images (user_avatars, club_logos) are NOT handled here: refresh-dev-db.sh
+-- tells normalise-d1-export.py to skip their rows outright, so they never
+-- reach this database. The deletes at the foot of this file are a safety net
+-- for a load that bypassed that flag, not the primary mechanism (#359).
 
 -- Pseudonyms rather than "Joueur 12": names of realistic length are what
 -- surface wrapping and truncation bugs, which is half the point of previewing
@@ -49,3 +54,67 @@ DELETE FROM auth_otp;
 
 -- Google/Apple subject ids — stable per-person identifiers from the provider.
 DELETE FROM auth_identities;
+
+-- ---------------------------------------------------------------------------
+-- Clubs (#359)
+--
+-- A club is not a person, but a preview that names real clubs, gives the
+-- street address of their venue and links their WhatsApp group is still
+-- production data on a guessable public URL — and the venue address is where
+-- identifiable people physically are on a Thursday evening.
+--
+-- Team labels come along for free: `teams` has no name column, so a team reads
+-- as "<club display_name> <number>" everywhere. Renaming the club renames every
+-- team, fixture and composition that mentions it.
+--
+-- 4 prefixes x 12 towns, indexed so rowid 0..47 are distinct; beyond 48 clubs
+-- names start repeating, which is cosmetic rather than a leak.
+UPDATE clubs SET
+  display_name =
+    CASE rowid % 4 WHEN 0 THEN 'TT ' WHEN 1 THEN 'US ' WHEN 2 THEN 'AS ' ELSE 'CP ' END
+    || CASE (rowid / 4) % 12
+      WHEN 0 THEN 'Valmont'    WHEN 1  THEN 'Beauval'   WHEN 2  THEN 'Montfleury'
+      WHEN 3 THEN 'Chalonnes'  WHEN 4  THEN 'Preuilly'  WHEN 5  THEN 'Vaubourg'
+      WHEN 6 THEN 'Sancourt'   WHEN 7  THEN 'Marnaval'  WHEN 8  THEN 'Ferrières'
+      WHEN 9 THEN 'Aubercy'    WHEN 10 THEN 'Brémont'   ELSE 'Tilleul' END,
+  -- An affiliation number resolves to the real club in the FFTT's public
+  -- directory. The 99 prefix marks the row as synthetic, which is what
+  -- refresh-dev-db.sh verifies afterwards.
+  affiliation_number = printf('99%06d', rowid);
+
+-- The town is recomputed from the club's rowid rather than parsed back out of
+-- display_name, so an address stays in the town its club is named after.
+UPDATE club_addresses SET
+  label = 'Salle municipale',
+  street = printf('%d rue du Stade', 1 + (rowid % 60)),
+  postal_code = printf('%05d', 10000 + (rowid * 137) % 79000),
+  city = COALESCE(
+    (SELECT CASE (c.rowid / 4) % 12
+      WHEN 0 THEN 'Valmont'    WHEN 1  THEN 'Beauval'   WHEN 2  THEN 'Montfleury'
+      WHEN 3 THEN 'Chalonnes'  WHEN 4  THEN 'Preuilly'  WHEN 5  THEN 'Vaubourg'
+      WHEN 6 THEN 'Sancourt'   WHEN 7  THEN 'Marnaval'  WHEN 8  THEN 'Ferrières'
+      WHEN 9 THEN 'Aubercy'    WHEN 10 THEN 'Brémont'   ELSE 'Tilleul' END
+     FROM clubs c WHERE c.id = club_addresses.club_id),
+    'Valmont');
+
+-- Websites, WhatsApp invites and Facebook pages all lead straight back to the
+-- real club and its members. .invalid never resolves (RFC 2606).
+UPDATE club_channels SET
+  link = 'https://example.invalid/' || type || '/' || rowid,
+  display_name = NULL;
+
+-- Raw FFTT payloads cached per club and per season. They hold the real club and
+-- team names the renames above just removed, so leaving them would both leak
+-- and contradict the database around them. They are caches: they refill.
+DELETE FROM fftt_club_teams_cache;
+DELETE FROM fftt_season_cache;
+
+-- ---------------------------------------------------------------------------
+-- Images — safety net (#359)
+--
+-- Normally empty already: refresh-dev-db.sh skips these tables at load time.
+-- They are photographs of real members and real club marks, so a refresh that
+-- somehow carried them must not leave them sitting here.
+DELETE FROM user_avatars;
+DELETE FROM player_avatars_pre_0036;
+DELETE FROM club_logos;
