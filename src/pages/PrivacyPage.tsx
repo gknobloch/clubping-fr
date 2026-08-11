@@ -13,6 +13,11 @@ import { BrandMark } from '@/components/BrandMark'
  * The content mirrors what the code actually does. Keep it that way: if the app
  * starts collecting something new, or gains an analytics SDK, this page is part
  * of the change, not a follow-up.
+ *
+ * Nothing here describes Google or Apple sign-in. The plumbing exists but both
+ * are hidden from the UI until the OAuth client IDs are configured (#129/#100),
+ * so no member can use them — describing them would overstate what is collected.
+ * Re-add a section here as part of whatever change turns them back on.
  */
 
 const CONTACT_EMAIL = 'clubping@leskno.fr'
@@ -119,15 +124,6 @@ export function PrivacyPage() {
               et aucun traceur tiers. Le seul élément conservé sur votre appareil est le jeton
               nécessaire à votre session, sans lequel vous devriez vous reconnecter à chaque
               ouverture.
-            </p>
-          </Section>
-
-          <Section title="Connexion Google et Apple">
-            <p>
-              Vous pouvez vous connecter avec votre compte Google ou Apple. Dans ce cas,
-              l'application reçoit uniquement l'identifiant permettant de vous authentifier et
-              votre adresse e-mail. Aucun autre contenu de ces comptes n'est consulté, et aucune
-              donnée ne leur est transmise en retour.
             </p>
           </Section>
 

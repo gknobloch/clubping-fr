@@ -39,6 +39,17 @@ describe('PrivacyPage', () => {
     expect(page).toMatch(/aucun traceur tiers/i)
   })
 
+  // Mirrors the LoginPage guard for #129: the OAuth plumbing exists but is
+  // hidden until the client IDs are configured, so the policy must not claim a
+  // sign-in route no member can actually take.
+  it('does not describe Google or Apple sign-in while it is not offered', () => {
+    render(<PrivacyPage />)
+    const page = document.body.textContent ?? ''
+
+    expect(page).not.toMatch(/Google/i)
+    expect(page).not.toMatch(/Apple/i)
+  })
+
   it('covers the GDPR rights and names the supervisory authority', () => {
     render(<PrivacyPage />)
     const page = document.body.textContent ?? ''
