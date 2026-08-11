@@ -37,8 +37,13 @@ npx wrangler d1 export "$PROD_DB" --remote --output="$DUMP"
 # matching that pattern gets picked up as if it were one. It reads as an export
 # and is not one — normalise it again and you normalise your own output.
 NORM="${DEST}/ordered-${STAMP}.sql"
-echo "→ ordering the export for load"
-python3 "$(dirname "$0")/normalise-d1-export.py" "$DUMP" "$NORM"
+# Base64 images are dropped here rather than deleted after the fact (#359):
+# nothing on a preview needs member photographs, and they are the bulk of the
+# bytes. The tables still arrive, empty. anonymise-dev-db.sql deletes from them
+# too, as a safety net for a load that skipped this step.
+SKIP_ROWS="user_avatars,player_avatars_pre_0036,club_logos"
+echo "→ ordering the export for load (skipping rows: ${SKIP_ROWS})"
+python3 "$(dirname "$0")/normalise-d1-export.py" "$DUMP" "$NORM" "--skip-rows=${SKIP_ROWS}"
 
 # Everything below is destructive, and the load is the step most likely to
 # fail. Prove the file loads — with foreign keys ON, exactly as D1 will
@@ -91,10 +96,19 @@ echo "→ anonymising ${DEV_DB}"
 npx wrangler d1 execute "$DEV_DB" --remote --file=scripts/anonymise-dev-db.sql >/dev/null
 
 echo "→ verifying no production data survived"
+# Each term must be 0. Beyond the person-level checks: the image tables have to
+# be empty, every club must carry a synthetic 99-prefixed affiliation number
+# (which is what proves the club rename ran rather than silently no-op'd), and
+# no club channel may still point at a resolvable host (#359).
 REMAINING=$(npx wrangler d1 execute "$DEV_DB" --remote --json \
   --command "SELECT (SELECT count(*) FROM users WHERE email NOT LIKE '%@example.invalid') \
     + (SELECT count(*) FROM sessions) + (SELECT count(*) FROM auth_otp) \
-    + (SELECT count(*) FROM auth_identities) AS n" \
+    + (SELECT count(*) FROM auth_identities) \
+    + (SELECT count(*) FROM user_avatars) + (SELECT count(*) FROM player_avatars_pre_0036) \
+    + (SELECT count(*) FROM club_logos) \
+    + (SELECT count(*) FROM clubs WHERE affiliation_number NOT LIKE '99%') \
+    + (SELECT count(*) FROM club_channels WHERE link NOT LIKE '%example.invalid%') \
+    + (SELECT count(*) FROM fftt_club_teams_cache) + (SELECT count(*) FROM fftt_season_cache) AS n" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["results"][0]["n"])')
 if [ "$REMAINING" != "0" ]; then
   echo "✘ ${REMAINING} row(s) still hold real data in ${DEV_DB} — do NOT deploy a preview against it"
