@@ -18,6 +18,7 @@ import { MyClubPage } from '@/pages/MyClubPage'
 import { PlayerDetailPage } from '@/pages/PlayerDetailPage'
 import { TeamDetailPage } from '@/pages/TeamDetailPage'
 import { ComptePage } from '@/pages/ComptePage'
+import { PrivacyPage } from '@/pages/PrivacyPage'
 
 function AuthLoading() {
   return (
@@ -52,6 +53,9 @@ export default function App() {
         <DataProvider>
           <Routes>
           <Route path="/login" element={<PublicRoute />} />
+          {/* Public and outside the auth guard on purpose: store reviewers fetch
+              this URL anonymously (#356). */}
+          <Route path="/confidentialite" element={<PrivacyPage />} />
           <Route path="/" element={<ProtectedLayout />}>
             <Route index element={<HomePage />} />
             <Route path="clubs" element={<ClubsPage />} />

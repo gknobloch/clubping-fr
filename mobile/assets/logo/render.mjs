@@ -16,6 +16,8 @@ const jobs = [
   // Splash matches the login photo's native aspect (1600x1067) so cover-mode
   // crops sides on portrait devices but keeps the paddle/ball centered.
   ['splash-icon.svg', '../splash-icon.png', 1600, 1067],
+  // Google Play listing asset (#356) — Play requires exactly 1024x500.
+  ['feature-graphic.svg', '../store/feature-graphic.png', 1024, 500],
 ]
 
 // Embed the welcome photo so the SVGs can reference it via {{PHOTO}} without
