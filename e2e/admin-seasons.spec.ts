@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, acceptConfirm } from './helpers'
 
 // The dev server has no API, so the FFTT endpoints are mocked per test.
 const FFTT_CHECK = '**/api/seasons/fftt-current'
@@ -137,9 +137,9 @@ test.describe('General admin — Saisons', () => {
 
   test('an archived season can be modified to recover from a mistake (#223)', async ({ page }) => {
     await page.goto('/saisons')
-    // Archive the only season (confirm dialog), then bring it back via Modifier.
-    page.once('dialog', (dialog) => dialog.accept())
+    // Archive the only season, then bring it back via Modifier.
     await page.getByRole('button', { name: 'Archiver' }).click()
+    await acceptConfirm(page, 'Archiver')
     await page.getByLabel(/Afficher les saisons archivées/).check()
     await expect(page.getByText('Archivée', { exact: true })).toBeVisible()
 

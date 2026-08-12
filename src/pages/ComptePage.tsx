@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { useConfirm } from '@/components/useConfirm'
 import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { fileToAvatar } from '@/lib/avatarFile'
@@ -13,6 +14,7 @@ export function ComptePage() {
   const { players, clubs, teams, phases, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   const me = user?.isPlayer ? players.find((p) => p.id === user.id) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
@@ -67,8 +69,8 @@ export function ComptePage() {
     setEditing(false)
   }
 
-  function handleLogout() {
-    if (window.confirm('Se déconnecter ?')) {
+  async function handleLogout() {
+    if (await confirm({ title: 'Se déconnecter ?', confirmLabel: 'Se déconnecter' })) {
       logout()
       navigate('/login', { replace: true })
     }
@@ -76,6 +78,7 @@ export function ComptePage() {
 
   return (
     <div className="space-y-5">
+      {confirmDialog}
       {/* Identity + avatar */}
       <IdentityCard
         leading={

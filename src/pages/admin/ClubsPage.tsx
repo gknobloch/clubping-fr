@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportClubModal } from '@/components/ImportClubModal'
+import { useConfirm } from '@/components/useConfirm'
 
 export function ClubsPage() {
   const navigate = useNavigate()
@@ -15,6 +16,7 @@ export function ClubsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [form, setForm] = useState({ affiliationNumber: '', displayName: '' })
+  const [confirm, confirmDialog] = useConfirm()
 
   const activeClubs = clubs.filter((c) => !c.isArchived)
   const archivedClubs = clubs.filter((c) => c.isArchived)
@@ -36,8 +38,8 @@ export function ClubsPage() {
     }
   }
 
-  const handleArchive = (club: Club) => {
-    if (window.confirm(`Archiver le club "${club.displayName}" ? Il ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (club: Club) => {
+    if (await confirm({ title: `Archiver le club "${club.displayName}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveClub(club.id)
     }
   }
@@ -49,9 +51,9 @@ export function ClubsPage() {
   const clubHasDependents = (club: Club) =>
     teams.some((t) => t.clubId === club.id) || players.some((p) => p.clubId === club.id)
 
-  const handleDelete = (club: Club) => {
+  const handleDelete = async (club: Club) => {
     if (clubHasDependents(club)) return
-    if (window.confirm(`Supprimer définitivement le club "${club.displayName}" ? Cette action est irréversible.`)) {
+    if (await confirm({ title: `Supprimer définitivement le club "${club.displayName}" ?`, message: `Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteClub(club.id)
     }
   }
@@ -62,6 +64,7 @@ export function ClubsPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Clubs"
         actions={

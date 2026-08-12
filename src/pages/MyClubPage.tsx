@@ -104,17 +104,22 @@ export function MyClubPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {channels.map((ch) => (
-              <li key={ch.id} className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
-                <span className="shrink-0 text-slate-400">
-                  <ChannelIcon type={ch.type} />
-                </span>
+              // The row is the target, not the label inside it (#377): the
+              // border reads as a button, so that is where the thumb lands.
+              // The <a> fills the <li> and carries the padding itself.
+              <li key={ch.id} className="rounded-lg border border-slate-100 text-sm">
                 <a
                   href={ch.link}
                   target="_blank"
                   rel="noreferrer"
-                  className={`min-w-0 truncate font-medium text-slate-800 hover:underline ${TEXT_TARGET_CLASS}`}
+                  className="flex min-h-11 w-full items-center gap-2 px-3 py-2 hover:underline md:min-h-0"
                 >
-                  {ch.displayName?.trim() || channelTypeLabel(ch.type)}
+                  <span className="shrink-0 text-slate-400">
+                    <ChannelIcon type={ch.type} />
+                  </span>
+                  <span className="min-w-0 truncate font-medium text-slate-800">
+                    {ch.displayName?.trim() || channelTypeLabel(ch.type)}
+                  </span>
                 </a>
               </li>
             ))}

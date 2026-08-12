@@ -12,6 +12,7 @@ import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowAction
 import { PhaseSwitchButton } from '@/components/icons'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { useConfirm } from '@/components/useConfirm'
 
 export function GroupsPage() {
   const { user } = useAuth()
@@ -21,6 +22,7 @@ export function GroupsPage() {
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
+  const [confirm, confirmDialog] = useConfirm()
 
   // Phase switcher — defaults to the active phase, chronological order (#237).
   const orderedPhases = useMemo(
@@ -139,26 +141,27 @@ export function GroupsPage() {
     }
   }
 
-  const handleArchive = (group: Group) => {
-    if (window.confirm(`Archiver le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Il ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (group: Group) => {
+    if (await confirm({ title: `Archiver le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveGroup(group.id)
     }
   }
 
-  const handleDelete = (group: Group) => {
-    if (window.confirm(`Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
+  const handleDelete = async (group: Group) => {
+    if (await confirm({ title: `Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteGroup(group.id)
     }
   }
 
-  const handleResetGames = (group: Group) => {
-    if (window.confirm(`Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`)) {
+  const handleResetGames = async (group: Group) => {
+    if (await confirm({ title: `Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`, confirmLabel: 'Réinitialiser' })) {
       resetGroupGames(group.id)
     }
   }
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Groupes"
         actions={

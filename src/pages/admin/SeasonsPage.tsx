@@ -9,6 +9,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
+import { useConfirm } from '@/components/useConfirm'
 
 export function SeasonsPage() {
   const {
@@ -28,6 +29,7 @@ export function SeasonsPage() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(false)
   const [ffttSuccess, setFfttSuccess] = useState<string | null>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   const activeSeasons = useMemo(() => allSeasons.filter((s) => s.status !== 'archived'), [allSeasons])
   const archivedSeasons = useMemo(() => allSeasons.filter((s) => s.status === 'archived'), [allSeasons])
@@ -93,20 +95,21 @@ export function SeasonsPage() {
     }
   }
 
-  const handleArchive = (season: Season) => {
-    if (window.confirm(`Archiver la saison "${season.displayName}" ? Elle ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (season: Season) => {
+    if (await confirm({ title: `Archiver la saison "${season.displayName}" ?`, message: `Elle ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveSeason(season.id)
     }
   }
 
-  const handleDelete = (season: Season) => {
-    if (window.confirm(`Supprimer définitivement la saison "${season.displayName}" ? Toutes les phases, divisions, groupes, équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
+  const handleDelete = async (season: Season) => {
+    if (await confirm({ title: `Supprimer définitivement la saison "${season.displayName}" ?`, message: `Toutes les phases, divisions, groupes, équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteSeason(season.id)
     }
   }
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Saisons"
         actions={

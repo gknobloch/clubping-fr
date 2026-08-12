@@ -138,7 +138,7 @@ export function GameQuickView({
                     onClear={() => clearGameAvailability(game.id, p.id)}
                   />
                 ) : (
-                  <AvailabilityPills status={availOf(p.id)} />
+                  <AvailabilityPills size="sm" status={availOf(p.id)} />
                 )}
               </li>
             )

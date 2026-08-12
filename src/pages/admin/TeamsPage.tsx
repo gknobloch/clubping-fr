@@ -12,6 +12,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { ImportTeamsModal } from '@/components/ImportTeamsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
+import { useConfirm } from '@/components/useConfirm'
 
 export function TeamsPage() {
   const { user } = useAuth()
@@ -28,6 +29,7 @@ export function TeamsPage() {
     archiveTeam,
     deleteTeam,
   } = useAppData()
+  const [confirm, confirmDialog] = useConfirm()
 
   const isClubAdmin = user?.role === 'club_admin'
   const isAdmin = user?.role === 'general_admin' || isClubAdmin
@@ -310,20 +312,21 @@ export function TeamsPage() {
     closeModal()
   }
 
-  const handleArchive = (team: Team) => {
-    if (window.confirm(`Archiver l'équipe "${getClubName(team.clubId)} ${team.number}" ? Elle ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (team: Team) => {
+    if (await confirm({ title: `Archiver l'équipe "${getClubName(team.clubId)} ${team.number}" ?`, message: `Elle ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveTeam(team.id)
     }
   }
 
-  const handleDelete = (team: Team) => {
-    if (window.confirm(`Supprimer définitivement l'équipe "${getClubName(team.clubId)} ${team.number}" ? Les matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
+  const handleDelete = async (team: Team) => {
+    if (await confirm({ title: `Supprimer définitivement l'équipe "${getClubName(team.clubId)} ${team.number}" ?`, message: `Les matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteTeam(team.id)
     }
   }
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Équipes"
         club={scopedClub}

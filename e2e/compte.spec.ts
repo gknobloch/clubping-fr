@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, acceptConfirm } from './helpers'
 
 test.describe('Player — Compte', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,8 +24,8 @@ test.describe('Player — Compte', () => {
 
   test('can log out from Compte', async ({ page }) => {
     await page.goto('/compte')
-    page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: 'Déconnexion' }).click()
+    await acceptConfirm(page, 'Se déconnecter')
     await expect(page).toHaveURL(/\/login/)
     await expect(page.getByRole('heading', { name: /Club Ping/i })).toBeVisible()
   })

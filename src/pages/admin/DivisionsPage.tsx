@@ -10,6 +10,7 @@ import { PhaseSwitchButton } from '@/components/icons'
 import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { useConfirm } from '@/components/useConfirm'
 
 export function DivisionsPage() {
   const {
@@ -24,6 +25,7 @@ export function DivisionsPage() {
     fetchOrganizations,
     fetchDivisionsPreview,
   } = useAppData()
+  const [confirm, confirmDialog] = useConfirm()
 
   // Phase switcher — defaults to the active phase, chronological order (#235).
   const orderedPhases = useMemo(
@@ -158,20 +160,21 @@ export function DivisionsPage() {
     }
   }
 
-  const handleArchive = (div: Division) => {
-    if (window.confirm(`Archiver la division "${div.displayName}" ? Elle ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (div: Division) => {
+    if (await confirm({ title: `Archiver la division "${div.displayName}" ?`, message: `Elle ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveDivision(div.id)
     }
   }
 
-  const handleDelete = (div: Division) => {
-    if (window.confirm(`Supprimer définitivement la division "${div.displayName}" ? Les groupes, équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
+  const handleDelete = async (div: Division) => {
+    if (await confirm({ title: `Supprimer définitivement la division "${div.displayName}" ?`, message: `Les groupes, équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteDivision(div.id)
     }
   }
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Divisions"
         actions={

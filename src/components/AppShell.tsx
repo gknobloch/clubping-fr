@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { BrandMark } from '@/components/BrandMark'
 import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
+import { useConfirm } from '@/components/useConfirm'
 
 function PreviewBanner() {
   if (!IS_PR_PREVIEW) return null
@@ -41,6 +42,7 @@ function LogoutIcon() {
 
 export function AppShell() {
   const { user, displayName, logout } = useAuth()
+  const [confirm, confirmDialog] = useConfirm()
   const location = useLocation()
   const navigate = useNavigate()
   const isGeneralAdmin = user?.role === 'general_admin'
@@ -82,8 +84,8 @@ export function AppShell() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [menuOpen])
 
-  const handleLogout = () => {
-    if (window.confirm('Se déconnecter ?')) {
+  const handleLogout = async () => {
+    if (await confirm({ title: 'Se déconnecter ?', confirmLabel: 'Se déconnecter' })) {
       logout()
       navigate('/login', { replace: true })
     }
@@ -91,6 +93,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      {confirmDialog}
       <PreviewBanner />
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">

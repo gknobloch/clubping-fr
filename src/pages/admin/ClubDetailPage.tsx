@@ -5,6 +5,7 @@ import { ClubDetailView } from '@/components/ClubDetailView'
 import { ClubImportPreview } from '@/components/ClubImportPreview'
 import { ModalShell } from '@/components/ModalShell'
 import { BASE_BUTTON_CLASS, DANGER_BUTTON_CLASS, NEUTRAL_BUTTON_CLASS, OUTLINE_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { useConfirm } from '@/components/useConfirm'
 import {
   clubSyncFields, defaultSelectedFields, fetchClubDetailXmlFromBrowser, parseClubDetailXml,
   type ClubSyncField, type FfttClubDetail,
@@ -20,6 +21,7 @@ export function ClubDetailPage() {
   const navigate = useNavigate()
   const { clubs, teams, players, archiveClub, updateClub, deleteClub, addClubAddress, updateClubAddress } = useAppData()
   const club = clubId != null ? clubs.find((c) => c.id === clubId) ?? null : null
+  const [confirm, confirmDialog] = useConfirm()
 
   const [syncState, setSyncState] = useState<SyncState>('idle')
   // Nothing is written until the preview is confirmed (#280).
@@ -29,6 +31,7 @@ export function ClubDetailPage() {
   if (!clubId || !club) {
     return (
       <div className="space-y-6">
+        {confirmDialog}
         <p className="text-slate-600">Club introuvable.</p>
         <Link to="/clubs" className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
           ← Retour à la liste des clubs
@@ -37,8 +40,8 @@ export function ClubDetailPage() {
     )
   }
 
-  const handleArchive = () => {
-    if (window.confirm(`Archiver le club "${club.displayName}" ? Il ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async () => {
+    if (await confirm({ title: `Archiver le club "${club.displayName}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveClub(club.id)
       navigate('/clubs')
     }
@@ -50,9 +53,9 @@ export function ClubDetailPage() {
 
   const hasDependents = teams.some((t) => t.clubId === club.id) || players.some((p) => p.clubId === club.id)
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (hasDependents) return
-    if (window.confirm(`Supprimer définitivement le club "${club.displayName}" ? Cette action est irréversible.`)) {
+    if (await confirm({ title: `Supprimer définitivement le club "${club.displayName}" ?`, message: `Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteClub(club.id)
       navigate('/clubs')
     }

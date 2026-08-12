@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, declineConfirm } from './helpers'
 
 // #307 (targets under 44px) and #305 (tables clipped or overflowing).
 //
@@ -69,9 +69,9 @@ test.describe('Zones tactiles et tableaux sur mobile (#307, #305)', () => {
     await expect(archive).toBeVisible()
     expect((await archive.boundingBox())!.height).toBeGreaterThanOrEqual(44)
 
-    page.once('dialog', (d) => d.dismiss())
     await archive.click()
     await expect(page.getByRole('menu')).toHaveCount(0)
+    await declineConfirm(page)
   })
 
   // The menu is portalled to <body> for this reason: its cell now lives in an

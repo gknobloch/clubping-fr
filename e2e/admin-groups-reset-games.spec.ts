@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, acceptConfirm, declineConfirm } from './helpers'
 
 // #270 — "Réinitialiser les matchs" on a group clears its journées and games
 // but leaves the group and its teams alone.
@@ -30,15 +30,13 @@ test.describe('General admin — réinitialiser les matchs d’un groupe (#270)'
     await page.goto('/groupes')
     await page.getByLabel('Division').selectOption({ label: 'GE 1' })
 
-    let message = ''
-    page.once('dialog', (dialog) => {
-      message = dialog.message()
-      return dialog.accept()
-    })
     await page.getByRole('button', { name: 'Réinitialiser les matchs' }).click()
 
+    // The warning is rendered now, so it can be read rather than intercepted.
+    const message = (await page.getByRole('dialog').textContent()) ?? ''
     expect(message).toContain('irréversible')
     expect(message).toContain('équipes du groupe seront conservées')
+    await acceptConfirm(page, 'Réinitialiser')
 
     // The pool itself and its roster of teams are untouched.
     await expect(page.getByRole('cell', { name: '1', exact: true })).toBeVisible()
@@ -55,8 +53,8 @@ test.describe('General admin — réinitialiser les matchs d’un groupe (#270)'
     await page.goto('/groupes')
     await page.getByLabel('Division').selectOption({ label: 'GE 1' })
 
-    page.once('dialog', (dialog) => dialog.dismiss())
     await page.getByRole('button', { name: 'Réinitialiser les matchs' }).click()
+    await declineConfirm(page)
 
     await page.getByRole('link', { name: 'Équipes' }).click()
     await page.getByRole('link', { name: /PPA Rixheim 1/ }).first().click()

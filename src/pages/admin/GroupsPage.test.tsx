@@ -1,13 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Club, Division, Group, Phase, Team } from '@/types'
 import { GroupsPage } from './GroupsPage'
 
 const authState = vi.hoisted(() => ({ role: 'general_admin' as string }))
 const data = vi.hoisted(() => ({ resetGroupGames: vi.fn() }))
-// happy-dom ships no window.confirm, so there is nothing to spy on — stub it.
-const confirmMock = vi.hoisted(() => vi.fn<(message?: string) => boolean>())
 
 vi.mock('@/contexts/AuthContext', () => ({
   DEV_LOGIN: true,
@@ -60,15 +58,16 @@ async function setup(role = 'general_admin') {
 
 const resetButton = () => screen.queryByRole('button', { name: 'Réinitialiser les matchs' })
 
+// The confirmation is an in-app dialog since #375: window.confirm is silently
+// inert on iOS Safari once a member blocks dialogs, which made this action — and
+// every other destructive one — a no-op with nothing on screen to say so. That
+// makes the assertions stronger, not weaker: the warning text is now rendered
+// and can be read, rather than inspected as an argument to a stub.
+const dialog = () => screen.getByRole('dialog')
+
 describe('GroupsPage — réinitialiser les matchs (#270)', () => {
   beforeEach(() => {
     data.resetGroupGames.mockClear()
-    confirmMock.mockReset()
-    vi.stubGlobal('confirm', confirmMock)
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
   })
 
   it('offers the action to an admin', async () => {
@@ -82,32 +81,31 @@ describe('GroupsPage — réinitialiser les matchs (#270)', () => {
   })
 
   it('warns that the action is irreversible but spares the teams', async () => {
-    confirmMock.mockReturnValue(false)
     await setup()
 
     await userEvent.click(resetButton()!)
 
-    expect(confirmMock).toHaveBeenCalledTimes(1)
-    const message = confirmMock.mock.calls[0][0] as string
+    const message = dialog().textContent ?? ''
     expect(message).toContain('Réinitialiser les matchs')
     expect(message).toContain('irréversible')
     expect(message).toContain('équipes du groupe seront conservées')
   })
 
   it('does not reset when the confirmation is declined', async () => {
-    confirmMock.mockReturnValue(false)
     await setup()
 
     await userEvent.click(resetButton()!)
+    await userEvent.click(within(dialog()).getByRole('button', { name: 'Annuler' }))
 
     expect(data.resetGroupGames).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('resets the right group once confirmed', async () => {
-    confirmMock.mockReturnValue(true)
     await setup()
 
     await userEvent.click(resetButton()!)
+    await userEvent.click(within(dialog()).getByRole('button', { name: 'Réinitialiser' }))
 
     expect(data.resetGroupGames).toHaveBeenCalledWith('group-1')
   })
