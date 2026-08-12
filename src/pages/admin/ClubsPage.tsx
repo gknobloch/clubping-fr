@@ -4,7 +4,7 @@ import type { Club } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportClubModal } from '@/components/ImportClubModal'
 
@@ -199,14 +199,14 @@ export function ClubsPage() {
               <button
                 type="button"
                 onClick={closeCreateModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

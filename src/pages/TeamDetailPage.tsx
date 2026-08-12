@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
+import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { teamPhaseEntries } from '@/lib/teamPhases'
 import { gameDate } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
@@ -65,7 +66,7 @@ export function TeamDetailPage() {
   if (!baseTeam || !team) {
     return (
       <div className="space-y-4">
-        <Link to="/equipes" className="text-sm font-medium text-accent-600 hover:text-accent-800">
+        <Link to="/equipes" className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
           ← Équipes
         </Link>
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-600">
@@ -79,7 +80,7 @@ export function TeamDetailPage() {
 
   return (
     <div className="space-y-5">
-      <Link to="/equipes" className="text-sm font-medium text-accent-600 hover:text-accent-800">
+      <Link to="/equipes" className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
         ← Équipes
       </Link>
 
@@ -182,7 +183,7 @@ export function TeamDetailPage() {
                       <button
                         type="button"
                         onClick={() => setQuickGame({ gameId: g.id, teamId: team.id })}
-                        className="text-slate-300 hover:text-accent-600"
+                        className={`text-slate-300 hover:text-accent-600 ${ICON_TARGET_CLASS}`}
                         title="Détails du match"
                         aria-label="Détails du match"
                       >
@@ -223,7 +224,7 @@ function RosterRow({
 }) {
   return (
     <li className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5">
-      <Link to={`/joueurs/${player.id}`} className="flex min-w-0 flex-1 items-center gap-3 hover:text-accent-600">
+      <Link to={`/joueurs/${player.id}`} className={`flex min-w-0 flex-1 items-center gap-3 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}>
         <Avatar
           playerId={player.id}
           avatarUpdatedAt={player.avatarUpdatedAt}

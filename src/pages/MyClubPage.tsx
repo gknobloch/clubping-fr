@@ -5,6 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView, ChannelIcon, channelTypeLabel } from '@/components/ClubDetailView'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
+import { PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 export function MyClubPage() {
   const { user } = useAuth()
@@ -37,7 +38,7 @@ export function MyClubPage() {
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="text-sm font-medium text-accent-600 hover:text-accent-800"
+            className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
           >
             Terminé
           </button>
@@ -61,7 +62,7 @@ export function MyClubPage() {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="shrink-0 rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+              className={`shrink-0 ${PRIMARY_BUTTON_CLASS}`}
             >
               Modifier
             </button>
@@ -111,7 +112,7 @@ export function MyClubPage() {
                   href={ch.link}
                   target="_blank"
                   rel="noreferrer"
-                  className="min-w-0 truncate font-medium text-slate-800 hover:underline"
+                  className={`min-w-0 truncate font-medium text-slate-800 hover:underline ${TEXT_TARGET_CLASS}`}
                 >
                   {ch.displayName?.trim() || channelTypeLabel(ch.type)}
                 </a>

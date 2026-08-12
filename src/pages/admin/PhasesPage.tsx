@@ -6,7 +6,7 @@ import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 
 export function PhasesPage() {
@@ -304,7 +304,7 @@ export function PhasesPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -312,7 +312,7 @@ export function PhasesPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={duplicate}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

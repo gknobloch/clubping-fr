@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
@@ -196,7 +196,7 @@ export function PlayersPage() {
             <div className="flex items-center gap-3">
               <Link
                 to={`/joueurs/${player.id}`}
-                className="flex min-w-0 flex-1 items-center gap-3 text-slate-900"
+                className={`flex min-w-0 flex-1 items-center gap-3 text-slate-900 ${TEXT_TARGET_CLASS}`}
               >
                 <Avatar
                   playerId={player.id}
@@ -462,7 +462,7 @@ export function PlayersPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -474,7 +474,7 @@ export function PlayersPage() {
                   !form.lastName ||
                   (creating && !form.clubId)
                 }
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

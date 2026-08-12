@@ -8,6 +8,7 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
 import type { Team } from '@/types'
+import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 type HistoryEntry = {
   gameId: string
@@ -247,7 +248,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
                         <button
                           type="button"
                           onClick={() => setQuickGame({ gameId: e.gameId, teamId: e.teamId })}
-                          className="text-slate-300 hover:text-accent-600"
+                          className={`text-slate-300 hover:text-accent-600 ${ICON_TARGET_CLASS}`}
                           title="Détails du match"
                           aria-label="Détails du match"
                         >
@@ -311,7 +312,7 @@ function TeamRow({
           </span>
         )}
         {to ? (
-          <Link to={to} className="hover:opacity-80" title="Voir la fiche équipe">
+          <Link to={to} className={`hover:opacity-80 ${TEXT_TARGET_CLASS}`} title="Voir la fiche équipe">
             {badge}
           </Link>
         ) : (

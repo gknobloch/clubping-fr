@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout } = useAuth()
@@ -98,11 +99,11 @@ export function ComptePage() {
         <p className="text-sm text-slate-500">{roleLabel}</p>
         {me && (
           <div className="mt-2 flex items-center gap-4 text-sm">
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="font-medium text-accent-600 hover:text-accent-800 disabled:opacity-50">
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className={`font-medium text-accent-600 hover:text-accent-800 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}>
               Changer la photo
             </button>
             {me.avatarUpdatedAt && (
-              <button type="button" onClick={() => removeAvatar(me.id)} disabled={uploading} className="font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50">
+              <button type="button" onClick={() => removeAvatar(me.id)} disabled={uploading} className={`font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}>
                 Supprimer
               </button>
             )}
@@ -116,7 +117,7 @@ export function ComptePage() {
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</h2>
           {me && !editing && (
-            <button type="button" onClick={startEdit} className="text-sm font-medium text-accent-600 hover:text-accent-800">
+            <button type="button" onClick={startEdit} className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
               Modifier
             </button>
           )}
@@ -140,10 +141,10 @@ export function ComptePage() {
               <Field label="Lieu de naissance" value={form.birthPlace} onChange={(v) => setForm((f) => ({ ...f, birthPlace: v }))} />
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setEditing(false)} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+              <button type="button" onClick={() => setEditing(false)} className={NEUTRAL_BUTTON_CLASS}>
                 Annuler
               </button>
-              <button type="button" onClick={saveEdit} disabled={removingOwnEmail} className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50">
+              <button type="button" onClick={saveEdit} disabled={removingOwnEmail} className={PRIMARY_BUTTON_CLASS}>
                 Enregistrer
               </button>
             </div>
@@ -170,7 +171,7 @@ export function ComptePage() {
               <div key={t.id} className="flex items-center justify-between py-2.5">
                 <dt className="text-sm text-slate-500">Équipe</dt>
                 <dd>
-                  <Link to={`/equipes/${t.id}`} className="text-sm font-medium text-accent-600 hover:text-accent-800">
+                  <Link to={`/equipes/${t.id}`} className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
                     {getTeamName(t, clubs)}
                   </Link>
                 </dd>

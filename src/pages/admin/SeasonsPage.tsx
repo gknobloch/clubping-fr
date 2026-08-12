@@ -7,7 +7,7 @@ import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 
 export function SeasonsPage() {
@@ -144,7 +144,7 @@ export function SeasonsPage() {
           <button
             type="button"
             onClick={() => handleActivate(checkResult)}
-            className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+            className={PRIMARY_BUTTON_CLASS}
           >
             Activer
           </button>
@@ -170,7 +170,7 @@ export function SeasonsPage() {
               type="button"
               onClick={handleImport}
               disabled={importing}
-              className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+              className={PRIMARY_BUTTON_CLASS}
             >
               {importing ? 'Import…' : 'Importer'}
             </button>
@@ -328,7 +328,7 @@ export function SeasonsPage() {
               <button
                 type="button"
                 onClick={() => { setEditing(null); setCreating(false) }}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -336,7 +336,7 @@ export function SeasonsPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={!canSave}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

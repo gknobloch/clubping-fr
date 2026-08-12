@@ -6,7 +6,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { ClockIcon, CaptainIcon, WhatsAppIcon, PhaseSwitchButton } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
 import { RowActions } from '@/components/RowActions'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportTeamsModal } from '@/components/ImportTeamsModal'
@@ -391,7 +391,7 @@ export function TeamsPage() {
                 className={`flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${team.isArchived ? 'opacity-50' : ''}`}
               >
                 <div className="flex items-center gap-3">
-                  <Link to={`/equipes/${team.id}`} className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80">
+                  <Link to={`/equipes/${team.id}`} className={`flex min-w-0 flex-1 items-center gap-3 hover:opacity-80 ${TEXT_TARGET_CLASS}`}>
                     <span
                       className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
                       style={{ backgroundColor: team.color ?? DEFAULT_TEAM_COLOR }}
@@ -416,7 +416,7 @@ export function TeamsPage() {
                       onClick={(e) => e.stopPropagation()}
                       title="Groupe WhatsApp"
                       aria-label="Groupe WhatsApp"
-                      className="shrink-0 text-slate-400 hover:text-slate-600"
+                      className={`shrink-0 text-slate-400 hover:text-slate-600 ${ICON_TARGET_CLASS}`}
                     >
                       <WhatsAppIcon className="h-5 w-5" />
                     </a>
@@ -513,7 +513,7 @@ export function TeamsPage() {
                       type="color"
                       value={form.color || DEFAULT_TEAM_COLOR}
                       onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                      className="h-9 w-12 shrink-0 cursor-pointer rounded border border-slate-300 p-1"
+                      className="h-11 w-14 shrink-0 cursor-pointer rounded border border-slate-300 p-1 md:h-9 md:w-12"
                     />
                     {form.color && (
                       <button
@@ -573,8 +573,11 @@ export function TeamsPage() {
                 </div>
               )}
 
-              {/* Row 2: Lieu, Jour, Heure */}
-              <div className="grid grid-cols-4 gap-4">
+              {/* Row 2: Lieu, Jour, Heure. Four columns is ~66px each at 375px,
+                  which the Heure cell cannot hold once its two selects are 44px
+                  wide — so below md: Lieu takes a row and Jour/Heure share the
+                  next one (#372). */}
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <div className="col-span-2">
                   <label htmlFor="team-gameLocationId" className="block text-sm font-medium text-slate-700">Lieu de jeu</label>
                   <select
@@ -608,7 +611,7 @@ export function TeamsPage() {
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeFromParts(e.target.value, timeMinute)}
-                      className="w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      className="w-full min-h-[44px] min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-slate-300 px-2 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:px-3"
                     >
                       <option value="">—</option>
                       {HOURS.map((h) => (
@@ -620,7 +623,7 @@ export function TeamsPage() {
                       value={timeMinute}
                       onChange={(e) => setTimeFromParts(String(timeHour), e.target.value)}
                       disabled={!timeHour}
-                      className="w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100"
+                      className="w-full min-h-[44px] min-w-11 md:min-h-0 md:min-w-0 rounded-lg border border-slate-300 px-2 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100 md:px-3"
                     >
                       {MINUTES.map((m) => (
                         <option key={m} value={m}>{m}</option>
@@ -772,7 +775,7 @@ export function TeamsPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -789,7 +792,7 @@ export function TeamsPage() {
                     form.playerIds.length === 0 ||
                     !form.playerIds.includes(form.captainId))
                 }
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

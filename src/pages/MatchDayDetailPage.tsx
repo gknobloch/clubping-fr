@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
@@ -65,7 +66,7 @@ export function MatchDayDetailPage() {
         <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
           Match introuvable.
         </p>
-        <Link to="/journees" className="text-sm font-medium text-accent-600 hover:text-accent-700">
+        <Link to="/journees" className={`text-sm font-medium text-accent-600 hover:text-accent-700 ${TEXT_TARGET_CLASS}`}>
           ← Retour aux journées
         </Link>
       </div>

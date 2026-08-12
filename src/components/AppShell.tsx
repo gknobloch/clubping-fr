@@ -96,7 +96,7 @@ export function AppShell() {
         <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
             to="/"
-            className="flex items-center gap-2 whitespace-nowrap font-display text-lg font-semibold text-slate-800"
+            className={`flex min-h-11 items-center gap-2 whitespace-nowrap font-display text-lg font-semibold text-slate-800 md:min-h-0`}
           >
             <BrandMark className="h-7 w-7 shrink-0" />
             Club Ping

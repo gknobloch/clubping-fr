@@ -9,6 +9,35 @@ import type { ButtonHTMLAttributes } from 'react'
 // (#307).
 const base = 'inline-flex h-11 md:h-9 items-center justify-center rounded-lg px-4 text-sm font-medium disabled:opacity-50'
 
+// The same two looks, as class strings rather than components, for the ~40 form
+// and modal footers that build their own <button>. They predate Button.tsx and
+// each carried its own copy of the classes minus a height, which is why every
+// modal footer still measured 36px after #307 — `base` was never theirs to
+// inherit. Importing the string is a one-line change per site; converting the
+// call sites to <PrimaryButton> wholesale is a bigger refactor than #372 needs.
+export const PRIMARY_BUTTON_CLASS = `${base} bg-accent-600 text-white hover:bg-accent-700`
+
+/** Neutral/cancel look — "Annuler", "Fermer". Not the bordered SecondaryButton. */
+export const NEUTRAL_BUTTON_CLASS = `${base} bg-slate-100 text-slate-700 hover:bg-slate-200`
+
+/** Shape and height only — for one-off looks (a green "Réactiver", say). */
+export const BASE_BUTTON_CLASS = base
+
+/** Bordered accent look, for a secondary action rendered as a bare <button>. */
+export const OUTLINE_BUTTON_CLASS = `${base} border`
+
+/** Destructive actions — "Archiver ce club", "Supprimer définitivement". */
+export const DANGER_BUTTON_CLASS = `${base} bg-red-600 text-white hover:bg-red-700`
+
+// Icon-only controls and bare text links: pad the hit area out to 44px without
+// touching the glyph or the type. The icon stays 16px — only what the finger
+// has to find grows, and only below md: (#372).
+export const ICON_TARGET_CLASS =
+  'inline-flex min-h-11 min-w-11 items-center justify-center md:min-h-0 md:min-w-0'
+
+/** Same idea for inline text actions, which need the height but not the width. */
+export const TEXT_TARGET_CLASS = 'inline-flex min-h-11 items-center md:min-h-0'
+
 export function PrimaryButton({
   className = '',
   type = 'button',

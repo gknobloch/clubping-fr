@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportIcon } from '@/components/icons'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
   AVAILABILITY_COLORS,
   AVAILABILITY_LABELS,
@@ -1633,14 +1634,14 @@ export function MatchDaysPage() {
               <button
                 type="button"
                 onClick={closeMatchDayModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleSaveMatchDay}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>
@@ -1758,7 +1759,7 @@ export function MatchDaysPage() {
               <button
                 type="button"
                 onClick={closeGameEditModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -1766,7 +1767,7 @@ export function MatchDaysPage() {
                 type="button"
                 onClick={handleSaveGameEdit}
                 disabled={!gameEditForm.opponentTeamId}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

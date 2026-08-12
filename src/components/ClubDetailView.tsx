@@ -3,6 +3,7 @@ import type { Address, Club, ClubChannel, ClubChannelType } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { useClubAddressFormState } from '@/pages/useClubAddressForm'
 import { WhatsAppIcon } from '@/components/icons'
+import { PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 const emptyAddressForm = {
   label: '',
@@ -261,7 +262,7 @@ export function ClubDetailView({
             <button
               type="button"
               onClick={handleSaveClub}
-              className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+              className={PRIMARY_BUTTON_CLASS}
             >
               Enregistrer
             </button>
@@ -278,7 +279,7 @@ export function ClubDetailView({
             <button
               type="button"
               onClick={openAddAddress}
-              className="text-sm font-medium text-accent-600 hover:text-accent-800"
+              className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
             >
               Ajouter une adresse
             </button>
@@ -437,7 +438,7 @@ export function ClubDetailView({
               <button
                 type="button"
                 onClick={() => logoInputRef.current?.click()}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 {logoUrl ? 'Remplacer le logo' : 'Ajouter un logo'}
               </button>
@@ -465,7 +466,7 @@ export function ClubDetailView({
             <button
               type="button"
               onClick={openAddChannel}
-              className="text-sm font-medium text-accent-600 hover:text-accent-800"
+              className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
             >
               Ajouter un canal
             </button>

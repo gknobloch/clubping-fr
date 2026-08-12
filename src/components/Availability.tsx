@@ -17,6 +17,10 @@ export function AvailabilityButtons({
   size?: 'sm' | 'md'
 }) {
   const pad = size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'
+  // OUI/PE/NON is the one control every licensee touches, and it measured
+  // 36-49px wide by 26px tall — the smallest target in the app sat on its most
+  // used path (#372). 44px below md:, original chip size from md: up, the same
+  // trade the shared buttons make in Button.tsx (#307).
   const cell = (s: AvailabilityStatus, label: string, active: string) => {
     const on = status === s
     return (
@@ -24,7 +28,7 @@ export function AvailabilityButtons({
         type="button"
         disabled={disabled}
         onClick={() => (on ? onClear() : onSet(s))}
-        className={`rounded-md border font-semibold ${pad} ${
+        className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border font-semibold md:min-h-0 md:min-w-0 ${pad} ${
           on ? active : 'border-slate-200 text-slate-400'
         } ${disabled ? 'cursor-default' : 'hover:border-slate-300'}`}
       >

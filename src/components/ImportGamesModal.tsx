@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppData, type FfttGamesPreview, type FfttGamesImportResult } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 
 type PreviewState = 'loading' | 'done' | 'error'
 
@@ -227,7 +228,7 @@ export function ImportGamesModal({
                 type="button"
                 onClick={handleImport}
                 disabled={importing || !hasWork}
-                className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
               >
                 {importing
                   ? 'Import…'
@@ -247,7 +248,7 @@ export function ImportGamesModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            className={NEUTRAL_BUTTON_CLASS}
           >
             Fermer
           </button>

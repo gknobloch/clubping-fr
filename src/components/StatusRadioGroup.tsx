@@ -17,14 +17,16 @@ export function StatusRadioGroup({
   return (
     <div className="mt-1 flex gap-4" role="radiogroup" aria-label="Statut">
       {ORDER.map((status) => (
-        <label key={status} className="flex items-center gap-2">
+        // The label is the tap target, so it carries the 44px, not the 13px
+        // radio inside it (#372).
+        <label key={status} className="flex min-h-11 items-center gap-2 md:min-h-0">
           <input
             type="radio"
             name={name}
             value={status}
             checked={value === status}
             onChange={() => onChange(status)}
-            className="border-slate-300 text-accent-600 focus:ring-accent-500"
+            className="h-5 w-5 border-slate-300 text-accent-600 focus:ring-accent-500 md:h-4 md:w-4"
           />
           <span className="text-sm text-slate-700">{STATUS_LABELS[status]}</span>
         </label>
