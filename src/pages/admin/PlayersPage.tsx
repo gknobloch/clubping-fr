@@ -220,29 +220,16 @@ export function PlayersPage() {
                   {STATUS_LABELS[player.status]}
                 </span>
               )}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 border-t border-slate-100 pt-1">
-              {player.email && (
-                <a
-                  href={`mailto:${player.email}`}
-                  className="flex min-h-[44px] min-w-0 items-center text-sm text-accent-600"
-                >
-                  <span className="truncate">{player.email}</span>
-                </a>
-              )}
-              {player.phone && (
-                <a
-                  href={`tel:${player.phone}`}
-                  className="flex min-h-[44px] items-center text-sm text-accent-600"
-                >
-                  {player.phone}
-                </a>
-              )}
+              {/* E-mail and phone used to sit on a second row here (#379). The
+                  list is for finding someone, and they were the loudest thing
+                  on the card — two accent-coloured links pulling the eye off
+                  the name. They stay on the player's own page, where calling
+                  and writing belong. The desktop table still has both columns. */}
               {canEditPlayers && (
                 <button
                   type="button"
                   onClick={() => openEdit(player)}
-                  className="ml-auto flex min-h-[44px] items-center text-sm font-medium text-accent-600"
+                  className={`shrink-0 text-sm font-medium text-accent-600 ${TEXT_TARGET_CLASS}`}
                 >
                   Modifier
                 </button>

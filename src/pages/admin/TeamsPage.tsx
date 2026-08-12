@@ -447,6 +447,7 @@ export function TeamsPage() {
                         !team.isArchived && team.groupId && {
                           label: 'Importer les matchs',
                           onClick: () => setImportGamesFor(team),
+                          desktopOnly: true,
                         },
                         !team.isArchived && {
                           label: 'Archiver',

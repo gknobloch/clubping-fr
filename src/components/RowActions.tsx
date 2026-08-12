@@ -8,6 +8,13 @@ export type RowAction = {
   tone?: 'accent' | 'danger' | 'success'
   disabled?: boolean
   title?: string
+  /**
+   * Keep this action out of the below-`md:` menu. For work that has no usable
+   * mobile form yet — the FFTT games import is a dense comparison screen that
+   * is illegible at 375px (#381) — so it is offered where it works rather than
+   * offered badly everywhere.
+   */
+  desktopOnly?: boolean
 }
 
 /**
@@ -80,6 +87,9 @@ export function RowActions({
 }) {
   const items = actions.filter((a): a is RowAction => Boolean(a))
   if (items.length === 0) return null
+  // Every action on the row may be desktopOnly, leaving nothing for the "…"
+  // trigger to open — render no trigger rather than an empty menu.
+  const menuItems = items.filter((a) => !a.desktopOnly)
   const justify = align === 'left' ? 'justify-start' : 'justify-end'
 
   return (
@@ -98,9 +108,11 @@ export function RowActions({
           </button>
         ))}
       </div>
-      <div className={`flex md:hidden ${justify}`}>
-        <ActionsMenu items={items} label={label} />
-      </div>
+      {menuItems.length > 0 && (
+        <div className={`flex md:hidden ${justify}`}>
+          <ActionsMenu items={menuItems} label={label} />
+        </div>
+      )}
     </>
   )
 }

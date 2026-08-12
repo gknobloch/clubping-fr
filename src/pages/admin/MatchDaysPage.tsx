@@ -723,7 +723,7 @@ export function MatchDaysPage() {
               onClick={() => setImportGamesOpen(true)}
               title="Importer les matchs FFTT"
               aria-label="Importer les matchs FFTT"
-              className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700 md:h-9 md:w-9"
+              className="hidden h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700 md:flex md:h-9 md:w-9"
             >
               <ImportIcon className="h-4 w-4" />
             </button>
