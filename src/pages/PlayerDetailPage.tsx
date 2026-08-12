@@ -79,7 +79,7 @@ export function PlayerDetailPage() {
           onClose={() => setZoom(false)}
           closeOnBackdrop
           label="Avatar"
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 p-6"
+          presentation="center" z={40} backdrop="dark"
         >
           <button
             type="button"

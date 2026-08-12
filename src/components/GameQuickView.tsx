@@ -87,7 +87,7 @@ export function GameQuickView({
       onClose={onClose}
       closeOnBackdrop
       label="Détails du match"
-      className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
+      z={40}
     >
       <div
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"

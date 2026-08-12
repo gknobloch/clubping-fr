@@ -110,6 +110,32 @@ test.describe('Zones tactiles — pages de détail et modales (#372)', () => {
     expect(box.height).toBeGreaterThanOrEqual(MIN)
   })
 
+  // #382 — every dialog is a bottom sheet below sm:. Asserted on the geometry
+  // rather than on classes, so it holds however the presentation is expressed.
+  test('les modales sont des feuilles ancrées en bas', async ({ page }) => {
+    await loginAs(page, 'admin')
+
+    for (const [path, label] of [
+      ['/saisons', 'Ajouter une saison'],
+      ['/clubs', 'Ajouter un club'],
+      ['/equipes', 'Ajouter une équipe'],
+    ] as const) {
+      await page.goto(path)
+      await page.getByRole('button', { name: label }).click()
+
+      const card = page.getByRole('dialog').locator('> *').first()
+      const box = (await card.boundingBox())!
+      expect(Math.round(box.x), `${label} : bord gauche`).toBe(0)
+      expect(Math.round(box.width), `${label} : pleine largeur`).toBe(375)
+      expect(Math.round(box.y + box.height), `${label} : collée au bas`).toBe(812)
+      expect(box.y, `${label} : sommet hors écran`).toBeGreaterThanOrEqual(0)
+
+      // A long form scrolls inside the sheet rather than off the screen (#373).
+      const overflow = await card.evaluate((el) => getComputedStyle(el).overflowY)
+      expect(overflow, `${label} : défilement interne`).toBe('auto')
+    }
+  })
+
   test('les modales : pied de page et champs à 44 px, rien de rogné', async ({ page }) => {
     await loginAs(page, 'admin')
 

@@ -34,7 +34,7 @@ export function ConfirmDialog({
       onClose={onCancel}
       closeOnBackdrop
       labelledBy="confirm-dialog-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
+      z={50}
     >
       <div className="w-full max-w-md rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl">
         <h2 id="confirm-dialog-title" className="font-display text-lg font-semibold text-slate-800">

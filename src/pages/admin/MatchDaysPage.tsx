@@ -1565,7 +1565,6 @@ export function MatchDaysPage() {
         <ModalShell
           onClose={closeMatchDayModal}
           labelledBy="matchday-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="matchday-modal-title" className="font-display text-lg font-semibold text-slate-800">
@@ -1655,7 +1654,6 @@ export function MatchDaysPage() {
         <ModalShell
           onClose={closeGameEditModal}
           labelledBy="game-edit-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="game-edit-modal-title" className="font-display text-lg font-semibold text-slate-800">

@@ -361,7 +361,6 @@ export function GroupsPage() {
         <ModalShell
           onClose={closeModal}
           labelledBy="group-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="group-modal-title" className="font-display text-lg font-semibold text-slate-800">

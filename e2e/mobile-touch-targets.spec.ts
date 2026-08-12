@@ -74,6 +74,27 @@ test.describe('Zones tactiles et tableaux sur mobile (#307, #305)', () => {
     await declineConfirm(page)
   })
 
+  // #378 — the case the table never exercised. RowActions honoured `align`
+  // when placing the trigger but always positioned the menu by its right edge,
+  // so on the Équipes cards, whose trigger sits at the left, the menu was laid
+  // out from about x=-140 and could not be reached. It is a bottom sheet since
+  // #382, which is why this now passes for any alignment: there is no position
+  // left to get wrong.
+  test('le menu d’actions des cartes équipe tient à l’écran (#378)', async ({ page }) => {
+    await page.goto('/equipes')
+    await page.getByRole('button', { name: /^Actions —/ }).first().click()
+
+    const menu = page.getByRole('menu')
+    await expect(menu).toBeVisible()
+    const box = (await menu.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(375)
+    expect(box.y + box.height).toBeLessThanOrEqual(812)
+
+    // Full-width rows, not a 12rem column floated next to the trigger.
+    expect(box.width).toBeGreaterThan(300)
+  })
+
   // The menu is portalled to <body> for this reason: its cell now lives in an
   // `overflow-x-auto` scroll container, which clips whatever it contains.
   test('le menu d’actions n’est pas rogné par le conteneur défilant du tableau', async ({ page }) => {

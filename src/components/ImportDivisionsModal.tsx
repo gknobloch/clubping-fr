@@ -103,7 +103,6 @@ export function ImportDivisionsModal({
     <ModalShell
       onClose={onClose}
       labelledBy="import-divisions-title"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
     >
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-divisions-title" className="font-display text-lg font-semibold text-slate-800">
