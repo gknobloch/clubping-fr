@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { TEXT_TARGET_CLASS } from '@/components/Button'
+import { OUTLINE_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
@@ -13,6 +13,7 @@ import {
   ReadOnlyCompo,
   TeamSelect,
 } from '@/components/availabilityControls'
+import { AddRenfortSheet } from '@/components/AddRenfortSheet'
 import type { Player } from '@/types'
 
 /**
@@ -45,12 +46,16 @@ export function MatchDayDetailPage() {
     getSelectedTeamForMatchDay,
     setPlayerSelectedForMatchDay,
     orderedTeamOptionIds,
+    isEligibleForTeam,
+    myClubTeamsInPhase,
     getTeamSelectLabel,
     getTeamColor,
     getTeamLabel,
     setGameAvailability,
     clearGameAvailability,
   } = useMatchDayEditing(team?.phaseId ?? null)
+
+  const [addingRenfort, setAddingRenfort] = useState(false)
 
   const roster = useMemo(() => {
     if (!team) return [] as Player[]
@@ -87,6 +92,15 @@ export function MatchDayDetailPage() {
   const rosterIds = new Set(roster.map((p) => p.id))
   const borrowed = players.filter((p) => selectedIds.includes(p.id) && !rosterIds.has(p.id))
   const availableCount = roster.filter((p) => getAvailability(game.id, p.id) === 'available').length
+
+  // Club players who could still be borrowed: everyone active in the club who
+  // is neither on this roster nor already in the line-up. Eligibility (brûlage)
+  // is decided in the sheet so the rule can be shown rather than applied
+  // silently.
+  const alreadyListed = new Set([...rosterIds, ...selectedIds])
+  const renfortCandidates = players.filter(
+    (p) => p.clubId === team.clubId && p.status === 'active' && !alreadyListed.has(p.id),
+  )
 
   const date = gameDate(game, matchDay)
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
@@ -241,7 +255,42 @@ export function MatchDayDetailPage() {
             })}
           </ul>
         )}
+
+        {/* Fielding a player from outside the roster was desktop-only until
+            #380 — the "Autres joueurs" matrix. It is a routine move when the
+            roster is short of availability, and a captain composing from a
+            phone could not make it. */}
+        {canEditSel && (
+          <div className="border-t border-slate-200 p-3">
+            <button
+              type="button"
+              onClick={() => setAddingRenfort(true)}
+              className={`w-full ${OUTLINE_BUTTON_CLASS} border-accent-600 text-accent-600 hover:bg-accent-50`}
+            >
+              Ajouter un renfort
+            </button>
+          </div>
+        )}
       </div>
+
+      {addingRenfort && (
+        <AddRenfortSheet
+          candidates={renfortCandidates}
+          teamLabel={getTeamLabel(team.id)}
+          lineUpFull={selectedIds.length >= playersPerGame}
+          isEligible={(playerId) => isEligibleForTeam(playerId, team.id, matchDay.id)}
+          availabilityOf={(playerId) => getAvailability(game.id, playerId)}
+          teamNameOf={(playerId) => {
+            const own = myClubTeamsInPhase.find((t) => t.playerIds?.includes(playerId))
+            return own ? getTeamLabel(own.id) : undefined
+          }}
+          onPick={(playerId) => {
+            setPlayerSelectedForMatchDay(matchDay.id, playerId, team.id)
+            setAddingRenfort(false)
+          }}
+          onClose={() => setAddingRenfort(false)}
+        />
+      )}
     </div>
   )
 }

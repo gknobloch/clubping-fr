@@ -149,6 +149,18 @@ export function useMatchDayEditing(phaseId: string | null) {
     return [null, ...all]
   }
 
+  /**
+   * Brûlage check for one player against one team this round — the same rule
+   * `orderedTeamOptionIds` filters on, exposed on its own so the renfort picker
+   * can show who is ineligible rather than silently omitting them (#380).
+   */
+  const isEligibleForTeam = (playerId: string, teamId: string, matchDayId: string) => {
+    const t = teams.find((x) => x.id === teamId)
+    return t
+      ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId)
+      : false
+  }
+
   const getTeamSelectLabel = (teamId: string) => {
     const team = teams.find((t) => t.id === teamId)
     return team ? `Éq. ${team.number}` : teamId
@@ -173,6 +185,7 @@ export function useMatchDayEditing(phaseId: string | null) {
     getSelectedTeamForMatchDay,
     setPlayerSelectedForMatchDay,
     orderedTeamOptionIds,
+    isEligibleForTeam,
     getTeamSelectLabel,
     getTeamColor,
     getTeamLabel,
