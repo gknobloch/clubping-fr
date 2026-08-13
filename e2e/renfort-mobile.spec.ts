@@ -71,6 +71,22 @@ test.describe('Composition depuis un téléphone (#380, #382)', () => {
     await expect(compose).toHaveText(before!)
   })
 
+  // #383 — the third shortcut, in the native app's order.
+  test('la feuille de match reprend le club et la composition', async ({ page }) => {
+    await loginAs(page, 'colle')
+    await openMyMatch(page)
+
+    await page.getByRole('button', { name: 'Feuille de match' }).click()
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+
+    await expect(sheet.getByText('Feuille de match')).toBeVisible()
+    // Exact: the club name is also a substring of the matchup line above.
+    await expect(sheet.getByText('PPA Rixheim', { exact: true })).toBeVisible()
+    await expect(sheet.getByText(/Joueurs \(\d+\)/)).toBeVisible()
+    await expect(sheet.getByText(/n'est pas enregistré/)).toBeVisible()
+  })
+
   test('la feuille est ancrée en bas et tient à l’écran', async ({ page }) => {
     await loginAs(page, 'colle')
     await openMyMatch(page)

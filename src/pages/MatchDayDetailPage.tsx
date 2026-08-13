@@ -8,6 +8,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { SelectionSheet } from '@/components/SelectionSheet'
+import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
 
@@ -27,7 +28,7 @@ export function MatchDayDetailPage() {
   const teamId = searchParams.get('equipe')
 
   const { user } = useAuth()
-  const { teams, players, matchDays, games, divisions, gameSelections, setGameSelection } = useAppData()
+  const { teams, players, clubs, matchDays, games, divisions, gameSelections, setGameSelection } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
@@ -46,6 +47,7 @@ export function MatchDayDetailPage() {
   } = useMatchDayEditing(team?.phaseId ?? null)
 
   const [composing, setComposing] = useState(false)
+  const [showingSheet, setShowingSheet] = useState(false)
 
   const roster = useMemo(() => {
     if (!team) return [] as Player[]
@@ -104,6 +106,23 @@ export function MatchDayDetailPage() {
     matchDays,
     gameSelections,
   )
+
+  // Phase points live on the fielding team's roster; a renfort keeps the points
+  // recorded by their own team this phase.
+  const pointsFor = (playerId: string) =>
+    team.rosterInitialPoints?.[playerId] ??
+    myClubTeamsInPhase.find((t) => t.playerIds?.includes(playerId))?.rosterInitialPoints?.[playerId]
+
+  const lineUp: MatchSheetPlayer[] = selectedIds
+    .map((id) => players.find((p) => p.id === id))
+    .filter((p): p is Player => p != null)
+    .map((p) => ({
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      license: p.licenseNumber || undefined,
+      points: pointsFor(p.id) || undefined,
+    }))
 
   const date = gameDate(game, matchDay)
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
@@ -238,6 +257,14 @@ export function MatchDayDetailPage() {
             </span>
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setShowingSheet(true)}
+          className="flex min-h-11 w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"
+        >
+          <span className="font-medium text-slate-800">Feuille de match</span>
+          <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
+        </button>
         <Link
           to={`/equipes/${team.id}`}
           className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50"
@@ -246,6 +273,17 @@ export function MatchDayDetailPage() {
           <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
         </Link>
       </div>
+
+      {showingSheet && (
+        <MatchSheetView
+          matchup={isHome ? `${getTeamLabel(team.id)} – ${getTeamLabel(opponentId)}` : `${getTeamLabel(opponentId)} – ${getTeamLabel(team.id)}`}
+          clubName={clubs.find((c) => c.id === team.clubId)?.displayName ?? ''}
+          affiliationNumber={clubs.find((c) => c.id === team.clubId)?.affiliationNumber}
+          players={lineUp}
+          isHome={isHome}
+          onClose={() => setShowingSheet(false)}
+        />
+      )}
 
       {composing && (
         <SelectionSheet
