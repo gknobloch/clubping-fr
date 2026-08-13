@@ -2,18 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { OUTLINE_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
+import { ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
-import { gameDate } from '@/lib/matchdays'
+import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
-import {
-  AVAILABILITY_COLORS,
-  AVAILABILITY_LABELS,
-  AvailabilitySelect,
-  ReadOnlyCompo,
-  TeamSelect,
-} from '@/components/availabilityControls'
-import { AddRenfortSheet } from '@/components/AddRenfortSheet'
+import { SelectionSheet } from '@/components/SelectionSheet'
+import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
 
 /**
@@ -32,7 +27,7 @@ export function MatchDayDetailPage() {
   const teamId = searchParams.get('equipe')
 
   const { user } = useAuth()
-  const { teams, players, matchDays, games, divisions, gameSelections } = useAppData()
+  const { teams, players, matchDays, games, divisions, gameSelections, setGameSelection } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
@@ -43,19 +38,14 @@ export function MatchDayDetailPage() {
     canEditAvailability,
     isOverride,
     canEditGameSelection,
-    getSelectedTeamForMatchDay,
-    setPlayerSelectedForMatchDay,
-    orderedTeamOptionIds,
     isEligibleForTeam,
     myClubTeamsInPhase,
-    getTeamSelectLabel,
-    getTeamColor,
     getTeamLabel,
     setGameAvailability,
     clearGameAvailability,
   } = useMatchDayEditing(team?.phaseId ?? null)
 
-  const [addingRenfort, setAddingRenfort] = useState(false)
+  const [composing, setComposing] = useState(false)
 
   const roster = useMemo(() => {
     if (!team) return [] as Player[]
@@ -93,13 +83,26 @@ export function MatchDayDetailPage() {
   const borrowed = players.filter((p) => selectedIds.includes(p.id) && !rosterIds.has(p.id))
   const availableCount = roster.filter((p) => getAvailability(game.id, p.id) === 'available').length
 
-  // Club players who could still be borrowed: everyone active in the club who
-  // is neither on this roster nor already in the line-up. Eligibility (brûlage)
-  // is decided in the sheet so the rule can be shown rather than applied
-  // silently.
-  const alreadyListed = new Set([...rosterIds, ...selectedIds])
-  const renfortCandidates = players.filter(
-    (p) => p.clubId === team.clubId && p.status === 'active' && !alreadyListed.has(p.id),
+  // Club players outside the roster who are still eligible for this team this
+  // round (brûlage). Ineligible ones are left out here rather than shown
+  // disabled: this sheet is the line-up itself, not a browse of the club.
+  const eligibleOthers = players.filter(
+    (p) =>
+      p.clubId === team.clubId &&
+      p.status === 'active' &&
+      !rosterIds.has(p.id) &&
+      isEligibleForTeam(p.id, team.id, matchDay.id),
+  )
+
+  // Already fielded by another of the club's teams this round — pickable
+  // nowhere else, so the sheet locks them and says where they are.
+  const committedElsewhere = playersCommittedElsewhere(
+    team.id,
+    matchDay.number,
+    myClubTeamsInPhase,
+    games,
+    matchDays,
+    gameSelections,
   )
 
   const date = gameDate(game, matchDay)
@@ -159,11 +162,14 @@ export function MatchDayDetailPage() {
         </div>
       </div>
 
-      {/* Roster — one player per block, controls stacked so nothing needs a
-          sideways scroll on a 375px screen. */}
+      {/* Availability — the whole roster, one row each, with the same
+          OUI/PE/NON control the Accueil card and the game modal use. Composing
+          is a separate step below rather than a second column here: picking a
+          line-up is one decision about a group, not a series of per-player
+          ones (#382). */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 font-display text-base font-medium text-slate-800">
-          Disponibilités et composition
+        <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Disponibilités
         </h2>
         {roster.length === 0 ? (
           <p className="px-4 py-4 text-sm text-slate-500">Aucun joueur dans l'effectif.</p>
@@ -172,123 +178,86 @@ export function MatchDayDetailPage() {
             {[...roster, ...borrowed].map((player) => {
               const status = getAvailability(game.id, player.id)
               const canEditAv = canEditAvailability(player.id, team.id)
-              const selectedTeamId = getSelectedTeamForMatchDay(matchDay.id, player.id)
               const isMe = player.id === user?.id
               const isBorrowed = !rosterIds.has(player.id)
+              const isPicked = selectedIds.includes(player.id)
               return (
-                <li key={player.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
-                  <div className="flex items-baseline gap-2">
-                    <span
-                      className={`font-medium text-slate-800 ${player.id === team.captainId ? 'font-bold' : ''}`}
-                    >
-                      {player.firstName} {player.lastName}
+                <li
+                  key={player.id}
+                  className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5 last:border-b-0"
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={`truncate text-sm ${isMe ? 'font-semibold text-accent-600' : 'text-slate-800'} ${player.id === team.captainId ? 'font-bold' : ''}`}
+                      >
+                        {player.firstName} {player.lastName}
+                      </span>
+                      {isBorrowed && (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          Renfort
+                        </span>
+                      )}
                     </span>
-                    {team.rosterInitialPoints?.[player.id] && (
-                      <span className="text-sm text-slate-500">
-                        ({team.rosterInitialPoints[player.id]})
-                      </span>
+                    {isPicked && (
+                      <span className="text-[11px] font-medium text-green-700">Sélectionné</span>
                     )}
-                    {isMe && (
-                      <span className="rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent-700">
-                        Moi
-                      </span>
-                    )}
-                    {isBorrowed && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        Renfort
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-500">Dispo</span>
-                      {canEditAv ? (
-                        <AvailabilitySelect
-                          value={status}
-                          onChange={(v) => {
-                            if (v) setGameAvailability(game.id, player.id, v, isOverride(player.id, team.id))
-                            else if (status) clearGameAvailability(game.id, player.id)
-                          }}
-                        />
-                      ) : (
-                        <span className="inline-flex min-h-[26px] items-center gap-1 text-xs text-slate-600">
-                          {status ? (
-                            <>
-                              <span
-                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                                style={{ backgroundColor: AVAILABILITY_COLORS[status] }}
-                                aria-hidden
-                              />
-                              {AVAILABILITY_LABELS[status]}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </span>
-                      )}
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-500">Compo</span>
-                      {canEditSel ? (
-                        <TeamSelect
-                          value={selectedTeamId}
-                          onChange={(v) => setPlayerSelectedForMatchDay(matchDay.id, player.id, v)}
-                          optionIds={orderedTeamOptionIds(team.id, player.id, matchDay.id)}
-                          getLabel={getTeamSelectLabel}
-                          getColor={getTeamColor}
-                        />
-                      ) : (
-                        <span className="inline-flex min-h-[26px] items-center">
-                          <ReadOnlyCompo
-                            teamId={selectedTeamId}
-                            getLabel={getTeamSelectLabel}
-                            getColor={getTeamColor}
-                          />
-                        </span>
-                      )}
-                    </label>
-                  </div>
+                  </span>
+                  {canEditAv ? (
+                    <AvailabilityButtons
+                      size="sm"
+                      status={status}
+                      onSet={(v) => setGameAvailability(game.id, player.id, v, isOverride(player.id, team.id))}
+                      onClear={() => clearGameAvailability(game.id, player.id)}
+                    />
+                  ) : (
+                    <AvailabilityPills size="sm" status={status} />
+                  )}
                 </li>
               )
             })}
           </ul>
         )}
-
-        {/* Fielding a player from outside the roster was desktop-only until
-            #380 — the "Autres joueurs" matrix. It is a routine move when the
-            roster is short of availability, and a captain composing from a
-            phone could not make it. */}
-        {canEditSel && (
-          <div className="border-t border-slate-200 p-3">
-            <button
-              type="button"
-              onClick={() => setAddingRenfort(true)}
-              className={`w-full ${OUTLINE_BUTTON_CLASS} border-accent-600 text-accent-600 hover:bg-accent-50`}
-            >
-              Ajouter un renfort
-            </button>
-          </div>
-        )}
       </div>
 
-      {addingRenfort && (
-        <AddRenfortSheet
-          candidates={renfortCandidates}
+      {/* Shortcuts, in the native app's order. "Feuille de match" is app-only
+          for now and is deliberately absent rather than stubbed. */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        {canEditSel && (
+          <button
+            type="button"
+            onClick={() => setComposing(true)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"
+          >
+            <span className="font-medium text-slate-800">Composer l'équipe</span>
+            <span className="flex shrink-0 items-center gap-2">
+              <span className={`text-sm font-semibold ${compoOk ? 'text-green-700' : 'text-amber-600'}`}>
+                {selectedIds.length}/{playersPerGame}
+              </span>
+              <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
+            </span>
+          </button>
+        )}
+        <Link
+          to={`/equipes/${team.id}`}
+          className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+        >
+          <span className="font-medium text-slate-800">Tous les matchs de l'équipe</span>
+          <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
+        </Link>
+      </div>
+
+      {composing && (
+        <SelectionSheet
           teamLabel={getTeamLabel(team.id)}
-          lineUpFull={selectedIds.length >= playersPerGame}
-          isEligible={(playerId) => isEligibleForTeam(playerId, team.id, matchDay.id)}
+          playersPerGame={playersPerGame}
+          roster={roster}
+          others={eligibleOthers}
+          initialSelection={selectedIds}
           availabilityOf={(playerId) => getAvailability(game.id, playerId)}
-          teamNameOf={(playerId) => {
-            const own = myClubTeamsInPhase.find((t) => t.playerIds?.includes(playerId))
-            return own ? getTeamLabel(own.id) : undefined
-          }}
-          onPick={(playerId) => {
-            setPlayerSelectedForMatchDay(matchDay.id, playerId, team.id)
-            setAddingRenfort(false)
-          }}
-          onClose={() => setAddingRenfort(false)}
+          committedElsewhere={committedElsewhere}
+          onSave={(playerIds) => setGameSelection(game.id, team.id, playerIds)}
+          onClose={() => setComposing(false)}
         />
       )}
     </div>

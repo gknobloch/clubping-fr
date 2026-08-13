@@ -426,21 +426,27 @@ export function TeamsPage() {
                   )}
                 </div>
 
-                <div className="space-y-1.5 text-sm text-slate-600">
-                  <div className="flex items-center gap-1.5">
-                    <ClockIcon className="h-4 w-4 shrink-0 text-slate-400" />
-                    <span className="truncate">{team.defaultDay} {team.defaultTime}</span>
+                {/* Below md: the actions are one "…" trigger, so they sit
+                    beside the day/captain block and centre on it — a menu is
+                    not a section of the card, and a full-width row read as one.
+                    From md: up they are three inline text buttons needing
+                    ~230px, which in a 264px card column leaves the info nothing
+                    at all, so there they keep their own row under a rule. */}
+                <div className="flex items-center gap-3 md:block">
+                  <div className="min-w-0 flex-1 space-y-1.5 text-sm text-slate-600">
+                    <div className="flex items-center gap-1.5">
+                      <ClockIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span className="truncate">{team.defaultDay} {team.defaultTime}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CaptainIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span className="truncate">{getCaptainName(team.captainId)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <CaptainIcon className="h-4 w-4 shrink-0 text-slate-400" />
-                    <span className="truncate">{getCaptainName(team.captainId)}</span>
-                  </div>
-                </div>
 
-                {isAdmin && (
-                  <div className="mt-1 border-t border-slate-100 pt-2">
+                  {isAdmin && (
+                    <div className="shrink-0 md:mt-3 md:border-t md:border-slate-100 md:pt-2">
                     <RowActions
-                      align="left"
                       label={`Actions — ${getClubName(team.clubId)} ${team.number}`}
                       actions={[
                         !team.isArchived && { label: 'Modifier', onClick: () => openEdit(team) },
@@ -461,8 +467,9 @@ export function TeamsPage() {
                         },
                       ]}
                     />
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
             )
           })}

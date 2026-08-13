@@ -452,6 +452,9 @@ export function MatchDaysPage() {
         game,
         matchDay,
         opponentName: getTeamLabel(opponentId),
+        teamName: getTeamLabel(team.id),
+        divisionName: divisions.find((d) => d.id === team.divisionId)?.displayName,
+        isMine: !!user?.id && roster.includes(user.id),
         isHome,
         dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),
         time: game.time ?? undefined,
@@ -460,8 +463,10 @@ export function MatchDaysPage() {
         playersPerGame: divisions.find((d) => d.id === team.divisionId)?.playersPerGame ?? 4,
       })
     }
-    return entries
-  }, [mobileMatchDayGroup, myClubTeamsInPhase, games, matchDays, divisions]) // eslint-disable-line react-hooks/exhaustive-deps
+    // The signed-in player's own match first — it is the one they came for.
+    // Stable otherwise, so the rest keep their team order.
+    return entries.sort((a, b) => Number(b.isMine ?? false) - Number(a.isMine ?? false))
+  }, [mobileMatchDayGroup, myClubTeamsInPhase, games, matchDays, divisions, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeMatchDayModal = () => {
     setEditingMatchDay(null)

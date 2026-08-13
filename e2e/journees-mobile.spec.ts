@@ -41,6 +41,10 @@ test.describe('Journées sur mobile (#306)', () => {
     }
   })
 
+  // Availability and line-up are now two separate gestures, not two dropdowns
+  // on every roster row: OUI/PE/NON per player, and one "Composer l'équipe"
+  // sheet for the group decision (#382). Both still have to work without the
+  // page ever moving sideways.
   test('régler dispo et compo se fait sans défilement horizontal', async ({ page }) => {
     await page.goto('/journees')
     await page.locator('a[href^="/journees/"]').first().click()
@@ -50,19 +54,15 @@ test.describe('Journées sur mobile (#306)', () => {
     const { scrollWidth, clientWidth } = await noHorizontalScroll(page)
     expect(scrollWidth).toBe(clientWidth)
 
-    // Both controls are on screen and reachable for the first player, without
-    // the page ever needing to move sideways.
-    const firstRow = page.locator('li').filter({ hasText: 'Dispo' }).first()
-    const dispo = firstRow.getByRole('button').first()
-    const compo = firstRow.getByRole('button').nth(1)
-    await expect(dispo).toBeInViewport()
-    await expect(compo).toBeInViewport()
+    const oui = page.getByRole('button', { name: 'OUI' }).first()
+    await expect(oui).toBeInViewport()
+    await oui.click()
 
-    await dispo.click()
-    const option = page.getByRole('option', { name: 'Oui', exact: true })
-    await expect(option).toBeVisible()
-    await option.click()
-    await expect(dispo).toContainText('Oui')
+    const compose = page.getByRole('button', { name: /Composer l’équipe|Composer l'équipe/ })
+    await expect(compose).toBeInViewport()
+    await compose.click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.getByRole('button', { name: 'Annuler' }).click()
 
     // Still no sideways scroll after interacting.
     const after = await noHorizontalScroll(page)
