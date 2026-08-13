@@ -88,7 +88,11 @@ describe('RowActions', () => {
     expect(screen.getByRole('menuitem', { name: 'Archiver' })).toHaveFocus()
   })
 
-  it('closes when a click lands outside it', async () => {
+  // Since #382 the actions open in a modal sheet, so "outside" is the backdrop
+  // rather than whatever sits behind it. That is the point of the change: the
+  // page underneath is covered, so a stray tap dismisses the sheet instead of
+  // firing some other control by accident.
+  it('closes when the backdrop is tapped', async () => {
     render(
       <>
         <RowActions label="Actions — PPA Rixheim" actions={actions} />
@@ -96,8 +100,9 @@ describe('RowActions', () => {
       </>,
     )
     await userEvent.click(trigger())
+    expect(screen.queryAllByRole('menuitem')).not.toHaveLength(0)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Ailleurs' }))
+    await userEvent.click(screen.getByRole('dialog'))
 
     expect(screen.queryAllByRole('menuitem')).toHaveLength(0)
   })

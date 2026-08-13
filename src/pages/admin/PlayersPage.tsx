@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
@@ -196,7 +196,7 @@ export function PlayersPage() {
             <div className="flex items-center gap-3">
               <Link
                 to={`/joueurs/${player.id}`}
-                className="flex min-w-0 flex-1 items-center gap-3 text-slate-900"
+                className={`flex min-w-0 flex-1 items-center gap-3 text-slate-900 ${TEXT_TARGET_CLASS}`}
               >
                 <Avatar
                   playerId={player.id}
@@ -220,29 +220,16 @@ export function PlayersPage() {
                   {STATUS_LABELS[player.status]}
                 </span>
               )}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 border-t border-slate-100 pt-1">
-              {player.email && (
-                <a
-                  href={`mailto:${player.email}`}
-                  className="flex min-h-[44px] min-w-0 items-center text-sm text-accent-600"
-                >
-                  <span className="truncate">{player.email}</span>
-                </a>
-              )}
-              {player.phone && (
-                <a
-                  href={`tel:${player.phone}`}
-                  className="flex min-h-[44px] items-center text-sm text-accent-600"
-                >
-                  {player.phone}
-                </a>
-              )}
+              {/* E-mail and phone used to sit on a second row here (#379). The
+                  list is for finding someone, and they were the loudest thing
+                  on the card — two accent-coloured links pulling the eye off
+                  the name. They stay on the player's own page, where calling
+                  and writing belong. The desktop table still has both columns. */}
               {canEditPlayers && (
                 <button
                   type="button"
                   onClick={() => openEdit(player)}
-                  className="ml-auto flex min-h-[44px] items-center text-sm font-medium text-accent-600"
+                  className={`shrink-0 text-sm font-medium text-accent-600 ${TEXT_TARGET_CLASS}`}
                 >
                   Modifier
                 </button>
@@ -333,7 +320,6 @@ export function PlayersPage() {
         <ModalShell
           onClose={closeModal}
           labelledBy="player-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4 overflow-y-auto"
         >
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg my-8">
             <h2 id="player-modal-title" className="font-display text-lg font-semibold text-slate-800">
@@ -462,7 +448,7 @@ export function PlayersPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -474,7 +460,7 @@ export function PlayersPage() {
                   !form.lastName ||
                   (creating && !form.clubId)
                 }
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

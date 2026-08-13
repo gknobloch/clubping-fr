@@ -4,6 +4,7 @@ import { useAppData, type FfttDivisionsPreview } from '@/contexts/DataContext'
 import { FFTT_PHASES } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { ModalShell } from '@/components/ModalShell'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 
 type PreviewState = 'idle' | 'loading' | 'done' | 'no_contest' | 'error'
 
@@ -102,7 +103,6 @@ export function ImportDivisionsModal({
     <ModalShell
       onClose={onClose}
       labelledBy="import-divisions-title"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
     >
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-divisions-title" className="font-display text-lg font-semibold text-slate-800">
@@ -185,7 +185,7 @@ export function ImportDivisionsModal({
             type="button"
             onClick={handleSearch}
             disabled={!organizationId || !seasonId || previewState === 'loading'}
-            className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+            className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
           >
             {previewState === 'loading' ? 'Recherche…' : 'Rechercher les divisions'}
           </button>
@@ -242,7 +242,7 @@ export function ImportDivisionsModal({
                 type="button"
                 onClick={handleImport}
                 disabled={importing || toImportCount === 0}
-                className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
               >
                 {importing
                   ? 'Import…'
@@ -257,7 +257,7 @@ export function ImportDivisionsModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            className={NEUTRAL_BUTTON_CLASS}
           >
             Fermer
           </button>

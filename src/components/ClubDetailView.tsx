@@ -3,6 +3,8 @@ import type { Address, Club, ClubChannel, ClubChannelType } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { useClubAddressFormState } from '@/pages/useClubAddressForm'
 import { WhatsAppIcon } from '@/components/icons'
+import { PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { useConfirm } from '@/components/useConfirm'
 
 const emptyAddressForm = {
   label: '',
@@ -95,6 +97,7 @@ export function ClubDetailView({
   const [channelForm, setChannelForm] = useState<{ mode: 'add' } | { mode: 'edit'; channel: ClubChannel } | null>(null)
   const [channelFields, setChannelFields] = useState(emptyChannelForm)
   const logoInputRef = useRef<HTMLInputElement>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   useEffect(() => {
     setForm({
@@ -137,8 +140,8 @@ export function ClubDetailView({
     }
   }
 
-  const handleDeleteAddress = (addressId: string) => {
-    if (window.confirm('Supprimer cette adresse ?')) {
+  const handleDeleteAddress = async (addressId: string) => {
+    if (await confirm({ title: 'Supprimer cette adresse ?', confirmLabel: 'Supprimer' })) {
       deleteClubAddress(club.id, addressId)
       if (addressForm?.mode === 'edit' && addressForm.address.id === addressId) {
         closeAddressForm()
@@ -167,8 +170,8 @@ export function ClubDetailView({
     }
   }
 
-  const handleRemoveLogo = () => {
-    if (window.confirm('Supprimer le logo du club ?')) removeClubLogo(club.id)
+  const handleRemoveLogo = async () => {
+    if (await confirm({ title: 'Supprimer le logo du club ?', confirmLabel: 'Supprimer' })) removeClubLogo(club.id)
   }
 
   // --- Channels ---
@@ -193,8 +196,8 @@ export function ClubDetailView({
     closeChannelForm()
   }
 
-  const handleDeleteChannel = (channelId: string) => {
-    if (window.confirm('Supprimer ce canal ?')) {
+  const handleDeleteChannel = async (channelId: string) => {
+    if (await confirm({ title: 'Supprimer ce canal ?', confirmLabel: 'Supprimer' })) {
       deleteClubChannel(club.id, channelId)
       if (channelForm?.mode === 'edit' && channelForm.channel.id === channelId) closeChannelForm()
     }
@@ -216,6 +219,7 @@ export function ClubDetailView({
 
   return (
     <>
+      {confirmDialog}
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="font-display text-lg font-medium text-slate-800">Informations du club</h2>
         <div className="mt-4 space-y-4">
@@ -261,7 +265,7 @@ export function ClubDetailView({
             <button
               type="button"
               onClick={handleSaveClub}
-              className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+              className={PRIMARY_BUTTON_CLASS}
             >
               Enregistrer
             </button>
@@ -278,7 +282,7 @@ export function ClubDetailView({
             <button
               type="button"
               onClick={openAddAddress}
-              className="text-sm font-medium text-accent-600 hover:text-accent-800"
+              className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
             >
               Ajouter une adresse
             </button>
@@ -437,7 +441,7 @@ export function ClubDetailView({
               <button
                 type="button"
                 onClick={() => logoInputRef.current?.click()}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 {logoUrl ? 'Remplacer le logo' : 'Ajouter un logo'}
               </button>
@@ -465,7 +469,7 @@ export function ClubDetailView({
             <button
               type="button"
               onClick={openAddChannel}
-              className="text-sm font-medium text-accent-600 hover:text-accent-800"
+              className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
             >
               Ajouter un canal
             </button>

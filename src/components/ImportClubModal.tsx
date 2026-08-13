@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { fetchClubDetailXmlFromBrowser, hasVenueInfo, parseClubDetailXml } from '@/lib/ffttClub'
 import { ModalShell } from '@/components/ModalShell'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 
 type SearchState = 'idle' | 'loading' | 'found' | 'not_found' | 'already_exists' | 'error'
 
@@ -100,7 +101,6 @@ export function ImportClubModal({ onClose }: { onClose: () => void }) {
     <ModalShell
       onClose={onClose}
       labelledBy="import-club-title"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
     >
       <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-club-title" className="font-display text-lg font-semibold text-slate-800">
@@ -123,7 +123,7 @@ export function ImportClubModal({ onClose }: { onClose: () => void }) {
                 type="button"
                 onClick={handleSearch}
                 disabled={!affiliationNumber || state === 'loading'}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 {state === 'loading' ? 'Recherche…' : 'Rechercher'}
               </button>
@@ -241,7 +241,7 @@ export function ImportClubModal({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onClick={handleImport}
-                className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={`w-full ${PRIMARY_BUTTON_CLASS}`}
               >
                 Importer ce club
               </button>
@@ -252,7 +252,7 @@ export function ImportClubModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            className={NEUTRAL_BUTTON_CLASS}
           >
             Fermer
           </button>

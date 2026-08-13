@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, declineConfirm } from './helpers'
 
 // #307 (targets under 44px) and #305 (tables clipped or overflowing).
 //
@@ -69,9 +69,30 @@ test.describe('Zones tactiles et tableaux sur mobile (#307, #305)', () => {
     await expect(archive).toBeVisible()
     expect((await archive.boundingBox())!.height).toBeGreaterThanOrEqual(44)
 
-    page.once('dialog', (d) => d.dismiss())
     await archive.click()
     await expect(page.getByRole('menu')).toHaveCount(0)
+    await declineConfirm(page)
+  })
+
+  // #378 — the case the table never exercised. RowActions honoured `align`
+  // when placing the trigger but always positioned the menu by its right edge,
+  // so on the Équipes cards, whose trigger sits at the left, the menu was laid
+  // out from about x=-140 and could not be reached. It is a bottom sheet since
+  // #382, which is why this now passes for any alignment: there is no position
+  // left to get wrong.
+  test('le menu d’actions des cartes équipe tient à l’écran (#378)', async ({ page }) => {
+    await page.goto('/equipes')
+    await page.getByRole('button', { name: /^Actions —/ }).first().click()
+
+    const menu = page.getByRole('menu')
+    await expect(menu).toBeVisible()
+    const box = (await menu.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(375)
+    expect(box.y + box.height).toBeLessThanOrEqual(812)
+
+    // Full-width rows, not a 12rem column floated next to the trigger.
+    expect(box.width).toBeGreaterThan(300)
   })
 
   // The menu is portalled to <body> for this reason: its cell now lives in an

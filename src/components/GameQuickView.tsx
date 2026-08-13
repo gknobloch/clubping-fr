@@ -9,6 +9,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
 
 // Read-only quick view of a single game from one team's perspective — match
 // header + availabilities / line-up. Mirrors the mobile match detail screen
@@ -86,7 +87,7 @@ export function GameQuickView({
       onClose={onClose}
       closeOnBackdrop
       label="Détails du match"
-      className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
+      z={40}
     >
       <div
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
@@ -96,7 +97,7 @@ export function GameQuickView({
         <div className="flex flex-wrap items-center gap-1.5">
           <Pill>J{matchDay.number}</Pill>
           {division && <Pill>{division.displayName}</Pill>}
-          <Link to={`/equipes/${team.id}`} className="hover:opacity-80" onClick={onClose} title="Voir la fiche équipe">
+          <Link to={`/equipes/${team.id}`} className={`hover:opacity-80 ${TEXT_TARGET_CLASS}`} onClick={onClose} title="Voir la fiche équipe">
             <TeamBadge color={team.color} label={`Équipe ${team.number}`} />
           </Link>
         </div>
@@ -120,7 +121,7 @@ export function GameQuickView({
                 <Link
                   to={`/joueurs/${p.id}`}
                   onClick={onClose}
-                  className="flex min-w-0 items-center gap-2 hover:opacity-80"
+                  className={`flex min-w-0 items-center gap-2 hover:opacity-80 ${TEXT_TARGET_CLASS}`}
                 >
                   <Check on={selected} />
                   <span className={`truncate text-sm ${selected ? 'font-semibold text-accent-600' : 'text-slate-800'}`}>
@@ -137,7 +138,7 @@ export function GameQuickView({
                     onClear={() => clearGameAvailability(game.id, p.id)}
                   />
                 ) : (
-                  <AvailabilityPills status={availOf(p.id)} />
+                  <AvailabilityPills size="sm" status={availOf(p.id)} />
                 )}
               </li>
             )
@@ -147,7 +148,7 @@ export function GameQuickView({
               <Link
                 to={`/joueurs/${p.id}`}
                 onClick={onClose}
-                className="flex min-w-0 items-center gap-2 hover:opacity-80"
+                className={`flex min-w-0 items-center gap-2 hover:opacity-80 ${TEXT_TARGET_CLASS}`}
               >
                 <Check on />
                 <span className="truncate text-sm font-semibold text-accent-600">

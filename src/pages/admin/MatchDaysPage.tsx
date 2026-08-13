@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportIcon } from '@/components/icons'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
   AVAILABILITY_COLORS,
   AVAILABILITY_LABELS,
@@ -451,6 +452,9 @@ export function MatchDaysPage() {
         game,
         matchDay,
         opponentName: getTeamLabel(opponentId),
+        teamName: getTeamLabel(team.id),
+        divisionName: divisions.find((d) => d.id === team.divisionId)?.displayName,
+        isMine: !!user?.id && roster.includes(user.id),
         isHome,
         dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),
         time: game.time ?? undefined,
@@ -459,8 +463,10 @@ export function MatchDaysPage() {
         playersPerGame: divisions.find((d) => d.id === team.divisionId)?.playersPerGame ?? 4,
       })
     }
-    return entries
-  }, [mobileMatchDayGroup, myClubTeamsInPhase, games, matchDays, divisions]) // eslint-disable-line react-hooks/exhaustive-deps
+    // The signed-in player's own match first — it is the one they came for.
+    // Stable otherwise, so the rest keep their team order.
+    return entries.sort((a, b) => Number(b.isMine ?? false) - Number(a.isMine ?? false))
+  }, [mobileMatchDayGroup, myClubTeamsInPhase, games, matchDays, divisions, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeMatchDayModal = () => {
     setEditingMatchDay(null)
@@ -722,7 +728,7 @@ export function MatchDaysPage() {
               onClick={() => setImportGamesOpen(true)}
               title="Importer les matchs FFTT"
               aria-label="Importer les matchs FFTT"
-              className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700 md:h-9 md:w-9"
+              className="hidden h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700 md:flex md:h-9 md:w-9"
             >
               <ImportIcon className="h-4 w-4" />
             </button>
@@ -1564,7 +1570,6 @@ export function MatchDaysPage() {
         <ModalShell
           onClose={closeMatchDayModal}
           labelledBy="matchday-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="matchday-modal-title" className="font-display text-lg font-semibold text-slate-800">
@@ -1633,14 +1638,14 @@ export function MatchDaysPage() {
               <button
                 type="button"
                 onClick={closeMatchDayModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleSaveMatchDay}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>
@@ -1654,7 +1659,6 @@ export function MatchDaysPage() {
         <ModalShell
           onClose={closeGameEditModal}
           labelledBy="game-edit-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="game-edit-modal-title" className="font-display text-lg font-semibold text-slate-800">
@@ -1758,7 +1762,7 @@ export function MatchDaysPage() {
               <button
                 type="button"
                 onClick={closeGameEditModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -1766,7 +1770,7 @@ export function MatchDaysPage() {
                 type="button"
                 onClick={handleSaveGameEdit}
                 disabled={!gameEditForm.opponentTeamId}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

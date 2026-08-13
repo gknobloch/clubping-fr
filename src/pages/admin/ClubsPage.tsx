@@ -4,9 +4,10 @@ import type { Club } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportClubModal } from '@/components/ImportClubModal'
+import { useConfirm } from '@/components/useConfirm'
 
 export function ClubsPage() {
   const navigate = useNavigate()
@@ -15,6 +16,7 @@ export function ClubsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [form, setForm] = useState({ affiliationNumber: '', displayName: '' })
+  const [confirm, confirmDialog] = useConfirm()
 
   const activeClubs = clubs.filter((c) => !c.isArchived)
   const archivedClubs = clubs.filter((c) => c.isArchived)
@@ -36,8 +38,8 @@ export function ClubsPage() {
     }
   }
 
-  const handleArchive = (club: Club) => {
-    if (window.confirm(`Archiver le club "${club.displayName}" ? Il ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (club: Club) => {
+    if (await confirm({ title: `Archiver le club "${club.displayName}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveClub(club.id)
     }
   }
@@ -49,9 +51,9 @@ export function ClubsPage() {
   const clubHasDependents = (club: Club) =>
     teams.some((t) => t.clubId === club.id) || players.some((p) => p.clubId === club.id)
 
-  const handleDelete = (club: Club) => {
+  const handleDelete = async (club: Club) => {
     if (clubHasDependents(club)) return
-    if (window.confirm(`Supprimer définitivement le club "${club.displayName}" ? Cette action est irréversible.`)) {
+    if (await confirm({ title: `Supprimer définitivement le club "${club.displayName}" ?`, message: `Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteClub(club.id)
     }
   }
@@ -62,6 +64,7 @@ export function ClubsPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Clubs"
         actions={
@@ -157,7 +160,6 @@ export function ClubsPage() {
         <ModalShell
           onClose={closeCreateModal}
           labelledBy="create-club-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg">
             <h2 id="create-club-title" className="font-display text-lg font-semibold text-slate-800">
@@ -199,14 +201,14 @@ export function ClubsPage() {
               <button
                 type="button"
                 onClick={closeCreateModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

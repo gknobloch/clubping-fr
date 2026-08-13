@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, acceptConfirm } from './helpers'
 
 // The browser fetches xml_club_detail.php directly (Cloudflare/FFTT egress
 // block, same as the other FFTT imports) — mocked per test.
@@ -25,8 +25,8 @@ test.describe('General admin — Clubs lifecycle (archive / activate / delete)',
   test('archives then reactivates a club from the list', async ({ page }) => {
     await page.goto('/clubs')
 
-    page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('row').filter({ hasText: 'Etival' }).getByRole('button', { name: 'Archiver' }).click()
+    await acceptConfirm(page, 'Archiver')
 
     // Hidden from the default (active-only) view once archived.
     await expect(page.getByRole('cell', { name: 'Etival' })).toHaveCount(0)
@@ -42,8 +42,8 @@ test.describe('General admin — Clubs lifecycle (archive / activate / delete)',
   test('disables Supprimer for an archived club that still has teams/players', async ({ page }) => {
     await page.goto('/clubs')
 
-    page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('row').filter({ hasText: 'PPA Rixheim' }).getByRole('button', { name: 'Archiver' }).click()
+    await acceptConfirm(page, 'Archiver')
 
     await page.getByText(/Afficher les clubs archivés/).click()
     const row = page.getByRole('row').filter({ hasText: 'PPA Rixheim' })
@@ -63,23 +63,23 @@ test.describe('General admin — Clubs lifecycle (archive / activate / delete)',
 
     await expect(page.getByRole('cell', { name: 'TT Orphelin' })).toBeVisible()
 
-    page.once('dialog', (d) => d.accept())
     await page.getByRole('row').filter({ hasText: 'TT Orphelin' }).getByRole('button', { name: 'Archiver' }).click()
+    await acceptConfirm(page, 'Archiver')
 
     await page.getByText(/Afficher les clubs archivés/).click()
     const row = page.getByRole('row').filter({ hasText: 'TT Orphelin' })
     const deleteButton = row.getByRole('button', { name: 'Supprimer' })
     await expect(deleteButton).toBeEnabled()
 
-    page.once('dialog', (d) => d.accept())
     await deleteButton.click()
+    await acceptConfirm(page, 'Supprimer')
     await expect(page.getByRole('cell', { name: 'TT Orphelin' })).toHaveCount(0)
   })
 
   test('offers a direct reactivate button when re-importing an archived club', async ({ page }) => {
     await page.goto('/clubs')
-    page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('row').filter({ hasText: 'Etival' }).getByRole('button', { name: 'Archiver' }).click()
+    await acceptConfirm(page, 'Archiver')
 
     const etivalXml =
       '<?xml version="1.0" encoding="ISO-8859-1"?><liste><club><numero>06880123</numero><nom>ETIVAL</nom></club></liste>'

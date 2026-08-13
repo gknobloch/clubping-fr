@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAppData, type FfttTeamsPreview, type FfttTeamsImportResult, type TeamImportOverride } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 
 const DAYS_OF_WEEK = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 9) // 9..21
@@ -189,7 +190,6 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
     <ModalShell
       onClose={onClose}
       labelledBy="import-teams-title"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
     >
       <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-teams-title" className="font-display text-lg font-semibold text-slate-800">
@@ -221,7 +221,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
               type="button"
               onClick={handleSearch}
               disabled={!clubId || previewState === 'loading'}
-              className="shrink-0 rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+              className={`shrink-0 disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
             >
               {previewState === 'loading' ? 'Recherche…' : 'Rechercher les équipes'}
             </button>
@@ -417,7 +417,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
                   type="button"
                   onClick={handleImport}
                   disabled={importing || selectedOverrides.length === 0 || !allSelectedHaveLocation}
-                  className="w-full rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                  className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
                 >
                   {importing
                     ? 'Import…'
@@ -433,7 +433,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            className={NEUTRAL_BUTTON_CLASS}
           >
             Fermer
           </button>

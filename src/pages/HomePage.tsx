@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { Avatar } from '@/components/Avatar'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamBadge } from '@/components/TeamBadge'
@@ -173,7 +174,7 @@ export function HomePage() {
                         <button
                           type="button"
                           onClick={() => setQuickGame({ gameId: g.id, teamId: myActiveTeam.id })}
-                          className="shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800"
+                          className={`shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
                         >
                           {/* "Aperçu": this opens the quick view, and "Détails"
                               now names the button inside it that goes to the

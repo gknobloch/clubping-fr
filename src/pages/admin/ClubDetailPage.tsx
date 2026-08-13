@@ -4,6 +4,8 @@ import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView } from '@/components/ClubDetailView'
 import { ClubImportPreview } from '@/components/ClubImportPreview'
 import { ModalShell } from '@/components/ModalShell'
+import { BASE_BUTTON_CLASS, DANGER_BUTTON_CLASS, NEUTRAL_BUTTON_CLASS, OUTLINE_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { useConfirm } from '@/components/useConfirm'
 import {
   clubSyncFields, defaultSelectedFields, fetchClubDetailXmlFromBrowser, parseClubDetailXml,
   type ClubSyncField, type FfttClubDetail,
@@ -19,6 +21,7 @@ export function ClubDetailPage() {
   const navigate = useNavigate()
   const { clubs, teams, players, archiveClub, updateClub, deleteClub, addClubAddress, updateClubAddress } = useAppData()
   const club = clubId != null ? clubs.find((c) => c.id === clubId) ?? null : null
+  const [confirm, confirmDialog] = useConfirm()
 
   const [syncState, setSyncState] = useState<SyncState>('idle')
   // Nothing is written until the preview is confirmed (#280).
@@ -28,16 +31,17 @@ export function ClubDetailPage() {
   if (!clubId || !club) {
     return (
       <div className="space-y-6">
+        {confirmDialog}
         <p className="text-slate-600">Club introuvable.</p>
-        <Link to="/clubs" className="text-sm font-medium text-accent-600 hover:text-accent-800">
+        <Link to="/clubs" className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
           ← Retour à la liste des clubs
         </Link>
       </div>
     )
   }
 
-  const handleArchive = () => {
-    if (window.confirm(`Archiver le club "${club.displayName}" ? Il ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async () => {
+    if (await confirm({ title: `Archiver le club "${club.displayName}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveClub(club.id)
       navigate('/clubs')
     }
@@ -49,9 +53,9 @@ export function ClubDetailPage() {
 
   const hasDependents = teams.some((t) => t.clubId === club.id) || players.some((p) => p.clubId === club.id)
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (hasDependents) return
-    if (window.confirm(`Supprimer définitivement le club "${club.displayName}" ? Cette action est irréversible.`)) {
+    if (await confirm({ title: `Supprimer définitivement le club "${club.displayName}" ?`, message: `Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteClub(club.id)
       navigate('/clubs')
     }
@@ -114,7 +118,7 @@ export function ClubDetailPage() {
       <div className="flex flex-wrap items-center gap-3">
         <Link
           to="/clubs"
-          className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-800"
+          className={`items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-800 ${TEXT_TARGET_CLASS}`}
         >
           ← Retour à la liste des clubs
         </Link>
@@ -147,7 +151,7 @@ export function ClubDetailPage() {
           type="button"
           onClick={handleSync}
           disabled={syncState === 'loading' || !club.affiliationNumber}
-          className="mt-3 rounded-lg border border-accent-600 px-4 py-2 text-sm font-medium text-accent-600 hover:bg-accent-50 disabled:opacity-50"
+          className={`mt-3 border border-accent-600 text-accent-600 hover:bg-accent-50 ${OUTLINE_BUTTON_CLASS}`}
         >
           {syncState === 'loading' ? 'Synchronisation…' : 'Synchroniser depuis la FFTT'}
         </button>
@@ -169,7 +173,7 @@ export function ClubDetailPage() {
           <button
             type="button"
             onClick={handleArchive}
-            className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            className={`mt-3 ${DANGER_BUTTON_CLASS}`}
           >
             Archiver ce club
           </button>
@@ -186,7 +190,7 @@ export function ClubDetailPage() {
             <button
               type="button"
               onClick={handleActivate}
-              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+              className={`bg-green-700 text-white hover:bg-green-800 ${BASE_BUTTON_CLASS}`}
             >
               Réactiver ce club
             </button>
@@ -195,7 +199,7 @@ export function ClubDetailPage() {
               onClick={handleDelete}
               disabled={hasDependents}
               title={hasDependents ? 'Ce club a des équipes ou des joueurs rattachés : impossible à supprimer.' : undefined}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className={`disabled:cursor-not-allowed disabled:bg-slate-300 ${DANGER_BUTTON_CLASS}`}
             >
               Supprimer définitivement
             </button>
@@ -212,7 +216,6 @@ export function ClubDetailPage() {
         <ModalShell
           onClose={() => setPreview(null)}
           labelledBy="sync-preview-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
             <h2 id="sync-preview-title" className="font-display text-lg font-semibold text-slate-800">
@@ -234,7 +237,7 @@ export function ClubDetailPage() {
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -242,7 +245,7 @@ export function ClubDetailPage() {
                 type="button"
                 onClick={applySync}
                 disabled={selected.size === 0}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Appliquer
               </button>

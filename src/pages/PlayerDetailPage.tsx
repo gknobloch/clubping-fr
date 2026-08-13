@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { Avatar } from '@/components/Avatar'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
@@ -18,7 +19,7 @@ export function PlayerDetailPage() {
   if (!player) {
     return (
       <div className="space-y-4">
-        <Link to="/joueurs" className="text-sm font-medium text-accent-600 hover:text-accent-800">
+        <Link to="/joueurs" className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
           ← Joueurs
         </Link>
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-600">
@@ -30,7 +31,7 @@ export function PlayerDetailPage() {
 
   return (
     <div className="space-y-5">
-      <Link to="/joueurs" className="text-sm font-medium text-accent-600 hover:text-accent-800">
+      <Link to="/joueurs" className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}>
         ← Joueurs
       </Link>
 
@@ -78,7 +79,7 @@ export function PlayerDetailPage() {
           onClose={() => setZoom(false)}
           closeOnBackdrop
           label="Avatar"
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 p-6"
+          presentation="center" z={40} backdrop="dark"
         >
           <button
             type="button"

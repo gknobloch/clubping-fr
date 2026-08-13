@@ -6,8 +6,9 @@ import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
+import { useConfirm } from '@/components/useConfirm'
 
 export function PhasesPage() {
   const { phases: allPhases, seasons, updatePhase, addPhase, archivePhase, deletePhase } = useAppData()
@@ -25,6 +26,7 @@ export function PhasesPage() {
     displayName: '',
     status: 'upcoming',
   })
+  const [confirm, confirmDialog] = useConfirm()
 
   const activePhases = useMemo(() => allPhases.filter((p) => p.status !== 'archived'), [allPhases])
   const archivedPhases = useMemo(() => allPhases.filter((p) => p.status === 'archived'), [allPhases])
@@ -108,20 +110,21 @@ export function PhasesPage() {
     }
   }
 
-  const handleArchive = (phase: Phase) => {
-    if (window.confirm(`Archiver la phase "${phase.displayName}" ? Elle ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (phase: Phase) => {
+    if (await confirm({ title: `Archiver la phase "${phase.displayName}" ?`, message: `Elle ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archivePhase(phase.id)
     }
   }
 
-  const handleDelete = (phase: Phase) => {
-    if (window.confirm(`Supprimer définitivement la phase "${phase.displayName}" ? Les divisions, groupes, équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
+  const handleDelete = async (phase: Phase) => {
+    if (await confirm({ title: `Supprimer définitivement la phase "${phase.displayName}" ?`, message: `Les divisions, groupes, équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deletePhase(phase.id)
     }
   }
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Phases"
         actions={<PrimaryButton onClick={openCreate}>Ajouter une phase</PrimaryButton>}
@@ -201,7 +204,6 @@ export function PhasesPage() {
         <ModalShell
           onClose={closeModal}
           labelledBy="phase-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="phase-modal-title" className="font-display text-lg font-semibold text-slate-800">
@@ -304,7 +306,7 @@ export function PhasesPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
@@ -312,7 +314,7 @@ export function PhasesPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={duplicate}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

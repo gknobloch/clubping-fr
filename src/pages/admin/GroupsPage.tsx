@@ -7,11 +7,12 @@ import { ImportGroupsModal } from '@/components/ImportGroupsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportScheduleDocumentModal } from '@/components/ImportScheduleDocumentModal'
 import { PageHeader } from '@/components/PageHeader'
-import { PrimaryButton, SecondaryButton } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { PhaseSwitchButton } from '@/components/icons'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { useConfirm } from '@/components/useConfirm'
 
 export function GroupsPage() {
   const { user } = useAuth()
@@ -21,6 +22,7 @@ export function GroupsPage() {
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
+  const [confirm, confirmDialog] = useConfirm()
 
   // Phase switcher — defaults to the active phase, chronological order (#237).
   const orderedPhases = useMemo(
@@ -139,26 +141,27 @@ export function GroupsPage() {
     }
   }
 
-  const handleArchive = (group: Group) => {
-    if (window.confirm(`Archiver le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Il ne sera plus visible dans la liste active.`)) {
+  const handleArchive = async (group: Group) => {
+    if (await confirm({ title: `Archiver le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveGroup(group.id)
     }
   }
 
-  const handleDelete = (group: Group) => {
-    if (window.confirm(`Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`)) {
+  const handleDelete = async (group: Group) => {
+    if (await confirm({ title: `Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteGroup(group.id)
     }
   }
 
-  const handleResetGames = (group: Group) => {
-    if (window.confirm(`Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ? Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`)) {
+  const handleResetGames = async (group: Group) => {
+    if (await confirm({ title: `Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`, confirmLabel: 'Réinitialiser' })) {
       resetGroupGames(group.id)
     }
   }
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <PageHeader
         title="Groupes"
         actions={
@@ -358,7 +361,6 @@ export function GroupsPage() {
         <ModalShell
           onClose={closeModal}
           labelledBy="group-modal-title"
-          className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
             <h2 id="group-modal-title" className="font-display text-lg font-semibold text-slate-800">
@@ -398,14 +400,14 @@ export function GroupsPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className={NEUTRAL_BUTTON_CLASS}
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Enregistrer
               </button>

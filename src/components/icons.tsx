@@ -102,3 +102,12 @@ export function PhaseSwitchButton({
     </button>
   )
 }
+
+/** Row affordance for "tap through to more" — list rows, shortcut rows. */
+export function ChevronRightIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  )
+}
