@@ -37,6 +37,37 @@ test.describe('Player — Accueil', () => {
     await expect(page.getByText('Tous mes matchs')).toBeVisible()
     await expect(page.getByText('Saison 2025/2026 Phase 1')).toBeVisible()
   })
+
+  // #385 — the card used to say nothing about the team's own state; a player
+  // (let alone a captain) had to open "Aperçu" to learn it. Enzo Lotz is on
+  // team-1's roster but not its captain, so the shortcut below is his to not see.
+  test('shows how many are available and how many have not answered', async ({ page }) => {
+    await expect(page.getByText(/disponible.*sans réponse/)).toBeVisible()
+    await expect(page.getByRole('button', { name: /Composer l'équipe/ })).toHaveCount(0)
+  })
+
+  test('shows "Matchs joués" beside "À confirmer"', async ({ page }) => {
+    await expect(page.getByText('Matchs joués')).toBeVisible()
+    await expect(page.getByText('À confirmer')).toBeVisible()
+  })
+})
+
+// Quentin Colle (p2-player-2) captains team-1 — the "Composer l'équipe"
+// shortcut on the card is his alone (#385).
+test.describe('Player — Accueil (captain shortcut)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, 'colle')
+  })
+
+  test('opens the line-up sheet in one tap, from the card itself', async ({ page }) => {
+    const compose = page.getByRole('button', { name: /Composer l'équipe/ })
+    await expect(compose).toBeVisible()
+    await expect(compose).toContainText('4/4')
+
+    await compose.click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByText(/Sélection — PPA Rixheim 1/)).toBeVisible()
+  })
 })
 
 // Cédric Cunin is the seeded renfort/brûlage case: rostered on (and captain
