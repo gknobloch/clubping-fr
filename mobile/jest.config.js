@@ -16,5 +16,14 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
   // The `@/` and `@shared/*` aliases are rewritten by babel-plugin-module-resolver
   // (see babel.config.js), which jest-expo runs through babel-jest — no
-  // moduleNameMapper needed here, and no second place to keep in sync.
+  // alias entry needed here, and no second place to keep in sync.
+  moduleNameMapper: {
+    // `@shared/*` resolves to ../src, outside mobile/. Babel compiles those
+    // files too, and its output requires `@babel/runtime` helpers — which Node
+    // resolves by walking up from ../src, where CI has no node_modules at all:
+    // the mobile job installs mobile/package.json alone (.github/workflows/
+    // test.yml). Pin the helpers to mobile's own copy, the one the app bundles
+    // with. Merged with the preset's own mappings, not a replacement.
+    '^@babel/runtime/(.*)$': '<rootDir>/node_modules/@babel/runtime/$1',
+  },
 }
