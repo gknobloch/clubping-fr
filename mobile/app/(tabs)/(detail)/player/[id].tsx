@@ -8,10 +8,11 @@ import { getTeamName } from '@/utils/roles'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
 import { fonts } from '@/constants/typography'
+import { pointsFor } from '@shared/lib/phasePoints'
 
 export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { players, teams, clubs, phases, seasons } = useAppData()
+  const { players, teams, clubs, phases, seasons, playerPhasePoints } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
   const [avatarOpen, setAvatarOpen] = useState(false)
@@ -25,9 +26,9 @@ export default function PlayerDetailScreen() {
     (t) => t.phaseId === activePhase?.id && t.playerIds?.includes(id ?? ''),
   )
 
-  // Points at start of phase: taken from the team's rosterInitialPoints map
-  const activeTeam = playerTeams[0]
-  const phasePoints = activeTeam?.rosterInitialPoints?.[id ?? '']
+  // Points belong to (phase, player) since #384 — a player with no team this
+  // phase still has them.
+  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, id)
 
   useEffect(() => {
     if (player)

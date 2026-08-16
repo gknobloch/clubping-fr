@@ -7,11 +7,12 @@ import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
+import { pointsFor } from '@/lib/phasePoints'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout } = useAuth()
-  const { players, clubs, teams, phases, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, clubs, teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
@@ -20,7 +21,7 @@ export function ComptePage() {
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
   const activePhase = phases.find((p) => p.status === 'active')
   const myTeams = me && activePhase ? teams.filter((t) => t.phaseId === activePhase.id && t.playerIds.includes(me.id)) : []
-  const phasePoints = myTeams[0]?.rosterInitialPoints?.[me?.id ?? '']
+  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, me?.id)
 
   const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState(false)

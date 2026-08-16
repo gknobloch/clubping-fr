@@ -57,15 +57,6 @@ export const jsonParseIds = (v: unknown): string[] => {
   return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
 }
 
-/** A JSON object column (roster_initial_points) as its string-valued entries. */
-export const jsonParseStringMap = (v: unknown): Record<string, string> => {
-  const parsed = jsonParse(v)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-  return Object.fromEntries(
-    Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string'),
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Row shapes
 // ---------------------------------------------------------------------------
@@ -151,13 +142,18 @@ export interface TeamRow {
   captain_id: string
   /** JSON array of player ids. */
   player_ids: string
-  /** JSON object of playerId -> points. */
-  roster_initial_points: string | null
   color: string | null
   whatsapp_link: string | null
   is_archived: number
   /** FFTT team id (#282). */
   team_id: string | null
+}
+
+export interface PlayerPhasePointsRow {
+  phase_id: string
+  player_id: string
+  /** Points as text, as FFTT states them ("1731"). */
+  points: string
 }
 
 export interface MatchDayRow {

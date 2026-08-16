@@ -143,13 +143,27 @@ export interface Team {
   isArchived: boolean
   /** Roster for this team (phase). Used for availability and game selection. */
   playerIds: string[]
-  /** Initial points per player at the start of the phase (Club Admin sets when defining roster). */
-  rosterInitialPoints?: Record<string, string>
   /** Optional hex color for table/header display (e.g. #374151). */
   color?: string
   whatsappLink?: string
   /** FFTT team id, when this team came from FFTT (#282). */
   teamId?: string
+}
+
+/**
+ * A player's official points for a phase (#384).
+ *
+ * Keyed on (phaseId, playerId) — the table's primary key. Points used to hang
+ * off the team (`Team.rosterInitialPoints`), which left a licensee with no team
+ * nowhere to put them even though the value is the same: it belongs to the
+ * phase, not to the squad. The FFTT import is the only writer, so one player
+ * has one value per phase by construction.
+ */
+export interface PlayerPhasePoints {
+  phaseId: string
+  playerId: string
+  /** Points as text, the way FFTT states them ("1731"). */
+  points: string
 }
 
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
@@ -220,6 +234,7 @@ export interface DataState {
   groups: Group[]
   teams: Team[]
   players: Player[]
+  playerPhasePoints: PlayerPhasePoints[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]

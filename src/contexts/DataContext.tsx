@@ -21,6 +21,7 @@ import type {
   Group,
   Team,
   Player,
+  PlayerPhasePoints,
   MatchDay,
   Game,
   GameAvailability,
@@ -36,6 +37,7 @@ import {
   mockGroups,
   mockTeams,
   mockPlayers,
+  mockPlayerPhasePoints,
   mockMatchDays,
   mockGames,
   mockGameAvailabilities,
@@ -364,6 +366,8 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   moveDivisionDown: (divisionId: string) => void
   updatePlayer: (id: string, patch: Partial<Player>) => void
   addPlayer: (data: Omit<Player, 'id'>) => Player
+  /** Upsert points for (phase, player) — the FFTT import's only write (#384). */
+  setPlayerPhasePoints: (updates: PlayerPhasePoints[]) => void
   setAvatar: (id: string, base64: string, contentType: string) => Promise<void>
   removeAvatar: (id: string) => Promise<void>
   matchDays: MatchDay[]
@@ -405,6 +409,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const [groups, setGroups] = useState<Group[]>(initialData?.groups ?? [])
   const [teams, setTeams] = useState<Team[]>(initialData?.teams ?? [])
   const [players, setPlayers] = useState<Player[]>(initialData?.players ?? [])
+  const [playerPhasePoints, setPlayerPhasePointsState] = useState<PlayerPhasePoints[]>(
+    initialData?.playerPhasePoints ?? []
+  )
   const [matchDays, setMatchDays] = useState<MatchDay[]>(initialData?.matchDays ?? [])
   const [games, setGames] = useState<Game[]>(initialData?.games ?? [])
   const [gameAvailabilities, setGameAvailabilities] = useState<GameAvailability[]>(
@@ -432,6 +439,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setGroups(data.groups)
       setTeams(data.teams)
       setPlayers(data.players)
+      setPlayerPhasePointsState(data.playerPhasePoints ?? [])
       setMatchDays(data.matchDays)
       setGames(data.games)
       setGameAvailabilities(data.gameAvailabilities)
@@ -444,6 +452,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       applyData({
         seasons: mockSeasons, phases: mockPhases, divisions: mockDivisions,
         clubs: mockClubs, groups: mockGroups, teams: mockTeams, players: mockPlayers,
+        playerPhasePoints: mockPlayerPhasePoints,
         matchDays: mockMatchDays, games: mockGames,
         gameAvailabilities: mockGameAvailabilities,
         gameSelections: mockGameSelections, users: mockUsers,
@@ -1297,35 +1306,32 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       if (!team) return prev
       const nextPlayerIds = patch.playerIds ?? team.playerIds ?? []
       const phaseId = patch.phaseId ?? team.phaseId
-      const rosterInitialPoints = patch.rosterInitialPoints ?? team.rosterInitialPoints
       const otherTeamsInPhase = prev.filter(
         (t) => t.phaseId === phaseId && t.id !== id
       )
-      const batchUpdates: Array<{ id: string; playerIds: string[]; rosterInitialPoints?: Record<string, string> }> = []
+      // A player belongs to one team per phase: joining this one removes them
+      // from the others. Their points are untouched — since #384 those hang off
+      // (phase, player) and do not move with the roster.
+      const batchUpdates: Array<{ id: string; playerIds: string[] }> = []
       for (const other of otherTeamsInPhase) {
         const otherIds = other.playerIds ?? []
-        const removed = otherIds.filter((pid) => nextPlayerIds.includes(pid))
-        if (removed.length > 0) {
-          const nextIds = otherIds.filter((pid) => !nextPlayerIds.includes(pid))
-          const nextPoints = { ...other.rosterInitialPoints }
-          removed.forEach((pid) => delete nextPoints[pid])
+        if (otherIds.some((pid) => nextPlayerIds.includes(pid))) {
           batchUpdates.push({
             id: other.id,
-            playerIds: nextIds,
-            rosterInitialPoints: Object.keys(nextPoints).length ? nextPoints : undefined,
+            playerIds: otherIds.filter((pid) => !nextPlayerIds.includes(pid)),
           })
         }
       }
       if (persist) {
-        api(`/teams/${id}`, { method: 'PATCH', body: JSON.stringify({ ...patch, rosterInitialPoints }) })
+        api(`/teams/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
         if (batchUpdates.length) {
           api('/teams/batch', { method: 'POST', body: JSON.stringify({ updates: batchUpdates }) })
         }
       }
       return prev.map((t) => {
-        if (t.id === id) return { ...t, ...patch, rosterInitialPoints }
+        if (t.id === id) return { ...t, ...patch }
         const u = batchUpdates.find((upd) => upd.id === t.id)
-        if (u) return { ...t, playerIds: u.playerIds, rosterInitialPoints: u.rosterInitialPoints }
+        if (u) return { ...t, playerIds: u.playerIds }
         return t
       })
     })
@@ -1340,25 +1346,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       const phaseId = team.phaseId
       const newPlayerIds = team.playerIds ?? []
       const otherTeamsInPhase = prev.filter((t) => t.phaseId === phaseId)
-      const batchUpdates: Array<{ id: string; playerIds: string[]; rosterInitialPoints?: Record<string, string> }> = []
+      const batchUpdates: Array<{ id: string; playerIds: string[] }> = []
       const updated = prev.map((t) => {
         if (!otherTeamsInPhase.includes(t)) return t
         const otherIds = t.playerIds ?? []
-        const removed = otherIds.filter((pid) => newPlayerIds.includes(pid))
-        if (removed.length === 0) return t
+        if (!otherIds.some((pid) => newPlayerIds.includes(pid))) return t
         const nextIds = otherIds.filter((pid) => !newPlayerIds.includes(pid))
-        const nextPoints = { ...t.rosterInitialPoints }
-        removed.forEach((pid) => delete nextPoints[pid])
-        batchUpdates.push({
-          id: t.id,
-          playerIds: nextIds,
-          rosterInitialPoints: Object.keys(nextPoints).length ? nextPoints : undefined,
-        })
-        return {
-          ...t,
-          playerIds: nextIds,
-          rosterInitialPoints: Object.keys(nextPoints).length ? nextPoints : undefined,
-        }
+        batchUpdates.push({ id: t.id, playerIds: nextIds })
+        return { ...t, playerIds: nextIds }
       })
       if (persist) {
         api('/teams', { method: 'POST', body: JSON.stringify(team) })
@@ -1414,6 +1409,23 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     setPlayers((prev) => [...prev, player])
     if (persist) api('/players', { method: 'POST', body: JSON.stringify(player) })
     return player
+  }, [persist])
+
+  // --- Player phase points (#384) ---
+  // Written in one call because the FFTT import is their only writer, and it
+  // lands a whole club at once. Upsert semantics on (phaseId, playerId), same
+  // as the API's ON CONFLICT.
+  const setPlayerPhasePoints = useCallback((updates: PlayerPhasePoints[]) => {
+    if (!updates.length) return
+    setPlayerPhasePointsState((prev) => {
+      const next = prev.filter(
+        (p) => !updates.some((u) => u.phaseId === p.phaseId && u.playerId === p.playerId),
+      )
+      return [...next, ...updates]
+    })
+    if (persist) {
+      api('/player-phase-points/batch', { method: 'POST', body: JSON.stringify({ updates }) })
+    }
   }, [persist])
 
   // Avatars are stored base64 in D1 behind PUT/DELETE /users/:id/avatar; the
@@ -1590,6 +1602,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       groups,
       teams,
       players,
+      playerPhasePoints,
       matchDays,
       games,
       updateDivision,
@@ -1642,6 +1655,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       moveDivisionDown,
       updatePlayer,
       addPlayer,
+      setPlayerPhasePoints,
       setAvatar,
       removeAvatar,
       updateMatchDay,
@@ -1657,7 +1671,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setGameSelectionBatch,
     }),
     [
-      divisions, clubs, seasons, phases, groups, teams, players,
+      divisions, clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
@@ -1666,7 +1680,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
-      updatePlayer, addPlayer, setAvatar, removeAvatar,
+      updatePlayer, addPlayer, setPlayerPhasePoints, setAvatar, removeAvatar,
       updateMatchDay, addMatchDay, updateGame, addGame,
       gameAvailabilities, setGameAvailability, clearGameAvailability,
       gameSelections, getGameSelectionPlayerIds, setGameSelection, setGameSelectionBatch,

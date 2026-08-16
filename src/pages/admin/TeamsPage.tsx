@@ -4,6 +4,7 @@ import type { Team } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
+import { pointsFor } from '@/lib/phasePoints'
 import { ClockIcon, CaptainIcon, WhatsAppIcon, PhaseSwitchButton } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
 import { ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -23,6 +24,7 @@ export function TeamsPage() {
     divisions,
     groups,
     players,
+    playerPhasePoints,
     updateTeam,
     addTeam,
     updateGroup,
@@ -85,8 +87,6 @@ export function TeamsPage() {
     defaultTime: '',
     captainId: '',
     playerIds: [] as string[],
-    /** Initial points per player for this phase (when in this team). */
-    initialPoints: {} as Record<string, string>,
     whatsappLink: '',
     /** Card/header color; falls back to the default red when unset. */
     color: '',
@@ -167,17 +167,12 @@ export function TeamsPage() {
   const handleImportFromPreviousPhase = (patch: { captainId?: string; addPlayerIds: string[]; whatsappLink?: string; color?: string }) => {
     setForm((f) => {
       const newPlayerIds = [...f.playerIds]
-      const newInitialPoints = { ...f.initialPoints }
       for (const pid of patch.addPlayerIds) {
-        if (!newPlayerIds.includes(pid)) {
-          newPlayerIds.push(pid)
-          newInitialPoints[pid] = newInitialPoints[pid] ?? ''
-        }
+        if (!newPlayerIds.includes(pid)) newPlayerIds.push(pid)
       }
       return {
         ...f,
         playerIds: newPlayerIds,
-        initialPoints: newInitialPoints,
         captainId: patch.captainId ?? f.captainId,
         whatsappLink: patch.whatsappLink ?? f.whatsappLink,
         color: patch.color ?? f.color,
@@ -190,10 +185,6 @@ export function TeamsPage() {
     setEditing(team)
     setCreating(false)
     const rosterIds = team.playerIds ?? []
-    const initialPoints: Record<string, string> = {}
-    rosterIds.forEach((pid) => {
-      initialPoints[pid] = team.rosterInitialPoints?.[pid] ?? ''
-    })
     setForm({
       clubId: team.clubId,
       phaseId: team.phaseId,
@@ -205,7 +196,6 @@ export function TeamsPage() {
       defaultTime: team.defaultTime,
       captainId: team.captainId,
       playerIds: rosterIds,
-      initialPoints,
       whatsappLink: team.whatsappLink ?? '',
       color: team.color ?? '',
     })
@@ -230,7 +220,6 @@ export function TeamsPage() {
       defaultTime: '20h00',
       captainId: '',
       playerIds: [],
-      initialPoints: {},
       whatsappLink: '',
       color: '',
     })
@@ -254,14 +243,6 @@ export function TeamsPage() {
         ? form.captainId
         : form.playerIds[0] ?? ''
 
-  const buildRosterInitialPoints = (): Record<string, string> | undefined => {
-    const out: Record<string, string> = {}
-    form.playerIds.forEach((pid) => {
-      out[pid] = (form.initialPoints[pid] ?? '').trim()
-    })
-    return form.playerIds.length > 0 ? out : undefined
-  }
-
   const handleSave = () => {
     if (editing) {
       updateTeam(editing.id, {
@@ -271,7 +252,6 @@ export function TeamsPage() {
         defaultTime: form.defaultTime,
         playerIds: form.playerIds,
         captainId: captainForSave,
-        rosterInitialPoints: buildRosterInitialPoints(),
         whatsappLink: form.whatsappLink || undefined,
         color: form.color || undefined,
       })
@@ -300,7 +280,6 @@ export function TeamsPage() {
       defaultTime: form.defaultTime,
       captainId: form.captainId,
       playerIds: form.playerIds,
-      rosterInitialPoints: buildRosterInitialPoints(),
       whatsappLink: form.whatsappLink || undefined,
       color: form.color || undefined,
       isArchived: false,
@@ -686,19 +665,11 @@ export function TeamsPage() {
                             <td className="px-3 py-2 text-slate-500 text-xs">
                               {p.licenseNumber}
                             </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="text"
-                                value={form.initialPoints[p.id] ?? ''}
-                                onChange={(e) =>
-                                  setForm((f) => ({
-                                    ...f,
-                                    initialPoints: { ...f.initialPoints, [p.id]: e.target.value },
-                                  }))
-                                }
-                                placeholder="—"
-                                className="w-20 rounded border border-slate-300 px-2 py-1 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500/20"
-                              />
+                            {/* Read-only since #384: points come from the FFTT
+                                import and belong to the phase, so they are shown
+                                here to help compose, not edited here. */}
+                            <td className="px-3 py-2 text-slate-600">
+                              {pointsFor(playerPhasePoints, form.phaseId, p.id) ?? '—'}
                             </td>
                             <td className="px-3 py-2 text-center">
                               <input
@@ -713,16 +684,11 @@ export function TeamsPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setForm((f) => {
-                                    const next = { ...f.initialPoints }
-                                    delete next[p.id]
-                                    return {
-                                      ...f,
-                                      playerIds: f.playerIds.filter((id) => id !== p.id),
-                                      captainId: f.captainId === p.id ? '' : f.captainId,
-                                      initialPoints: next,
-                                    }
-                                  })
+                                  setForm((f) => ({
+                                    ...f,
+                                    playerIds: f.playerIds.filter((id) => id !== p.id),
+                                    captainId: f.captainId === p.id ? '' : f.captainId,
+                                  }))
                                 }}
                                 className="text-slate-400 hover:text-red-600 transition-colors"
                                 title="Retirer de l'équipe"
@@ -745,11 +711,7 @@ export function TeamsPage() {
                       onChange={(e) => {
                         const id = e.target.value
                         if (id && !form.playerIds.includes(id)) {
-                          setForm((f) => ({
-                            ...f,
-                            playerIds: [...f.playerIds, id],
-                            initialPoints: { ...f.initialPoints, [id]: '' },
-                          }))
+                          setForm((f) => ({ ...f, playerIds: [...f.playerIds, id] }))
                         }
                         e.target.value = ''
                       }}

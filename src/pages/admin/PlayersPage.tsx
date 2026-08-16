@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { ModalShell } from '@/components/ModalShell'
+import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 
 const STATUS_LABELS: Record<PlayerType['status'], string> = {
   active: 'Actif',
@@ -27,6 +28,7 @@ export function PlayersPage() {
   const [statusFilter, setStatusFilter] = useState<PlayerType['status'] | 'all'>('active')
   const [editing, setEditing] = useState<PlayerType | null>(null)
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -155,7 +157,22 @@ export function PlayersPage() {
       <PageHeader
         title="Joueurs"
         club={scopedClub}
-        actions={canEditPlayers && <PrimaryButton onClick={openCreate}>Ajouter un joueur</PrimaryButton>}
+        actions={
+          canEditPlayers && (
+            <div className="flex items-center gap-2">
+              {/* Desktop only, like the other FFTT imports (#381): this is a
+                  dense comparison screen, checked line by line before it
+                  writes anything. It needs one club to import into, so it
+                  only shows when the page is scoped to a single one. */}
+              {scopedClub && (
+                <SecondaryButton onClick={() => setImporting(true)} className="hidden md:inline-flex">
+                  Importer depuis la FFTT
+                </SecondaryButton>
+              )}
+              <PrimaryButton onClick={openCreate}>Ajouter un joueur</PrimaryButton>
+            </div>
+          )
+        }
       />
       <div className="flex items-center gap-3">
         <input
@@ -315,6 +332,10 @@ export function PlayersPage() {
           </tbody>
         </table>
       </div>
+
+      {importing && scopedClub && (
+        <ImportPlayersModal clubId={scopedClub.id} onClose={() => setImporting(false)} />
+      )}
 
       {(editing || creating) && (
         <ModalShell

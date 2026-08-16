@@ -13,13 +13,14 @@ import { getTeamName, getRoleLabel } from '@/utils/roles'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import type { Player } from '@shared/types'
+import { pointsFor } from '@shared/lib/phasePoints'
 import { fonts } from '@/constants/typography'
 
 type EditableFields = Required<Pick<Player, 'phone' | 'birthDate' | 'birthPlace'>> & { email: string }
 
 export default function MonCompteScreen() {
   const { user, logout } = useAuth()
-  const { players, teams, clubs, phases, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, teams, clubs, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [form, setForm] = useState<EditableFields>({ email: '', phone: '', birthDate: '', birthPlace: '' })
@@ -31,8 +32,7 @@ export default function MonCompteScreen() {
   const playerTeams = player
     ? teams.filter((t) => t.phaseId === activePhase?.id && t.playerIds?.includes(player.id))
     : []
-  const activeTeam = playerTeams[0]
-  const phasePoints = player ? activeTeam?.rosterInitialPoints?.[player.id] : undefined
+  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, player?.id)
 
   function openEdit() {
     if (!player) return

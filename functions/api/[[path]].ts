@@ -2,10 +2,10 @@ import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
-import { jsonParseIds, jsonParseStringMap } from './rows'
+import { jsonParseIds } from './rows'
 import type { Address, ClubChannel, DataState } from '../../src/types'
 import type {
-  SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
+  SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
 } from './rows'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
@@ -52,7 +52,7 @@ app.get('/data', async (c) => {
   const db = c.env.DB
   const [
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
-    groupsR, teamsR, matchDaysR, gamesR,
+    groupsR, teamsR, phasePointsR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
@@ -63,6 +63,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM club_channels ORDER BY sort_order').all<ClubChannelRow>(),
     db.prepare('SELECT * FROM groups').all<GroupRow>(),
     db.prepare('SELECT * FROM teams').all<TeamRow>(),
+    db.prepare('SELECT * FROM player_phase_points').all<PlayerPhasePointsRow>(),
     db.prepare('SELECT * FROM match_days').all<MatchDayRow>(),
     db.prepare('SELECT * FROM games').all<GameRow>(),
     db.prepare('SELECT * FROM game_availabilities').all<GameAvailabilityRow>(),
@@ -164,9 +165,12 @@ app.get('/data', async (c) => {
       isArchived: bool(r.is_archived),
       ...(r.team_id ? { teamId: r.team_id } : {}),
       playerIds: jsonParseIds(r.player_ids),
-      ...(r.roster_initial_points ? { rosterInitialPoints: jsonParseStringMap(r.roster_initial_points) } : {}),
       ...(r.color ? { color: r.color } : {}),
       ...(r.whatsapp_link ? { whatsappLink: r.whatsapp_link } : {}),
+    })),
+    // (phase_id, player_id) is the primary key (#384) — no surrogate id.
+    playerPhasePoints: phasePointsR.results.map(r => ({
+      phaseId: r.phase_id, playerId: r.player_id, points: r.points,
     })),
     matchDays: matchDaysR.results.map(r => ({
       id: r.id, groupId: r.group_id, number: r.number, date: r.date,
@@ -2153,6 +2157,9 @@ app.delete('/phases/:id', async (c) => {
     ...clearGroupsAndTeams(db, groups, teams, id),
     db.prepare(`DELETE FROM groups WHERE division_id IN (${divisions})`).bind(id),
     db.prepare('DELETE FROM divisions WHERE phase_id = ?').bind(id),
+    // Points hang off the phase, not off a team (#384), so they outlive the
+    // teams cleared just above and have to go with the phase itself.
+    db.prepare('DELETE FROM player_phase_points WHERE phase_id = ?').bind(id),
     db.prepare('DELETE FROM phases WHERE id = ?').bind(id),
   ])
   return c.json({ ok: true })
@@ -2595,12 +2602,12 @@ app.delete('/users/:id/avatar', async (c) => {
 app.post('/teams', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    `INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, roster_initial_points, color, whatsapp_link, is_archived, team_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, color, whatsapp_link, is_archived, team_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     d.id, d.clubId, d.phaseId, d.number, d.groupId,
     d.gameLocationId, d.defaultDay, d.defaultTime, d.captainId ?? '',
-    jsonStr(d.playerIds ?? []), d.rosterInitialPoints ? jsonStr(d.rosterInitialPoints) : null,
+    jsonStr(d.playerIds ?? []),
     d.color ?? null, d.whatsappLink ?? null, d.isArchived ? 1 : 0, d.teamId ?? null,
   ).run()
   return c.json({ ok: true })
@@ -2620,7 +2627,6 @@ app.patch('/teams/:id', async (c) => {
   if ('defaultTime' in p) { s.push('default_time = ?'); v.push(p.defaultTime) }
   if ('captainId' in p) { s.push('captain_id = ?'); v.push(p.captainId) }
   if ('playerIds' in p) { s.push('player_ids = ?'); v.push(jsonStr(p.playerIds)) }
-  if ('rosterInitialPoints' in p) { s.push('roster_initial_points = ?'); v.push(p.rosterInitialPoints ? jsonStr(p.rosterInitialPoints) : null) }
   if ('color' in p) { s.push('color = ?'); v.push(p.color ?? null) }
   if ('whatsappLink' in p) { s.push('whatsapp_link = ?'); v.push(p.whatsappLink ?? null) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
@@ -2652,11 +2658,29 @@ app.delete('/teams/:id', async (c) => {
 app.post('/teams/batch', async (c) => {
   const { updates } = await c.req.json()
   if (!updates?.length) return c.json({ ok: true })
-  const stmts = updates.map((u: { id: string; playerIds: string[]; rosterInitialPoints?: Record<string, string> }) =>
-    c.env.DB.prepare('UPDATE teams SET player_ids = ?, roster_initial_points = ? WHERE id = ?')
-      .bind(jsonStr(u.playerIds), u.rosterInitialPoints ? jsonStr(u.rosterInitialPoints) : null, u.id)
+  const stmts = updates.map((u: { id: string; playerIds: string[] }) =>
+    c.env.DB.prepare('UPDATE teams SET player_ids = ? WHERE id = ?')
+      .bind(jsonStr(u.playerIds), u.id)
   )
   await c.env.DB.batch(stmts)
+  return c.json({ ok: true })
+})
+
+// --- Player phase points (#384) ---
+// Points belong to (phase, player), not to a team, and the FFTT import is
+// their only writer — hence a batch upsert rather than per-field PATCHes: one
+// import writes the whole club at once.
+app.post('/player-phase-points/batch', async (c) => {
+  const { updates } = await c.req.json() as {
+    updates?: Array<{ phaseId: string; playerId: string; points: string }>
+  }
+  if (!updates?.length) return c.json({ ok: true })
+  await c.env.DB.batch(updates.map((u) =>
+    c.env.DB.prepare(
+      `INSERT INTO player_phase_points (phase_id, player_id, points) VALUES (?, ?, ?)
+       ON CONFLICT(phase_id, player_id) DO UPDATE SET points = excluded.points`
+    ).bind(u.phaseId, u.playerId, u.points)
+  ))
   return c.json({ ok: true })
 })
 
