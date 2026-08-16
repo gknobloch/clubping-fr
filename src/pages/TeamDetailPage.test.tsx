@@ -3,8 +3,18 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import {
-  mockDivisions, mockClubs, mockSeasons, mockPhases, mockGroups, mockTeams,
-  mockPlayers, mockMatchDays, mockGames, mockGameAvailabilities, mockGameSelections,
+  mockClubs,
+  mockDivisions,
+  mockGameAvailabilities,
+  mockGameSelections,
+  mockGames,
+  mockGroups,
+  mockMatchDays,
+  mockPhases,
+  mockPlayerPhasePoints,
+  mockPlayers,
+  mockSeasons,
+  mockTeams,
   mockUsers,
 } from '@/mock/data'
 
@@ -25,6 +35,7 @@ function baseTestData(clubs = mockClubs) {
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
+    playerPhasePoints: mockPlayerPhasePoints,
   }
 }
 

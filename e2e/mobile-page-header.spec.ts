@@ -49,16 +49,29 @@ test.describe('En-tête de page sur mobile (#308)', () => {
     })
   }
 
-  test('les actions passent sous le titre', async ({ page }) => {
+  // #308 wrapped the actions under the title because their labels could not
+  // share a 375px row. They are icon-only squares below md: since #389's
+  // review, so they fit beside the title and no longer need to wrap — which is
+  // what PageHeader always allowed for ("actions sit beside the title when they
+  // fit"). What still has to hold is the reason wrapping existed: the header
+  // must not overflow, and every action must stay a full 44px target.
+  test('les actions tiennent dans l’en-tête sans le faire déborder', async ({ page }) => {
     await page.goto('/groupes')
     await page.locator('main h1').waitFor()
 
-    const { titleBottom, firstActionTop } = await page.evaluate(() => {
-      const h1 = document.querySelector('main h1')!
-      const btn = h1.closest('div.rounded-2xl')!.querySelector('button')!
-      return { titleBottom: h1.getBoundingClientRect().bottom, firstActionTop: btn.getBoundingClientRect().top }
-    })
-    expect(firstActionTop).toBeGreaterThanOrEqual(titleBottom)
+    const header = page.locator('main h1').locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const { client, scroll } = await header.evaluate((el) => ({
+      client: el.clientWidth,
+      scroll: el.scrollWidth,
+    }))
+    expect(scroll).toBe(client)
+
+    for (const btn of await header.getByRole('button').all()) {
+      const box = (await btn.boundingBox())!
+      expect(box.width).toBeGreaterThanOrEqual(44)
+      expect(box.height).toBeGreaterThanOrEqual(44)
+      expect(box.x + box.width).toBeLessThanOrEqual(375)
+    }
   })
 })
 

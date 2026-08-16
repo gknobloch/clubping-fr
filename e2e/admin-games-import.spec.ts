@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, runRowAction } from './helpers'
 
 // The E2E dev server has no API; the FFTT games endpoints are mocked per test.
 const PREVIEW = '**/api/fftt/games-preview*'
@@ -71,7 +71,7 @@ test.describe('General admin — Games FFTT import', () => {
 
     await page.goto('/equipes')
     const card = page.locator('div').filter({ hasText: 'PPA Rixheim 1' }).filter({ hasText: 'Quentin Colle' }).last()
-    await card.getByRole('button', { name: 'Importer les matchs' }).click()
+    await runRowAction(page, card, 'Importer les matchs')
 
     const dialog = page.getByRole('dialog')
     await expect(page.getByRole('heading', { name: 'Importer les matchs FFTT' })).toBeVisible()
@@ -180,7 +180,7 @@ test.describe('General admin — Games FFTT import', () => {
     })
 
     await page.goto('/equipes')
-    await page.getByRole('button', { name: 'Importer les matchs' }).first().click()
+    await runRowAction(page, page, 'Importer les matchs')
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('3 à une autre date')).toBeVisible()
 
@@ -209,7 +209,7 @@ test.describe('General admin — Games FFTT import', () => {
     })
 
     await page.goto('/equipes')
-    await page.getByRole('button', { name: 'Importer les matchs' }).first().click()
+    await runRowAction(page, page, 'Importer les matchs')
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('checkbox').check()
     // Adjusting dates is work in itself, so the button acts even with no new match.
@@ -239,7 +239,7 @@ test.describe('General admin — Games FFTT import', () => {
     })
 
     await page.goto('/equipes')
-    await page.getByRole('button', { name: 'Importer les matchs' }).first().click()
+    await runRowAction(page, page, 'Importer les matchs')
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('7 à relier à la FFTT')).toBeVisible()
 

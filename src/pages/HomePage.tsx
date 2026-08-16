@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { Avatar } from '@/components/Avatar'
+import { IdentityCard } from '@/components/IdentityCard'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
@@ -115,19 +116,29 @@ export function HomePage() {
 
   return (
     <div className="space-y-5">
-      {/* Welcome / identity */}
-      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        {me ? (
-          <Avatar playerId={me.id} avatarUpdatedAt={me.avatarUpdatedAt} firstName={me.firstName} lastName={me.lastName} size={56} />
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-semibold text-slate-800">
-            {displayName}
-          </h1>
-          <p className="text-slate-500">{myClub ? myClub.displayName : roleLabel}</p>
-        </div>
-        {myClub && <ClubLogo clubId={myClub.id} logoUpdatedAt={myClub.logoUpdatedAt} size={56} />}
-      </div>
+      {/* Welcome / identity — IdentityCard rather than a local copy, so the
+          header scale stays the same as every other screen's (#389 review). */}
+      <IdentityCard
+        leading={
+          me ? (
+            <Avatar
+              playerId={me.id}
+              avatarUpdatedAt={me.avatarUpdatedAt}
+              firstName={me.firstName}
+              lastName={me.lastName}
+              sizeClass="h-11 w-11 sm:h-14 sm:w-14"
+            />
+          ) : undefined
+        }
+        title={displayName}
+        trailing={
+          myClub && (
+            <ClubLogo clubId={myClub.id} logoUpdatedAt={myClub.logoUpdatedAt} sizeClass="h-11 w-11 sm:h-14 sm:w-14" />
+          )
+        }
+      >
+        <p className="text-slate-500">{myClub ? myClub.displayName : roleLabel}</p>
+      </IdentityCard>
 
       {isPlayerDashboard && myActiveTeam ? (
         <>
@@ -271,7 +282,10 @@ export function HomePage() {
                 })()
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            {/* Two across on a phone, stacked from md: up: beside the match
+                card they are two tall, near-empty boxes otherwise (#389
+                review). */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-1 md:content-start">
               <div className="flex flex-col gap-3">
                 <div className="flex h-7 items-center">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Matchs joués</p>

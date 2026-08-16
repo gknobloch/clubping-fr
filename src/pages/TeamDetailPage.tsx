@@ -97,7 +97,7 @@ export function TeamDetailPage() {
           </span>
         }
         title={getTeamName(team, clubs)}
-        trailing={club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} size={56} />}
+        trailing={club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} sizeClass="h-11 w-11 sm:h-14 sm:w-14" />}
       >
         {division && <p className="text-slate-500">{division.displayName}</p>}
       </IdentityCard>

@@ -7,7 +7,8 @@ import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
+import { CheckIcon, PlusIcon } from '@/components/icons'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { useConfirm } from '@/components/useConfirm'
 
@@ -116,10 +117,13 @@ export function SeasonsPage() {
           <>
             {/* Manual add is the fallback; the FFTT check/import is the default
                 path — same layout as the Divisions page. */}
-            <SecondaryButton onClick={openCreate}>Ajouter une saison</SecondaryButton>
-            <PrimaryButton onClick={handleCheck} disabled={checking}>
-              {checking ? 'Vérification…' : 'Vérifier la saison FFTT'}
-            </PrimaryButton>
+            <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une saison" onClick={openCreate} />
+            <HeaderAction
+              icon={<CheckIcon />}
+              label={checking ? 'Vérification…' : 'Vérifier la saison FFTT'}
+              onClick={handleCheck}
+              disabled={checking}
+            />
           </>
         }
       />

@@ -65,3 +65,58 @@ export function SecondaryButton({
     />
   )
 }
+
+/**
+ * Page-header action: an icon-only square below `md:`, icon + label above.
+ *
+ * The labels these carry are long — "Importer depuis la FFTT" is 205px — and
+ * two or three of them side by side pushed the header into a second and third
+ * row on a phone, eating the top of every list screen (#389 review).
+ *
+ * `aria-label` carries the full label at every width, so the accessible name
+ * never changes with the viewport and a test can find the button by its words
+ * whatever the screen size.
+ */
+export function HeaderAction({
+  icon,
+  label,
+  onClick,
+  variant = 'primary',
+  disabled,
+  desktopOnly,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  /**
+   * `adaptive` is filled below `md:` and outlined above — for the "add" button
+   * on a screen whose import is `desktopOnly`: on a phone it is the only action
+   * left, so the page would otherwise have no filled one; on desktop the import
+   * takes that role (#384).
+   */
+  variant?: 'primary' | 'secondary' | 'adaptive'
+  disabled?: boolean
+  /** Hidden below `md:`, for work with no usable mobile form yet (#381). */
+  desktopOnly?: boolean
+}) {
+  const look =
+    variant === 'primary'
+      ? 'bg-accent-600 text-white hover:bg-accent-700'
+      : variant === 'secondary'
+        ? 'border border-accent-600 text-accent-600 hover:bg-accent-50'
+        : 'bg-accent-600 text-white hover:bg-accent-700' +
+          ' md:border md:border-accent-600 md:bg-white md:text-accent-600 md:hover:bg-accent-50'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={`${base} gap-2 max-md:w-11 max-md:px-0 ${desktopOnly ? 'max-md:hidden' : ''} ${look}`}
+    >
+      {icon}
+      <span className="hidden md:inline">{label}</span>
+    </button>
+  )
+}

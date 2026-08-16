@@ -55,7 +55,7 @@ export function MyClubPage() {
     <div className="space-y-5">
       {/* Identity */}
       <IdentityCard
-        leading={<ClubLogo clubId={currentClub.id} logoUpdatedAt={currentClub.logoUpdatedAt} size={56} />}
+        leading={<ClubLogo clubId={currentClub.id} logoUpdatedAt={currentClub.logoUpdatedAt} sizeClass="h-11 w-11 sm:h-14 sm:w-14" />}
         title={currentClub.displayName}
         trailing={
           canEdit && (

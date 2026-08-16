@@ -9,10 +9,13 @@ export type RowAction = {
   disabled?: boolean
   title?: string
   /**
-   * Keep this action out of the below-`md:` menu. For work that has no usable
-   * mobile form yet — the FFTT games import is a dense comparison screen that
-   * is illegible at 375px (#381) — so it is offered where it works rather than
-   * offered badly everywhere.
+   * Hide this action below `md:`. For work that has no usable mobile form yet —
+   * the FFTT games import is a dense comparison screen, illegible at 375px
+   * (#381) — so it is offered where it works rather than badly everywhere.
+   *
+   * Hidden by CSS inside the menu rather than filtered out of it, because the
+   * menu is now the only surface on some screens (#389 review): filtering would
+   * remove the action from desktop too.
    */
   desktopOnly?: boolean
 }
@@ -78,19 +81,34 @@ export function RowActions({
   actions,
   label = 'Actions',
   align = 'right',
+  menuOnly = false,
 }: {
   actions: MaybeAction[]
   /** Accessible name of the "…" trigger — say which row it belongs to. */
   label?: string
   /** `left` for the Équipes cards, whose actions sit under the card body. */
   align?: 'left' | 'right'
+  /**
+   * Use the "…" menu at every width instead of inline text buttons from `md:`.
+   * On a card, three text links stacked under the body read as a section of the
+   * card and crowd it; one trigger beside the content does not (#389 review).
+   */
+  menuOnly?: boolean
 }) {
   const items = actions.filter((a): a is RowAction => Boolean(a))
   if (items.length === 0) return null
-  // Every action on the row may be desktopOnly, leaving nothing for the "…"
-  // trigger to open — render no trigger rather than an empty menu.
-  const menuItems = items.filter((a) => !a.desktopOnly)
+  // Every action may be desktopOnly, leaving the menu empty below md: — show no
+  // trigger there rather than one that opens onto nothing.
+  const hasMobileItem = items.some((a) => !a.desktopOnly)
   const justify = align === 'left' ? 'justify-start' : 'justify-end'
+
+  if (menuOnly) {
+    return (
+      <div className={`flex ${hasMobileItem ? '' : 'max-md:hidden'} ${justify}`}>
+        <ActionsMenu items={items} label={label} />
+      </div>
+    )
+  }
 
   return (
     <>
@@ -108,9 +126,9 @@ export function RowActions({
           </button>
         ))}
       </div>
-      {menuItems.length > 0 && (
+      {hasMobileItem && (
         <div className={`flex md:hidden ${justify}`}>
-          <ActionsMenu items={menuItems} label={label} />
+          <ActionsMenu items={items.filter((a) => !a.desktopOnly)} label={label} />
         </div>
       )}
     </>
@@ -192,7 +210,7 @@ function ActionsMenu({ items, label }: { items: RowAction[]; label: string }) {
                 onClick={() => run(action)}
                 disabled={action.disabled}
                 title={action.title}
-                className={`flex min-h-[44px] w-full items-center border-t border-slate-100 px-4 text-left text-sm font-medium hover:bg-slate-50 ${TONE[action.tone ?? 'accent']} ${DISABLED}`}
+                className={`flex min-h-[44px] w-full items-center border-t border-slate-100 px-4 text-left text-sm font-medium hover:bg-slate-50 ${action.desktopOnly ? 'max-md:hidden' : ''} ${TONE[action.tone ?? 'accent']} ${DISABLED}`}
               >
                 {action.label}
               </button>

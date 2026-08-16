@@ -4,9 +4,9 @@ import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportDivisionsModal } from '@/components/ImportDivisionsModal'
 import { PageHeader } from '@/components/PageHeader'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
-import { PhaseSwitchButton } from '@/components/icons'
+import { ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
 import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
@@ -180,8 +180,8 @@ export function DivisionsPage() {
         actions={
           <>
             {/* Manual add is the fallback; FFTT import is the default path (#219). */}
-            <SecondaryButton onClick={openCreate}>Ajouter une division</SecondaryButton>
-            <PrimaryButton onClick={() => setImportOpen(true)}>Importer depuis la FFTT</PrimaryButton>
+            <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une division" onClick={openCreate} />
+            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
           </>
         }
       />

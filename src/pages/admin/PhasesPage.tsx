@@ -6,7 +6,8 @@ import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
 import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton } from '@/components/Button'
+import { PlusIcon } from '@/components/icons'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { useConfirm } from '@/components/useConfirm'
 
@@ -127,7 +128,7 @@ export function PhasesPage() {
       {confirmDialog}
       <PageHeader
         title="Phases"
-        actions={<PrimaryButton onClick={openCreate}>Ajouter une phase</PrimaryButton>}
+        actions={<HeaderAction icon={<PlusIcon />} label="Ajouter une phase" onClick={openCreate} />}
       />
       {archivedPhases.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">

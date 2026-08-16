@@ -5,9 +5,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
-import { ClockIcon, CaptainIcon, WhatsAppIcon, PhaseSwitchButton } from '@/components/icons'
+import { CaptainIcon, ClockIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
-import { ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
+import { HeaderAction, ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { RowActions } from '@/components/RowActions'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportTeamsModal } from '@/components/ImportTeamsModal'
@@ -313,8 +313,8 @@ export function TeamsPage() {
           isAdmin && (
             <>
               {/* Manual add is the fallback; FFTT import is the default path (#229). */}
-              <SecondaryButton onClick={openCreate}>Ajouter une équipe</SecondaryButton>
-              <PrimaryButton onClick={() => setImportOpen(true)}>Importer depuis la FFTT</PrimaryButton>
+              <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une équipe" onClick={openCreate} />
+              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
             </>
           )
         }
@@ -405,13 +405,12 @@ export function TeamsPage() {
                   )}
                 </div>
 
-                {/* Below md: the actions are one "…" trigger, so they sit
-                    beside the day/captain block and centre on it — a menu is
-                    not a section of the card, and a full-width row read as one.
-                    From md: up they are three inline text buttons needing
-                    ~230px, which in a 264px card column leaves the info nothing
-                    at all, so there they keep their own row under a rule. */}
-                <div className="flex items-center gap-3 md:block">
+                {/* The "…" trigger at every width, beside the day/captain
+                    block and centred on it. Three inline text links under the
+                    body read as a section of the card rather than as a menu,
+                    and they needed ~230px in a 264px column, which left the
+                    info nothing at all (#389 review). */}
+                <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1 space-y-1.5 text-sm text-slate-600">
                     <div className="flex items-center gap-1.5">
                       <ClockIcon className="h-4 w-4 shrink-0 text-slate-400" />
@@ -424,8 +423,9 @@ export function TeamsPage() {
                   </div>
 
                   {isAdmin && (
-                    <div className="shrink-0 md:mt-3 md:border-t md:border-slate-100 md:pt-2">
+                    <div className="shrink-0">
                     <RowActions
+                      menuOnly
                       label={`Actions — ${getClubName(team.clubId)} ${team.number}`}
                       actions={[
                         !team.isArchived && { label: 'Modifier', onClick: () => openEdit(team) },
