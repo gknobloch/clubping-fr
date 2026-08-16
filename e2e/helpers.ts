@@ -33,3 +33,20 @@ export async function loginAs(page: Page, search: string) {
   await page.getByRole('option').first().click()
   await expect(page).toHaveURL('/')
 }
+
+/**
+ * The short date label the app renders for a day `days` from today, e.g.
+ * "jeu. 13 août" — same options as `formatMatchDayRange` in src/lib/matchdays.
+ * The mock fixtures are dated relative to today so they never fall into the
+ * past (#393), so the expected label has to be computed rather than written out.
+ */
+export function shortDateLabel(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  const iso = d.toISOString().slice(0, 10)
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
