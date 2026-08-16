@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, shortDateLabel } from './helpers'
+
+// Mock game g1-8 is dated two days after its journée (both relative to today
+// since #393), so the label has to be computed the way the app formats it.
+const g18Date = shortDateLabel(16)
 
 // #292: /api/data never sent games.date, so every client-side game.date was
 // undefined and the journée header fell back to match_days.date — the MIN
 // across the round. A Sunday fixture in a mostly-Saturday journée showed the
-// Saturday instead. Mock game g1-8 carries a fixed date of its own, distinct
-// from its journée's (which is relative to today), so the two never coincide.
+// Saturday instead. Mock game g1-8 carries a date of its own, distinct from
+// its journée's, so the two never coincide.
 test.describe('Journées — a game shows its own date', () => {
   test('the header uses the game’s own date and time', async ({ page }) => {
     await loginAs(page, 'club.admin')
@@ -15,7 +19,7 @@ test.describe('Journées — a game shows its own date', () => {
     // `visible: true` matters since #306: the mobile card list renders the same
     // string and sits earlier in the DOM, hidden behind `md:hidden`, so a plain
     // .first() would resolve to it and never be visible at this width.
-    await expect(page.getByText(/jeu\. 13 août/).filter({ visible: true }).first()).toBeVisible()
+    await expect(page.getByText(g18Date).filter({ visible: true }).first()).toBeVisible()
     await expect(page.getByText(/9h30/).filter({ visible: true }).first()).toBeVisible()
   })
 })
@@ -34,7 +38,7 @@ test.describe('Journées — provenance and who may reschedule', () => {
     await page.goto('/journees')
 
     // PPA Rixheim 1's J8 (g1-8) is at home — its header is actionable.
-    await expect(page.getByRole('button').filter({ hasText: /jeu\. 13 août/ })).toHaveCount(1)
+    await expect(page.getByRole('button').filter({ hasText: g18Date })).toHaveCount(1)
 
     // J6 and J7 are away (opp-moussey-1 / opp-anould-2 are the home clubs):
     // the headers render, but not as something you can open.
