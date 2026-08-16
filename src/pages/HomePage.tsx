@@ -282,10 +282,10 @@ export function HomePage() {
                 })()
               )}
             </div>
-            {/* Two across on a phone, stacked from md: up: beside the match
-                card they are two tall, near-empty boxes otherwise (#389
-                review). */}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-1 md:content-start">
+            {/* Two across on a phone; stacked from md: up, sharing the height
+                of the match card beside them half and half — otherwise they are
+                two tall, near-empty boxes (#389 review). */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-1 md:grid-rows-2">
               <div className="flex flex-col gap-3">
                 <div className="flex h-7 items-center">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Matchs joués</p>

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RowActions } from './RowActions'
@@ -20,9 +20,28 @@ const actions = [
   { label: 'Archiver', tone: 'danger' as const, onClick: archive },
 ]
 
+/** Pick the presentation: the sheet below md:, the anchored menu above. */
+function setViewport(kind: 'mobile' | 'desktop') {
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    matches: kind === 'desktop',
+    media,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
+}
+
 beforeEach(() => {
   edit.mockClear()
   archive.mockClear()
+  setViewport('desktop')
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 const trigger = () => screen.getByRole('button', { name: 'Actions — PPA Rixheim' })
@@ -88,11 +107,12 @@ describe('RowActions', () => {
     expect(screen.getByRole('menuitem', { name: 'Archiver' })).toHaveFocus()
   })
 
-  // Since #382 the actions open in a modal sheet, so "outside" is the backdrop
-  // rather than whatever sits behind it. That is the point of the change: the
-  // page underneath is covered, so a stray tap dismisses the sheet instead of
-  // firing some other control by accident.
-  it('closes when the backdrop is tapped', async () => {
+  // Below md: the actions open in a modal sheet, so "outside" is the backdrop
+  // rather than whatever sits behind it. That is the point: the page underneath
+  // is covered, so a stray tap dismisses the sheet instead of firing some other
+  // control by accident.
+  it('closes when the backdrop is tapped, on a phone', async () => {
+    setViewport('mobile')
     render(
       <>
         <RowActions label="Actions — PPA Rixheim" actions={actions} />
@@ -144,5 +164,24 @@ describe('RowActions', () => {
     const item = screen.getByRole('menuitem', { name: 'Supprimer' })
     expect(item).toBeDisabled()
     expect(item).toHaveAttribute('title', 'Ce club a des équipes ou des joueurs rattachés')
+  })
+
+  // From md: up the sheet would be a phone answer to a mouse question: a small
+  // menu is anchored to the trigger instead, and an outside click closes it
+  // without a backdrop covering the page (#389 review).
+  it('opens a small anchored menu on desktop, not a sheet', async () => {
+    render(
+      <>
+        <RowActions label="Actions — PPA Rixheim" actions={actions} />
+        <button type="button">Ailleurs</button>
+      </>,
+    )
+    await userEvent.click(trigger())
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ailleurs' }))
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
   })
 })
