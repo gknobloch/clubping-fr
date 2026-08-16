@@ -21,6 +21,12 @@ import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
+function openUrl(url: string) {
+  Linking.openURL(url).catch(() => {
+    /* no app to handle it — nothing useful to say beyond not crashing */
+  })
+}
+
 export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections, updateTeam } = useAppData()
@@ -31,7 +37,6 @@ export default function TeamDetailScreen() {
   // Draft line-up edited inside the modal; only committed on "Enregistrer".
   const [draftPlayerIds, setDraftPlayerIds] = useState<string[]>([])
   const [draftCaptainId, setDraftCaptainId] = useState<string>('')
-  const [editingWhatsApp, setEditingWhatsApp] = useState(false)
   const [whatsappDraft, setWhatsappDraft] = useState('')
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
 
@@ -139,6 +144,7 @@ export default function TeamDetailScreen() {
   function openRosterPicker() {
     setDraftPlayerIds(team!.playerIds)
     setDraftCaptainId(team!.captainId)
+    setWhatsappDraft(team!.whatsappLink ?? '')
     setShowRosterPicker(true)
   }
 
@@ -155,7 +161,12 @@ export default function TeamDetailScreen() {
 
   function saveRoster() {
     const apply = () => {
-      updateTeam(team!.id, { playerIds: draftPlayerIds, captainId: draftCaptainId })
+      const link = whatsappDraft.trim()
+      updateTeam(team!.id, {
+        playerIds: draftPlayerIds,
+        captainId: draftCaptainId,
+        whatsappLink: link || null,
+      })
       setShowRosterPicker(false)
     }
 
@@ -187,24 +198,31 @@ export default function TeamDetailScreen() {
     apply()
   }
 
-  function saveWhatsApp() {
-    const val = whatsappDraft.trim()
-    updateTeam(team!.id, { whatsappLink: val || null })
-    setEditingWhatsApp(false)
-  }
-
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
 
         {/* Identity header — mirrors the player header: a round team-colour
-            badge (the team number) on the left, where a player's avatar sits. */}
+            badge (the team number) on the left, where a player's avatar sits.
+            The WhatsApp group hangs off it as a discreet icon, as on the web
+            team cards (#388): joining is occasional, not worth a section. */}
         <View style={styles.identityCard}>
           <TeamColorBadge color={team.color} number={team.number} size={48} />
           <View style={styles.identityText}>
             <Text style={styles.teamName} numberOfLines={1}>{getTeamName(team, clubs)}</Text>
             {division && <Text style={styles.levelBadge}>{division.displayName}</Text>}
           </View>
+          {!!team.whatsappLink && (
+            <TouchableOpacity
+              style={styles.whatsappIconBtn}
+              onPress={() => openUrl(team.whatsappLink!)}
+              hitSlop={8}
+              accessibilityRole="link"
+              accessibilityLabel="Groupe WhatsApp"
+            >
+              <Ionicons name="logo-whatsapp" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
           {club && (
             <ClubLogo
               clubId={club.id}
@@ -214,62 +232,6 @@ export default function TeamDetailScreen() {
             />
           )}
         </View>
-
-        {/* WhatsApp */}
-        {(team.whatsappLink || isCaptain) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>WhatsApp</Text>
-            {!editingWhatsApp && (
-              <>
-                {team.whatsappLink ? (
-                  <View style={styles.whatsappRow}>
-                    <TouchableOpacity
-                      style={styles.whatsappBtn}
-                      onPress={() => Linking.openURL(team.whatsappLink!)}
-                    >
-                      <Text style={styles.whatsappBtnText}>Rejoindre le groupe</Text>
-                    </TouchableOpacity>
-                    {isCaptain && (
-                      <TouchableOpacity
-                        onPress={() => { setWhatsappDraft(team.whatsappLink ?? ''); setEditingWhatsApp(true) }}
-                      >
-                        <Text style={styles.textLink}>Modifier</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ) : isCaptain ? (
-                  <TouchableOpacity
-                    onPress={() => { setWhatsappDraft(''); setEditingWhatsApp(true) }}
-                  >
-                    <Text style={styles.textLink}>Configurer le lien WhatsApp…</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </>
-            )}
-            {editingWhatsApp && (
-              <View style={styles.whatsappEdit}>
-                <TextInput
-                  style={styles.whatsappInput}
-                  value={whatsappDraft}
-                  onChangeText={setWhatsappDraft}
-                  placeholder="https://chat.whatsapp.com/..."
-                  placeholderTextColor={colors.textSecondary}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-                <View style={styles.editActions}>
-                  <TouchableOpacity onPress={() => setEditingWhatsApp(false)}>
-                    <Text style={styles.cancelLink}>Annuler</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={saveWhatsApp}>
-                    <Text style={styles.saveLink}>Enregistrer</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Roster */}
         <View style={styles.sectionList}>
@@ -291,7 +253,7 @@ export default function TeamDetailScreen() {
           )}
           {isCaptain && (
             <TouchableOpacity style={styles.addBtn} onPress={openRosterPicker}>
-              <Text style={styles.addBtnText}>Modifier la composition</Text>
+              <Text style={styles.addBtnText}>Modifier l'équipe</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -363,7 +325,9 @@ export default function TeamDetailScreen() {
         />
       )}
 
-      {/* Roster picker modal (captain only) */}
+      {/* Team edit modal (captain only): line-up + WhatsApp group link — the
+          app's only place to set that link, so it lives with the other team
+          edits rather than on the read-only fiche (#388). */}
       {isCaptain && (
         <Modal
           visible={showRosterPicker}
@@ -373,14 +337,34 @@ export default function TeamDetailScreen() {
         >
           <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Composition</Text>
-              <Text style={styles.modalSubtitle}>Touchez ★ pour le capitaine</Text>
+              <Text style={styles.modalTitle}>Modifier l'équipe</Text>
             </View>
             <FlatList
               style={styles.modalList}
               data={eligiblePlayers}
               keyExtractor={(p) => p.id}
               contentContainerStyle={styles.listContent}
+              keyboardShouldPersistTaps="handled"
+              ListHeaderComponent={
+                <View style={styles.modalFields}>
+                  <Text style={styles.fieldLabel}>Groupe WhatsApp</Text>
+                  <TextInput
+                    style={styles.whatsappInput}
+                    value={whatsappDraft}
+                    onChangeText={setWhatsappDraft}
+                    placeholder="https://chat.whatsapp.com/..."
+                    placeholderTextColor={colors.textSecondary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                  />
+                  <Text style={styles.fieldHint}>
+                    Laissez vide pour retirer le lien de la fiche.
+                  </Text>
+                  <Text style={styles.fieldLabel}>Composition</Text>
+                  <Text style={styles.fieldHint}>Touchez ★ pour le capitaine</Text>
+                </View>
+              }
               renderItem={({ item: p }) => {
                 const selected = draftPlayerIds.includes(p.id)
                 const isCap = p.id === draftCaptainId
@@ -463,7 +447,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
 
-  // Sections with internal padding + gap (WhatsApp, Schedule)
+  // Sections with internal padding + gap (Calendrier)
   section: {
     backgroundColor: colors.card,
     marginHorizontal: 16,
@@ -522,18 +506,8 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, color: colors.textPrimary },
   scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 
-  // WhatsApp
-  whatsappRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  whatsappBtn: {
-    flex: 1,
-    backgroundColor: '#25D366',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  whatsappBtnText: { color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 },
-  textLink: { fontSize: 14, color: colors.accent },
-  whatsappEdit: { gap: 10 },
+  // WhatsApp — an icon in the identity banner, as on the web team cards
+  whatsappIconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   whatsappInput: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -544,9 +518,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     backgroundColor: colors.bg,
   },
-  editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20 },
-  cancelLink: { fontSize: 14, color: colors.textSecondary },
-  saveLink: { fontSize: 14, color: colors.accent, fontFamily: fonts.semiBold },
 
   // Roster button
   addBtn: {
@@ -586,9 +557,20 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   modalTitle: { fontSize: 17, fontFamily: fonts.semiBold, color: colors.textPrimary },
-  modalSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   modalList: { flex: 1 },
   listContent: { padding: 16, gap: 1 },
+
+  // Fields above the roster list (WhatsApp link, then the roster heading)
+  modalFields: { gap: 6, marginBottom: 10 },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 6,
+  },
+  fieldHint: { fontSize: 12, color: colors.textSecondary },
 
   // Cancel / Save footer — mirrors the PlayerSheet footer.
   modalFooter: {
