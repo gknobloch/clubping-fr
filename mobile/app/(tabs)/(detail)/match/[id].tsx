@@ -15,6 +15,7 @@ import { MatchSheet } from '@/components/MatchSheet'
 import { gameDate, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
+import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -31,7 +32,7 @@ export default function MatchDetailScreen() {
   const { user } = useAuth()
   const {
     clubs, teams, players, matchDays, games, phases, divisions, groups,
-    gameAvailabilities, gameSelections,
+    gameAvailabilities, gameSelections, playerPhasePoints,
     setAvailability, clearAvailability, setGameSelection,
   } = useAppData()
 
@@ -293,7 +294,7 @@ export default function MatchDetailScreen() {
           <PlayerSheet
             player={quickViewPlayer}
             phaseLabel={viewPhase ? `Saison ${viewPhase.displayName}` : undefined}
-            phasePoints={viewTeam.rosterInitialPoints?.[quickViewPlayer.id]}
+            phasePoints={pointsFor(playerPhasePoints, viewTeam.phaseId, quickViewPlayer.id)}
             gamesPlayed={history.filter((e) => e.isPast).length}
             gamesTotal={totalPlayed}
             team={viewTeam}
@@ -306,17 +307,17 @@ export default function MatchDetailScreen() {
 
       {showSheet && (() => {
         const club = clubs.find((c) => c.id === team.clubId)
-        const pointsFor = (pid: string) => {
-          for (const t of clubTeamsInPhase) {
-            const pts = t.rosterInitialPoints?.[pid]
-            if (pts) return pts
-          }
-          return undefined
-        }
         const sheetPlayers = (selection
           .map((pid) => playerMap.get(pid))
           .filter(Boolean) as Player[])
-          .map((p) => ({ firstName: p.firstName, lastName: p.lastName, license: p.licenseNumber, points: pointsFor(p.id) }))
+          .map((p) => ({
+            firstName: p.firstName,
+            lastName: p.lastName,
+            license: p.licenseNumber,
+            // A renfort brings their own points: they hang off the phase, not
+            // off whichever team fields them (#384).
+            points: pointsFor(playerPhasePoints, team.phaseId, p.id),
+          }))
         const teamName = getTeamName(team, clubs)
         return (
           <MatchSheet

@@ -20,6 +20,7 @@ import type {
   Group,
   Team,
   Player,
+  PlayerPhasePoints,
   MatchDay,
   Game,
   GameAvailability,
@@ -42,6 +43,7 @@ interface DataState {
   groups: Group[]
   teams: Team[]
   players: Player[]
+  playerPhasePoints: PlayerPhasePoints[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -57,12 +59,24 @@ const emptyState: DataState = {
   groups: [],
   teams: [],
   players: [],
+  playerPhasePoints: [],
   matchDays: [],
   games: [],
   gameAvailabilities: [],
   gameSelections: [],
   users: [],
 }
+
+/**
+ * A payload — from the API or from the offline cache — brought up to the
+ * current shape. An offline cache written before #384 has no
+ * `playerPhasePoints`, and a cold start hydrates from it before the first
+ * fetch, so the screens would read points off `undefined`.
+ */
+const withDefaults = (data: DataState): DataState => ({
+  ...data,
+  playerPhasePoints: data.playerPhasePoints ?? [],
+})
 
 // ---------------------------------------------------------------------------
 // Context value
@@ -130,7 +144,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data: DataState = await res.json()
         const syncedAt = new Date().toISOString()
-        setState(data)
+        setState(withDefaults(data))
         setApiAvailable(true)
         setStale(false)
         setLastSyncedAt(syncedAt)
@@ -162,7 +176,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     ;(async () => {
       const cached = await readCache<DataState>()
       if (!cancelled && cached) {
-        setState(cached.data)
+        setState(withDefaults(cached.data))
         setLastSyncedAt(cached.lastSyncedAt)
         setStale(true)
         setLoading(false)

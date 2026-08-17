@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName, canManageTeam } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
 import { computeBrulage } from '@shared/lib/brulage'
+import { pointsFor } from '@shared/lib/phasePoints'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
@@ -29,7 +30,7 @@ function openUrl(url: string) {
 
 export default function TeamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections, updateTeam } = useAppData()
+  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections, playerPhasePoints, updateTeam } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
   const router = useRouter()
@@ -297,7 +298,7 @@ export default function TeamDetailScreen() {
         <PlayerSheet
           player={selectedPlayer}
           phaseLabel={phase ? `Saison ${phase.displayName}` : undefined}
-          phasePoints={team.rosterInitialPoints?.[selectedPlayer.id]}
+          phasePoints={pointsFor(playerPhasePoints, team.phaseId, selectedPlayer.id)}
           gamesPlayed={playerHistory.filter((e) => e.isPast).length}
           gamesTotal={games.filter((g) => {
             if (g.homeTeamId !== team.id && g.awayTeamId !== team.id) return false

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import {
   mockDivisions, mockClubs, mockSeasons, mockPhases, mockGroups, mockTeams,
-  mockPlayers, mockMatchDays, mockGames, mockGameAvailabilities, mockGameSelections,
+  mockPlayers, mockPlayerPhasePoints, mockMatchDays, mockGames, mockGameAvailabilities, mockGameSelections,
   mockUsers,
 } from '@/mock/data'
 
@@ -23,7 +23,8 @@ const { GameQuickView } = await import('./GameQuickView')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-  groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
+  groups: mockGroups, teams: mockTeams, players: mockPlayers,
+  playerPhasePoints: mockPlayerPhasePoints, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,
 }

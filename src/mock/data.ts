@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, Address, MatchDay, Game, GameAvailability, GameSelection } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, Address, MatchDay, Game, GameAvailability, GameSelection } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -161,56 +161,48 @@ export const mockTeams: Team[] = [
     id: 'team-1', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 1, divisionId: '198609', groupId: 'group-1',
     gameLocationId: 'addr-1', defaultDay: 'Samedi', defaultTime: '16h00', captainId: 'p2-player-2',
     playerIds: ['p2-player-5', 'p2-player-1', 'p2-player-2', 'p2-player-3', 'p2-player-4'],
-    rosterInitialPoints: { 'p2-player-5': '1887', 'p2-player-1': '1763', 'p2-player-2': '1665', 'p2-player-3': '1647', 'p2-player-4': '1566' },
     color: '#374151', isArchived: false,
   },
   {
     id: 'team-2', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 2, divisionId: '198755', groupId: 'group-2',
     gameLocationId: 'addr-1', defaultDay: 'Samedi', defaultTime: '16h00', captainId: 'p2-player-8',
     playerIds: ['p2-player-6', 'p2-player-10', 'p2-player-7', 'p2-player-9', 'p2-player-8'],
-    rosterInitialPoints: { 'p2-player-6': '1791', 'p2-player-10': '1661', 'p2-player-7': '1500', 'p2-player-9': '1301', 'p2-player-8': '1301' },
     color: '#b91c1c', isArchived: false,
   },
   {
     id: 'team-3', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 3, divisionId: '198305', groupId: 'group-3',
     gameLocationId: 'addr-1', defaultDay: 'Samedi', defaultTime: '16h00', captainId: 'p2-player-13',
     playerIds: ['p2-player-12', 'p2-player-13', 'p2-player-14', 'p2-player-11', 'p2-player-17'],
-    rosterInitialPoints: { 'p2-player-12': '1356', 'p2-player-13': '1267', 'p2-player-14': '1198', 'p2-player-11': '1186', 'p2-player-17': '754' },
     color: '#15803d', isArchived: false,
   },
   {
     id: 'team-4', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 4, divisionId: '198821', groupId: 'group-4',
     gameLocationId: 'addr-1', defaultDay: 'Jeudi', defaultTime: '20h00', captainId: 'p2-player-19',
     playerIds: ['p2-player-16', 'p2-player-19', 'p2-player-18', 'p2-player-15', 'p2-player-20'],
-    rosterInitialPoints: { 'p2-player-16': '889', 'p2-player-19': '728', 'p2-player-18': '727', 'p2-player-15': '713', 'p2-player-20': '704' },
     color: '#c2410c', isArchived: false,
   },
   {
     id: 'team-5', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 5, divisionId: '198895', groupId: 'group-5',
     gameLocationId: 'addr-1', defaultDay: 'Samedi', defaultTime: '16h00', captainId: 'p2-player-24',
     playerIds: ['p2-player-22', 'p2-player-24', 'p2-player-21', 'p2-player-23', 'p2-player-26'],
-    rosterInitialPoints: { 'p2-player-22': '735', 'p2-player-24': '701', 'p2-player-21': '702', 'p2-player-23': '1050', 'p2-player-26': '707' },
     color: '#1d4ed8', isArchived: false,
   },
   {
     id: 'team-6', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 6, divisionId: '198895', groupId: 'group-5',
     gameLocationId: 'addr-2', defaultDay: 'Samedi', defaultTime: '16h00', captainId: 'p2-player-29',
     playerIds: ['p2-player-29', 'p2-player-39', 'p2-player-40', 'p2-player-41', 'p2-player-42', 'p2-player-38', 'p2-player-43', 'p2-player-44'],
-    rosterInitialPoints: { 'p2-player-29': '632', 'p2-player-39': '500', 'p2-player-40': '503', 'p2-player-41': '561', 'p2-player-42': '500', 'p2-player-38': '500', 'p2-player-43': '500', 'p2-player-44': '500' },
     color: '#be185d', isArchived: false,
   },
   {
     id: 'team-7', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 7, divisionId: '198435', groupId: 'group-6',
     gameLocationId: 'addr-1', defaultDay: 'Jeudi', defaultTime: '20h00', captainId: 'p2-player-33',
     playerIds: ['p2-player-33', 'p2-player-35', 'p2-player-34', 'p2-player-36', 'p2-player-37'],
-    rosterInitialPoints: { 'p2-player-33': '500', 'p2-player-35': '500', 'p2-player-34': '500', 'p2-player-36': '500', 'p2-player-37': '500' },
     color: '#7c2d12', isArchived: false,
   },
   {
     id: 'team-8', clubId: 'club-fftt-06680011', phaseId: 'phase-26-1', number: 8, divisionId: '198907', groupId: 'group-7',
     gameLocationId: 'addr-1', defaultDay: 'Jeudi', defaultTime: '20h00', captainId: 'p2-player-42',
     playerIds: ['p2-player-32', 'p2-player-27', 'p2-player-28', 'p2-player-30', 'p2-player-31'],
-    rosterInitialPoints: { 'p2-player-32': '607', 'p2-player-27': '501', 'p2-player-28': '500', 'p2-player-30': '500', 'p2-player-31': '500' },
     color: '#0d9488', isArchived: false,
   },
   // Group 1-5 opponents
@@ -263,6 +255,57 @@ export const mockTeams: Team[] = [
   oppTeam('opp-kembs-6', 'club-fftt-06680140', 6, '198907', 'group-7'),
   oppTeam('opp-kembs-4', 'club-fftt-06680140', 4, '198907', 'group-7'),
   oppTeam('opp-illzach-11', 'club-fftt-06680091', 11, '198907', 'group-7'),
+]
+
+// ---------------------------------------------------------------------------
+// Player points per phase (#384)
+// ---------------------------------------------------------------------------
+// These used to sit on each team as `rosterInitialPoints`. Points belong to the
+// phase: a licensee with no team has them too, and they are the same points.
+export const mockPlayerPhasePoints: PlayerPhasePoints[] = [
+  { phaseId: 'phase-26-1', playerId: 'p2-player-5', points: '1887' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-1', points: '1763' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-2', points: '1665' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-3', points: '1647' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-4', points: '1566' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-6', points: '1791' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-10', points: '1661' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-7', points: '1500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-9', points: '1301' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-8', points: '1301' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-12', points: '1356' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-13', points: '1267' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-14', points: '1198' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-11', points: '1186' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-17', points: '754' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-16', points: '889' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-19', points: '728' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-18', points: '727' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-15', points: '713' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-20', points: '704' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-22', points: '735' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-24', points: '701' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-21', points: '702' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-23', points: '1050' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-26', points: '707' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-29', points: '632' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-39', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-40', points: '503' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-41', points: '561' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-42', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-38', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-43', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-44', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-33', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-35', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-34', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-36', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-37', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-32', points: '607' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-27', points: '501' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-28', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-30', points: '500' },
+  { phaseId: 'phase-26-1', playerId: 'p2-player-31', points: '500' },
 ]
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { jsonParseIds, jsonParseStringMap } from './rows'
+import { jsonParseIds } from './rows'
 
 // These replaced `jsonParse(x) as string[]` (#285). The cast promised a shape
 // nothing checked; what matters here is what they do with a column that does
@@ -26,21 +26,5 @@ describe('jsonParseIds', () => {
     expect(jsonParseIds('{"team":"a"}')).toEqual([])
     expect(jsonParseIds('not json')).toEqual([])
     expect(jsonParseIds(7)).toEqual([])
-  })
-})
-
-describe('jsonParseStringMap', () => {
-  it('decodes a JSON object column', () => {
-    expect(jsonParseStringMap('{"p1":"1200","p2":"980"}')).toEqual({ p1: '1200', p2: '980' })
-  })
-
-  it('keeps only string-valued entries', () => {
-    expect(jsonParseStringMap('{"p1":"1200","p2":980,"p3":null}')).toEqual({ p1: '1200' })
-  })
-
-  it('returns an empty object for anything that is not an object', () => {
-    expect(jsonParseStringMap('["p1"]')).toEqual({})
-    expect(jsonParseStringMap(null)).toEqual({})
-    expect(jsonParseStringMap('not json')).toEqual({})
   })
 })

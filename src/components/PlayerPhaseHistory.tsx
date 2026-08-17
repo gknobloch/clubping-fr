@@ -4,6 +4,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { computeBrulage } from '@/lib/brulage'
 import { gameDate } from '@/lib/matchdays'
 import { getTeamName } from '@/lib/teamName'
+import { pointsFor } from '@/lib/phasePoints'
 import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
@@ -43,7 +44,7 @@ type PhaseBlock = {
 // season. Shared by PlayerDetailPage (viewing any player) and HomePage (the
 // logged-in player's own "Tous mes matchs") (#233).
 export function PlayerPhaseHistory({ playerId, title }: { playerId: string; title?: string }) {
-  const { players, teams, clubs, phases, seasons, matchDays, games, gameSelections } = useAppData()
+  const { players, teams, clubs, phases, seasons, matchDays, games, gameSelections, playerPhasePoints } = useAppData()
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined)
 
@@ -132,7 +133,9 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           label: `Saison ${ph.displayName}`,
           team: rosterTeam,
           isCaptain: rosterTeam?.captainId === playerId,
-          points: rosterTeam?.rosterInitialPoints?.[playerId],
+          // Points follow the phase, not the roster (#384), so a phase where
+          // the player had no team still shows what they were worth.
+          points: pointsFor(playerPhasePoints, ph.id, playerId),
           brulageTeam,
           played,
           total,
@@ -140,7 +143,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           history: rows.sort((a, b) => a.raw.localeCompare(b.raw)).map((r) => r.e),
         }
       })
-  }, [player, playerId, teams, phases, matchDays, games, gameSelections, clubs, today])
+  }, [player, playerId, teams, phases, matchDays, games, gameSelections, playerPhasePoints, clubs, today])
 
   if (phaseBlocks.length === 0) return null
 

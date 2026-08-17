@@ -10,6 +10,7 @@ import { getTeamName } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
 import { computeBrulage } from '@shared/lib/brulage'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
+import { pointsFor } from '@shared/lib/phasePoints'
 import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
 import { Switcher } from '@/components/Switcher'
@@ -28,7 +29,7 @@ import { fonts } from '@/constants/typography'
 // ---------------------------------------------------------------------------
 export default function PhaseGamesScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>()
-  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections } = useAppData()
+  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections, playerPhasePoints } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
 
@@ -281,7 +282,7 @@ export default function PhaseGamesScreen() {
         <PlayerSheet
           player={selectedPlayer}
           phaseLabel={currentEntry?.label}
-          phasePoints={team.rosterInitialPoints?.[selectedPlayer.id]}
+          phasePoints={pointsFor(playerPhasePoints, team.phaseId, selectedPlayer.id)}
           gamesPlayed={playerHistory.filter((e) => e.isPast).length}
           gamesTotal={games.filter((g) => {
             if (g.homeTeamId !== team.id && g.awayTeamId !== team.id) return false

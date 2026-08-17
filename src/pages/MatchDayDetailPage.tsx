@@ -7,6 +7,7 @@ import { ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
+import { pointsFor } from '@/lib/phasePoints'
 import { SelectionSheet } from '@/components/SelectionSheet'
 import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
@@ -28,7 +29,7 @@ export function MatchDayDetailPage() {
   const teamId = searchParams.get('equipe')
 
   const { user } = useAuth()
-  const { teams, players, clubs, matchDays, games, divisions, gameSelections, setGameSelection } = useAppData()
+  const { teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints, setGameSelection } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
@@ -107,11 +108,10 @@ export function MatchDayDetailPage() {
     gameSelections,
   )
 
-  // Phase points live on the fielding team's roster; a renfort keeps the points
-  // recorded by their own team this phase.
-  const pointsFor = (playerId: string) =>
-    team.rosterInitialPoints?.[playerId] ??
-    myClubTeamsInPhase.find((t) => t.playerIds?.includes(playerId))?.rosterInitialPoints?.[playerId]
+  // Points belong to the phase, not to the fielding team (#384), so a renfort
+  // brings their own — no sweep across the club's other teams to find them.
+  const pointsForPlayer = (playerId: string) =>
+    pointsFor(playerPhasePoints, team.phaseId, playerId)
 
   const lineUp: MatchSheetPlayer[] = selectedIds
     .map((id) => players.find((p) => p.id === id))
@@ -121,7 +121,7 @@ export function MatchDayDetailPage() {
       firstName: p.firstName,
       lastName: p.lastName,
       license: p.licenseNumber || undefined,
-      points: pointsFor(p.id) || undefined,
+      points: pointsForPlayer(p.id) || undefined,
     }))
 
   const date = gameDate(game, matchDay)

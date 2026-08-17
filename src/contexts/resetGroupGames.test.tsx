@@ -50,6 +50,7 @@ const initialData: DataState = {
   phases: [phase],
   groups: [groupOne, groupTwo],
   teams: [team('team-a', 1, 'group-1'), team('team-b', 2, 'group-1'), team('team-c', 3, 'group-2'), team('team-d', 4, 'group-2')],
+  playerPhasePoints: [],
   players: [player('p1')],
   matchDays: [
     { id: 'md-1', groupId: 'group-1', number: 1, date: '2025-09-13' },

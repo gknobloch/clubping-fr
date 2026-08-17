@@ -14,6 +14,7 @@ import {
 } from '@/lib/matchdays'
 import { MatchDayCards, type MatchDayCardEntry } from '@/components/MatchDayCards'
 import { sortByName } from '@/lib/sortByName'
+import { pointsFor } from '@/lib/phasePoints'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
@@ -130,6 +131,7 @@ export function MatchDaysPage() {
     players,
     gameAvailabilities,
     gameSelections,
+    playerPhasePoints,
     setGameAvailability,
     clearGameAvailability,
     getGameSelectionPlayerIds,
@@ -1186,7 +1188,7 @@ export function MatchDaysPage() {
                               <span className={`block font-medium ${player.id === team.captainId ? 'font-bold' : ''}`}>
                                 {player.firstName} {player.lastName}
                                 {(() => {
-                                  const pts = team.rosterInitialPoints?.[player.id]
+                                  const pts = pointsFor(playerPhasePoints, team.phaseId, player.id)
                                   return pts ? <span className="ml-1 text-slate-500 font-normal">({pts})</span> : null
                                 })()}
                               </span>
