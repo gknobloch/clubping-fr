@@ -100,7 +100,7 @@ export function ComptePage() {
         }
         title={displayName}
       >
-        <p className="text-sm text-slate-500">{roleLabel}</p>
+        <p className="text-slate-500">{roleLabel}</p>
         {me && (
           <div className="mt-2 flex items-center gap-4 text-sm">
             <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className={`font-medium text-accent-600 hover:text-accent-800 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}>

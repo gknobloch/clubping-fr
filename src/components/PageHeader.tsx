@@ -47,7 +47,13 @@ export function PageHeader({
           overflow #308 fixed. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-          {club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} size={44} />}
+          {club && (
+            <ClubLogo
+              clubId={club.id}
+              logoUpdatedAt={club.logoUpdatedAt}
+              sizeClass="h-11 w-11 sm:h-14 sm:w-14"
+            />
+          )}
           <div className="min-w-0">
             <h1 className="font-display text-xl font-semibold text-slate-800 sm:text-2xl">{title}</h1>
             {club && <p className="truncate text-sm text-slate-500 sm:text-base">{club.displayName}</p>}

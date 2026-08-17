@@ -26,7 +26,11 @@ export function IdentityCard({
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:gap-4 sm:p-5">
       {leading}
-      <div className="min-w-0 flex-1">
+      {/* The content scale lives here, not in each caller: they passed
+          free-form children and each picked its own size, or none at all, which
+          left Club and Accueil a step larger than the list screens (#389
+          review). */}
+      <div className="min-w-0 flex-1 text-sm sm:text-base">
         <h1 className="font-display text-xl font-semibold text-slate-800 sm:text-2xl">{title}</h1>
         {children}
       </div>
