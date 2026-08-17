@@ -44,6 +44,7 @@ import {
   mockGameSelections,
   mockUsers,
 } from '@/mock/data'
+import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
@@ -385,6 +386,11 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   ) => void
   clearGameAvailability: (gameId: string, playerId: string) => void
   gameSelections: GameSelection[]
+  /**
+   * ISO timestamp of the cached data currently on screen, or null when the
+   * data came from the network. Drives the offline banner (#387).
+   */
+  staleSince: string | null
   getGameSelectionPlayerIds: (gameId: string, teamId: string) => string[]
   setGameSelection: (gameId: string, teamId: string, playerIds: string[]) => void
   setGameSelectionBatch: (
@@ -401,7 +407,7 @@ interface DataProviderProps {
 }
 
 export function DataProvider({ children, initialData }: DataProviderProps) {
-  const { token, logout } = useAuth()
+  const { token, logout, user, loading: authLoading } = useAuth()
   const [divisions, setDivisions] = useState<Division[]>(initialData?.divisions ?? [])
   const [clubs, setClubs] = useState<Club[]>(initialData?.clubs ?? [])
   const [seasons, setSeasons] = useState<Season[]>(initialData?.seasons ?? [])
@@ -424,11 +430,25 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const [persist, setPersist] = useState(!initialData)
   const [error, setError] = useState<string | null>(null)
   const [retryNonce, setRetryNonce] = useState(0)
+  /** When set, the screen is showing cached data: the last fetch did not land. */
+  const [staleSince, setStaleSince] = useState<string | null>(null)
+
+  // A cache belongs to one member. Dropping it as soon as nobody is signed in
+  // keeps the next person on a shared phone from meeting the previous one's
+  // club, and costs only a refetch (#387).
+  const userId = user?.id ?? null
+  useEffect(() => {
+    if (initialData) return
+    if (!userId) clearCache()
+  }, [initialData, userId])
 
   useEffect(() => {
     if (initialData) return
+    // Wait for auth to settle first. The cache is keyed to the member, so
+    // loading before we know who they are would both miss it and cost a second
+    // fetch the moment they arrived (#387).
+    if (authLoading) return
     let cancelled = false
-    setLoading(true)
     setError(null)
 
     function applyData(data: DataState) {
@@ -459,6 +479,17 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       })
     }
 
+    // Show the last known data straight away, before the network is asked.
+    // Offline that is the whole answer; online it just removes the spinner.
+    const cached = userId ? readCache(userId) : null
+    if (cached) {
+      applyData(cached.data)
+      setStaleSince(cached.fetchedAt)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+
     fetch('/api/data', { headers: authHeaders() })
       .then((r) => {
         if (r.status === 401) {
@@ -473,11 +504,25 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       .then((data: DataState | null) => {
         if (cancelled || !data) return
         applyData(data)
+        setStaleSince(null)
+        if (userId) writeCache(userId, data)
       })
       .catch((err) => {
         if (cancelled) return
-        if (DEV_LOGIN) {
+        if (cached) {
+          // Cached data is on screen already: say it is old and let the member
+          // carry on reading. Replacing a readable line-up with an error page
+          // is the failure this issue is about.
+          //
+          // Ahead of the mock fallback deliberately, including in dev: a cache
+          // only exists because a real fetch once succeeded for this member, so
+          // it beats fixtures. Falling through to mock here also left the
+          // banner claiming a date for data that was not theirs.
+          console.warn('Failed to refresh /api/data, serving cached data', err)
+          setStaleSince(cached.fetchedAt)
+        } else if (DEV_LOGIN) {
           // No real backend in local dev / E2E — mock data keeps the app usable.
+          setStaleSince(null)
           fallbackToMock()
         } else {
           console.error('Failed to load /api/data', err)
@@ -492,7 +537,15 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       cancelled = true
     }
     // Refetch when the session token changes (e.g. after login) or on retry.
-  }, [initialData, token, retryNonce, logout])
+  }, [initialData, token, retryNonce, logout, userId, authLoading])
+
+  // Coming back online is the moment the cache stops being the best answer.
+  useEffect(() => {
+    if (initialData) return
+    const onOnline = () => setRetryNonce((n) => n + 1)
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [initialData])
 
   // --- Seasons ---
   // Mirrors the API's single-active invariant: activating a season demotes
@@ -1595,6 +1648,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   const value = useMemo<DataContextValue>(
     () => ({
+      staleSince,
       divisions,
       clubs,
       seasons,
@@ -1671,6 +1725,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setGameSelectionBatch,
     }),
     [
+      staleSince,
       divisions, clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,

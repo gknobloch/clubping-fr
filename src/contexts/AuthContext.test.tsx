@@ -139,6 +139,89 @@ describe('restoring a session', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Offline restore (#387)
+//
+// A sports hall is usually a basement. Every /auth/me above fails there, and
+// the client used to read that as "signed out" — it dropped the token and
+// showed the login form, which also put the offline data cache, keyed to the
+// member, out of reach. Unreachable and rejected are now told apart.
+// ---------------------------------------------------------------------------
+describe('restoring a session with no network', () => {
+  const USER_KEY = 'pp-club-user'
+  // What `fetch` throws when the network is down: no status anywhere on it.
+  const offline = () => Promise.reject(new TypeError('Failed to fetch'))
+
+  function signedInPreviously() {
+    window.localStorage.setItem(SESSION_KEY, 'good-token')
+    window.localStorage.setItem(USER_KEY, JSON.stringify(member))
+  }
+
+  it('keeps the member signed in when the server cannot be reached', async () => {
+    signedInPreviously()
+    mockFetch.mockImplementation((url: string) =>
+      String(url).includes('/auth/me') ? offline() : Promise.resolve(ok({ users: [] })),
+    )
+
+    const { result } = render()
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.isAuthenticated).toBe(true)
+    expect(result.current.user).toEqual(member)
+    // The token survives, so the next call once there is signal is authorised.
+    expect(window.localStorage.getItem(SESSION_KEY)).toBe('good-token')
+  })
+
+  // The distinction this all rests on: a 401 is the server saying no, and must
+  // still sign the member out however weak the signal was.
+  it('still signs out when the server rejects the token', async () => {
+    signedInPreviously()
+
+    const { result } = render() // default mock answers 401 everywhere
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.isAuthenticated).toBe(false)
+    expect(window.localStorage.getItem(SESSION_KEY)).toBeNull()
+    expect(window.localStorage.getItem(USER_KEY)).toBeNull()
+  })
+
+  it('restores a cookie session offline, which has no token to remember', async () => {
+    window.localStorage.setItem(USER_KEY, JSON.stringify(member))
+    mockFetch.mockImplementation((url: string) =>
+      String(url).includes('/auth/me') ? offline() : Promise.resolve(ok({ users: [] })),
+    )
+
+    const { result } = render()
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.user).toEqual(member)
+    expect(result.current.token).toBeNull()
+  })
+
+  it('shows the login form offline when nobody was signed in here before', async () => {
+    mockFetch.mockImplementation((url: string) =>
+      String(url).includes('/auth/me') ? offline() : Promise.resolve(ok({ users: [] })),
+    )
+
+    const { result } = render()
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.isAuthenticated).toBe(false)
+  })
+
+  it('remembers the member on a successful restore, ready for the next boot', async () => {
+    window.localStorage.setItem(SESSION_KEY, 'good-token')
+    mockFetch.mockImplementation(async (url: string) =>
+      String(url).includes('/auth/me') ? ok({ user: member }) : ok({ users: [] }),
+    )
+
+    const { result } = render()
+
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true))
+    expect(JSON.parse(window.localStorage.getItem(USER_KEY)!)).toEqual(member)
+  })
+})
+
 describe('logging out', () => {
   it('calls the API even with no token to send, so the cookie is cleared', async () => {
     mockFetch.mockImplementation(async (url: string) =>

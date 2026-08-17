@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AppShell } from './AppShell'
+import { DataProvider } from '@/contexts/DataContext'
+import type { DataState } from '@/types'
 
 const authState = vi.hoisted(() => ({
   user: { id: 'u1', email: 'a@b.c', role: 'general_admin', isPlayer: false } as Record<string, unknown> | null,
@@ -19,13 +21,24 @@ vi.mock('@/contexts/AuthContext', () => ({
 // drawer is closed, two means it is open. Whether the CSS actually hides the
 // bar on a phone is covered by e2e/mobile-nav.spec.ts, where a real engine
 // applies the stylesheet.
+// AppShell carries the offline banner since #387, which reads data freshness,
+// so the shell now needs the provider it always has in the real tree.
+// `initialData` keeps this a pure render: no fetch, no cache.
+const EMPTY: DataState = {
+  seasons: [], phases: [], divisions: [], clubs: [], groups: [], teams: [],
+  players: [], playerPhasePoints: [], matchDays: [], games: [],
+  gameAvailabilities: [], gameSelections: [], users: [],
+}
+
 function setup(user: Record<string, unknown> | null) {
   authState.user = user
   render(
     <MemoryRouter initialEntries={['/']}>
-      <Routes>
-        <Route path="/" element={<AppShell />} />
-      </Routes>
+      <DataProvider initialData={EMPTY}>
+        <Routes>
+          <Route path="/" element={<AppShell />} />
+        </Routes>
+      </DataProvider>
     </MemoryRouter>
   )
 }
