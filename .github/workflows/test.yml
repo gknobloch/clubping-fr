@@ -48,6 +48,13 @@ jobs:
         working-directory: mobile
         env:
           npm_config_registry: 'https://registry.npmjs.org/'
+      # #402 — the SDK 55 packages, react-native and typescript had drifted
+      # behind the versions the installed expo expects, and nothing failed
+      # until someone ran the app by hand. `npm ci` above fails on a lockfile
+      # out of sync with package.json; this catches the other half — a
+      # package.json out of sync with expo's expected versions.
+      - run: npx expo install --check
+        working-directory: mobile
       - run: npm run typecheck
         working-directory: mobile
 
