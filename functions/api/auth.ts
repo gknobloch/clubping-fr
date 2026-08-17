@@ -20,6 +20,15 @@ export type Env = {
     // bypass. wrangler.toml keeps it out of the top-level [vars], and
     // src/test/workflows.spec.ts fails the build if it ever appears there.
     DEV_LOGIN_ENABLED?: string
+    // App Store / Play Store review sign-in. The stores demand a working
+    // login, but a reviewer cannot receive our emailed one-time code (the app
+    // is passwordless). This designated account accepts REVIEW_LOGIN_CODE in
+    // place of the emailed code — nothing else changes, and it is scoped to
+    // this one email. Both must be set (as production Pages *secrets*) for the
+    // bypass to exist; the same pair goes in the store's review notes. The
+    // account must still be a real user row: only the emailed code is skipped.
+    REVIEW_LOGIN_EMAIL?: string
+    REVIEW_LOGIN_CODE?: string
   }
   Variables: {
     user: UserRow
@@ -327,10 +336,23 @@ function sessionResponse(c: Context<Env>, token: string, user: UserRow) {
   return c.json({ token, user: serializeUser(user) })
 }
 
+// The store-review account, if configured (see the Env type). Both the email
+// and the code must be set for the bypass to exist at all — otherwise
+// REVIEW_LOGIN_EMAIL is just an ordinary address on the normal OTP path.
+const reviewLoginConfigured = (env: Env['Bindings']) =>
+  !!env.REVIEW_LOGIN_EMAIL && !!env.REVIEW_LOGIN_CODE
+
+const isReviewEmail = (env: Env['Bindings'], email: string) =>
+  reviewLoginConfigured(env) && email.toLowerCase() === env.REVIEW_LOGIN_EMAIL!.toLowerCase()
+
 // Request an email OTP. Always returns ok (don't leak account existence).
 authApp.post('/email/request', async (c) => {
   const { email } = await c.req.json<{ email?: string }>()
   if (!email || !email.includes('@')) return c.json({ error: 'invalid_email' }, 400)
+
+  // The review account never receives an email: its code is fixed and set out
+  // of band, so requesting one is a no-op the reviewer can tap through.
+  if (isReviewEmail(c.env, email)) return c.json({ ok: true })
 
   const user = await userByEmail(c.env.DB, email)
   // Only generate/send a code when an account exists, but respond identically.
@@ -356,6 +378,17 @@ authApp.post('/email/request', async (c) => {
 authApp.post('/email/verify', async (c) => {
   const { email, code } = await c.req.json<{ email?: string; code?: string }>()
   if (!email || !code) return c.json({ error: 'invalid_request' }, 400)
+
+  // Store-review bypass: the fixed code stands in for the emailed one, for the
+  // one configured account only. A real user row is still required, so this
+  // grants no more access than the account itself has. A wrong code falls
+  // through and fails on the empty OTP table below, as any bad code would.
+  if (isReviewEmail(c.env, email) && code === c.env.REVIEW_LOGIN_CODE) {
+    const user = await userByEmail(c.env.DB, email)
+    if (!user) return c.json({ error: 'no_account' }, 403)
+    const token = await createSession(c.env.DB, user.id)
+    return sessionResponse(c, token, user)
+  }
 
   const row = await c.env.DB.prepare(
     'SELECT code_hash, expires_at, attempts FROM auth_otp WHERE email = lower(?)',

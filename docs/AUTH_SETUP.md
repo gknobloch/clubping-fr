@@ -102,6 +102,7 @@ Then place the values:
 | `VITE_GOOGLE_CLIENT_ID` | no | web `.env.local` | Pages **build** env var |
 | `VITE_APPLE_CLIENT_ID` / `VITE_APPLE_REDIRECT_URI` | no | web `.env.local` | Pages build env var |
 | `googleIosClientId` / `googleAndroidClientId` | no | `mobile/app.json` `expo.extra` | same (in the build) |
+| `REVIEW_LOGIN_EMAIL` / `REVIEW_LOGIN_CODE` | **yes** | `.dev.vars` | Pages **Secret** (see §G) |
 
 Templates: [`.dev.vars.example`](../.dev.vars.example),
 [`.env.example`](../.env.example), [`mobile/.env.example`](../mobile/.env.example).
@@ -153,6 +154,41 @@ session exactly as a preview does — so the guard stays on either way.
 
 Guard behaviour is covered by `functions/api/authGuard.test.ts`; new
 auth-sensitive routes belong there.
+
+---
+
+## G. App Store / Play Store review sign-in
+
+The stores require a working login for their reviewer, but our sign-in is
+passwordless — a code is emailed to the member. A reviewer cannot receive that
+email, so one designated account accepts a **fixed code**, set out of band,
+in place of the emailed one. Everything else is unchanged: the code stands in
+only for the emailed OTP, and only for this single address, which must still be
+a real user row. A wrong code fails exactly as any bad code does.
+
+The bypass exists **only when both** `REVIEW_LOGIN_EMAIL` and
+`REVIEW_LOGIN_CODE` are set — with either missing, the address is just an
+ordinary one on the normal OTP path. Treat the pair as a secret:
+
+```bash
+npx wrangler pages secret put REVIEW_LOGIN_EMAIL   # e.g. clubping.demo@leskno.fr
+npx wrangler pages secret put REVIEW_LOGIN_CODE     # a long, unguessable string
+```
+
+Setup:
+
+1. **Create the account.** `REVIEW_LOGIN_EMAIL` must be a real user in the
+   production database (a `club_admin` demo club is a good choice — it shows the
+   reviewer a populated app without touching a real club's data).
+2. **Set both secrets** on the production Pages project (commands above). Never
+   put them in `wrangler.toml`.
+3. **Fill "App Review Information"** in App Store Connect / Play Console:
+   *User name* = the email, *Password* = the code. Add a note: *"Passwordless
+   app: enter the email, tap to request a code, then enter the code from the
+   Password field — no email is received for this demo account."*
+4. **Rotate** `REVIEW_LOGIN_CODE` if it ever leaks; unset both to disable.
+
+Covered by `functions/api/reviewLogin.test.ts`.
 
 ---
 
