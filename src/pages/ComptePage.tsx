@@ -85,9 +85,9 @@ export function ComptePage() {
         leading={
           <div className="relative shrink-0">
             {me ? (
-              <Avatar playerId={me.id} avatarUpdatedAt={me.avatarUpdatedAt} firstName={me.firstName} lastName={me.lastName} size={72} />
+              <Avatar playerId={me.id} avatarUpdatedAt={me.avatarUpdatedAt} firstName={me.firstName} lastName={me.lastName} sizeClass="h-11 w-11 sm:h-14 sm:w-14" />
             ) : (
-              <span className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-slate-200 text-2xl font-bold text-slate-500">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-base font-bold text-slate-500 sm:h-14 sm:w-14 sm:text-xl">
                 {(user?.email?.[0] ?? '?').toUpperCase()}
               </span>
             )}
@@ -100,7 +100,7 @@ export function ComptePage() {
         }
         title={displayName}
       >
-        <p className="text-sm text-slate-500">{roleLabel}</p>
+        <p className="text-slate-500">{roleLabel}</p>
         {me && (
           <div className="mt-2 flex items-center gap-4 text-sm">
             <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className={`font-medium text-accent-600 hover:text-accent-800 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}>

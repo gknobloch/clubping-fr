@@ -25,6 +25,20 @@ export async function declineConfirm(page: Page) {
   await expect(dialog).toBeHidden()
 }
 
+/**
+ * Run a row action from a card or table row. Since #389's review the Équipes
+ * cards use the "…" menu at every width, so the action is a `menuitem` behind a
+ * trigger rather than an inline button.
+ */
+export async function runRowAction(
+  page: Page,
+  row: { getByRole: Page['getByRole'] } | Page,
+  action: string | RegExp,
+) {
+  await (row as Page).getByRole('button', { name: /^Actions —/ }).first().click()
+  await page.getByRole('menuitem', { name: action }).click()
+}
+
 export async function loginAs(page: Page, search: string) {
   await page.goto('/login')
   await expect(page).toHaveURL(/\/login/)

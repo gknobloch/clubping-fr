@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAs } from './helpers'
+import { loginAs, runRowAction } from './helpers'
 
 test.describe('General admin — Équipes list', () => {
   test.beforeEach(async ({ page }) => {
@@ -17,7 +17,7 @@ test.describe('General admin — Équipes list', () => {
   })
 
   test('can open the edit modal from a card', async ({ page }) => {
-    await page.getByRole('button', { name: 'Modifier' }).first().click()
+    await runRowAction(page, page, 'Modifier')
     await expect(page.getByRole('heading', { name: "Modifier l'équipe" })).toBeVisible()
     await page.getByRole('button', { name: 'Annuler' }).click()
     await expect(page.getByRole('heading', { name: "Modifier l'équipe" })).not.toBeVisible()
@@ -28,7 +28,7 @@ test.describe('General admin — Équipes list', () => {
     const swatch = card.locator('span').filter({ hasText: '1' }).first()
     await expect(swatch).toHaveCSS('background-color', 'rgb(55, 65, 81)') // team-1's mock color, #374151
 
-    await card.getByRole('button', { name: 'Modifier' }).click()
+    await runRowAction(page, card, 'Modifier')
     await expect(page.getByLabel('Couleur')).toHaveValue('#374151')
     await page.getByLabel('Couleur').fill('#00aa55')
     await page.getByRole('button', { name: 'Enregistrer' }).click()

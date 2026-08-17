@@ -12,12 +12,18 @@ export function Avatar({
   lastName,
   size = 48,
   className = '',
+  sizeClass,
 }: {
   playerId: string
   avatarUpdatedAt?: string
   firstName?: string
   lastName?: string
   size?: number
+  /**
+   * Tailwind sizing (e.g. `h-11 w-11 sm:h-14 sm:w-14`) instead of `size`. The
+   * inline box would win over any class, so responsive sizing needs this.
+   */
+  sizeClass?: string
   className?: string
 }) {
   const { token } = useAuth()
@@ -49,17 +55,20 @@ export function Avatar({
   }, [playerId, avatarUpdatedAt, token])
 
   const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?'
-  const box = { width: size, height: size }
+  const box = sizeClass ? undefined : { width: size, height: size }
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 ${sizeClass ?? ''} ${className}`}
       style={box}
     >
       {url ? (
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
-        <span className="font-bold text-slate-500" style={{ fontSize: Math.round(size * 0.4) }}>
+        <span
+          className={`font-bold text-slate-500 ${sizeClass ? 'text-base sm:text-xl' : ''}`}
+          style={sizeClass ? undefined : { fontSize: Math.round(size * 0.4) }}
+        >
           {initials}
         </span>
       )}

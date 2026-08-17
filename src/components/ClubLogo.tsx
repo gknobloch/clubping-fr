@@ -10,11 +10,14 @@ export function ClubLogo({
   logoUpdatedAt,
   size = 48,
   className = '',
+  sizeClass,
 }: {
   clubId: string
   logoUpdatedAt?: string
   size?: number
   className?: string
+  /** Tailwind sizing instead of `size`; the inline box would win over classes. */
+  sizeClass?: string
 }) {
   const { token } = useAuth()
   const [url, setUrl] = useState<string | null>(null)
@@ -48,8 +51,8 @@ export function ClubLogo({
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white ${className}`}
-      style={{ width: size, height: size }}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white ${sizeClass ?? ''} ${className}`}
+      style={sizeClass ? undefined : { width: size, height: size }}
     >
       <img src={url} alt="" className="h-full w-full object-contain" />
     </div>

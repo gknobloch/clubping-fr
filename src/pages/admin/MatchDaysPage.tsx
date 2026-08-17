@@ -19,7 +19,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportIcon } from '@/components/icons'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
   AVAILABILITY_COLORS,
   AVAILABILITY_LABELS,
@@ -725,15 +725,12 @@ export function MatchDaysPage() {
         club={scopedClub}
         actions={
           isAdmin && importableGroupIds.length > 0 ? (
-            <button
-              type="button"
+            <HeaderAction
+              desktopOnly
+              icon={<ImportIcon />}
+              label="Importer les matchs FFTT"
               onClick={() => setImportGamesOpen(true)}
-              title="Importer les matchs FFTT"
-              aria-label="Importer les matchs FFTT"
-              className="hidden h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white hover:bg-accent-700 md:flex md:h-9 md:w-9"
-            >
-              <ImportIcon className="h-4 w-4" />
-            </button>
+            />
           ) : undefined
         }
         controls={
@@ -849,9 +846,18 @@ export function MatchDaysPage() {
               </div>
             )}
 
-            {/* Global match-day switcher — matrix-only, see above. */}
+            {/* Global match-day switcher — matrix-only, see above. Pushed to
+                the right so it lines up with the per-team paginator each table
+                carries: the same control, one scope down, and the eye reads
+                them as a pair.
+
+                The 17px is that card's inner edge — its 1px border plus 1rem of
+                header padding — since the toolbar is a full-bleed band with
+                neither. It only has to hold on desktop, where both are visible
+                at once; below md: the toolbar scrolls sideways and the tables
+                are not rendered at all. */}
             {globalMaxMatchDays > VISIBLE_MATCH_DAY_COUNT && (
-              <div className="hidden h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:flex">
+              <div className="hidden h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:ml-auto md:mr-[17px] md:flex">
                 <button
                   type="button"
                   onClick={() => setGlobalOffset(globalMatchDayOffset - 1)}

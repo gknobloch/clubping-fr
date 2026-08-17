@@ -501,7 +501,7 @@ export const mockGameSelections: GameSelection[] = [
 // "À confirmer" (no response yet) state too.
 // ---------------------------------------------------------------------------
 export const mockGameAvailabilities: GameAvailability[] = [
-  // g1-8 (team-1, in daysFromNow(14) days)
+  // g1-8 (team-1, in daysFromNow(16) days)
   { gameId: 'g1-8', playerId: 'p2-player-5', status: 'available' },
   { gameId: 'g1-8', playerId: 'p2-player-1', status: 'maybe' },
   { gameId: 'g1-8', playerId: 'p2-player-2', status: 'unavailable', overriddenBy: 'captain' },

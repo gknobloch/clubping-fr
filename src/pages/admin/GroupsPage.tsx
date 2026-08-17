@@ -7,9 +7,9 @@ import { ImportGroupsModal } from '@/components/ImportGroupsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportScheduleDocumentModal } from '@/components/ImportScheduleDocumentModal'
 import { PageHeader } from '@/components/PageHeader'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, SecondaryButton } from '@/components/Button'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
-import { PhaseSwitchButton } from '@/components/icons'
+import { FileIcon, ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
@@ -166,12 +166,12 @@ export function GroupsPage() {
         title="Groupes"
         actions={
           <>
-            <SecondaryButton onClick={openCreate}>Ajouter un groupe</SecondaryButton>
+            <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter un groupe" onClick={openCreate} />
             {isAdmin && (
-              <SecondaryButton onClick={() => setImportDocOpen(true)}>Importer depuis un fichier</SecondaryButton>
+              <HeaderAction variant="secondary" icon={<FileIcon />} label="Importer depuis un fichier" onClick={() => setImportDocOpen(true)} />
             )}
             {isAdmin && division && (
-              <PrimaryButton onClick={() => setImportOpen(true)}>Importer les groupes FFTT</PrimaryButton>
+              <HeaderAction icon={<ImportIcon />} label="Importer les groupes FFTT" onClick={() => setImportOpen(true)} />
             )}
           </>
         }

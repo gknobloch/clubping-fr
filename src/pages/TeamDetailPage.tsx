@@ -7,6 +7,7 @@ import { gameDate } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { getTeamName } from '@/lib/teamName'
 import { Avatar } from '@/components/Avatar'
+import { ClubLogo } from '@/components/ClubLogo'
 import { GameQuickView } from '@/components/GameQuickView'
 import { IdentityCard } from '@/components/IdentityCard'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
@@ -42,6 +43,7 @@ export function TeamDetailPage() {
 
   const team = teams.find((t) => t.id === current?.teamId) ?? baseTeam
   const division = divisions.find((d) => d.id === team?.divisionId)
+  const club = clubs.find((c) => c.id === team?.clubId)
   const games_ = current?.games ?? []
   const totalGames = games_.length
 
@@ -95,6 +97,7 @@ export function TeamDetailPage() {
           </span>
         }
         title={getTeamName(team, clubs)}
+        trailing={club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} sizeClass="h-11 w-11 sm:h-14 sm:w-14" />}
       >
         {division && <p className="text-slate-500">{division.displayName}</p>}
       </IdentityCard>

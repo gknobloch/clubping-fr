@@ -5,7 +5,8 @@ import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView, ChannelIcon, channelTypeLabel } from '@/components/ClubDetailView'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
-import { PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { HeaderAction, TEXT_TARGET_CLASS } from '@/components/Button'
+import { EditIcon } from '@/components/icons'
 
 export function MyClubPage() {
   const { user } = useAuth()
@@ -55,17 +56,11 @@ export function MyClubPage() {
     <div className="space-y-5">
       {/* Identity */}
       <IdentityCard
-        leading={<ClubLogo clubId={currentClub.id} logoUpdatedAt={currentClub.logoUpdatedAt} size={56} />}
+        leading={<ClubLogo clubId={currentClub.id} logoUpdatedAt={currentClub.logoUpdatedAt} sizeClass="h-11 w-11 sm:h-14 sm:w-14" />}
         title={currentClub.displayName}
         trailing={
           canEdit && (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className={`shrink-0 ${PRIMARY_BUTTON_CLASS}`}
-            >
-              Modifier
-            </button>
+            <HeaderAction icon={<EditIcon />} label="Modifier" onClick={() => setEditing(true)} />
           )
         }
       >

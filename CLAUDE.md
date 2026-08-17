@@ -63,3 +63,17 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - UI text must be in French
 - Code comments and technical docs: English preferred
 - All new features should include unit tests; user-facing flows should have E2E tests
+
+### Mobile UI
+- **Page-header actions use `HeaderAction`** (`src/components/Button.tsx`) — icon
+  only below `md:`, icon + label above. Their labels are long ("Importer depuis
+  la FFTT" is 205px); two side by side push the header onto extra rows on a
+  phone. Never add a bare text button to a `PageHeader`'s `actions`.
+- **Row actions use `RowActions`** — the "…" menu, which is a bottom sheet. Pass
+  `menuOnly` on cards so it is the menu at every width. Mark an action
+  `desktopOnly` when it has no usable mobile form yet.
+- Interactive targets are 44px below `md:`; the shared button classes already
+  handle it. See `src/components/Button.tsx`.
+- Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
+  Never use `window.confirm` — it is silently inert on iOS Safari once a member
+  blocks dialogs. Use `useConfirm` (#375).

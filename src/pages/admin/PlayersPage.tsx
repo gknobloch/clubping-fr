@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { BASE_BUTTON_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, PrimaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
+import { ImportIcon, PlusIcon } from '@/components/icons'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
@@ -20,17 +21,6 @@ const STATUS_FILTERS: { value: PlayerType['status'] | 'all'; label: string }[] =
   { value: 'archived', label: 'Archivé' },
   { value: 'all', label: 'Tous' },
 ]
-
-/**
- * "Ajouter un joueur" when the FFTT import sits next to it: filled below md:,
- * where the import is not rendered and this is the page's only action, and
- * outlined from md: up, where the import is the primary one. A single button
- * that changes look, rather than two with the same label — which would be two
- * things to find for anything looking the button up by name.
- */
-const ADD_WITH_IMPORT_CLASS =
-  `${BASE_BUTTON_CLASS} bg-accent-600 text-white hover:bg-accent-700` +
-  ' md:border md:border-accent-600 md:bg-white md:text-accent-600 md:hover:bg-accent-50'
 
 export function PlayersPage() {
   const { user } = useAuth()
@@ -175,23 +165,25 @@ export function PlayersPage() {
         actions={
           canEditPlayers && (
             <>
-              {/* Same order as /equipes (#229): manual add is the fallback,
-                  the FFTT import is the default path — so it is the primary
-                  button and comes last. Below md: the import is not offered
-                  (dense comparison screen, #381/#384), which leaves the manual
-                  add alone: it takes the primary look back at that width
+              {/* Same order as /equipes (#229): manual add is the fallback, the
+                  FFTT import is the default path — so it is the primary button
+                  and comes last. Below md: the import is not offered (dense
+                  comparison screen, #381/#384), which leaves the manual add
+                  alone: `adaptive` gives it the filled look back at that width
                   rather than leaving the page with no filled action. */}
-              <button
-                type="button"
+              <HeaderAction
+                variant={canImport ? 'adaptive' : 'primary'}
+                icon={<PlusIcon />}
+                label="Ajouter un joueur"
                 onClick={openCreate}
-                className={canImport ? ADD_WITH_IMPORT_CLASS : PRIMARY_BUTTON_CLASS}
-              >
-                Ajouter un joueur
-              </button>
+              />
               {canImport && (
-                <PrimaryButton onClick={() => setImporting(true)} className="hidden md:inline-flex">
-                  Importer depuis la FFTT
-                </PrimaryButton>
+                <HeaderAction
+                  desktopOnly
+                  icon={<ImportIcon />}
+                  label="Importer depuis la FFTT"
+                  onClick={() => setImporting(true)}
+                />
               )}
             </>
           )
