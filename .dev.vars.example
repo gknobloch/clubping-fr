@@ -32,6 +32,17 @@ GOOGLE_CLIENT_IDS=
 # (fr.clubping.app), since their id_tokens carry different `aud` values.
 APPLE_CLIENT_IDS=
 
+# --- App Store / Play Store review sign-in ---
+# The stores require a working login, but a reviewer cannot receive our emailed
+# one-time code. When BOTH are set, this one account signs in with the fixed
+# code below instead of an emailed one — nothing else changes, and it is scoped
+# to this single email (which must still be a real user in the database). Put
+# the same pair in the store's "App Review Information". In production set them
+# as Pages *secrets* (`wrangler pages secret put REVIEW_LOGIN_CODE`), never in
+# wrangler.toml. Leave them blank here unless you are testing the flow locally.
+REVIEW_LOGIN_EMAIL=
+REVIEW_LOGIN_CODE=
+
 # --- Session guard (#98) ---
 # Left OFF (unset) on purpose: with DEV_LOGIN_ENABLED above, local dev holds a
 # real session, so the guard can run exactly as it does in production. That is
