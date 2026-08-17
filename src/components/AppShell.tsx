@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { BrandMark } from '@/components/BrandMark'
 import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
 import { useConfirm } from '@/components/useConfirm'
+import { OfflineBanner } from '@/components/OfflineBanner'
 
 function PreviewBanner() {
   if (!IS_PR_PREVIEW) return null
@@ -95,6 +96,7 @@ export function AppShell() {
     <div className="min-h-screen flex flex-col bg-slate-50">
       {confirmDialog}
       <PreviewBanner />
+      <OfflineBanner />
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="relative mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link

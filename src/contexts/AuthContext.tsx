@@ -20,6 +20,12 @@ import {
 
 const SESSION_KEY = 'pp-club-session'
 const DEV_USER_KEY = 'clubping-dev-user-id'
+/**
+ * The signed-in member, kept so a boot with no network can restore the session
+ * instead of showing the sign-in form (#387). Identity only — everything the
+ * app actually renders comes from DataContext's own cache.
+ */
+const USER_KEY = 'pp-club-user'
 
 // Defensive localStorage access (guards SSR and test environments without a
 // working Storage implementation).
@@ -45,6 +51,27 @@ const storage = {
       /* ignore */
     }
   },
+}
+
+/**
+ * Did the server turn us away, or did we never reach it? Only the first should
+ * cost the member their session: `fetch` rejects with a plain TypeError when
+ * the network is down, while an expired or revoked token comes back as an
+ * ApiError carrying a status (#387).
+ */
+function isServerRejection(err: unknown): boolean {
+  return typeof (err as { status?: number } | null)?.status === 'number'
+}
+
+function readStoredUser(): User | null {
+  const raw = storage.get(USER_KEY)
+  if (!raw) return null
+  try {
+    const user = JSON.parse(raw) as User
+    return user && typeof user.id === 'string' ? user : null
+  } catch {
+    return null
+  }
 }
 
 // Dev login ("pick any user") stays available in dev builds / E2E (the E2E
@@ -157,10 +184,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!cancelled) {
               setRealUser(me)
               setRealToken(token)
+              storage.set(USER_KEY, JSON.stringify(me))
             }
             return
-          } catch {
+          } catch (err) {
+            if (!isServerRejection(err)) {
+              // Offline, not signed out. Dropping the token here used to mean a
+              // sports hall with no signal showed the sign-in form — and, with
+              // no member to key it to, put the offline data cache out of reach
+              // as well (#387). Keep the session and carry on with what we know.
+              const stored = readStoredUser()
+              if (stored && !cancelled) {
+                setRealUser(stored)
+                setRealToken(token)
+                return
+              }
+            }
             storage.remove(SESSION_KEY) // expired / revoked
+            storage.remove(USER_KEY)
           }
         }
         // No usable token — but the session cookie may still be there, and
@@ -169,9 +210,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // that from "log in again" into nothing the member notices.
         try {
           const me = await fetchMe()
-          if (!cancelled) setRealUser(me)
+          if (!cancelled) {
+            setRealUser(me)
+            storage.set(USER_KEY, JSON.stringify(me))
+          }
           return
-        } catch {
+        } catch (err) {
+          // Same distinction as above: unreachable is not signed out. A cookie
+          // session has no token to keep, so the remembered member is all there
+          // is to go on — and the cookie will still be there when the network
+          // is (#387).
+          if (!isServerRejection(err)) {
+            const stored = readStoredUser()
+            if (stored && !cancelled) {
+              setRealUser(stored)
+              return
+            }
+          }
+          storage.remove(USER_KEY)
           /* no cookie session either — carry on to dev login / the form */
         }
         if (DEV_LOGIN) {
@@ -196,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const applySession = useCallback((token: string, sessionUser: User) => {
     storage.set(SESSION_KEY, token)
+    storage.set(USER_KEY, JSON.stringify(sessionUser))
     storage.remove(DEV_USER_KEY)
     setRealToken(token)
     setRealUser(sessionUser)
@@ -231,6 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // the login page makes before anybody has signed in.
     if (realToken || realUser) apiLogout(realToken ?? undefined)
     storage.remove(SESSION_KEY)
+    storage.remove(USER_KEY)
     storage.remove(DEV_USER_KEY)
     setRealUser(null)
     setRealToken(null)
