@@ -206,4 +206,8 @@ export interface UserRow {
   birth_place: string | null
   status: PlayerStatus
   club_id: string | null
+  /** Unix epoch ms of the member's first ever sign-in; NULL = never (#406). */
+  first_login_at: number | null
+  /** Unix epoch ms, refreshed at most hourly while the member uses the app. */
+  last_seen_at: number | null
 }

@@ -245,7 +245,40 @@ async function createSession(db: D1Database, userId: string): Promise<string> {
     .prepare('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
     .bind(token, userId, now, now + SESSION_TTL_MS)
     .run()
+  // The session row is not the record of this (#406): it is deleted at logout
+  // and gone after 30 days, so a club that shared the app could not tell a
+  // member who tried it once from one who never opened the link. COALESCE is
+  // what makes first_login_at the FIRST login rather than the latest.
+  await db
+    .prepare('UPDATE users SET first_login_at = COALESCE(first_login_at, ?), last_seen_at = ? WHERE id = ?')
+    .bind(now, now, userId)
+    .run()
   return token
+}
+
+/**
+ * How stale `users.last_seen_at` may get before a request refreshes it (#406).
+ *
+ * Every authenticated request passes through the guard, so writing there
+ * unconditionally would put a D1 write in front of every page load — for a
+ * value read as a date on one admin screen. An hour bounds it to one write per
+ * member per hour and still answers the question anyone asks of it ("did they
+ * come back this week?").
+ */
+const LAST_SEEN_REFRESH_MS = 60 * 60 * 1000
+
+/**
+ * Bring `last_seen_at` up to date if it has gone stale, mutating the row so the
+ * rest of the request sees the value it just wrote.
+ */
+async function touchLastSeen(db: D1Database, user: UserRow): Promise<void> {
+  const now = Date.now()
+  // `typeof` rather than a null check: a database still missing the 0039
+  // columns hands back undefined, and treating that as "fresh" would leave the
+  // column empty for good.
+  if (typeof user.last_seen_at === 'number' && now - user.last_seen_at < LAST_SEEN_REFRESH_MS) return
+  await db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').bind(now, user.id).run()
+  user.last_seen_at = now
 }
 
 export function bearer(authHeader: string | undefined | null): string | null {
@@ -317,7 +350,15 @@ export async function userFromToken(db: D1Database, token: string): Promise<User
     await db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run()
     return null
   }
-  return db.prepare('SELECT * FROM users WHERE id = ?').bind(session.user_id).first<UserRow>()
+  const user = await db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .bind(session.user_id)
+    .first<UserRow>()
+  // Every authenticated request lands here, which makes it the one place that
+  // knows a member is still using the app between sign-ins (#406). Throttled —
+  // see LAST_SEEN_REFRESH_MS.
+  if (user) await touchLastSeen(db, user)
+  return user
 }
 
 // ---------------------------------------------------------------------------

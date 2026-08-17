@@ -5,7 +5,8 @@ import { BrandMark } from '@/components/BrandMark'
  * Public privacy policy (#356). Google Play and the App Store both require a
  * publicly reachable policy URL for any app collecting personal data, and this
  * one collects a lot: civil identity, contact details, birth date and place,
- * FFTT licence number, and an optional avatar.
+ * FFTT licence number, an optional avatar, and — since #406 — the date of the
+ * member's last visit.
  *
  * Deliberately outside the protected layout — store reviewers fetch this URL
  * anonymously, so anything behind the auth guard is useless to them.
@@ -26,7 +27,7 @@ const CONTACT_EMAIL = 'clubping@leskno.fr'
 const CONTROLLER = 'Club Ping'
 
 /** Last substantive review of this text. Shown to the reader; update when the content changes. */
-const LAST_UPDATED = '11 août 2026'
+const LAST_UPDATED = '17 août 2026'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -88,6 +89,12 @@ export function PrivacyPage() {
                 <strong>Vie sportive</strong> : club et équipes de rattachement, disponibilités,
                 compositions d'équipes et résultats des rencontres.
               </li>
+              <li>
+                <strong>Date de dernière connexion</strong> : la date à laquelle vous avez ouvert
+                l'application pour la dernière fois, afin que les responsables du club sachent qui
+                a pu accéder à son compte et qui reste à accompagner. Aucune autre trace d'usage
+                n'est conservée : ni les écrans consultés, ni les actions effectuées.
+              </li>
             </ul>
             <p>
               L'application ne collecte aucune donnée de localisation, n'accède ni à vos contacts
@@ -113,8 +120,8 @@ export function PrivacyPage() {
             <p>
               Les membres de votre club voient les informations utiles à la vie sportive : nom,
               prénom, photo de profil, équipes, disponibilités et résultats. Les données plus
-              sensibles — coordonnées, date et lieu de naissance, numéro de licence — ne sont
-              accessibles qu'aux personnes administrant le club.
+              sensibles — coordonnées, date et lieu de naissance, numéro de licence, date de
+              dernière connexion — ne sont accessibles qu'aux personnes administrant le club.
             </p>
             <p>
               Aucune donnée n'est transmise à un tiers à des fins commerciales. L'hébergement est
@@ -128,6 +135,11 @@ export function PrivacyPage() {
               et aucun traceur tiers. Le seul élément conservé sur votre appareil est le jeton
               nécessaire à votre session, sans lequel vous devriez vous reconnecter à chaque
               ouverture.
+            </p>
+            <p>
+              La date de dernière connexion mentionnée plus haut est enregistrée sur nos serveurs,
+              et non sur votre appareil. Elle n'alimente aucune statistique tierce et n'est visible
+              que des personnes administrant votre club.
             </p>
           </Section>
 

@@ -47,9 +47,38 @@ app.route('/auth', authApp)
 const bool = (v: unknown) => v === 1 || v === true
 const jsonStr = (v: unknown) => JSON.stringify(v)
 
+/**
+ * Whether `viewer` may be told when a given member last opened the app (#406).
+ *
+ * `GET /api/data` sends one payload to every client, so this is the only place
+ * the restriction can live — a member's last visit is about them, not about the
+ * club's sporting life, and it stays with the people who administer them:
+ * a general admin sees everyone, a club admin sees their own club, and a player
+ * sees nobody, themselves included.
+ *
+ * No viewer means AUTH_GUARD_DISABLED, the local-only escape hatch that already
+ * serves this entire payload to an unauthenticated caller (#138). Withholding
+ * one field there would hide the feature from local development and protect
+ * nothing.
+ */
+function lastSeenVisibleTo(viewer: UserRow | undefined): (row: UserRow) => boolean {
+  if (!viewer) return () => true
+  if (viewer.role === 'general_admin') return () => true
+  if (viewer.role === 'club_admin' && viewer.club_id) {
+    const { club_id: adminClubId } = viewer
+    return (row) => row.club_id === adminClubId
+  }
+  return () => false
+}
+
+/** The `lastSeenAt` field for a member row, or nothing at all. */
+const lastSeenField = (r: UserRow, visible: (row: UserRow) => boolean) =>
+  r.last_seen_at && visible(r) ? { lastSeenAt: new Date(r.last_seen_at).toISOString() } : {}
+
 // --- GET /api/data — return all entities ---
 app.get('/data', async (c) => {
   const db = c.env.DB
+  const canSeeLastSeen = lastSeenVisibleTo(c.get('user'))
   const [
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
     groupsR, teamsR, phasePointsR, matchDaysR, gamesR,
@@ -153,6 +182,7 @@ app.get('/data', async (c) => {
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
       status: r.status, clubId: r.club_id ?? '',
+      ...lastSeenField(r, canSeeLastSeen),
       ...(avatarUpdatedAt.has(r.id as string)
         ? { avatarUpdatedAt: avatarUpdatedAt.get(r.id as string) }
         : {}),
@@ -206,6 +236,7 @@ app.get('/data', async (c) => {
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
       ...(r.status ? { status: r.status } : {}),
       ...(r.club_id ? { clubId: r.club_id } : {}),
+      ...lastSeenField(r, canSeeLastSeen),
     })),
   }
   return c.json(payload)

@@ -42,7 +42,13 @@ UPDATE users SET
   -- FFTT matching by licence will not line up on previews.
   license_number = printf('99%05d', rowid),
   birth_date = NULL,
-  birth_place = NULL;
+  birth_place = NULL,
+  -- When a real member last opened the app (#406). A pseudonym makes it
+  -- harmless on its own, but it is a fact about someone's behaviour on a
+  -- publicly reachable preview, and keeping it buys nothing: the dev login
+  -- stamps a fresh visit the moment anyone signs in as a row.
+  first_login_at = NULL,
+  last_seen_at = NULL;
 
 -- Live production session tokens. Copying these into a less protected
 -- environment hands out authenticated access to real accounts; nothing on a

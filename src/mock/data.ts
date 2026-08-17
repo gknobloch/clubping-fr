@@ -75,12 +75,25 @@ export const mockDivisions: Division[] = [
 // ---------------------------------------------------------------------------
 // Players — PPA Rixheim (IDs match remote DB p2-player-* scheme)
 // ---------------------------------------------------------------------------
+/**
+ * A visit `days` ago, as the API would send it (#406). Relative, for the reason
+ * #393 taught: a fixed date in fixtures is a test that fails on a date nobody
+ * chose. Most players below carry none at all — never having opened the app is
+ * the ordinary state of a club that has just been given the link, and it is
+ * what the Joueurs page has to make visible.
+ */
+function visitedDaysAgo(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString()
+}
+
 export const mockPlayers: Player[] = [
   // Equipe 1
-  { id: 'p2-player-5', firstName: 'Joris', lastName: 'Szulc', licenseNumber: '686910', email: 'joris.szulc@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
-  { id: 'p2-player-1', firstName: 'Grégory', lastName: 'Canaque', licenseNumber: '425881', email: 'gregory.canaque@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
+  { id: 'p2-player-5', firstName: 'Joris', lastName: 'Szulc', licenseNumber: '686910', email: 'joris.szulc@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011', lastSeenAt: visitedDaysAgo(0) },
+  { id: 'p2-player-1', firstName: 'Grégory', lastName: 'Canaque', licenseNumber: '425881', email: 'gregory.canaque@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011', lastSeenAt: visitedDaysAgo(3) },
   { id: 'p2-player-2', firstName: 'Quentin', lastName: 'Colle', licenseNumber: '8810008', email: 'quentin.colle@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
-  { id: 'p2-player-3', firstName: 'Stéphane', lastName: 'Lach', licenseNumber: '681364', email: 'stephane.lach@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
+  { id: 'p2-player-3', firstName: 'Stéphane', lastName: 'Lach', licenseNumber: '681364', email: 'stephane.lach@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011', lastSeenAt: visitedDaysAgo(15) },
   { id: 'p2-player-4', firstName: 'Enzo', lastName: 'Lotz', licenseNumber: '6716966', email: 'enzo.lotz@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   // Equipe 2
   { id: 'p2-player-6', firstName: 'Christian', lastName: 'Buchi', licenseNumber: '6815117', email: 'christian.buchi@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
@@ -532,6 +545,7 @@ export const mockUsers: User[] = [
       ...(p.birthPlace ? { birthPlace: p.birthPlace } : {}),
       status: p.status,
       clubId: p.clubId,
+      ...(p.lastSeenAt ? { lastSeenAt: p.lastSeenAt } : {}),
     }),
   ),
 ]

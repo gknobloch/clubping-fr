@@ -41,6 +41,18 @@ describe('PrivacyPage', () => {
     expect(page).toMatch(/éligibilité à certaines compétitions/i)
   })
 
+  // #406 — the app now stores when a member last opened it. That is a usage
+  // record, not audience measurement, and the difference only holds if the page
+  // says what is kept and who sees it.
+  it('declares the last-connection date and limits it to the club administrators', () => {
+    render(<PrivacyPage />)
+    const page = document.body.textContent ?? ''
+
+    expect(page).toMatch(/date de dernière connexion/i)
+    expect(page).toMatch(/ni les écrans consultés, ni les actions effectuées/i)
+    expect(page).toMatch(/visible que des personnes administrant votre club/i)
+  })
+
   it('states the absence of trackers, advertising and audience measurement', () => {
     render(<PrivacyPage />)
     const page = document.body.textContent ?? ''
