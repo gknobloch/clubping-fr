@@ -1,13 +1,14 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { serviceWorker } from './scripts/vite-plugin-service-worker.mjs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), serviceWorker()],
   define: {
     __PR_NUMBER__: JSON.stringify(process.env.PR_NUMBER || ''),
     __COMMIT_SHA__: JSON.stringify(process.env.COMMIT_SHA || ''),
@@ -21,7 +22,11 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: ['src/test/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'functions/**/*.{test,spec}.ts'],
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx}',
+      'functions/**/*.{test,spec}.ts',
+      'scripts/**/*.{test,spec}.ts',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

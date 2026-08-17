@@ -35,7 +35,10 @@ Mobile-friendly web app for managing table tennis club players, teams, availabil
 - `functions/api/` — Cloudflare Pages Functions (Hono API)
 - `migrations/` — D1 SQL schema migrations
 - `seed.sql` — Database seed data
-- `e2e/` — Playwright E2E tests
+- `e2e/` — Playwright E2E tests (two projects: `chromium` against `npm run dev`,
+  and `pwa` against `vite preview`, since the service worker only exists in a build)
+- `scripts/service-worker.js` — the PWA shell cache, built into `dist/sw.js` by
+  `scripts/vite-plugin-service-worker.mjs` with the build's hashed file names
 - `docs/SPEC.md` — Business specification
 - `docs/IMPLEMENTATION_PLAN.md` — Phased roadmap with GitHub issues
 
@@ -63,6 +66,17 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - UI text must be in French
 - Code comments and technical docs: English preferred
 - All new features should include unit tests; user-facing flows should have E2E tests
+
+### Offline (#387)
+- Two caches, deliberately separate. **DataContext** owns the API response —
+  keyed to the member and cleared at logout, because clubs share phones. The
+  **service worker** owns the shell only and never touches `/api`; a second,
+  unkeyed copy of the data there would outlive the session.
+- The worker precaches the entry chunk and CSS, not dynamic imports: pdf.js and
+  tesseract.js are ~2.6 MB for one admin flow.
+- Cache lookups pass `ignoreVary: true`. Vite marks module scripts
+  `crossorigin`, so they carry an `Origin` the precached copy lacks, and any
+  server answering `Vary: Origin` otherwise makes every asset miss.
 
 ### Mobile UI
 - **Page-header actions use `HeaderAction`** (`src/components/Button.tsx`) — icon
