@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { DataProvider } from '@/contexts/DataContext'
 import { AppShell } from '@/components/AppShell'
+import { ScrollToTop } from '@/components/ScrollToTop'
 import { LoginPage } from '@/pages/LoginPage'
 import { HomePage } from '@/pages/HomePage'
 import { ClubsPage } from '@/pages/admin/ClubsPage'
@@ -49,6 +50,7 @@ function PublicRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <DataProvider>
           <Routes>
