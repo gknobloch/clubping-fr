@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildImportRows,
   dafunkerClubLicencesUrl,
-  ffttPlayerUrl,
+  dafunkerLicenceUrl,
   formatPoints,
   normalizePersonName,
   parseClubLicencesXml,
-  parseFfttPlayerJson,
   playerSyncFields,
   playersMissingFromFftt,
   sameClubNumber,
@@ -14,12 +13,14 @@ import {
 } from './ffttPlayers'
 import type { Player, PlayerPhasePoints } from '../types'
 
-// The real /v1/joueur/6813454 response, trimmed to the fields we read.
-const PLAYER_JSON = JSON.stringify({
-  nom: 'DE COATPONT', prenom: 'Bertrand', licence: '6813454', type: 'T', cat: 'V50',
-  numclub: '06680011', nomclub: 'RIXHEIM PPA', sexe: 'M',
-  point: 803.0, initm: 727.0, pointm: 803.0, apointm: 788.34,
-})
+// The real xml_licence_b.php?licence=684545 response — the single-licence
+// scope answers with the same record shape as the club-wide one.
+const ONE_LICENCE_XML =
+  '<?xml version="1.0" encoding="ISO-8859-1"?>' +
+  '<liste><licence><idlicence>45574</idlicence><licence>684545</licence><nom>CERONI</nom>' +
+  '<prenom>Herve</prenom><numclub>06680011</numclub><nomclub>RIXHEIM PPA</nomclub>' +
+  '<sexe>M</sexe><type>A</type><point>1416</point><cat>V55</cat><pointm>1416</pointm>' +
+  '<apointm>1435.97</apointm><initm>1500</initm></licence></liste>'
 
 // The real xml_licence_b.php?club=06680011 response, two records of it.
 const CLUB_XML =
@@ -104,34 +105,27 @@ describe('sameClubNumber', () => {
 })
 
 describe('urls', () => {
-  it('builds the licence and club endpoints, stripping anything else', () => {
-    expect(ffttPlayerUrl('6813454')).toBe('https://fftt.dafunker.com/v1/joueur/6813454')
-    expect(ffttPlayerUrl('68 134 54')).toBe('https://fftt.dafunker.com/v1/joueur/6813454')
+  // Both scopes go through /v1/proxy/: the friendlier /v1/joueur/<licence>
+  // JSON endpoint answers without an Access-Control-Allow-Origin header, so
+  // the browser blocks it (the import runs in the page, not on the server).
+  it('builds both scopes on the CORS-enabled proxy, stripping anything else', () => {
+    expect(dafunkerLicenceUrl('684545'))
+      .toBe('https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?licence=684545')
+    expect(dafunkerLicenceUrl('68 45 45'))
+      .toBe('https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?licence=684545')
     expect(dafunkerClubLicencesUrl('06680011'))
       .toBe('https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?club=06680011')
   })
 })
 
-describe('parseFfttPlayerJson', () => {
-  it('parses a real /v1/joueur response, normalizing the name and reading `point`', () => {
-    expect(parseFfttPlayerJson(PLAYER_JSON)).toEqual({
-      licence: '6813454',
-      lastName: 'De Coatpont',
-      firstName: 'Bertrand',
-      clubNumber: '06680011',
-      clubName: 'Rixheim PPA',
-      points: '803',
-    })
-  })
-
-  it('returns null for an unknown licence or an unparseable body', () => {
-    expect(parseFfttPlayerJson('{"error":"not found"}')).toBeNull()
-    expect(parseFfttPlayerJson('not json')).toBeNull()
-    expect(parseFfttPlayerJson('[]')).toBeNull()
-  })
-})
-
 describe('parseClubLicencesXml', () => {
+  it('parses a single-licence response the same way as a club list', () => {
+    expect(parseClubLicencesXml(ONE_LICENCE_XML)).toEqual([{
+      licence: '684545', lastName: 'Ceroni', firstName: 'Herve',
+      clubNumber: '06680011', clubName: 'Rixheim PPA', points: '1416',
+    }])
+  })
+
   it('parses every record, taking the licence NUMBER and not idlicence', () => {
     expect(parseClubLicencesXml(CLUB_XML)).toEqual([
       {

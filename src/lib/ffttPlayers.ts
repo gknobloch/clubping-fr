@@ -3,22 +3,27 @@
 // fetch runs in the user's browser and the parsed payload is handed to the
 // app's own player-creation flow.
 //
-// Two sources, one shape:
+// One source, two scopes:
 //
-//   GET https://fftt.dafunker.com/v1/joueur/<licence>            (JSON, one licence)
-//     {"nom":"DE COATPONT","prenom":"Bertrand","licence":"6813454",
-//      "numclub":"06680011","nomclub":"RIXHEIM PPA","point":803.0,
-//      "pointm":803.0,"apointm":788.34,"initm":727.0, …}
-//     An unknown licence answers with an error object rather than a player.
-//
-//   GET https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?club=<numclub>  (XML, whole club)
+//   GET https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?licence=<licence>
+//   GET https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?club=<numclub>
 //     <liste><licence><idlicence/><licence>425881</licence><nom>CANAQUE</nom>
 //       <prenom>Gregory</prenom><numclub>06680011</numclub>
 //       <nomclub>RIXHEIM PPA</nomclub><point>1731</point><pointm>1731</pointm>
 //       <apointm>1752.34</apointm><initm>1763</initm>…</licence>…</liste>
-//     Note the two `licence` names: the <licence> ELEMENT inside each record is
-//     the licence number; <idlicence> is FFTT's internal row id, which is not
-//     what anyone means by "numéro de licence".
+//     Same record either way — one for a licence, the club's whole list for a
+//     club number — so one parser serves both. Note the two `licence` names:
+//     the <licence> ELEMENT inside each record is the licence number, while
+//     <idlicence> is FFTT's internal row id, which is not what anyone means by
+//     "numéro de licence".
+//
+// There is a friendlier-looking JSON endpoint for a single licence,
+// /v1/joueur/<licence>, and this first used it — but it answers without an
+// `Access-Control-Allow-Origin` header, so the browser blocks the response and
+// the import can only fail. The /v1/proxy/ endpoints send `*`. The same trap
+// caught the games import (see ffttGamesXml.ts, where /v1/club/<n>/equipes had
+// to give way to its /v1/proxy/ twin): on dafunker, only /v1/proxy/ is
+// reachable from a page.
 //
 // Points come from `point` — the official ranking. `pointm` is the monthly
 // figure, `apointm` the running average, `initm` the season's starting value;
@@ -27,8 +32,7 @@
 import type { Player, PlayerPhasePoints } from '../types'
 import { normalizeFfttName } from './ffttClub'
 
-const PLAYER_URL = 'https://fftt.dafunker.com/v1/joueur'
-const CLUB_LICENCES_URL = 'https://fftt.dafunker.com/v1/proxy/xml_licence_b.php'
+const LICENCES_URL = 'https://fftt.dafunker.com/v1/proxy/xml_licence_b.php'
 const TIMEOUT_MS = 15000
 
 /** One licence as FFTT states it, normalized for our own storage. */
@@ -117,46 +121,23 @@ export function sameClubNumber(a: string | undefined, b: string | undefined): bo
 // Fetching and parsing
 // ---------------------------------------------------------------------------
 
+const digits = (s: string) => s.replace(/[^0-9A-Za-z]/g, '')
+
 /** The dafunker URL for one licence. */
-export function ffttPlayerUrl(licence: string): string {
-  return `${PLAYER_URL}/${encodeURIComponent(licence.replace(/[^0-9A-Za-z]/g, ''))}`
+export function dafunkerLicenceUrl(licence: string): string {
+  return `${LICENCES_URL}?licence=${encodeURIComponent(digits(licence))}`
 }
 
 /** The dafunker URL listing every licence of a club. */
 export function dafunkerClubLicencesUrl(clubNumber: string): string {
-  return `${CLUB_LICENCES_URL}?club=${encodeURIComponent(clubNumber.replace(/[^0-9A-Za-z]/g, ''))}`
-}
-
-/** Parse the one-licence JSON body; null when it carries no usable player. */
-export function parseFfttPlayerJson(body: string): FfttLicence | null {
-  let raw: unknown
-  try {
-    raw = JSON.parse(body)
-  } catch {
-    return null
-  }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const r = raw as Record<string, unknown>
-  const licence = typeof r.licence === 'string' ? r.licence.trim() : String(r.licence ?? '').trim()
-  const lastName = typeof r.nom === 'string' ? r.nom : ''
-  // An unknown licence comes back without the fields that make a player.
-  if (!licence || !lastName) return null
-  return {
-    licence,
-    lastName: normalizePersonName(lastName),
-    firstName: normalizePersonName(typeof r.prenom === 'string' ? r.prenom : ''),
-    clubNumber: typeof r.numclub === 'string' ? r.numclub.trim() : '',
-    // A club name, not a person's: "RIXHEIM PPA" keeps its abbreviation.
-    clubName: normalizeFfttName(typeof r.nomclub === 'string' ? r.nomclub : ''),
-    points: formatPoints(r.point),
-  }
+  return `${LICENCES_URL}?club=${encodeURIComponent(digits(clubNumber))}`
 }
 
 function text(node: ParentNode, tag: string): string {
   return node.querySelector(tag)?.textContent?.trim() ?? ''
 }
 
-/** Parse the club-wide XML licence list. */
+/** Parse an XML licence list — one record or a club's worth of them. */
 export function parseClubLicencesXml(xml: string): FfttLicence[] {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   if (doc.querySelector('parsererror')) return []
@@ -198,9 +179,10 @@ async function fetchText(url: string): Promise<string | null> {
 export async function fetchFfttPlayerFromBrowser(
   licence: string,
 ): Promise<FfttLicence | 'not_found' | null> {
-  const body = await fetchText(ffttPlayerUrl(licence))
-  if (body === null) return null
-  return parseFfttPlayerJson(body) ?? 'not_found'
+  const xml = await fetchText(dafunkerLicenceUrl(licence))
+  if (xml === null) return null
+  // An unknown licence answers with an empty <liste/>, not an error.
+  return parseClubLicencesXml(xml)[0] ?? 'not_found'
 }
 
 /** Every licence of a club from the browser; null when unreachable. */
