@@ -12,6 +12,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
 import { sortByName } from '@shared/lib/sortByName'
+import { hasVisited, lastSeenSentence } from '@shared/lib/lastSeen'
 import { Avatar } from '@/components/Avatar'
 import { fonts } from '@/constants/typography'
 
@@ -30,6 +31,11 @@ export default function JoueursScreen() {
     user?.role === 'general_admin'
       ? players
       : players.filter((p) => p.clubId === user?.clubId)
+
+  // #406. The API only fills `lastSeenAt` in for members the caller
+  // administers, so for anyone else it is uniformly absent — rendering it would
+  // read as "nobody in this club has ever signed in".
+  const showLastSeen = user?.role === 'general_admin' || user?.role === 'club_admin'
 
   const filtered = sortByName(
     visiblePlayers.filter((p) => {
@@ -74,7 +80,15 @@ export default function JoueursScreen() {
               />
               <View style={styles.cardBody}>
                 <Text style={styles.name}>{p.firstName} {p.lastName}</Text>
-                <Text style={styles.meta}>{club?.displayName}</Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {club?.displayName}
+                  {showLastSeen && (
+                    <Text style={hasVisited(p.lastSeenAt) ? undefined : styles.metaNever}>
+                      {' · '}
+                      {lastSeenSentence(p.lastSeenAt)}
+                    </Text>
+                  )}
+                </Text>
               </View>
               <View style={[styles.statusBadge, p.status !== 'active' && styles.statusBadgeMuted]}>
                 <Text style={[styles.statusText, p.status !== 'active' && styles.statusTextMuted]}>
@@ -119,6 +133,7 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1 },
   name: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  metaNever: { color: colors.warningText },
   statusBadge: {
     backgroundColor: '#dcfce7',
     paddingHorizontal: 8,

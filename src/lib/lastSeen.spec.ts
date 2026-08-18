@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatLastSeen, hasVisited, NEVER_LABEL } from './lastSeen'
+import { formatLastSeen, hasVisited, lastSeenSentence, NEVER_LABEL, NEVER_SENTENCE } from './lastSeen'
 
 /** A fixed "now" so the labels do not depend on the day the suite runs. */
 const NOW = new Date(2026, 7, 17, 14, 30) // 17 August 2026, local time
@@ -42,6 +42,29 @@ describe('formatLastSeen', () => {
 
   it('reads a visit dated in the future as today rather than a negative delay', () => {
     expect(formatLastSeen(daysBefore(-3), NOW)).toBe("Aujourd'hui")
+  })
+})
+
+// The mobile cards have no column header above them: the visit sits on the same
+// line as the licence number, where a bare "Il y a 3 jours" is three days since
+// something unstated. Same instants, phrased to stand on their own.
+describe('lastSeenSentence', () => {
+  it('says plainly that the member never signed in', () => {
+    expect(lastSeenSentence(undefined, NOW)).toBe(NEVER_SENTENCE)
+  })
+
+  it('reads as a sentence for every relative distance', () => {
+    expect(lastSeenSentence(daysBefore(0), NOW)).toBe('Vu aujourd\'hui')
+    expect(lastSeenSentence(daysBefore(1), NOW)).toBe('Vu hier')
+    expect(lastSeenSentence(daysBefore(4), NOW)).toBe('Vu il y a 4 jours')
+    expect(lastSeenSentence(daysBefore(7), NOW)).toBe('Vu il y a 1 semaine')
+    expect(lastSeenSentence(daysBefore(21), NOW)).toBe('Vu il y a 3 semaines')
+  })
+
+  // "Vu 20 juillet 2026" is not French; the article is the whole reason this
+  // is a second function rather than a prefix on the first.
+  it('takes the article when it falls back to a date', () => {
+    expect(lastSeenSentence(daysBefore(28), NOW)).toBe('Vu le 20 juillet 2026')
   })
 })
 

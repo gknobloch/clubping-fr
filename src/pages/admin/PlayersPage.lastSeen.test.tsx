@@ -103,12 +103,17 @@ describe('Joueurs — last visit, for the people who administer the club (#406)'
     expect(screen.getByText(/0 joueur sur 1 a déjà ouvert l'application\./)).toBeInTheDocument()
   })
 
-  it('flags the members who have never opened it on the mobile cards', () => {
+  // On a phone the visit sits on the licence line of each card. It used to be a
+  // badge beside the name, which truncated the name to «Chloé Be…» and could
+  // only mark the members who had NEVER signed in — leaving no date anywhere.
+  it('puts every visit on the card detail line, dates included', () => {
     renderPage()
-    const flagged = screen.getAllByText('Jamais connecté')
-    expect(flagged).toHaveLength(1)
-    // The card of the one member who has never signed in, not a stray badge.
-    expect(flagged[0].closest('li')?.textContent).toContain('Enzo Lotz')
+    const cards = screen.getAllByRole('listitem')
+    const cardFor = (name: string) => cards.find((c) => c.textContent?.includes(name))
+
+    expect(cardFor('Joris Szulc')?.textContent).toContain('Vu aujourd\'hui')
+    expect(cardFor('Grégory Canaque')?.textContent).toContain('Vu il y a 3 jours')
+    expect(cardFor('Enzo Lotz')?.textContent).toContain('Jamais connecté')
   })
 })
 
@@ -118,7 +123,8 @@ describe('Joueurs — last visit is not shown to a member who does not administe
     renderPage()
 
     expect(screen.queryByRole('columnheader', { name: 'Dernière visite' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Jamais connecté')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Jamais connecté/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Vu /)).not.toBeInTheDocument()
     expect(screen.queryByText(/ont déjà ouvert l'application/)).not.toBeInTheDocument()
   })
 })

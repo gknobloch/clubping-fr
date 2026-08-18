@@ -8,7 +8,7 @@ import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_C
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
-import { formatLastSeen, hasVisited } from '@/lib/lastSeen'
+import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 
@@ -269,25 +269,33 @@ export function PlayersPage() {
                   <p className="truncate font-medium">
                     {player.firstName} {player.lastName}
                   </p>
-                  <p className="truncate font-mono text-xs text-slate-500">
-                    {player.licenseNumber}
+                  {/* The visit rides on the detail line rather than a badge of
+                      its own (#406). A badge sat between the name and the
+                      actions and truncated the name to «Chloé Be…» on a phone,
+                      which costs the list the one thing it is for; and it could
+                      only say «Jamais connecté», leaving the members who HAVE
+                      opened the app with no date anywhere on mobile. */}
+                  {/* Wraps rather than truncates: `truncate` clips whatever
+                      comes last, and the visit is last. A club admin sees one
+                      line (licence · visite); a general admin, who also gets the
+                      club name, gets a second line instead of losing the end of
+                      the first. Caught by the "rien de rogné" check in
+                      e2e/mobile-touch-targets-detail.spec.ts. */}
+                  <p className="text-xs text-slate-500">
+                    <span className="font-mono">{player.licenseNumber}</span>
                     {!hasClubScope && ` · ${getClubName(player.clubId)}`}
+                    {showLastSeen && (
+                      <span className={hasVisited(player.lastSeenAt) ? undefined : 'text-amber-700'}>
+                        {' · '}
+                        {lastSeenSentence(player.lastSeenAt)}
+                      </span>
+                    )}
                   </p>
                 </div>
               </Link>
               {player.status !== 'active' && (
                 <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                   {STATUS_LABELS[player.status]}
-                </span>
-              )}
-              {/* Only the members who have never opened it (#406). The date
-                  itself is a desktop column: putting one on every card is what
-                  #379 took off these cards, and the list is for finding
-                  someone. What is left is the one line worth acting on — who
-                  still has to be walked through signing in. */}
-              {showLastSeen && !hasVisited(player.lastSeenAt) && (
-                <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                  Jamais connecté
                 </span>
               )}
               {/* E-mail and phone used to sit on a second row here (#379). The
