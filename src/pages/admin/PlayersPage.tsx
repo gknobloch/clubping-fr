@@ -8,6 +8,7 @@ import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_C
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
+import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
 import { ModalShell } from '@/components/ModalShell'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 
@@ -55,17 +56,21 @@ export function PlayersPage() {
     return sortByName(list)
   }, [allPlayers, hasClubScope, adminClubIds])
 
+  const playersByStatus = useMemo(
+    () => (statusFilter === 'all' ? players : players.filter((p) => p.status === statusFilter)),
+    [players, statusFilter],
+  )
+
   const filteredPlayers = useMemo(() => {
-    const byStatus = statusFilter === 'all' ? players : players.filter((p) => p.status === statusFilter)
     const q = query.trim().toLowerCase()
-    if (!q) return byStatus
-    return byStatus.filter(
+    if (!q) return playersByStatus
+    return playersByStatus.filter(
       (p) =>
         p.lastName.toLowerCase().includes(q) ||
         p.firstName.toLowerCase().includes(q) ||
         p.email?.toLowerCase().includes(q),
     )
-  }, [players, query, statusFilter])
+  }, [playersByStatus, query])
 
   const clubsForSelect =
     hasClubScope && adminClubIds.length
@@ -82,6 +87,20 @@ export function PlayersPage() {
   // The import writes into one club, so it needs the page to be scoped to one
   // — a general admin sees every club here and has no target to import into.
   const canImport = canEditPlayers && !!scopedClub
+
+  // Adoption (#406). `lastSeenAt` only reaches people who administer these
+  // members, so the column and the count are theirs alone — for anyone else the
+  // field is uniformly absent and would read as "nobody has ever signed in".
+  //
+  // Counted over the status filter but not the search box: the question is how
+  // far the app has spread through the club, which a half-typed name should not
+  // change. Archived members are excluded with everything else by the default
+  // filter, which is the point — they are not who the club is waiting on.
+  const showLastSeen = canEditPlayers
+  const visitedCount = useMemo(
+    () => playersByStatus.filter((p) => hasVisited(p.lastSeenAt)).length,
+    [playersByStatus],
+  )
 
   const getClubName = (clubId: string) =>
     clubs.find((c) => c.id === clubId)?.displayName ?? clubId
@@ -215,6 +234,15 @@ export function PlayersPage() {
           </span>
         )}
       </div>
+      {/* Singular at zero as well as at one, which is the French rule and not an
+          edge case here: the day the app is shared with the club, nobody has
+          opened it yet and this line is the first thing it says. */}
+      {showLastSeen && playersByStatus.length > 0 && (
+        <p className="text-sm text-slate-500">
+          {visitedCount} joueur{visitedCount > 1 ? 's' : ''} sur {playersByStatus.length}{' '}
+          {visitedCount > 1 ? 'ont' : 'a'} déjà ouvert l'application.
+        </p>
+      )}
       {/* The table is 724px wide — «Email» alone is 280px — so below md: it is
           swapped for a card list rather than forced into a sideways scroll
           (#305). Contact details become tap-to-call / tap-to-mail links there,
@@ -241,9 +269,27 @@ export function PlayersPage() {
                   <p className="truncate font-medium">
                     {player.firstName} {player.lastName}
                   </p>
-                  <p className="truncate font-mono text-xs text-slate-500">
-                    {player.licenseNumber}
+                  {/* The visit rides on the detail line rather than a badge of
+                      its own (#406). A badge sat between the name and the
+                      actions and truncated the name to «Chloé Be…» on a phone,
+                      which costs the list the one thing it is for; and it could
+                      only say «Jamais connecté», leaving the members who HAVE
+                      opened the app with no date anywhere on mobile. */}
+                  {/* Wraps rather than truncates: `truncate` clips whatever
+                      comes last, and the visit is last. A club admin sees one
+                      line (licence · visite); a general admin, who also gets the
+                      club name, gets a second line instead of losing the end of
+                      the first. Caught by the "rien de rogné" check in
+                      e2e/mobile-touch-targets-detail.spec.ts. */}
+                  <p className="text-xs text-slate-500">
+                    <span className="font-mono">{player.licenseNumber}</span>
                     {!hasClubScope && ` · ${getClubName(player.clubId)}`}
+                    {showLastSeen && (
+                      <span className={hasVisited(player.lastSeenAt) ? undefined : 'text-amber-700'}>
+                        {' · '}
+                        {lastSeenSentence(player.lastSeenAt)}
+                      </span>
+                    )}
                   </p>
                 </div>
               </Link>
@@ -291,6 +337,11 @@ export function PlayersPage() {
                   Club
                 </th>
               )}
+              {showLastSeen && (
+                <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
+                  Dernière visite
+                </th>
+              )}
               <th scope="col" className="px-4 py-3 text-right text-sm font-medium text-slate-700">
                 Actions
               </th>
@@ -329,6 +380,15 @@ export function PlayersPage() {
                 {!hasClubScope && (
                   <td className="px-4 py-3 text-sm text-slate-600">
                     {getClubName(player.clubId)}
+                  </td>
+                )}
+                {showLastSeen && (
+                  <td
+                    className={`px-4 py-3 text-sm ${
+                      hasVisited(player.lastSeenAt) ? 'text-slate-600' : 'text-amber-700'
+                    }`}
+                  >
+                    {formatLastSeen(player.lastSeenAt)}
                   </td>
                 )}
                 <td className="px-4 py-3 text-right">

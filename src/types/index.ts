@@ -265,6 +265,18 @@ export interface User {
   status?: PlayerStatus
   /** The person's club (players have one; club_admins administer it). */
   clubId?: string
+  /**
+   * ISO timestamp of the member's last visit — absent when they have never
+   * signed in, and absent for every row when the reader is not entitled to it
+   * (#406).
+   *
+   * The distinction matters when reading this field: `GET /api/data` only
+   * fills it in for members the caller administers, so `undefined` means
+   * "never opened the app" *or* "none of your business", and the two are not
+   * distinguishable client-side. Only screens already restricted to admins
+   * should read it — everywhere else it is uniformly absent, by design.
+   */
+  lastSeenAt?: string
 }
 
 /**
