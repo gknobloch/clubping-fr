@@ -240,13 +240,17 @@ export function HomePage() {
                           </button>
                         </div>
                         {/* Team-level response summary — the count a captain opens
-                            "Aperçu" for today (#385). Amber + alert when the club
-                            can't yet field the team. */}
-                        <div className="mt-3 flex items-center gap-1.5">
-                          {short && <AlertIcon className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
-                          <p className={`text-xs ${short ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>
-                            {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
-                          </p>
+                            "Aperçu" for today (#385). Labelled to distinguish it
+                            from the player's own availability above. Amber + alert
+                            when the club can't yet field the team. */}
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponibilité de l'équipe</p>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            {short && <AlertIcon className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
+                            <p className={`text-xs ${short ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>
+                              {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
+                            </p>
+                          </div>
                         </div>
                         {canCompose && (
                           <button
