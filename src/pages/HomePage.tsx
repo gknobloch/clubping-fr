@@ -216,7 +216,7 @@ export function HomePage() {
                         <p className="mt-1 text-sm text-slate-500">
                           {dateLabel}{g.time ? ` · ${g.time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
                         </p>
-                        <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="mt-3">
                           {locked !== undefined ? (
                             <span className="text-xs italic text-slate-500">Joue en Équipe {locked}</span>
                           ) : myPlayerId ? (
@@ -228,28 +228,31 @@ export function HomePage() {
                           ) : (
                             <AvailabilityChip status={availOf(g.id)} />
                           )}
-                          <button
-                            type="button"
-                            onClick={() => setQuickGame({ gameId: g.id, teamId: myActiveTeam.id })}
-                            className={`shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
-                          >
-                            {/* "Aperçu": this opens the quick view, and "Détails"
-                                now names the button inside it that goes to the
-                                real thing. */}
-                            Aperçu
-                          </button>
                         </div>
                         {/* Team-level response summary — the count a captain opens
                             "Aperçu" for today (#385). Labelled to distinguish it
                             from the player's own availability above. Amber + alert
-                            when the club can't yet field the team. */}
+                            when the club can't yet field the team. "Aperçu" lives
+                            here since its quick view shows this team's responses. */}
                         <div className="mt-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponibilité de l'équipe</p>
-                          <div className="mt-1 flex items-center gap-1.5">
-                            {short && <AlertIcon className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
-                            <p className={`text-xs ${short ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>
-                              {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
-                            </p>
+                          <div className="mt-1 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-1.5">
+                              {short && <AlertIcon className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
+                              <p className={`text-xs ${short ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>
+                                {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setQuickGame({ gameId: g.id, teamId: myActiveTeam.id })}
+                              className={`shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+                            >
+                              {/* "Aperçu": this opens the quick view, and "Détails"
+                                  now names the button inside it that goes to the
+                                  real thing. */}
+                              Aperçu
+                            </button>
                           </div>
                         </div>
                         {canCompose && (
