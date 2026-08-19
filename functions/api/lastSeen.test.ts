@@ -59,8 +59,10 @@ function dbWith(users: UserRow[], viewerId: string | null) {
       const bound = (params: unknown[]) => ({
         async first() {
           if (sql.includes('FROM sessions')) {
-            return viewerId && params[0] === TOKEN
-              ? { user_id: viewerId, expires_at: Date.now() + HOUR }
+            // Since #410 the lookup binds the digest and the plaintext; this
+            // fixture answers to the plaintext, the pre-#410 storage form.
+            return viewerId && params.includes(TOKEN)
+              ? { token: TOKEN, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
           if (sql.includes('FROM users WHERE id = ?')) return copyOf(params[0])
