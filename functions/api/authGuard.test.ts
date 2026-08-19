@@ -92,7 +92,12 @@ function dbWithSession(expiresAt: number) {
           return {
             async first() {
               if (sql.includes('FROM sessions')) {
-                return args[0] === VALID_TOKEN ? { user_id: 'u1', expires_at: expiresAt } : null
+                // The lookup binds both storage forms since #410 — the digest
+                // first, then the plaintext for rows minted before it. This row
+                // is stored in the old form, so it exercises the fallback.
+                return args.includes(VALID_TOKEN)
+                  ? { token: VALID_TOKEN, user_id: 'u1', expires_at: expiresAt }
+                  : null
               }
               if (sql.includes('FROM users')) return args[0] === 'u1' ? user : null
               return null

@@ -238,12 +238,75 @@ async function userByEmail(db: D1Database, email: string): Promise<UserRow | nul
     .first<UserRow>()
 }
 
+/**
+ * What goes in `sessions.token` (#410): the SHA-256 of the value the client
+ * holds, never the value itself.
+ *
+ * The table next door already worked this way — `auth_otp` stores a `code_hash`
+ * for a code that lives ten minutes, while the session token, good for thirty
+ * days, was kept in the clear. Anyone able to read the database held a usable
+ * bearer credential for every signed-in member; a digest cannot be replayed.
+ *
+ * No salt and no KDF: the token is 32 random bytes (see `randomToken`), so
+ * there is no low-entropy secret to grind at. This is lookup-key hardening,
+ * not password storage.
+ */
+const sessionKey = (token: string) => sha256Hex(token)
+
+/**
+ * Match a session under either storage form, each arm checking the form it
+ * means (#410).
+ *
+ * The second arm is the transition: rows minted before this change hold the
+ * plaintext token, and dropping them would have signed the whole club out — D1
+ * exposes no hash function, so they cannot be rewritten in place. Every login
+ * from here writes a digest, SESSION_TTL_MS caps the old rows at 30 days, and
+ * #409's purge clears them sooner. Phase 3 drops the arm and the column.
+ *
+ * `token_hashed` is what keeps the fallback from undoing the change. A plain
+ * `token = digest OR token = presented` also matches a HASHED row when someone
+ * replays the stored value verbatim — which would leave a database read
+ * yielding a working credential, exactly what this stops.
+ *
+ * Returns the matched row's key and form, because the caller has to delete the
+ * row it actually matched.
+ */
+const SESSION_BY_TOKEN =
+  'SELECT token, token_hashed, user_id, expires_at FROM sessions' +
+  ' WHERE (token = ? AND token_hashed = 1) OR (token = ? AND token_hashed = 0)'
+
+interface SessionRow {
+  token: string
+  token_hashed: number
+  user_id: string
+  expires_at: number
+}
+
+async function sessionByToken(db: D1Database, token: string) {
+  return db
+    .prepare(SESSION_BY_TOKEN)
+    .bind(await sessionKey(token), token)
+    .first<SessionRow>()
+}
+
 async function createSession(db: D1Database, userId: string): Promise<string> {
   const token = randomToken()
   const now = Date.now()
   await db
-    .prepare('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
-    .bind(token, userId, now, now + SESSION_TTL_MS)
+    .prepare(
+      'INSERT INTO sessions (token, token_hashed, user_id, created_at, expires_at)' +
+      ' VALUES (?, 1, ?, ?, ?)',
+    )
+    .bind(await sessionKey(token), userId, now, now + SESSION_TTL_MS)
+    .run()
+  // Expired sessions were never swept (#409): rows left only at logout, or
+  // lazily when a dead token happened to be presented again, so a session that
+  // quietly lapsed stayed for good — production still held rows from June.
+  // Signing in is the natural moment to tidy up after this member. Bounded by
+  // expires_at, so their live sessions on other devices are untouched.
+  await db
+    .prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?')
+    .bind(userId, now)
     .run()
   // The session row is not the record of this (#406): it is deleted at logout
   // and gone after 30 days, so a club that shared the app could not tell a
@@ -341,13 +404,16 @@ export function sessionCookieHeader(token: string | null, requestUrl: string): s
 }
 
 export async function userFromToken(db: D1Database, token: string): Promise<UserRow | null> {
-  const session = await db
-    .prepare('SELECT user_id, expires_at FROM sessions WHERE token = ?')
-    .bind(token)
-    .first<{ user_id: string; expires_at: number }>()
+  const session = await sessionByToken(db, token)
   if (!session) return null
   if (session.expires_at <= Date.now()) {
-    await db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run()
+    // By the key and form actually matched, not the presented value: a hashed
+    // row would not match the plaintext, and the row would outlive its own
+    // expiry, to be re-checked and re-skipped forever (#410).
+    await db
+      .prepare('DELETE FROM sessions WHERE token = ? AND token_hashed = ?')
+      .bind(session.token, session.token_hashed)
+      .run()
     return null
   }
   const user = await db
@@ -513,7 +579,16 @@ authApp.get('/me', async (c) => {
 // it would send a dead credential on every subsequent request.
 authApp.post('/logout', async (c) => {
   const token = requestToken(c.req)
-  if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run()
+  // Both storage forms, so a session minted before #410 still revokes.
+  if (token) {
+    await c.env.DB
+      .prepare(
+        'DELETE FROM sessions' +
+        ' WHERE (token = ? AND token_hashed = 1) OR (token = ? AND token_hashed = 0)',
+      )
+      .bind(await sessionKey(token), token)
+      .run()
+  }
   c.header('Set-Cookie', sessionCookieHeader(null, c.req.url))
   return c.json({ ok: true })
 })

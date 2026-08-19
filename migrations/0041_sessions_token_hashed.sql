@@ -1,0 +1,27 @@
+-- #410: mark which storage form a session row's `token` column holds.
+--
+--   sessions.token_hashed  1 = SHA-256 digest, 0 = the plaintext token
+--
+-- Session tokens are now stored as a digest, so a database read no longer
+-- yields a replayable credential. The rows already in the table cannot be
+-- converted — D1 exposes no hash function, and a digest cannot be derived from
+-- what we no longer have — and deleting them would sign the whole club out. So
+-- both forms coexist until the old ones age out.
+--
+-- Why a flag rather than simply accepting either value: without it the lookup
+-- is `token = digest OR token = presented`, and the second arm matches a HASHED
+-- row when someone replays the stored value verbatim. That hands back exactly
+-- the property the change removes. The flag makes each arm check the form it
+-- means: a digest is only accepted against a hashed row, a plaintext only
+-- against a legacy one.
+--
+-- Every row that exists when this runs predates the change, so the default of 0
+-- is correct for all of them; only new sessions write 1.
+--
+-- Phase 3, once SESSION_TTL_MS (30 days) has passed and #409's purge has run:
+-- delete what is left of `token_hashed = 0`, drop this column, and drop the
+-- fallback arm in auth.ts.
+--
+-- Re-run safety: the ALTER fails once the column exists, rolling the file back.
+
+ALTER TABLE sessions ADD COLUMN token_hashed INTEGER NOT NULL DEFAULT 0;

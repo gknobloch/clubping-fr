@@ -117,7 +117,11 @@ function db() {
           return {
             async first() {
               if (sql.includes('FROM sessions')) {
-                return args[0] === VALID ? { user_id: 'u1', expires_at: Date.now() + 60_000 } : null
+                // Both storage forms are bound since #410; this row is in the
+                // pre-#410 plaintext form.
+                return args.includes(VALID)
+                  ? { token: VALID, user_id: 'u1', expires_at: Date.now() + 60_000 }
+                  : null
               }
               if (sql.includes('FROM users')) return user
               return null
