@@ -112,32 +112,35 @@ export function NextMatchCard({
         </View>
       </View>
 
-      {/* Response summary — amber when fewer confirmed players than needed */}
-      <View style={s.responses}>
-        <View style={s.stack}>
-          {stack.map((p, i) => (
-            <View key={p.id} style={[s.stackItem, i > 0 && { marginLeft: -8 }]}>
-              <Avatar
-                playerId={p.id}
-                avatarUpdatedAt={p.avatarUpdatedAt}
-                firstName={p.firstName}
-                lastName={p.lastName}
-                size={24}
-              />
-            </View>
-          ))}
-          {extra > 0 ? (
-            <View style={[s.stackItem, stack.length > 0 && { marginLeft: -8 }]}>
-              <View style={s.extra}><Text style={s.extraTxt}>+{extra}</Text></View>
-            </View>
+      {/* Team response summary — amber when fewer confirmed players than needed */}
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>Disponibilité de l'équipe</Text>
+        <View style={s.responses}>
+          <View style={s.stack}>
+            {stack.map((p, i) => (
+              <View key={p.id} style={[s.stackItem, i > 0 && { marginLeft: -8 }]}>
+                <Avatar
+                  playerId={p.id}
+                  avatarUpdatedAt={p.avatarUpdatedAt}
+                  firstName={p.firstName}
+                  lastName={p.lastName}
+                  size={24}
+                />
+              </View>
+            ))}
+            {extra > 0 ? (
+              <View style={[s.stackItem, stack.length > 0 && { marginLeft: -8 }]}>
+                <View style={s.extra}><Text style={s.extraTxt}>+{extra}</Text></View>
+              </View>
+            ) : null}
+          </View>
+          {!enoughAvailable ? (
+            <Ionicons name="alert-circle" size={14} color={colors.warning} />
           ) : null}
+          <Text style={[s.responseTxt, !enoughAvailable && s.responseWarn]}>
+            {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
+          </Text>
         </View>
-        {!enoughAvailable ? (
-          <Ionicons name="alert-circle" size={14} color={colors.warning} />
-        ) : null}
-        <Text style={[s.responseTxt, !enoughAvailable && s.responseWarn]}>
-          {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
-        </Text>
       </View>
 
       {/* Captain shortcut — shows the line-up fill state */}
