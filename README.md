@@ -29,8 +29,10 @@ Ouvrir [http://localhost:5173](http://localhost:5173). Se connecter en choisissa
 ### Authentification
 
 L'application utilise une vraie authentification : code à usage unique par e-mail
-(via Resend) et OAuth Google / Apple. La connexion « dev » (choix d'un utilisateur
-sans mot de passe) reste disponible en développement (`npm run dev`) et en E2E.
+(via Resend). Les boutons Google et Apple sont masqués tant que les identifiants
+OAuth ne sont pas configurés (#129 / #100) ; la vérification des jetons OIDC est
+en place côté API. La connexion « dev » (choix d'un utilisateur sans mot de
+passe) reste disponible en développement (`npm run dev`) et en E2E.
 
 La configuration des fournisseurs (clés Resend, identifiants OAuth) est décrite
 dans [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md). Sans ces valeurs, le code OTP est

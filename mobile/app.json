@@ -13,9 +13,8 @@
       "backgroundColor": "#1e293b"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "fr.clubping.app",
-      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -40,15 +39,16 @@
       "expo-splash-screen",
       "expo-secure-store",
       "expo-web-browser",
-      "expo-apple-authentication",
       [
         "expo-image-picker",
         {
           "photosPermission": "Autorisez l'accès à vos photos pour choisir un avatar.",
-          "cameraPermission": "Autorisez l'accès à l'appareil photo pour prendre votre avatar."
+          "cameraPermission": "Autorisez l'accès à l'appareil photo pour prendre votre avatar.",
+          "microphonePermission": false
         }
       ],
       "./plugins/withDisableScriptSandboxing",
+      "./plugins/withoutAppleSignInEntitlement",
       "expo-font"
     ],
     "experiments": {
