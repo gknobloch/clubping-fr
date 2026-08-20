@@ -47,6 +47,13 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Autorisez l'accès à vos agendas pour y ajouter vos matchs.",
+          "remindersPermission": false
+        }
+      ],
       "./plugins/withDisableScriptSandboxing",
       "./plugins/withoutAppleSignInEntitlement",
       "expo-font"
