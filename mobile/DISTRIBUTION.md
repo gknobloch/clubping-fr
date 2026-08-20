@@ -138,3 +138,39 @@ eas build --platform android --profile production --auto-submit
 
 Builds land on the `internal` track. Promote to `closed`, `open` or `production` from
 the Play Console, or change `track` in `eas.json`.
+
+---
+
+# Native config only fails in a real binary
+
+`app.json` and the plugins in `plugins/` decide what ends up in `Info.plist`,
+`*.entitlements` and `AndroidManifest.xml`. Nothing in `npm run test:run`,
+`npm run typecheck` or the linter reads any of it — a mistake there is invisible until
+an installed build launches on a device. 1.1.0 shipped to the App Store and crashed on
+every launch for exactly this reason (#420).
+
+Before changing a permission or an entitlement, print what the change actually
+generates:
+
+```
+npx expo config --type introspect
+```
+
+## Do not remove an iOS usage string to "not ask for" a permission
+
+Autolinked Expo modules probe their own permissions at startup, whether or not the app
+ever calls them, and some treat a missing `Info.plist` key as fatal rather than as a
+denial. `expo-calendar` is one: its `OnCreate` calls `initializePermittedEntities()`,
+which asks about **reminders** even though this app only ever creates events, and
+`RemindersPermissionRequester.getPermissions` calls `RCTFatal` when
+`NSRemindersFullAccessUsageDescription` is absent. That is `OnCreate`, so it kills the
+process before any JS runs — no error screen, no crash inside a feature, just an app
+that closes as it opens.
+
+So `"remindersPermission"` in `app.json` must stay a real string. It costs nothing: an
+iOS usage string appears on no store listing and is only ever shown to a member if the
+API is called.
+
+Android is the opposite case and the reason `withoutAndroidCalendarPermissions` exists:
+there the calendar permissions are *dangerous*, the Play Store lists them on the app's
+page, and the Android module has no startup probe to upset (#418).
