@@ -2,7 +2,7 @@
   "expo": {
     "name": "Club Ping",
     "slug": "clubping-fr",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "clubping",
@@ -47,6 +47,14 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Autorisez l'accès à vos agendas pour y ajouter vos matchs.",
+          "remindersPermission": false
+        }
+      ],
+      "./plugins/withoutAndroidCalendarPermissions",
       "./plugins/withDisableScriptSandboxing",
       "./plugins/withoutAppleSignInEntitlement",
       "expo-font"

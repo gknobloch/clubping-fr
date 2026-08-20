@@ -1,6 +1,6 @@
 {
   "name": "fr.clubping.mobile",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "expo-router/entry",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -27,6 +27,7 @@
     "expo": "~55.0.29",
     "expo-apple-authentication": "~55.0.16",
     "expo-auth-session": "~55.0.18",
+    "expo-calendar": "~55.0.18",
     "expo-constants": "~55.0.17",
     "expo-crypto": "~55.0.18",
     "expo-font": "~55.0.8",

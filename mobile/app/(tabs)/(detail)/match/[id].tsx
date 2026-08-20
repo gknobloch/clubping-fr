@@ -1,7 +1,8 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { createEventInCalendarAsync } from 'expo-calendar'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { canManageTeam, getTeamName } from '@/utils/roles'
@@ -12,6 +13,7 @@ import { PlayerSheet } from '@/components/PlayerSheet'
 import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
+import { buildMatchEvent } from '@/utils/calendar'
 import { gameDate, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
@@ -39,6 +41,9 @@ export default function MatchDetailScreen() {
   const [showCompose, setShowCompose] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
   const [quickViewPlayer, setQuickViewPlayer] = useState<Player | null>(null)
+  // A ref, not state: nothing renders from it, and a re-render between the two
+  // taps is exactly what it has to survive.
+  const openingCalendar = useRef(false)
 
   const game = games.find((g) => g.id === id)
   const team = teams.find((t) => t.id === teamId)
@@ -84,16 +89,20 @@ export default function MatchDetailScreen() {
   const playersPerGame = div?.playersPerGame ?? 4
 
   const homeTeam = teams.find((t) => t.id === game.homeTeamId)
-  const venueLabel = (() => {
-    const addr = homeTeam
-      ? clubs.flatMap((c) => c.addresses ?? []).find((a) => a.id === homeTeam.gameLocationId)
-      : undefined
-    if (addr) return addr.label ? `${addr.label}, ${addr.city}` : addr.city
-    // No game-location address → fall back to the home club's city.
-    const homeClub = homeTeam ? clubs.find((c) => c.id === homeTeam.clubId) : undefined
-    const cityAddr = homeClub?.addresses?.find((a) => a.isDefault) ?? homeClub?.addresses?.[0]
-    return cityAddr?.city
-  })()
+  const gameLocation = homeTeam
+    ? clubs.flatMap((c) => c.addresses ?? []).find((a) => a.id === homeTeam.gameLocationId)
+    : undefined
+  // No game-location address → fall back to the home club's own.
+  const homeClub = homeTeam ? clubs.find((c) => c.id === homeTeam.clubId) : undefined
+  const clubAddress = homeClub?.addresses?.find((a) => a.isDefault) ?? homeClub?.addresses?.[0]
+  // The header stays short — venue and city, or just the city for the fallback.
+  // The calendar event gets the whole address instead (#416).
+  const venueLabel = gameLocation
+    ? gameLocation.label ? `${gameLocation.label}, ${gameLocation.city}` : gameLocation.city
+    : clubAddress?.city
+
+  const teamName = getTeamName(team, clubs)
+  const matchup = isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`
 
   const selection = gameSelections.find((s) => s.teamId === team.id && s.gameId === game.id)?.playerIds ?? []
   const selectedPlayers = selection.map((pid) => playerMap.get(pid)).filter(Boolean) as Player[]
@@ -109,6 +118,36 @@ export default function MatchDetailScreen() {
   const gameDatePast = thisGameDate < today
   const getAvail = (pid: string) =>
     gameAvailabilities.find((a) => a.playerId === pid && a.gameId === game.id)?.status
+
+  // Built out here rather than inside the handler: `game` and `matchDay` are
+  // narrowed by the guard above, and that narrowing does not survive into a
+  // nested function.
+  const calendarEvent = buildMatchEvent({
+    date: thisGameDate,
+    time: game.time,
+    matchup,
+    matchDayNumber: matchDay.number,
+    divisionLabel: div?.displayName,
+    playersPerGame,
+    address: gameLocation ?? clubAddress,
+    venueLabel,
+  })
+
+  // Hands the match to the OS's own "new event" screen, pre-filled (#416). The
+  // agenda to file it under, the reminder and any edit are left to that screen:
+  // it knows the phone's calendars, and on iOS 17+ it needs no access to them
+  // — we never read the player's calendar, we only propose an event.
+  async function addToCalendar() {
+    if (openingCalendar.current) return // the native dialog refuses a second one
+    openingCalendar.current = true
+    try {
+      await createEventInCalendarAsync(calendarEvent)
+    } catch {
+      Alert.alert('Calendrier', "Impossible d'ouvrir le calendrier du téléphone.")
+    } finally {
+      openingCalendar.current = false
+    }
+  }
 
   // Game history (this phase, across the club's teams) for the quick-view sheet.
   function historyFor(player: Player): PlayerHistoryEntry[] {
@@ -150,11 +189,12 @@ export default function MatchDetailScreen() {
             teamColor={team.color}
             teamNumber={team.number}
             isHome={isHome}
-            teamName={getTeamName(team, clubs)}
+            teamName={teamName}
             opponentName={opponentName}
             matchDayDate={thisGameDate}
             time={game.time}
             venueLabel={venueLabel}
+            onAddToCalendar={addToCalendar}
           />
         </View>
 
@@ -318,10 +358,9 @@ export default function MatchDetailScreen() {
             // off whichever team fields them (#384).
             points: pointsFor(playerPhasePoints, team.phaseId, p.id),
           }))
-        const teamName = getTeamName(team, clubs)
         return (
           <MatchSheet
-            matchup={isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`}
+            matchup={matchup}
             clubName={club?.displayName ?? ''}
             affiliationNumber={club?.affiliationNumber ?? ''}
             players={sheetPlayers}

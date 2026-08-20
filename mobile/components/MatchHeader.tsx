@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
@@ -32,6 +32,7 @@ export function MatchHeader({
   showCountdown,
   label,
   labelMine,
+  onAddToCalendar,
 }: {
   matchDayNumber: number
   divisionLabel?: string
@@ -47,6 +48,12 @@ export function MatchHeader({
   /** Optional badge shown right of the team (e.g. "Mon équipe" / "Renfort"). */
   label?: string
   labelMine?: boolean
+  /**
+   * When set, an icon button sits in the space to the right of the date and
+   * venue lines (#416). The match screen fills it; the Accueil card leaves it
+   * out, since its whole surface is already a link to that screen.
+   */
+  onAddToCalendar?: () => void
 }) {
   const dateLabel = new Date(matchDayDate + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -84,16 +91,31 @@ export function MatchHeader({
         <Text style={s.title}>{title}</Text>
       </View>
 
-      <View style={s.metaRow}>
-        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-        <Text style={s.meta}>{dateLabel}{time ? ` · ${time}` : ''}</Text>
-      </View>
-      {venueLabel ? (
-        <View style={s.metaRow}>
-          <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-          <Text style={s.meta}>{venueLabel}</Text>
+      <View style={s.metaBlock}>
+        <View style={s.metaLines}>
+          <View style={s.metaRow}>
+            <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+            <Text style={s.meta}>{dateLabel}{time ? ` · ${time}` : ''}</Text>
+          </View>
+          {venueLabel ? (
+            <View style={s.metaRow}>
+              <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+              <Text style={s.meta}>{venueLabel}</Text>
+            </View>
+          ) : null}
         </View>
-      ) : null}
+        {onAddToCalendar ? (
+          <TouchableOpacity
+            style={s.calendarBtn}
+            onPress={onAddToCalendar}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter au calendrier"
+          >
+            <Ionicons name="calendar-number-outline" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   )
 }
@@ -121,6 +143,11 @@ const s = StyleSheet.create({
   countdownTxt: { fontSize: 12, fontFamily: fonts.semiBold, color: colors.warning },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   title: { flex: 1, fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, lineHeight: 21 },
+  metaBlock: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  metaLines: { flex: 1, gap: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
+  // Bare, like the team header's WhatsApp icon — the app's icon buttons carry
+  // no chrome, and hitSlop rather than padding gives them their target.
+  calendarBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 })
