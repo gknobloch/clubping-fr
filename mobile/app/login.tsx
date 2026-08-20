@@ -29,9 +29,11 @@ import { displayFonts, fonts } from '@/constants/typography'
 
 // Google + Apple sign-in have been removed from the UI until the OAuth
 // client IDs are configured (#129 / #100). `loginWithIdToken` /
-// `loginWithApple` in AuthContext, `usesAppleSignIn` in app.json, and the
-// expo-auth-session / expo-apple-authentication deps stay in place so
-// re-enabling is a small change.
+// `loginWithApple` in AuthContext and the expo-auth-session /
+// expo-apple-authentication deps stay in place so re-enabling is a small
+// change; `usesAppleSignIn` is gone from app.json (#414), since it added the
+// Sign in with Apple entitlement to a binary that never asks for it. Put it
+// back — and prebuild again — when the buttons return.
 
 // Map backend error codes to French messages.
 function authErrorMessage(e: unknown): string {
