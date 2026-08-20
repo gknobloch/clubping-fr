@@ -112,7 +112,7 @@ export function MatchHeader({
             accessibilityRole="button"
             accessibilityLabel="Ajouter au calendrier"
           >
-            <Ionicons name="calendar-number-outline" size={20} color={colors.accent} />
+            <Ionicons name="calendar-number-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -147,9 +147,7 @@ const s = StyleSheet.create({
   metaLines: { flex: 1, gap: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
-  calendarBtn: {
-    width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
-    borderRadius: 10, borderWidth: 1, borderColor: colors.accentSoftBorder,
-    backgroundColor: colors.accentSoft,
-  },
+  // Bare, like the team header's WhatsApp icon — the app's icon buttons carry
+  // no chrome, and hitSlop rather than padding gives them their target.
+  calendarBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 })
