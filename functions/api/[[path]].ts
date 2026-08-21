@@ -13,6 +13,10 @@ import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../..
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
+import {
+  departingTeamIds, emptiedMatchDayIds, obsoleteGames, playingTeamIds,
+  type ExistingGameRef, type SourceRound,
+} from '../../src/lib/poolChanges'
 
 // Exported for tests: the session guard is only observable through a real
 // request, so the suites that pin it down fetch this app directly (#320, #138).
@@ -671,11 +675,47 @@ async function teamsImportContext(db: Env['Bindings']['DB'], clubId: string, sea
 
 // Existing teams of a club, for skip-matching by FFTT id or (phase, number).
 async function clubTeamKeys(db: Env['Bindings']['DB'], clubId: string) {
-  const r = await db.prepare('SELECT id, phase_id, number FROM teams WHERE club_id = ?').bind(clubId).all()
+  const r = await db.prepare('SELECT id, phase_id, number, group_id, team_id FROM teams WHERE club_id = ?')
+    .bind(clubId).all()
+  const rows = r.results.map((t) => ({
+    id: t.id as string, phaseId: t.phase_id as string, number: t.number as number,
+    groupId: (t.group_id as string | null) ?? '', ffttId: (t.team_id as string | null) ?? null,
+  }))
   return {
-    ids: new Set(r.results.map((t) => t.id as string)),
-    byPhaseNumber: new Set(r.results.map((t) => `${t.phase_id}|${t.number}`)),
+    ids: new Set(rows.map((t) => t.id)),
+    byPhaseNumber: new Set(rows.map((t) => `${t.phaseId}|${t.number}`)),
+    /**
+     * The local row behind an FFTT engagement (#422): by FFTT team id, else by
+     * (phase, number) — the same two keys the skip check uses, but returning
+     * the team rather than a yes/no, so an engagement that moved pool can be
+     * moved instead of reported as already there. Phase-scoped: a move only
+     * means anything within one.
+     */
+    find(ffttId: string, phaseId: string, number: number) {
+      return rows.find((t) => t.phaseId === phaseId && (t.ffttId === ffttId || t.id === ffttId))
+        ?? rows.find((t) => t.phaseId === phaseId && t.number === number)
+        ?? null
+    },
+    /** A team this run just created, so a payload listing it twice still
+     *  matches instead of inserting it again. */
+    register(row: { id: string; phaseId: string; number: number; groupId: string; ffttId: string | null }) {
+      rows.push(row)
+    },
   }
+}
+
+/**
+ * The local group an FFTT engagement belongs in: the one carrying its pool id,
+ * else the one numbered like it in the same division (#278). Null when neither
+ * exists yet — the import creates it.
+ */
+function localGroupForPool<T extends { divisionId: string; number: number; groupId?: string }>(
+  groups: T[], pool: { divisionId: string; poolId: string; poolNumber: number | null },
+): T | null {
+  return groups.find((g) => g.groupId === pool.poolId)
+    ?? (pool.poolNumber !== null
+      ? groups.find((g) => g.divisionId === pool.divisionId && g.number === pool.poolNumber) ?? null
+      : null)
 }
 
 // POST /fftt/teams-preview — the client-fetched FFTT teams flagged with what
@@ -693,6 +733,12 @@ app.post('/fftt/teams-preview', async (c) => {
 
   const divisionRows = await c.env.DB.prepare('SELECT id, display_name, phase_id FROM divisions').all()
   const divisionById = new Map(divisionRows.results.map((d) => [d.id as string, d]))
+  const groupRows = await c.env.DB.prepare('SELECT id, division_id, number, group_id FROM groups').all()
+  const groups = groupRows.results.map((g) => ({
+    id: g.id as string, divisionId: g.division_id as string, number: g.number as number,
+    groupId: (g.group_id as string | null) ?? undefined,
+  }))
+  const groupById = new Map(groups.map((g) => [g.id, g]))
   const existing = await clubTeamKeys(c.env.DB, clubId)
 
   return c.json({
@@ -702,6 +748,14 @@ app.post('/fftt/teams-preview', async (c) => {
       const division = divisionById.get(t.divisionId)
       const exists = existing.ids.has(t.id) ||
         (!!division && existing.byPhaseNumber.has(`${division.phase_id}|${t.number}`))
+      // Already here, but FFTT now engages it in another poule (#422): the
+      // repêchage case. Reported as a move rather than as "déjà présente",
+      // which is what made a mid-season change impossible to follow.
+      const local = division
+        ? existing.find(t.id, division.phase_id as string, t.number) : null
+      const target = localGroupForPool(groups, t)
+      const from = local ? groupById.get(local.groupId) : undefined
+      const moved = !!local && (!target || target.id !== local.groupId)
       return {
         id: t.id,
         // Simplified display name, consistent with existing teams ("PPA Rixheim 2").
@@ -712,9 +766,17 @@ app.post('/fftt/teams-preview', async (c) => {
         divisionExists: !!division,
         poolNumber: t.poolNumber,
         exists,
-        // Importable = not already there, and the division is known or can be
-        // auto-imported (needs a detectable phase and an existing season).
-        importable: !exists && ctx.season.exists && (!!division || t.phase !== null),
+        /** Engaged elsewhere than where it sits locally — an import moves it. */
+        moved,
+        /** The poule it currently sits in, when it moves. */
+        fromPoolNumber: moved && from ? from.number : null,
+        fromDivisionName: moved && from
+          ? (divisionById.get(from.divisionId)?.display_name as string | undefined) ?? null
+          : null,
+        // Importable = not already there (or there but in another poule), and
+        // the division is known or can be auto-imported (needs a detectable
+        // phase and an existing season).
+        importable: (!exists || moved) && ctx.season.exists && (!!division || t.phase !== null),
       }
     }),
   })
@@ -814,6 +876,8 @@ app.post('/teams/import', async (c) => {
   /** Existing groups that just learned their FFTT pool id (#278). */
   const adoptedPoolIds = new Map<string, string>()
   const createdTeams: Array<Record<string, unknown>> = []
+  /** Teams already here, engaged in another poule than the one they sit in (#422). */
+  const movedTeams: Array<{ id: string; groupId: string; previousGroupId: string; ffttId: string }> = []
   const skipped: Array<{ id: string; label: string; reason: 'already_exists' | 'division_missing' | 'invalid_location' }> = []
 
   for (const t of teamsToImport) {
@@ -826,24 +890,27 @@ app.post('/teams/import', async (c) => {
     const phaseId = division.phase_id as string
     // Re-verify existence right before insert (never trust the preview's
     // snapshot — a concurrent import or manual creation may have landed since).
-    if (existing.ids.has(t.id) || existing.byPhaseNumber.has(`${phaseId}|${t.number}`)) {
+    const local = existing.find(t.id, phaseId, t.number)
+
+    // The pool FFTT engages it in, when we already know it: by FFTT pool id or
+    // by (division, number) (#278). Looked up before the existence check — a
+    // team already here needs it just as much, to tell whether it still sits
+    // where FFTT says it plays (#422). Creating the pool comes later, once
+    // this team is known to be processed: a team skipped below must not leave
+    // an empty group behind.
+    let group = localGroupForPool(groups, t) ?? undefined
+    if (local && group && local.groupId === group.id) {
       skipped.push({ id: t.id, label: t.label, reason: 'already_exists' })
       continue
     }
-    if (!validLocationIds.has(override.gameLocationId)) {
+    if (!local && !validLocationIds.has(override.gameLocationId)) {
       skipped.push({ id: t.id, label: t.label, reason: 'invalid_location' })
       continue
     }
-
-    // Reuse the pool when known by FFTT pool id or by (division, number);
-    // create it otherwise. The local id is generated and the FFTT pool id is
-    // kept in its own column (#278) — the two used to be the same value, which
-    // left groups created by hand or from a PDF in a different id space.
-    let group = groups.find((g) => g.groupId === t.poolId) ??
-      (t.poolNumber !== null
-        ? groups.find((g) => g.divisionId === t.divisionId && g.number === t.poolNumber)
-        : undefined)
     if (!group) {
+      // The local id is generated and the FFTT pool id is kept in its own
+      // column (#278) — the two used to be the same value, which left groups
+      // created by hand or from a PDF in a different id space.
       group = {
         id: newId('group'), divisionId: t.divisionId, number: t.poolNumber ?? 1,
         teamIds: [], isArchived: false, groupId: t.poolId,
@@ -856,6 +923,22 @@ app.post('/teams/import', async (c) => {
     if (!group.groupId) {
       group.groupId = t.poolId
       adoptedPoolIds.set(group.id, t.poolId)
+    }
+
+    if (local) {
+      // Moved, not created (#422): venue, day, time, roster and captain are
+      // the club's own settings and stay exactly as they are — the overrides
+      // in the payload are ignored. Only where the team plays changes.
+      movedTeams.push({ id: local.id, groupId: group.id, previousGroupId: local.groupId, ffttId: t.id })
+      group.teamIds = [...group.teamIds, local.id]
+      touchedGroups.set(group.id, group)
+      const from = groups.find((g) => g.id === local.groupId)
+      if (from) {
+        from.teamIds = from.teamIds.filter((id) => id !== local.id)
+        touchedGroups.set(from.id, from)
+      }
+      local.groupId = group.id
+      continue
     }
 
     // Local id derived from (club, phase, number) (#282); the FFTT team id is
@@ -871,6 +954,7 @@ app.post('/teams/import', async (c) => {
     createdTeams.push(team)
     existing.ids.add(t.id)
     existing.byPhaseNumber.add(`${phaseId}|${t.number}`)
+    existing.register({ id: team.id, phaseId, number: t.number, groupId: group.id, ffttId: t.id })
   }
 
   const stmts = [
@@ -886,8 +970,24 @@ app.post('/teams/import', async (c) => {
         `INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived, team_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '[]', 0, ?)`,
       ).bind(t.id, t.clubId, t.phaseId, t.number, t.groupId, t.gameLocationId, t.defaultDay, t.defaultTime, t.teamId ?? null)),
+    ...movedTeams.map((t) =>
+      db.prepare('UPDATE teams SET group_id = ? WHERE id = ?').bind(t.groupId, t.id)),
+    // A team that predates the FFTT import — created by hand or from a PDF —
+    // carries no FFTT id; the engagement we just read gives it one.
+    ...movedTeams.map((t) =>
+      db.prepare('UPDATE teams SET team_id = ? WHERE id = ? AND team_id IS NULL').bind(t.ffttId, t.id)),
   ]
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+
+  // Their fixtures in the poule they left go with them (#422) — after the
+  // batch, so the pool they join exists before anything is cleaned up.
+  const deletedGames: string[] = []
+  const deletedMatchDays: string[] = []
+  for (const t of movedTeams) {
+    const cleared = await clearTeamGamesOutsideGroup(db, t.id, t.previousGroupId, t.groupId)
+    deletedGames.push(...cleared.deletedGames)
+    deletedMatchDays.push(...cleared.deletedMatchDays)
+  }
 
   return c.json({
     createdPhases,
@@ -895,6 +995,11 @@ app.post('/teams/import', async (c) => {
     // Created + updated groups, in their final state, for client-side upsert.
     groups: [...touchedGroups.values()],
     createdTeams,
+    /** Teams FFTT now engages in another poule, moved rather than skipped (#422). */
+    movedTeams: movedTeams.map((t) => ({ id: t.id, groupId: t.groupId, previousGroupId: t.previousGroupId })),
+    /** Fixtures of the poule they left, removed with them. */
+    deletedGames,
+    deletedMatchDays,
     skipped,
   })
 })
@@ -1195,6 +1300,61 @@ function makeTeamResolver(
 const parseGroupIds = (raw: unknown): string[] =>
   Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && !!x).slice(0, 100) : []
 
+/**
+ * The FFTT matches of one group as poolChanges reads them (#422): resolved to
+ * local team ids and grouped by the journée they land on.
+ *
+ * A side that resolves to nothing gets a placeholder id instead of marking the
+ * round incomplete. Resolution failure means something precise here — no such
+ * team exists locally yet, so no local game can reference it — unlike the
+ * document import, where an unreadable roster name says nothing about whether
+ * the team is known. Marking these rounds incomplete would switch the whole
+ * comparison off in exactly the case it exists for: a poule whose new
+ * opponents are, by definition, not local teams yet.
+ */
+function ffttSourceRounds(
+  matches: FfttMatch[],
+  resolve: (side: FfttMatchTeam) => string | null,
+  matchDayIdOf: (round: number) => string | undefined,
+): SourceRound[] {
+  const placeholder = (side: FfttMatchTeam) => `fftt:${side.teamId}`
+  const byRound = new Map<number, SourceRound>()
+  for (const m of matches) {
+    let round = byRound.get(m.round)
+    if (!round) {
+      // '' when the journée doesn't exist locally yet: it holds no game, so it
+      // can hold no obsolete one — but its pairings still count as "playing".
+      round = { matchDayId: matchDayIdOf(m.round) ?? '', pairings: [] }
+      byRound.set(m.round, round)
+    }
+    round.pairings.push({
+      homeTeamId: resolve(m.home) ?? placeholder(m.home),
+      awayTeamId: resolve(m.away) ?? placeholder(m.away),
+    })
+  }
+  return [...byRound.values()]
+}
+
+/** Local games grouped by the group their journée belongs to (#422). */
+function gamesByGroupId(
+  mdRows: Array<Record<string, unknown>>, gameRows: Array<Record<string, unknown>>,
+): Map<string, ExistingGameRef[]> {
+  const groupIdByMatchDay = new Map(mdRows.map((m) => [m.id as string, m.group_id as string]))
+  const byGroup = new Map<string, ExistingGameRef[]>()
+  for (const g of gameRows) {
+    const groupId = groupIdByMatchDay.get(g.match_day_id as string)
+    if (!groupId) continue
+    const list = byGroup.get(groupId) ?? []
+    list.push({
+      id: g.id as string, matchDayId: g.match_day_id as string,
+      homeTeamId: g.home_team_id as string, awayTeamId: g.away_team_id as string,
+      source: (g.source as string | null) ?? null,
+    })
+    byGroup.set(groupId, list)
+  }
+  return byGroup
+}
+
 // Games own their date (#271); match_days.date is now derived — the MIN of
 // its games' dates, recomputed whenever games under it change. Guarded by
 // the EXISTS check so a match_day with zero dated games (a freshly-created
@@ -1230,9 +1390,10 @@ app.post('/fftt/games-preview', async (c) => {
     db.prepare('SELECT id, affiliation_number FROM clubs').all(),
     db.prepare('SELECT id, club_id, phase_id, number, default_day FROM teams').all(),
     db.prepare('SELECT id, group_id, number FROM match_days').all(),
-    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date, game_id FROM games').all(),
+    db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date, game_id, source FROM games').all(),
   ])
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
+  const existingByGroup = gamesByGroupId(mdRows.results, gameRows.results)
   const matchDayKeys = new Set(mdRows.results.map((m) => `${m.group_id}|${m.number}`))
   const matchDayIdByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m.id as string]))
   // A game already imported from a PDF carries no FFTT match id, so the id
@@ -1310,6 +1471,22 @@ app.post('/fftt/games-preview', async (c) => {
         }
       }
     }
+    // What the import would REMOVE (#422): fixtures the pool no longer has,
+    // and teams the repêchage moved out of it. Never in single-team mode —
+    // that scope only sees a slice of the calendar, so everything else in the
+    // pool would read as gone.
+    let obsolete = { ids: [] as string[], manual: 0 }
+    let departing: string[] = []
+    if (!onlyTeamId) {
+      const sourceRounds = ffttSourceRounds(
+        ctx.matches,
+        (side) => resolver.resolve(side, ctx.phaseId!),
+        (round) => matchDayIdByKey.get(`${ctx.groupId}|${round}`),
+      )
+      obsolete = obsoleteGames(existingByGroup.get(ctx.groupId) ?? [], sourceRounds)
+      departing = departingTeamIds(ctx.group.teamIds, playingTeamIds(sourceRounds))
+    }
+
     return {
       groupId: ctx.groupId,
       groupNumber: ctx.group.number,
@@ -1319,6 +1496,12 @@ app.post('/fftt/games-preview', async (c) => {
       newMatchDays,
       newGames,
       existingGames,
+      /** Present locally, absent from the pool FFTT now publishes (#422). */
+      obsoleteGames: obsolete.ids.length,
+      /** Of those, how many carry a slot agreed by hand (#294). */
+      obsoleteManualGames: obsolete.manual,
+      /** Teams of the group playing none of the pool's matches any more (#422). */
+      departingTeams: departing.length,
       // Already present but on another date than FFTT now publishes (#289) —
       // a PDF calendar's real slot, or a genuine reschedule. Never applied
       // silently; the import only touches them when asked.
@@ -1350,6 +1533,10 @@ app.post('/games/import', async (c) => {
   // publishes a nominal weekend date, so overwriting by default would trade
   // good data for worse. Left off, a re-import still adds what is missing.
   const updateDates = b.updateDates === true
+  // Opt-in too (#422): a pool rebuilt mid-season leaves fixtures that are no
+  // longer played and teams that left. Nothing is ever removed unless asked,
+  // and never in single-team mode, which sees only part of the calendar.
+  const removeObsolete = b.removeObsolete === true && !onlyTeamId
   const db = c.env.DB
   const ctxs = await gamesImportContext(db, groupIds, b.pools, onlyTeamId)
 
@@ -1360,6 +1547,7 @@ app.post('/games/import', async (c) => {
     db.prepare('SELECT id, match_day_id, home_team_id, away_team_id, date, game_id, source FROM games').all(),
   ])
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
+  const existingByGroup = gamesByGroupId(mdRows.results, gameRows.results)
   const matchDayByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m]))
   const gameIds = new Set(gameRows.results.map((g) => g.id as string))
   const existingGameDateById = new Map(gameRows.results.map((g) => [g.id as string, g.date as string | null]))
@@ -1401,6 +1589,11 @@ app.post('/games/import', async (c) => {
   const touchedGroups = new Map<string, { id: string; divisionId: string; number: number; teamIds: string[]; isArchived: boolean }>()
   const skippedGroups: Array<{ groupId: string; reason: GamesGroupError }> = []
   let existingGames = 0, skippedMatches = 0
+  /** Fixtures the pool no longer has, removed only when asked (#422). */
+  const obsoleteGameIds: string[] = []
+  let obsoleteManualGames = 0
+  /** Teams dropped from a group's roster because the pool changed (#422). */
+  let departedTeams = 0
 
   // Auto-created club ids are FFTT-aligned on the affiliation number, which
   // doubles as the natural dedup key across groups in one import.
@@ -1521,7 +1714,44 @@ app.post('/games/import', async (c) => {
       })
       touchedMatchDayIds.add(md.id as string)
     }
+
+    // The other direction (#422): what this pool no longer holds. Computed
+    // after the loop, so the resolver already knows the opponents this run
+    // created — an unresolved side then means a team that is genuinely not
+    // ours, not one we simply hadn't created yet.
+    if (removeObsolete) {
+      const sourceRounds = ffttSourceRounds(
+        ctx.matches,
+        (side) => resolver.resolve(side, ctx.phaseId!),
+        (round) => matchDayByKey.get(`${ctx.groupId}|${round}`)?.id as string | undefined,
+      )
+      const groupGames = existingByGroup.get(ctx.groupId) ?? []
+      const obsolete = obsoleteGames(groupGames, sourceRounds)
+      obsoleteGameIds.push(...obsolete.ids)
+      obsoleteManualGames += obsolete.manual
+      const departing = new Set(departingTeamIds(group.teamIds, playingTeamIds(sourceRounds)))
+      if (departing.size) {
+        // Only the group's membership: the team row stays, it may belong to a
+        // club that uses the app, with its own roster and captain.
+        group.teamIds = group.teamIds.filter((id) => !departing.has(id))
+        departedTeams += departing.size
+        touchedGroups.set(group.id, group)
+      }
+      // Their journées lose a game, so their derived date is recomputed too.
+      const matchDayOf = new Map(groupGames.map((g) => [g.id, g.matchDayId]))
+      for (const id of obsolete.ids) touchedMatchDayIds.add(matchDayOf.get(id)!)
+    }
   }
+
+  // Journées whose last game just went (#422) — an empty journée is a shell
+  // the UI would still list. Computed across every touched group at once,
+  // against the games this run creates as well as the ones it removes.
+  const emptiedMatchDays = removeObsolete
+    ? emptiedMatchDayIds(
+        [...existingByGroup.values()].flat(), obsoleteGameIds,
+        createdGames.map((g) => ({ matchDayId: g.matchDayId as string })),
+      )
+    : []
 
   const stmts = [
     // OR IGNORE on clubs/teams/match_days/games: their ids are fully
@@ -1554,6 +1784,10 @@ app.post('/games/import', async (c) => {
     // Adopt the FFTT match id where the game had none (#294).
     ...ffttIdBackfill.map((g) =>
       db.prepare('UPDATE games SET game_id = ? WHERE id = ? AND game_id IS NULL').bind(g.ffttId, g.id)),
+    // Fixtures the pool no longer holds, with their availabilities and
+    // compositions, then the journées they leave empty (#422).
+    ...clearGamesByIds(db, obsoleteGameIds),
+    ...deleteMatchDaysByIds(db, emptiedMatchDays),
     // Last: recompute every touched journée's derived date from its (now
     // fully written) games.
     ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),
@@ -1598,6 +1832,14 @@ app.post('/games/import', async (c) => {
     updatedGames,
     skippedGroups,
     existingGames,
+    /** Fixtures removed because the pool no longer holds them (#422). */
+    deletedGames: obsoleteGameIds,
+    /** Of those, how many carried a slot agreed by hand. */
+    deletedManualGames: obsoleteManualGames,
+    /** Journées deleted because they were left with no game at all. */
+    deletedMatchDays: emptiedMatchDays,
+    /** Teams dropped from a group's roster, having left the pool. */
+    departedTeams,
     /** Already present and agreed by hand, so left exactly as they are (#294). */
     manualKept,
     /** Games that gained their FFTT match id in this run (#294). */
@@ -1765,6 +2007,10 @@ app.post('/schedule-documents/import', async (c) => {
   // authoritative on day and time, but refreshing an existing game is still
   // the user's call.
   const updateSlots = b.updateSlots === true
+  // Opt-in as well (#422): a reissued calendar ("ANNULE ET REMPLACE") states a
+  // pool whose composition changed, so what it no longer holds is gone —
+  // fixtures and teams alike. Never applied unless asked.
+  const removeObsolete = b.removeObsolete === true
 
   const db = c.env.DB
   const [seasonRows, phaseRows, divisionRows, groupRows, clubRows, teamRows, mdRows, gameRows] = await Promise.all([
@@ -1797,6 +2043,7 @@ app.post('/schedule-documents/import', async (c) => {
     groupNumbersByDivision.get(g.divisionId)!.add(g.number)
   }
   const resolver = makeTeamResolver(clubRows.results, teamRows.results)
+  const existingByGroup = gamesByGroupId(mdRows.results, gameRows.results)
   const matchDayByKey = new Map(mdRows.results.map((m) => [`${m.group_id}|${m.number}`, m]))
   const pairingsByMatchDay = new Map<string, Set<string>>()
   /** Existing games by (journée, home, away), so the document — which is
@@ -1840,6 +2087,11 @@ app.post('/schedule-documents/import', async (c) => {
   const updatedGameSlots: Array<{ id: string; date: string | null; time: string | null }> = []
   let existingGames = 0
   let skippedMatches = 0
+  /** Fixtures the document no longer states, removed only when asked (#422). */
+  const obsoleteGameIds: string[] = []
+  let obsoleteManualGames = 0
+  /** Teams dropped from a group's roster because the pool changed (#422). */
+  let departedTeams = 0
 
   let uidCounter = 0
   const localId = (prefix: string) => `${prefix}-doc-${Date.now()}-${uidCounter++}`
@@ -1939,6 +2191,10 @@ app.post('/schedule-documents/import', async (c) => {
       rosterByNumber.get(t.number)!.push({ normalizedName, teamId })
     }
     touchedGroups.set(groupId, group)
+    // The roster table IS the document's statement of the pool composition
+    // (#422) — more direct than reading it back off the matches.
+    const rosterTeamIds = [...new Set(teamKeyToId.values())]
+    const docRounds: SourceRound[] = []
 
     const resolveMatchTeamId = (name: string, number: number): string | null => {
       const normalizedName = normalizeTeamNameKey(name)
@@ -1956,6 +2212,8 @@ app.post('/schedule-documents/import', async (c) => {
         createdMatchDays.push({ id: md.id as string, groupId, number: j.number, date: j.date })
         touchedMatchDayIds.add(md.id as string)
       }
+      const sourceRound: SourceRound = { matchDayId: md.id as string, pairings: [] }
+      docRounds.push(sourceRound)
       for (const m of j.matches) {
         const homeId = resolveMatchTeamId(m.homeName, m.homeNumber)
         const awayId = resolveMatchTeamId(m.awayName, m.awayNumber)
@@ -1967,12 +2225,17 @@ app.post('/schedule-documents/import', async (c) => {
         // the raw OCR dump by hand.
         if (!homeId || !awayId) {
           skippedMatches++
+          // Half-read journée (#422): a name the OCR mangled says nothing
+          // about whether that fixture is still played, so this round is
+          // excluded from the obsolescence comparison entirely.
+          sourceRound.incomplete = true
           if (skippedMatchDetails.length < 30) {
             if (!homeId) skippedMatchDetails.push({ side: 'home', name: m.homeName, number: m.homeNumber })
             if (!awayId) skippedMatchDetails.push({ side: 'away', name: m.awayName, number: m.awayNumber })
           }
           continue
         }
+        sourceRound.pairings.push({ homeTeamId: homeId, awayTeamId: awayId })
         const mdId = md.id as string
         const pairings = pairingsByMatchDay.get(mdId)
         // Dedup by pairing-on-journée, not by game id: unlike the FFTT games
@@ -2011,7 +2274,33 @@ app.post('/schedule-documents/import', async (c) => {
         touchedMatchDayIds.add(mdId)
       }
     }
+
+    // What this edition of the calendar no longer holds (#422). The roster
+    // gives the pool's composition outright; the journées give the fixtures,
+    // minus any round the OCR only half read.
+    if (removeObsolete) {
+      const obsolete = obsoleteGames(existingByGroup.get(groupId) ?? [], docRounds)
+      obsoleteGameIds.push(...obsolete.ids)
+      obsoleteManualGames += obsolete.manual
+      const departing = new Set(departingTeamIds(group.teamIds, rosterTeamIds))
+      if (departing.size) {
+        // Group membership only — the team row belongs to its own club.
+        group.teamIds = group.teamIds.filter((id) => !departing.has(id))
+        departedTeams += departing.size
+        touchedGroups.set(groupId, group)
+      }
+      const matchDayOf = new Map((existingByGroup.get(groupId) ?? []).map((g) => [g.id, g.matchDayId]))
+      for (const id of obsolete.ids) touchedMatchDayIds.add(matchDayOf.get(id)!)
+    }
   }
+
+  // Journées left with no game at all once the obsolete ones are gone (#422).
+  const emptiedMatchDays = removeObsolete
+    ? emptiedMatchDayIds(
+        [...existingByGroup.values()].flat(), obsoleteGameIds,
+        createdGames.map((g) => ({ matchDayId: g.matchDayId })),
+      )
+    : []
 
   const stmts = [
     ...createdPhases.map((p) =>
@@ -2055,6 +2344,10 @@ app.post('/schedule-documents/import', async (c) => {
     ...createdGames.map((g) =>
       db.prepare("INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'document')")
         .bind(g.id, g.matchDayId, g.homeTeamId, g.awayTeamId, g.time ?? null, g.date, g.gameId ?? null)),
+    // Fixtures this edition dropped, with their availabilities and
+    // compositions, then the journées they leave empty (#422).
+    ...clearGamesByIds(db, obsoleteGameIds),
+    ...deleteMatchDaysByIds(db, emptiedMatchDays),
     // Last: recompute every touched journée's derived date from its (now
     // fully written) games (#271).
     ...[...touchedMatchDayIds].map((id) => matchDayDateRecomputeStmt(db, id)),
@@ -2102,6 +2395,14 @@ app.post('/schedule-documents/import', async (c) => {
     createdGames,
     skippedSchedules,
     existingGames,
+    /** Fixtures removed because this edition no longer states them (#422). */
+    deletedGames: obsoleteGameIds,
+    /** Of those, how many carried a slot agreed by hand. */
+    deletedManualGames: obsoleteManualGames,
+    /** Journées deleted because they were left with no game at all. */
+    deletedMatchDays: emptiedMatchDays,
+    /** Teams dropped from a group's roster, absent from the document. */
+    departedTeams,
     /** Existing games whose slot differs from the document's (#294). */
     slotMismatches,
     /** Left exactly as they are because their slot was agreed by hand. */
@@ -2539,6 +2840,42 @@ function clearGamesUnderMatchDays(db: Env['Bindings']['DB'], mdIdsSql: string, b
   ]
 }
 
+/**
+ * Statements removing a known list of games, with their availabilities and
+ * selections (#422) — the imports' "this fixture is no longer played" path.
+ *
+ * Chunked at 90 ids: unlike the subquery-scoped helpers above, this binds one
+ * parameter per id, and a whole poule's calendar is more than SQLite's
+ * variable ceiling. Still a fixed number of set-based statements per chunk,
+ * no per-game round trip (#290).
+ */
+function clearGamesByIds(db: Env['Bindings']['DB'], gameIds: string[]) {
+  const stmts = []
+  for (let i = 0; i < gameIds.length; i += 90) {
+    const chunk = gameIds.slice(i, i + 90)
+    const holes = chunk.map(() => '?').join(',')
+    stmts.push(
+      db.prepare(`DELETE FROM game_availabilities WHERE game_id IN (${holes})`).bind(...chunk),
+      db.prepare(`DELETE FROM game_selections WHERE game_id IN (${holes})`).bind(...chunk),
+      db.prepare(`DELETE FROM games WHERE id IN (${holes})`).bind(...chunk),
+    )
+  }
+  return stmts
+}
+
+/** Statements deleting match days by id — for journées their last game just
+ *  left (#422); their games must already be gone. */
+function deleteMatchDaysByIds(db: Env['Bindings']['DB'], matchDayIds: string[]) {
+  const stmts = []
+  for (let i = 0; i < matchDayIds.length; i += 90) {
+    const chunk = matchDayIds.slice(i, i + 90)
+    stmts.push(
+      db.prepare(`DELETE FROM match_days WHERE id IN (${chunk.map(() => '?').join(',')})`).bind(...chunk),
+    )
+  }
+  return stmts
+}
+
 /** Statements removing every game a team plays, with its availabilities and
  *  selections — used when the team itself goes away. */
 function clearGamesOfTeam(db: Env['Bindings']['DB'], teamId: string) {
@@ -2644,14 +2981,70 @@ app.post('/teams', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * Keep `groups.team_ids` in step when a team changes pool (#422). That list is
+ * what the app reads as a poule's composition — a move that only rewrote
+ * `teams.group_id` would leave the team listed in the poule it left and
+ * missing from the one it joined.
+ */
+async function syncGroupMembership(db: Env['Bindings']['DB'], teamId: string, groupId: string) {
+  const rows = await db.prepare('SELECT id, team_ids FROM groups').all()
+  const stmts = []
+  for (const g of rows.results) {
+    const teamIds = jsonParseIds(g.team_ids)
+    const shouldHold = g.id === groupId
+    if (shouldHold === teamIds.includes(teamId)) continue
+    const next = shouldHold ? [...teamIds, teamId] : teamIds.filter((t) => t !== teamId)
+    stmts.push(db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(next), g.id))
+  }
+  return stmts
+}
+
+/**
+ * The fixtures a team leaves behind when it changes pool (#422) — the
+ * repêchage case, where it keeps its roster, its captain and its history but
+ * plays somewhere else.
+ *
+ * They are matches it will not play, and their availabilities and
+ * compositions answer a question that no longer exists, so they go. Journées
+ * of the old pool left with no game at all go too. Everything else — the old
+ * pool's other fixtures, the team row itself — is untouched.
+ */
+async function clearTeamGamesOutsideGroup(
+  db: Env['Bindings']['DB'], teamId: string, previousGroupId: string, groupId: string,
+) {
+  const doomed = await db.prepare(
+    `SELECT id FROM games WHERE (home_team_id = ?1 OR away_team_id = ?1)
+     AND match_day_id IN (SELECT id FROM match_days WHERE group_id <> ?2)`,
+  ).bind(teamId, groupId).all()
+  const deletedGames = doomed.results.map((g) => g.id as string)
+  if (deletedGames.length) await db.batch(clearGamesByIds(db, deletedGames))
+  const emptied = await db.prepare(
+    `SELECT id FROM match_days WHERE group_id = ?
+     AND NOT EXISTS (SELECT 1 FROM games WHERE games.match_day_id = match_days.id)`,
+  ).bind(previousGroupId).all()
+  const deletedMatchDays = emptied.results.map((m) => m.id as string)
+  if (deletedMatchDays.length) await db.batch(deleteMatchDaysByIds(db, deletedMatchDays))
+  return { deletedGames, deletedMatchDays }
+}
+
 app.patch('/teams/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
+  const db = c.env.DB
+  // A pool change is a move, not a field edit (#422) — read the pool the team
+  // is in before the update, so the work below only runs when it differs.
+  const movingTo = typeof p.groupId === 'string' && p.groupId ? p.groupId : null
+  const previousGroupId = movingTo
+    ? (await db.prepare('SELECT group_id FROM teams WHERE id = ?').bind(id)
+        .first<{ group_id: string }>())?.group_id ?? null
+    : null
   const s: string[] = [], v: unknown[] = []
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if ('phaseId' in p) { s.push('phase_id = ?'); v.push(p.phaseId) }
   if ('number' in p) { s.push('number = ?'); v.push(p.number) }
-  if ('divisionId' in p) { s.push('division_id = ?'); v.push(p.divisionId) }
+  // No divisionId: the column was dropped in migration 0031 and the division
+  // is derived from the group (#282). Writing it here was a hard failure.
   if ('groupId' in p) { s.push('group_id = ?'); v.push(p.groupId) }
   if ('gameLocationId' in p) { s.push('game_location_id = ?'); v.push(p.gameLocationId) }
   if ('defaultDay' in p) { s.push('default_day = ?'); v.push(p.defaultDay) }
@@ -2661,7 +3054,12 @@ app.patch('/teams/:id', async (c) => {
   if ('color' in p) { s.push('color = ?'); v.push(p.color ?? null) }
   if ('whatsappLink' in p) { s.push('whatsapp_link = ?'); v.push(p.whatsappLink ?? null) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
-  if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE teams SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  if (s.length) { v.push(id); await db.prepare(`UPDATE teams SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  if (movingTo && previousGroupId && previousGroupId !== movingTo) {
+    const membership = await syncGroupMembership(db, id, movingTo)
+    if (membership.length) await db.batch(membership)
+    return c.json({ ok: true, ...(await clearTeamGamesOutsideGroup(db, id, previousGroupId, movingTo)) })
+  }
   return c.json({ ok: true })
 })
 

@@ -95,6 +95,7 @@ const importedResult = {
 
 type ImportBody = {
   updateSlots?: boolean
+  removeObsolete?: boolean
   schedules: Array<{
     seasonId: string
     phaseNumber: number
@@ -197,7 +198,8 @@ test.describe('General admin — import a schedule from a file', () => {
     await attach(page, POULE_1_LINES)
 
     // Ticked by default — the document is the authoritative source of the slot.
-    const optIn = dialog.getByRole('checkbox')
+    // Named: the dialog also carries the removal opt-in since #422.
+    const optIn = dialog.getByRole('checkbox', { name: /Mettre à jour la date/ })
     await expect(optIn).toBeChecked()
 
     await optIn.uncheck()
@@ -211,6 +213,38 @@ test.describe('General admin — import a schedule from a file', () => {
     await dialog.getByRole('button', { name: /^Importer 4 matchs/ }).click()
     expect(body!.updateSlots).toBe(true)
     await expect(dialog.getByText('4 matchs recalés sur la date et l’heure du document.')).toBeVisible()
+  })
+
+  // #422: a reissued calendar ("ANNULE ET REMPLACE L'ÉDITION PRÉCÉDENTE")
+  // states a poule whose composition changed. Removing what it no longer holds
+  // is opt-in, and unticked by default — a document covering part of a poule,
+  // or mapped to the wrong group, must never quietly delete the rest.
+  test('opts in to removing what the calendar no longer holds', async ({ page }) => {
+    let body: ImportBody | undefined
+    await page.route(IMPORT, (route) => {
+      body = route.request().postDataJSON()
+      return route.fulfill({
+        json: {
+          ...importedResult, createdGames: [], existingGames: 4,
+          deletedGames: ['g-old-1', 'g-old-2'], deletedMatchDays: [], departedTeams: 1,
+        },
+      })
+    })
+
+    await page.goto('/groupes')
+    await page.getByRole('button', { name: 'Importer depuis un fichier' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await attach(page, POULE_1_LINES)
+
+    const removeObsolete = dialog.getByRole('checkbox', { name: /Supprimer ce que ce calendrier/ })
+    await expect(removeObsolete).not.toBeChecked()
+    await removeObsolete.check()
+    await dialog.getByRole('button', { name: /^Importer 4 matchs/ }).click()
+
+    expect(body!.removeObsolete).toBe(true)
+    await expect(dialog.getByText(/2 matchs supprimés : absents de ce calendrier/)).toBeVisible()
+    await expect(dialog.getByText('1 équipe retirée de la poule.')).toBeVisible()
   })
 
   test('warns when a file does not match the group it was opened from', async ({ page }) => {

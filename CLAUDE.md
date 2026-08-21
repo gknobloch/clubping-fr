@@ -91,3 +91,20 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
+
+### Imports and pool changes (#422)
+- Imports are additive by default: they create what is missing and never remove
+  what disappeared. Removing what a rebuilt poule no longer holds is opt-in per
+  import, counted in the preview first, and it takes the availabilities and
+  compositions of the deleted matches with it.
+- The comparison lives in `src/lib/poolChanges.ts`, shared by the FFTT and the
+  document import. It only judges the journées the source itself covers:
+  silence about a round is not a statement that its matches are gone.
+- Never offered when an import is scoped to one team (#287) — that scope sees a
+  slice of the calendar, so all the rest would read as obsolete.
+- **A group's `teamIds` is the poule's composition**, not `team.groupId`: it is
+  the list the imports prune when a team leaves. Read it wherever "who is in
+  this poule" is the question (`gameEditOpponentOptions`, say).
+- A team can change poule without being recreated — `PATCH /teams/:id` with a
+  new `groupId` moves it, and its fixtures in the poule it leaves go with it.
+  The phase never moves: team ids are derived from (club, phase, number) (#282).

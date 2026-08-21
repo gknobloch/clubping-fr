@@ -127,7 +127,12 @@ export interface FfttTeamPreview {
   poolNumber: number | null
   /** Already present locally — will be skipped on import. */
   exists: boolean
-  /** Whether the import can create this team. */
+  /** Already present, but FFTT engages it in another poule: an import moves it (#422). */
+  moved?: boolean
+  /** The poule it sits in today, when it moves. */
+  fromPoolNumber?: number | null
+  fromDivisionName?: string | null
+  /** Whether the import can create — or move — this team. */
   importable: boolean
 }
 
@@ -144,6 +149,11 @@ export interface FfttTeamsImportResult {
   /** Created + updated groups in their final state (client-side upsert). */
   groups: Group[]
   createdTeams: Team[]
+  /** Teams FFTT now engages in another poule, moved rather than skipped (#422). */
+  movedTeams?: Array<{ id: string; groupId: string; previousGroupId: string }>
+  /** Fixtures of the poule the moved teams left, removed with them. */
+  deletedGames?: string[]
+  deletedMatchDays?: string[]
   skipped: Array<{ id: string; label: string; reason: 'already_exists' | 'division_missing' | 'invalid_location' }>
 }
 
@@ -175,6 +185,12 @@ export interface FfttGamesGroupPreview {
   dateMismatches?: number
   /** Already present but with no FFTT match id, which the import would link (#294). */
   ffttIdsToLink?: number
+  /** Present locally, absent from the pool FFTT now publishes (#422). */
+  obsoleteGames?: number
+  /** Of those, how many carry a slot agreed by hand — removing them loses it. */
+  obsoleteManualGames?: number
+  /** Teams of the group playing none of the pool's matches any more (#422). */
+  departingTeams?: number
   /** Opponent teams that would be auto-created for this group. */
   newTeams?: number
 }
@@ -183,6 +199,14 @@ export interface FfttGamesPreview {
   groups: FfttGamesGroupPreview[]
   /** Deduplicated across all requested groups. */
   totals: { newClubs: number; newTeams: number }
+}
+
+/** The two things a games import can do beyond adding what is missing (#289, #422). */
+export interface ImportGamesOptions {
+  /** Take FFTT's dates for fixtures already present. */
+  updateDates?: boolean
+  /** Remove the fixtures and teams the pool no longer holds. */
+  removeObsolete?: boolean
 }
 
 /** Response of POST /api/games/import. */
@@ -199,6 +223,14 @@ export interface FfttGamesImportResult {
   updatedGames: Game[]
   skippedGroups: Array<{ groupId: string; reason: 'group_not_found' | 'fftt_unavailable' | 'pool_not_found' | 'calendar_not_published' }>
   existingGames: number
+  /** Ids of the fixtures removed because the pool no longer holds them (#422). */
+  deletedGames?: string[]
+  /** Of those, how many carried a slot agreed by hand. */
+  deletedManualGames?: number
+  /** Journées deleted because they were left with no game at all. */
+  deletedMatchDays?: string[]
+  /** Teams dropped from a group's roster, having left the pool. */
+  departedTeams?: number
   /** Already present and agreed by hand, left exactly as they are (#294). */
   manualKept?: number
   /** Games that gained their FFTT match id in this run (#294). */
@@ -265,6 +297,14 @@ export interface ScheduleDocImportResult {
   /** Existing journées whose derived date changed because a newly-imported game landed under them (#271). */
   updatedMatchDays: MatchDay[]
   createdGames: Game[]
+  /** Ids of the fixtures removed because this edition no longer states them (#422). */
+  deletedGames?: string[]
+  /** Of those, how many carried a slot agreed by hand. */
+  deletedManualGames?: number
+  /** Journées deleted because they were left with no game at all. */
+  deletedMatchDays?: string[]
+  /** Teams dropped from a group's roster, absent from the document. */
+  departedTeams?: number
   skippedSchedules: Array<{ index: number; reason: string }>
   existingGames: number
   /** Already present with a different date/time than the document states (#298). */
@@ -338,13 +378,13 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   /** Preview the FFTT calendars of the given groups (#231); null on failure. */
   fetchGamesPreview: (groupIds: string[], teamId?: string) => Promise<FfttGamesPreview | null>
   /** Import the FFTT calendars (journées + matchs, auto-creating opponents). */
-  importFfttGames: (groupIds: string[], teamId?: string, updateDates?: boolean) => Promise<FfttGamesImportResult | null>
+  importFfttGames: (groupIds: string[], teamId?: string, options?: ImportGamesOptions) => Promise<FfttGamesImportResult | null>
   /** Preview a division's FFTT groups/pools (#237); null on failure. */
   fetchGroupsPreview: (divisionId: string) => Promise<FfttGroupsPreview | null>
   /** Import a division's FFTT groups not already present locally. */
   importFfttGroups: (divisionId: string) => Promise<FfttGroupsImportResult | null>
   /** Import schedule documents (PDF/image, #260) confirmed by the admin; null on failure. */
-  importScheduleDocuments: (schedules: ScheduleDocImportInput[], updateSlots?: boolean) => Promise<ScheduleDocImportResult | null>
+  importScheduleDocuments: (schedules: ScheduleDocImportInput[], updateSlots?: boolean, removeObsolete?: boolean) => Promise<ScheduleDocImportResult | null>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
@@ -354,6 +394,8 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   /** Delete every journée/match (and their availabilities/selections) of a group — keeps the group and its teams (#270). */
   resetGroupGames: (id: string) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
+  /** Move a team to another poule (#422): its fixtures in the one it leaves go with it. */
+  moveTeamToGroup: (teamId: string, groupId: string) => Promise<void>
   archiveTeam: (id: string) => void
   deleteTeam: (id: string) => void
   addClub: (data: Omit<Club, 'id'>) => Club
@@ -718,6 +760,27 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [clubs])
 
+  /**
+   * Drop from local state what an import just deleted server-side (#422):
+   * fixtures a rebuilt poule no longer holds, and the journées they emptied.
+   * Availabilities and compositions go with them, exactly as the API's
+   * cascade does — leaving them would keep answers to matches that are gone.
+   */
+  const applyImportDeletions = useCallback((
+    deletedGames?: string[], deletedMatchDays?: string[],
+  ) => {
+    if (deletedGames?.length) {
+      const gone = new Set(deletedGames)
+      setGames((prev) => prev.filter((g) => !gone.has(g.id)))
+      setGameAvailabilities((prev) => prev.filter((a) => !gone.has(a.gameId)))
+      setGameSelections((prev) => prev.filter((sel) => !gone.has(sel.gameId)))
+    }
+    if (deletedMatchDays?.length) {
+      const gone = new Set(deletedMatchDays)
+      setMatchDays((prev) => prev.filter((m) => !gone.has(m.id)))
+    }
+  }, [])
+
   const importFfttTeams = useCallback(async (
     clubId: string, overrides: TeamImportOverride[],
   ): Promise<FfttTeamsImportResult | null> => {
@@ -741,11 +804,22 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         ])
       }
       if (result.createdTeams.length) setTeams((prev) => [...prev, ...result.createdTeams])
+      if (result.movedTeams?.length) {
+        const movedTo = new Map(result.movedTeams.map((t) => [t.id, t.groupId]))
+        setTeams((prev) => prev.map((t) => {
+          const groupId = movedTo.get(t.id)
+          if (!groupId) return t
+          // divisionId is derived from the group (#282), and the response's
+          // groups carry the destination in its final state.
+          return { ...t, groupId, divisionId: result.groups.find((g) => g.id === groupId)?.divisionId ?? t.divisionId }
+        }))
+      }
+      applyImportDeletions(result.deletedGames, result.deletedMatchDays)
       return result
     } catch {
       return null
     }
-  }, [])
+  }, [applyImportDeletions])
 
   // --- FFTT games import (#231, browser-side transport like the teams) ---
   // The browser fetches each requested group's schedule from dafunker
@@ -841,14 +915,20 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [groups, teams, clubs])
 
-  const importFfttGames = useCallback(async (groupIds: string[], teamId?: string, updateDates?: boolean): Promise<FfttGamesImportResult | null> => {
+  const importFfttGames = useCallback(async (
+    groupIds: string[], teamId?: string, options?: ImportGamesOptions,
+  ): Promise<FfttGamesImportResult | null> => {
     try {
       const pools = gamesPayloadRef.current[groupIds.join(',')]
       if (!pools) return null
       const r = await fetch('/api/games/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ groupIds, pools, ...(teamId ? { teamId } : {}), ...(updateDates ? { updateDates: true } : {}) }),
+        body: JSON.stringify({
+          groupIds, pools, ...(teamId ? { teamId } : {}),
+          ...(options?.updateDates ? { updateDates: true } : {}),
+          ...(options?.removeObsolete ? { removeObsolete: true } : {}),
+        }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttGamesImportResult
@@ -874,11 +954,12 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
           ...upserts,
         ])
       }
+      applyImportDeletions(result.deletedGames, result.deletedMatchDays)
       return result
     } catch {
       return null
     }
-  }, [])
+  }, [applyImportDeletions])
 
   // --- FFTT groups import (#237, same browser-side transport as the games
   // import above: FFTT blocks Cloudflare egress, so the browser fetches the
@@ -928,13 +1009,17 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   // --- Schedule document import (#260, no server preview — see the type note above) ---
   const importScheduleDocuments = useCallback(async (
-    schedules: ScheduleDocImportInput[], updateSlots?: boolean,
+    schedules: ScheduleDocImportInput[], updateSlots?: boolean, removeObsolete?: boolean,
   ): Promise<ScheduleDocImportResult | null> => {
     try {
       const r = await fetch('/api/schedule-documents/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ schedules, ...(updateSlots ? { updateSlots: true } : {}) }),
+        body: JSON.stringify({
+          schedules,
+          ...(updateSlots ? { updateSlots: true } : {}),
+          ...(removeObsolete ? { removeObsolete: true } : {}),
+        }),
       })
       if (!r.ok) {
         console.error('schedule-documents/import failed', r.status, await r.text().catch(() => ''))
@@ -959,11 +1044,12 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         ])
       }
       if (result.createdGames.length) setGames((prev) => [...prev, ...result.createdGames])
+      applyImportDeletions(result.deletedGames, result.deletedMatchDays)
       return result
     } catch {
       return null
     }
-  }, [])
+  }, [applyImportDeletions])
 
   const deleteSeason = useCallback((id: string) => {
     // Cascade: find phases → divisions → groups → teams, match days, games, avail, selections
@@ -1390,6 +1476,31 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     })
   }, [persist])
 
+  /**
+   * Move a team to another poule (#422) — what a repêchage does. The team keeps
+   * its roster, its captain and its history; what it loses is the calendar of
+   * the poule it leaves, which the API removes (with the availabilities and
+   * compositions hanging off it) and reports back, so local state follows the
+   * deletion instead of guessing at it.
+   */
+  const moveTeamToGroup = useCallback(async (teamId: string, groupId: string) => {
+    const target = groups.find((g) => g.id === groupId)
+    setTeams((prev) => prev.map((t) =>
+      t.id === teamId ? { ...t, groupId, divisionId: target?.divisionId ?? t.divisionId } : t))
+    setGroups((prev) => prev.map((g) => {
+      if (g.id === groupId) {
+        return g.teamIds.includes(teamId) ? g : { ...g, teamIds: [...g.teamIds, teamId] }
+      }
+      return g.teamIds.includes(teamId) ? { ...g, teamIds: g.teamIds.filter((id) => id !== teamId) } : g
+    }))
+    if (!persist) return
+    const r = await api(`/teams/${teamId}`, { method: 'PATCH', body: JSON.stringify({ groupId }) })
+    if (!r?.ok) return
+    const moved = await r.json().catch(() => null) as
+      { deletedGames?: string[]; deletedMatchDays?: string[] } | null
+    applyImportDeletions(moved?.deletedGames, moved?.deletedMatchDays)
+  }, [persist, groups, applyImportDeletions])
+
   const addTeam = useCallback((data: Omit<Team, 'id'>) => {
     // Derived from (club, phase, number) (#282) so a team created here and the
     // same team imported later land on one row instead of two.
@@ -1697,6 +1808,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       deleteGroup,
       resetGroupGames,
       updateTeam,
+      moveTeamToGroup,
       archiveTeam,
       deleteTeam,
       addClub,
@@ -1732,7 +1844,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       updatePlayer, addPlayer, setPlayerPhasePoints, setAvatar, removeAvatar,
