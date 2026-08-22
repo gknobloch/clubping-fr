@@ -112,7 +112,7 @@ export function ImportGamesModal({
       onClose={onClose}
       labelledBy="import-games-title"
     >
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-games-title" className="font-display text-lg font-semibold text-slate-800">
           Importer les matchs FFTT
         </h2>
@@ -171,7 +171,16 @@ export function ImportGamesModal({
             <div className="space-y-3">
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                 {rows.map((g) => (
-                  <li key={g.groupId} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  // Stacked on a phone, side by side from sm:, and BOTH sides
+                  // shrink. The counts used to be shrink-0, so the label took the
+                  // whole deficit and broke down to one word per line once a
+                  // rebuilt poule reported six of them; pinning the label instead
+                  // just pushed the counts out of the row, since on /journees it
+                  // names every team of the poule (#422).
+                  <li
+                    key={g.groupId}
+                    className="flex flex-col gap-0.5 px-3 py-2 text-sm sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                  >
                     {g.error ? (
                       <>
                         <span className="min-w-0 text-slate-400">
@@ -191,14 +200,14 @@ export function ImportGamesModal({
                       </>
                     ) : (
                       <>
-                        <span className="min-w-0 text-slate-800">
+                        <span className="min-w-0 text-slate-800 sm:basis-1/2">
                           <span className="font-medium">{g.divisionName}</span>
                           <span className="ml-1 text-slate-500">· Poule {g.groupNumber}</span>
                           {teamNameOf(g.groupId) && (
                             <span className="ml-1 text-slate-500">— {teamNameOf(g.groupId)}</span>
                           )}
                         </span>
-                        <span className="shrink-0 text-xs text-slate-500">
+                        <span className="min-w-0 text-xs text-slate-500 sm:basis-1/2 sm:text-right">
                           {plural(g.rounds ?? 0, 'journée')} · {g.newGames ?? 0} {(g.newGames ?? 0) > 1 ? 'nouveaux matchs' : 'nouveau match'}
                           {g.existingGames ? ` · ${g.existingGames} déjà présent${g.existingGames > 1 ? 's' : ''}` : ''}
                           {g.dateMismatches ? (
