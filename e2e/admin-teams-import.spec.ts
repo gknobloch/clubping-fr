@@ -196,6 +196,58 @@ test.describe('General admin — Teams FFTT import', () => {
     expect(importBody?.teams.map((t) => t.id)).toEqual(['9111'])
   })
 
+  // #422: FFTT engages a team in another poule than the one it sits in — a
+  // repêchage. Offered as a move, not reported as "déjà présente", and it
+  // keeps the settings the club chose for it.
+  test('offers an already-present team as a move when its pool changed', async ({ page }) => {
+    await page.route(PREVIEW, (route) => route.fulfill({
+      json: {
+        ...preview,
+        teams: [{
+          ...preview.teams[0], exists: true, importable: true,
+          moved: true, fromPoolNumber: 1, fromDivisionName: 'GE 1',
+        }, preview.teams[1], preview.teams[2]],
+      },
+    }))
+    let importBody: { teams: Array<{ id: string; gameLocationId: string }> } | undefined
+    await page.route(IMPORT, (route) => {
+      importBody = route.request().postDataJSON()
+      return route.fulfill({
+        json: {
+          ...importResult, createdTeams: [], createdDivisions: [], skipped: [],
+          movedTeams: [{ id: 'team-1', groupId: '1500001', previousGroupId: 'group-1' }],
+          deletedGames: ['g-old-1', 'g-old-2'], deletedMatchDays: [],
+        },
+      })
+    })
+
+    await page.goto('/equipes')
+    await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
+    await page.getByLabel('Club', { exact: true }).selectOption('club-fftt-06680011')
+    await page.getByRole('button', { name: 'Rechercher les équipes' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Change de poule')).toBeVisible()
+    await expect(dialog.getByText('Aujourd’hui : GE 1 · Poule 1')).toBeVisible()
+
+    // Selectable, unlike a team that is simply already there — and its venue,
+    // day and time are not up for grabs: the club set them.
+    const moving = dialog.getByLabel('Importer PPA Rixheim 1', { exact: true })
+    await expect(moving).toBeChecked()
+    const venue = dialog.getByLabel('Lieu de jeu — PPA Rixheim 1', { exact: true })
+    await expect(venue).toBeDisabled()
+    await expect(venue).toHaveValue('')
+
+    // Uncheck the other two so only the move is sent.
+    await dialog.getByLabel('Importer PPA Rixheim 10').uncheck()
+    await dialog.getByLabel('Importer PPA Rixheim 11').uncheck()
+    // A move needs no venue, so the confirm button is not held back by one.
+    await dialog.getByRole('button', { name: /^Importer/ }).click()
+
+    expect(importBody?.teams).toEqual([{ id: '9101', gameLocationId: '', defaultDay: '', defaultTime: '' }])
+    await expect(dialog.getByText(/1 équipe déplacée vers sa nouvelle poule, 2 matchs de l’ancienne supprimés/)).toBeVisible()
+  })
+
   test('reports when the FFTT API is unreachable from the browser', async ({ page }) => {
     // The real prod failure path: the browser can't reach apiv2 — no request
     // ever hits our API.

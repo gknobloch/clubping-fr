@@ -47,6 +47,10 @@ export function ImportScheduleDocumentModal({
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(false)
   const [updateSlots, setUpdateSlots] = useState(true)
+  // Off by default, unlike the slots above (#422): a document that only covers
+  // part of a poule, or one mapped to the wrong group by mistake, would read
+  // as "everything else is gone". Deleting is the admin's explicit call.
+  const [removeObsolete, setRemoveObsolete] = useState(false)
   const [imported, setImported] = useState<ScheduleDocImportResult | null>(null)
 
   const updateEntry = (id: string, patch: Partial<FileEntry>) =>
@@ -180,7 +184,7 @@ export function ImportScheduleDocumentModal({
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importScheduleDocuments(readyEntries.map(buildPayload), updateSlots)
+    const result = await importScheduleDocuments(readyEntries.map(buildPayload), updateSlots, removeObsolete)
     setImporting(false)
     if (result) {
       setImported(result)
@@ -237,6 +241,25 @@ export function ImportScheduleDocumentModal({
               </span>
             </label>
           )}
+          {!imported && readyEntries.length > 0 && (
+            <label className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <input
+                type="checkbox"
+                checked={removeObsolete}
+                onChange={(e) => setRemoveObsolete(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
+              />
+              <span className="text-sm text-red-900">
+                Supprimer ce que ce calendrier ne contient plus
+                <span className="mt-0.5 block text-xs text-red-800">
+                  À cocher pour un calendrier réédité (« ANNULE ET REMPLACE L’ÉDITION
+                  PRÉCÉDENTE ») : les matchs absents de ce document et les équipes absentes de
+                  son tableau sont retirés de la poule, avec les disponibilités et compositions
+                  des matchs supprimés. Une journée que le document n’aborde pas reste intacte.
+                </span>
+              </span>
+            </label>
+          )}
           {imported && (
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 space-y-1">
               <p className="text-sm text-green-800">
@@ -247,6 +270,19 @@ export function ImportScheduleDocumentModal({
               {!!imported.updatedGameSlots && (
                 <p className="text-sm text-green-800">
                   {plural(imported.updatedGameSlots, 'match')} recalé{imported.updatedGameSlots > 1 ? 's' : ''} sur la date et l’heure du document.
+                </p>
+              )}
+              {!!imported.deletedGames?.length && (
+                <p className="text-sm text-green-800">
+                  {plural(imported.deletedGames.length, 'match')} supprimé{imported.deletedGames.length > 1 ? 's' : ''} : absent{imported.deletedGames.length > 1 ? 's' : ''} de ce calendrier
+                  {imported.deletedMatchDays?.length
+                    ? `, dont ${plural(imported.deletedMatchDays.length, 'journée')} devenue${imported.deletedMatchDays.length > 1 ? 's' : ''} vide${imported.deletedMatchDays.length > 1 ? 's' : ''}`
+                    : ''}.
+                </p>
+              )}
+              {!!imported.departedTeams && (
+                <p className="text-sm text-green-800">
+                  {plural(imported.departedTeams, 'équipe')} retirée{imported.departedTeams > 1 ? 's' : ''} de la poule.
                 </p>
               )}
               {!!imported.slotMismatches && (

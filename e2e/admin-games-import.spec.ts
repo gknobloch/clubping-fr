@@ -251,6 +251,69 @@ test.describe('General admin — Games FFTT import', () => {
     expect(body?.updateDates).toBeUndefined()
   })
 
+  // #422: a poule rebuilt mid-season (forfait, repêchage, calendrier réédité)
+  // leaves fixtures that are no longer played and teams that left it. Nothing
+  // is removed unless the box is ticked.
+  test('offers to remove what the pool no longer holds', async ({ page }) => {
+    await page.route(PREVIEW, (route) => route.fulfill({
+      json: {
+        groups: [{
+          groupId: 'group-1', groupNumber: 1, divisionName: 'GE 1',
+          rounds: 7, matches: 28, newMatchDays: 0, newGames: 4,
+          existingGames: 24, dateMismatches: 0, newTeams: 1,
+          obsoleteGames: 3, obsoleteManualGames: 1, departingTeams: 1,
+        }],
+        totals: { newClubs: 0, newTeams: 1 },
+      },
+    }))
+    let body: { removeObsolete?: boolean } | undefined
+    await page.route(IMPORT, (route) => {
+      body = route.request().postDataJSON()
+      return route.fulfill({
+        json: {
+          ...importResult, createdGames: [], createdMatchDays: [], updatedMatchDays: [],
+          createdClubs: [], createdTeams: [],
+          deletedGames: ['g-old-1', 'g-old-2', 'g-old-3'], deletedManualGames: 1,
+          deletedMatchDays: [], departedTeams: 1,
+        },
+      })
+    })
+
+    await page.goto('/groupes')
+    await page.getByLabel('Division').selectOption({ label: 'GE 1' })
+    const row = page.locator('tr').filter({ hasText: 'PPA Rixheim 1' })
+    await row.getByRole('button', { name: 'Importer les matchs' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('3 plus au calendrier')).toBeVisible()
+    await expect(dialog.getByText('1 équipe sortie')).toBeVisible()
+    await expect(dialog.getByText(/Supprimer ce que la poule ne contient plus : 3 matchs et 1 équipe/)).toBeVisible()
+    // The hand-agreed slot among them is spelled out before anything is lost.
+    await expect(dialog.getByText(/1 match dont le créneau avait été fixé à la main/)).toBeVisible()
+
+    const box = dialog.getByRole('checkbox')
+    await expect(box).not.toBeChecked()
+    await box.check()
+    await dialog.getByRole('button', { name: 'Importer 4 matchs' }).click()
+
+    await expect(page.getByText(/3 matchs supprimés : plus au calendrier de la poule/)).toBeVisible()
+    await expect(page.getByText('1 équipe retirée de la poule.')).toBeVisible()
+    expect(body?.removeObsolete).toBe(true)
+  })
+
+  // The single-team scope (#287) only sees part of the calendar, so the API
+  // reports nothing to remove and the dialog offers nothing (#422).
+  test('never offers removal when importing one team’s fixtures', async ({ page }) => {
+    await page.route(PREVIEW, (route) => route.fulfill({ json: previewOneGroup }))
+    await page.route(IMPORT, (route) => route.fulfill({ json: importResult }))
+
+    await page.goto('/equipes')
+    await runRowAction(page, page, 'Importer les matchs')
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText(/7 journées/)).toBeVisible()
+    await expect(dialog.getByText(/Supprimer ce que la poule ne contient plus/)).toHaveCount(0)
+  })
+
   test('reports when the FFTT API is unreachable', async ({ page }) => {
     await page.route(PREVIEW, (route) => route.fulfill({ status: 502, json: { error: 'fftt_unavailable' } }))
 

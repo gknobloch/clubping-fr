@@ -38,6 +38,7 @@ export function ImportGamesModal({
   const [importError, setImportError] = useState(false)
   const [imported, setImported] = useState<FfttGamesImportResult | null>(null)
   const [updateDates, setUpdateDates] = useState(false)
+  const [removeObsolete, setRemoveObsolete] = useState(false)
 
   /** "Rixheim PPA 5" for the group's team(s) — a pool alone doesn't say which
    *  of your teams it concerns (#287). Scoped to the club when there is one. */
@@ -62,6 +63,14 @@ export function ImportGamesModal({
   // link can never happen. That is exactly what "Rien à importer" was hiding.
   const linkTotal = rows.reduce((n, g) => n + (g.ffttIdsToLink ?? 0), 0)
   const willUpdateDates = updateDates && mismatchTotal > 0
+  // A poule rebuilt mid-season (#422): fixtures that are no longer played and
+  // teams that left it. Never offered when the import is scoped to one team —
+  // the API reports nothing there, since it only sees part of the calendar.
+  const obsoleteTotal = rows.reduce((n, g) => n + (g.obsoleteGames ?? 0), 0)
+  const obsoleteManualTotal = rows.reduce((n, g) => n + (g.obsoleteManualGames ?? 0), 0)
+  const departingTotal = rows.reduce((n, g) => n + (g.departingTeams ?? 0), 0)
+  const hasPoolChange = obsoleteTotal > 0 || departingTotal > 0
+  const willRemoveObsolete = removeObsolete && hasPoolChange
 
   useEffect(() => {
     let cancelled = false
@@ -81,12 +90,12 @@ export function ImportGamesModal({
 
   const importableGroups = (preview?.groups ?? []).filter((g) => !g.error)
   const totalNewGames = importableGroups.reduce((n, g) => n + (g.newGames ?? 0), 0)
-  const hasWork = totalNewGames > 0 || linkTotal > 0 || willUpdateDates
+  const hasWork = totalNewGames > 0 || linkTotal > 0 || willUpdateDates || willRemoveObsolete
 
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttGames(groupIds, teamId, updateDates)
+    const result = await importFfttGames(groupIds, teamId, { updateDates, removeObsolete })
     setImporting(false)
     if (result) {
       setImported(result)
@@ -103,7 +112,7 @@ export function ImportGamesModal({
       onClose={onClose}
       labelledBy="import-games-title"
     >
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-games-title" className="font-display text-lg font-semibold text-slate-800">
           Importer les matchs FFTT
         </h2>
@@ -137,6 +146,19 @@ export function ImportGamesModal({
                   {imported.createdClubs.length > 0 ? ` et ${plural(imported.createdClubs.length, 'club')}` : ''}.
                 </p>
               )}
+              {!!imported.deletedGames?.length && (
+                <p className="text-sm text-green-800">
+                  {plural(imported.deletedGames.length, 'match')} supprimé{imported.deletedGames.length > 1 ? 's' : ''} : plus au calendrier de la poule
+                  {imported.deletedMatchDays?.length
+                    ? `, dont ${plural(imported.deletedMatchDays.length, 'journée')} devenue${imported.deletedMatchDays.length > 1 ? 's' : ''} vide${imported.deletedMatchDays.length > 1 ? 's' : ''}`
+                    : ''}.
+                </p>
+              )}
+              {!!imported.departedTeams && (
+                <p className="text-sm text-green-800">
+                  {plural(imported.departedTeams, 'équipe')} retirée{imported.departedTeams > 1 ? 's' : ''} de la poule.
+                </p>
+              )}
               {imported.skippedGroups.length > 0 && (
                 <p className="text-sm text-amber-700">
                   {plural(imported.skippedGroups.length, 'groupe')} ignoré{imported.skippedGroups.length > 1 ? 's' : ''} (poule FFTT introuvable ou API injoignable).
@@ -149,7 +171,16 @@ export function ImportGamesModal({
             <div className="space-y-3">
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                 {rows.map((g) => (
-                  <li key={g.groupId} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  // Stacked on a phone, side by side from sm:, and BOTH sides
+                  // shrink. The counts used to be shrink-0, so the label took the
+                  // whole deficit and broke down to one word per line once a
+                  // rebuilt poule reported six of them; pinning the label instead
+                  // just pushed the counts out of the row, since on /journees it
+                  // names every team of the poule (#422).
+                  <li
+                    key={g.groupId}
+                    className="flex flex-col gap-0.5 px-3 py-2 text-sm sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                  >
                     {g.error ? (
                       <>
                         <span className="min-w-0 text-slate-400">
@@ -169,19 +200,29 @@ export function ImportGamesModal({
                       </>
                     ) : (
                       <>
-                        <span className="min-w-0 text-slate-800">
+                        <span className="min-w-0 text-slate-800 sm:basis-1/2">
                           <span className="font-medium">{g.divisionName}</span>
                           <span className="ml-1 text-slate-500">· Poule {g.groupNumber}</span>
                           {teamNameOf(g.groupId) && (
                             <span className="ml-1 text-slate-500">— {teamNameOf(g.groupId)}</span>
                           )}
                         </span>
-                        <span className="shrink-0 text-xs text-slate-500">
+                        <span className="min-w-0 text-xs text-slate-500 sm:basis-1/2 sm:text-right">
                           {plural(g.rounds ?? 0, 'journée')} · {g.newGames ?? 0} {(g.newGames ?? 0) > 1 ? 'nouveaux matchs' : 'nouveau match'}
                           {g.existingGames ? ` · ${g.existingGames} déjà présent${g.existingGames > 1 ? 's' : ''}` : ''}
                           {g.dateMismatches ? (
                             <span className="text-amber-700">
                               {` · ${g.dateMismatches} à une autre date`}
+                            </span>
+                          ) : null}
+                          {g.obsoleteGames ? (
+                            <span className="text-red-700">
+                              {` · ${g.obsoleteGames} plus au calendrier`}
+                            </span>
+                          ) : null}
+                          {g.departingTeams ? (
+                            <span className="text-red-700">
+                              {` · ${plural(g.departingTeams, 'équipe')} sortie${g.departingTeams > 1 ? 's' : ''}`}
                             </span>
                           ) : null}
                           {g.ffttIdsToLink ? ` · ${g.ffttIdsToLink} à relier à la FFTT` : ''}
@@ -207,6 +248,33 @@ export function ImportGamesModal({
                       Décoché, les dates enregistrées sont conservées — un calendrier importé
                       depuis un fichier indique le vrai créneau, là où la FFTT publie une date
                       de week-end théorique.
+                    </span>
+                  </span>
+                </label>
+              )}
+              {hasPoolChange && (
+                <label className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={removeObsolete}
+                    onChange={(e) => setRemoveObsolete(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
+                  />
+                  <span className="text-sm text-red-900">
+                    Supprimer ce que la poule ne contient plus
+                    {obsoleteTotal > 0 ? ` : ${plural(obsoleteTotal, 'match')}` : ''}
+                    {departingTotal > 0
+                      ? `${obsoleteTotal > 0 ? ' et' : ' :'} ${plural(departingTotal, 'équipe')}`
+                      : ''}.
+                    <span className="mt-0.5 block text-xs text-red-800">
+                      À cocher quand la poule a été modifiée en cours de saison — un forfait,
+                      un repêchage, un calendrier réédité. Les disponibilités et compositions
+                      des matchs supprimés le sont aussi.
+                      {obsoleteManualTotal > 0
+                        ? ` Dont ${plural(obsoleteManualTotal, 'match')} dont le créneau avait été fixé à la main.`
+                        : ''}
+                      {' '}Les équipes sorties de la poule ne sont pas supprimées : elles en
+                      sont seulement retirées.
                     </span>
                   </span>
                 </label>
@@ -237,7 +305,9 @@ export function ImportGamesModal({
                       ? `Mettre à jour ${plural(mismatchTotal, 'date')}`
                       : linkTotal > 0
                         ? `Relier ${plural(linkTotal, 'match')} à la FFTT`
-                        : 'Rien à importer'}
+                        : willRemoveObsolete
+                          ? 'Mettre la poule à jour'
+                          : 'Rien à importer'}
               </button>
             </div>
           )}

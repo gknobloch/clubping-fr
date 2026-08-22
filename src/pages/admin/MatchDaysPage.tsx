@@ -561,11 +561,13 @@ export function MatchDaysPage() {
   const gameEditModalMatchDay = gameEditModal
     ? matchDays.find((m) => m.id === gameEditModal!.matchDayId)
     : null
+  // The group's own team list, not `team.groupId` (#422): that list is what an
+  // import prunes when a team leaves the poule, so filtering on the team side
+  // kept offering opponents the poule no longer holds.
   const gameEditOpponentOptions = gameEditModalTeam
-    ? teams.filter(
-        (t) =>
-          t.groupId === gameEditModalTeam.groupId && t.id !== gameEditModalTeam.id
-      )
+    ? (groups.find((g) => g.id === gameEditModalTeam.groupId)?.teamIds ?? [])
+        .filter((id) => id !== gameEditModalTeam.id)
+        .flatMap((id) => teams.find((t) => t.id === id) ?? [])
     : []
 
   const selectedPhaseIndex = phases.findIndex((p) => p.id === selectedPhaseId)

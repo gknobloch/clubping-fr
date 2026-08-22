@@ -65,6 +65,10 @@ function TimeSelect({
  * team gets its own venue / day / time, editable per-row or filled in bulk
  * via "Appliquer à tous". Teams already present locally can't be re-selected
  * — the server re-checks anyway right before inserting.
+ *
+ * One exception (#422): a team FFTT now engages in another poule is offered as
+ * a move. It keeps its venue, day, roster and captain — only where it plays
+ * changes — so its three setting cells stay empty and disabled.
  */
 export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => void; lockedClubId?: string }) {
   const { clubs, fetchTeamsPreview, importFfttTeams } = useAppData()
@@ -115,7 +119,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
     for (const t of result.teams) {
       initialRows[t.id] = {
         selected: t.importable,
-        gameLocationId: t.importable ? (defaultAddr?.id ?? '') : '',
+        gameLocationId: t.importable && !t.moved ? (defaultAddr?.id ?? '') : '',
         defaultDay: '',
         defaultTime: '',
       }
@@ -133,6 +137,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
     setRows((prev) => {
       const next = { ...prev }
       for (const t of importable) {
+        if (t.moved) continue
         next[t.id] = { ...next[t.id], gameLocationId: bulkLocation, defaultDay: bulkDay, defaultTime: bulkTime }
       }
       return next
@@ -155,7 +160,10 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
       defaultDay: rows[t.id].defaultDay,
       defaultTime: rows[t.id].defaultTime,
     }))
-  const allSelectedHaveLocation = selectedOverrides.every((o) => !!o.gameLocationId)
+  const movedIds = new Set(importable.filter((t) => t.moved).map((t) => t.id))
+  // A move needs no venue: the team already has one (#422).
+  const allSelectedHaveLocation = selectedOverrides
+    .every((o) => movedIds.has(o.id) || !!o.gameLocationId)
   const allImportableSelected = importable.length > 0 && importable.every((t) => rows[t.id]?.selected)
 
   const handleImport = async () => {
@@ -179,6 +187,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
     'w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100 disabled:text-slate-400'
 
   const badge = (t: FfttTeamsPreview['teams'][number]) => {
+    if (t.moved) return { label: 'Change de poule', className: 'bg-amber-100 text-amber-700' }
     if (t.exists) return { label: 'Déjà présente', className: 'bg-slate-100 text-slate-500' }
     if (seasonMissing) return { label: 'Saison manquante', className: 'bg-amber-100 text-amber-700' }
     if (!t.divisionExists && t.importable) return { label: 'Division à importer', className: 'bg-sky-100 text-sky-700' }
@@ -240,6 +249,14 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
                   ? 'Aucune équipe à importer : elles sont toutes déjà présentes.'
                   : `${imported.createdTeams.length} équipe${imported.createdTeams.length > 1 ? 's' : ''} importée${imported.createdTeams.length > 1 ? 's' : ''}.`}
               </p>
+              {!!imported.movedTeams?.length && (
+                <p className="text-sm text-green-800">
+                  {imported.movedTeams.length} équipe{imported.movedTeams.length > 1 ? 's' : ''} déplacée{imported.movedTeams.length > 1 ? 's' : ''} vers sa nouvelle poule
+                  {imported.deletedGames?.length
+                    ? `, ${imported.deletedGames.length} match${imported.deletedGames.length > 1 ? 's' : ''} de l’ancienne supprimé${imported.deletedGames.length > 1 ? 's' : ''}`
+                    : ''}. Importez son calendrier depuis « Journées ».
+                </p>
+              )}
               {imported.createdDivisions.length > 0 && (
                 <p className="text-sm text-green-800">
                   {imported.createdDivisions.length} division{imported.createdDivisions.length > 1 ? 's' : ''} importée{imported.createdDivisions.length > 1 ? 's' : ''} automatiquement.
@@ -361,6 +378,12 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
                                 {t.phase ? `Phase ${t.phase}` : 'Phase inconnue'} · {t.divisionName}
                                 {t.poolNumber !== null ? ` · Poule ${t.poolNumber}` : ''}
                               </p>
+                              {t.moved && (
+                                <p className="text-xs text-amber-700">
+                                  Aujourd’hui : {t.fromDivisionName ?? 'poule inconnue'}
+                                  {t.fromPoolNumber != null ? ` · Poule ${t.fromPoolNumber}` : ''}
+                                </p>
+                              )}
                               {b && (
                                 <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs ${b.className}`}>{b.label}</span>
                               )}
@@ -368,7 +391,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
                             <td className="px-3 py-2 align-top">
                               <select
                                 value={row?.gameLocationId ?? ''}
-                                disabled={!t.importable}
+                                disabled={!t.importable || t.moved}
                                 onChange={(e) => updateRow(t.id, { gameLocationId: e.target.value })}
                                 aria-label={`Lieu de jeu — ${t.name}`}
                                 className={cellSelectClass}
@@ -382,7 +405,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
                             <td className="px-3 py-2 align-top">
                               <select
                                 value={row?.defaultDay ?? ''}
-                                disabled={!t.importable}
+                                disabled={!t.importable || t.moved}
                                 onChange={(e) => updateRow(t.id, { defaultDay: e.target.value })}
                                 aria-label={`Jour — ${t.name}`}
                                 className={cellSelectClass}
@@ -395,7 +418,7 @@ export function ImportTeamsModal({ onClose, lockedClubId }: { onClose: () => voi
                             </td>
                             <td className="px-3 py-2 align-top">
                               <TimeSelect
-                                value={row?.defaultTime ?? ''}
+                                value={t.moved ? '' : row?.defaultTime ?? ''}
                                 onChange={(v) => updateRow(t.id, { defaultTime: v })}
                                 hourLabel={`Heure — ${t.name}`}
                                 minuteLabel={`Minutes — ${t.name}`}

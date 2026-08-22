@@ -26,6 +26,7 @@ export function TeamsPage() {
     players,
     playerPhasePoints,
     updateTeam,
+    moveTeamToGroup,
     addTeam,
     updateGroup,
     archiveTeam,
@@ -125,7 +126,7 @@ export function TeamsPage() {
     ? divisions.filter((d) => d.phaseId === form.phaseId)
     : []
   const groupsInDivision = form.divisionId
-    ? groups.filter((g) => g.divisionId === form.divisionId)
+    ? groups.filter((g) => g.divisionId === form.divisionId && (!g.isArchived || g.id === editing?.groupId))
     : []
   const selectedClub = form.clubId ? clubs.find((c) => c.id === form.clubId) : undefined
   const addressesForClub = selectedClub?.addresses ?? []
@@ -243,8 +244,22 @@ export function TeamsPage() {
         ? form.captainId
         : form.playerIds[0] ?? ''
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (editing) {
+      // Changing poule is a move, and it costs the fixtures of the poule left
+      // behind (#422) — asked before anything is saved, never slipped in as a
+      // side effect of "Enregistrer".
+      const movingTo = form.groupId && form.groupId !== editing.groupId ? form.groupId : null
+      if (movingTo) {
+        const target = groups.find((g) => g.id === movingTo)
+        const targetDivision = divisions.find((d) => d.id === target?.divisionId)
+        const confirmed = await confirm({
+          title: `Déplacer l'équipe "${getClubName(editing.clubId)} ${editing.number}" vers ${targetDivision?.displayName ?? ''} - Groupe ${target?.number ?? ''} ?`,
+          message: `Les matchs de son ancienne poule, ainsi que les disponibilités et compositions associées, seront supprimés — ce sont des rencontres qu'elle ne jouera pas. Son effectif, son capitaine et ses réglages sont conservés. Importez ensuite le calendrier de la nouvelle poule.`,
+          confirmLabel: 'Déplacer',
+        })
+        if (!confirmed) return
+      }
       updateTeam(editing.id, {
         number: form.number,
         gameLocationId: form.gameLocationId,
@@ -255,6 +270,7 @@ export function TeamsPage() {
         whatsappLink: form.whatsappLink || undefined,
         color: form.color || undefined,
       })
+      if (movingTo) await moveTeamToGroup(editing.id, movingTo)
       closeModal()
       return
     }
@@ -517,50 +533,53 @@ export function TeamsPage() {
                 </div>
               </div>
 
-              {/* Create-only: Phase, Division, Group */}
-              {creating && (
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="team-phaseId" className="block text-sm font-medium text-slate-700">Phase</label>
-                    <select
-                      id="team-phaseId"
-                      value={form.phaseId}
-                      onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, divisionId: '', groupId: '' }))}
-                      className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                    >
-                      {phases.map((p) => (
-                        <option key={p.id} value={p.id}>{p.displayName}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="team-divisionId" className="block text-sm font-medium text-slate-700">Division</label>
-                    <select
-                      id="team-divisionId"
-                      value={form.divisionId}
-                      onChange={(e) => setForm((f) => ({ ...f, divisionId: e.target.value, groupId: '' }))}
-                      className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                    >
-                      {divisionsInPhase.map((d) => (
-                        <option key={d.id} value={d.id}>{d.displayName}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="team-groupId" className="block text-sm font-medium text-slate-700">Groupe</label>
-                    <select
-                      id="team-groupId"
-                      value={form.groupId}
-                      onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))}
-                      className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                    >
-                      {groupsInDivision.map((g) => (
-                        <option key={g.id} value={g.id}>Groupe {g.number}</option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Phase, Division, Groupe. Division and groupe stay editable on an
+                  existing team (#422): a repêchage moves a team mid-season, and
+                  deleting/recreating it to follow was losing its roster and its
+                  history. The phase does not move — the team's identity is
+                  derived from (club, phase, number) (#282). */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="team-phaseId" className="block text-sm font-medium text-slate-700">Phase</label>
+                  <select
+                    id="team-phaseId"
+                    value={form.phaseId}
+                    disabled={!creating}
+                    onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, divisionId: '', groupId: '' }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    {phases.map((p) => (
+                      <option key={p.id} value={p.id}>{p.displayName}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
+                <div>
+                  <label htmlFor="team-divisionId" className="block text-sm font-medium text-slate-700">Division</label>
+                  <select
+                    id="team-divisionId"
+                    value={form.divisionId}
+                    onChange={(e) => setForm((f) => ({ ...f, divisionId: e.target.value, groupId: '' }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    {divisionsInPhase.map((d) => (
+                      <option key={d.id} value={d.id}>{d.displayName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="team-groupId" className="block text-sm font-medium text-slate-700">Groupe</label>
+                  <select
+                    id="team-groupId"
+                    value={form.groupId}
+                    onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    {groupsInDivision.map((g) => (
+                      <option key={g.id} value={g.id}>Groupe {g.number}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
               {/* Row 2: Lieu, Jour, Heure. Four columns is ~66px each at 375px,
                   which the Heure cell cannot hold once its two selects are 44px
@@ -755,14 +774,16 @@ export function TeamsPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={
-                  creating &&
+                  // A team always belongs to a poule: picking a division
+                  // without one leaves the move half-stated (#422).
+                  !form.groupId ||
+                  (creating &&
                   (!form.clubId ||
                     !form.phaseId ||
                     !form.divisionId ||
-                    !form.groupId ||
                     !form.gameLocationId ||
                     form.playerIds.length === 0 ||
-                    !form.playerIds.includes(form.captainId))
+                    !form.playerIds.includes(form.captainId)))
                 }
                 className={PRIMARY_BUTTON_CLASS}
               >
