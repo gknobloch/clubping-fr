@@ -12,6 +12,7 @@ import {
   activeMatchDayNumber,
   formatMatchDayRange,
 } from '@/lib/matchdays'
+import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDayCards, type MatchDayCardEntry } from '@/components/MatchDayCards'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
@@ -1090,20 +1091,28 @@ export function MatchDaysPage() {
                                         weekday: 'short', day: 'numeric', month: 'short',
                                       })
                                     return sched.date ? (
-                                      <span className="block text-xs font-normal text-slate-500">
-                                        {short(sched.date)}
-                                        {sched.time && <span className="ml-1">{sched.time}</span>}
-                                        {/* Agreed between clubs rather than imported (#294) — worth
-                                            seeing, since no import will overwrite it. */}
-                                        {game.source === 'manual' && (
-                                          <span
-                                            className="ml-1 text-accent-600"
-                                            title="Date et heure fixées manuellement : conservées lors des imports."
-                                          >
-                                            <span aria-hidden="true">✎</span>
-                                            <span className="sr-only">Modifié manuellement</span>
-                                          </span>
-                                        )}
+                                      <span className="flex items-center justify-center gap-1 text-xs font-normal text-slate-500">
+                                        <span>
+                                          {short(sched.date)}
+                                          {sched.time && <span className="ml-1">{sched.time}</span>}
+                                          {/* Agreed between clubs rather than imported (#294) — worth
+                                              seeing, since no import will overwrite it. */}
+                                          {game.source === 'manual' && (
+                                            <span
+                                              className="ml-1 text-accent-600"
+                                              title="Date et heure fixées manuellement : conservées lors des imports."
+                                            >
+                                              <span aria-hidden="true">✎</span>
+                                              <span className="sr-only">Modifié manuellement</span>
+                                            </span>
+                                          )}
+                                        </span>
+                                        {/* The one route from this screen to a player's own agenda
+                                            (#426): the cell is inert for a member, and for an admin
+                                            it opens the slot editor — neither leads to a calendar.
+                                            Only on a confirmed slot: the branch below says the date
+                                            is not known yet, and an agenda is no place for a guess. */}
+                                        <AddToCalendarButton game={game} matchDay={md} team={team} />
                                       </span>
                                     ) : sched.week ? (
                                       <span

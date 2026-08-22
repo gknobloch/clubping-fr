@@ -6,6 +6,7 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import { Pill } from '@/components/icons'
 import { ModalShell } from '@/components/ModalShell'
+import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { gameDate, gameSchedule, playersCommittedElsewhere } from '@/lib/matchdays'
@@ -104,11 +105,16 @@ export function GameQuickView({
           </Link>
         </div>
         <h2 className="mt-2 font-display text-lg font-semibold text-slate-800">{matchup}</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {dateLabel}
-          {time ? ` · ${time}` : ''}
-          {venue ? ` · ${venue}` : ''}
-        </p>
+        {/* The slot, and the one-click way to block it in one's own agenda
+            (#426) — the same pairing as the mobile match header. */}
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="text-sm text-slate-500">
+            {dateLabel}
+            {time ? ` · ${time}` : ''}
+            {venue ? ` · ${venue}` : ''}
+          </p>
+          <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+        </div>
 
         {/* Availabilities + line-up */}
         <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">

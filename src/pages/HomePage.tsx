@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamBadge } from '@/components/TeamBadge'
+import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { GameQuickView } from '@/components/GameQuickView'
 import { PlayerPhaseHistory } from '@/components/PlayerPhaseHistory'
 import { SelectionSheet } from '@/components/SelectionSheet'
@@ -213,9 +214,15 @@ export function HomePage() {
                           <span className="text-slate-400">{isHome ? <HomeIcon className="h-4 w-4" /> : <AwayIcon className="h-4 w-4" />}</span>
                           {matchup}
                         </h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {dateLabel}{g.time ? ` · ${g.time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
-                        </p>
+                        {/* The slot, and the icon that blocks it in the
+                            player's own agenda (#426): answering OUI and
+                            writing the match down are one gesture apart. */}
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <p className="text-sm text-slate-500">
+                            {dateLabel}{g.time ? ` · ${g.time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
+                          </p>
+                          <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
+                        </div>
                         <div className="mt-3">
                           {locked !== undefined ? (
                             <span className="text-xs italic text-slate-500">Joue en Équipe {locked}</span>
