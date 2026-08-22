@@ -79,3 +79,43 @@ describe('TeamDetailPage — club logo in the identity banner (#386)', () => {
     expect(container.querySelector('img')).not.toBeInTheDocument()
   })
 })
+
+describe('TeamDetailPage — game times in the match list (#424)', () => {
+  // The receiving club's time, never the viewing team's (#287).
+  function renderWithGames(games: typeof mockGames) {
+    return render(
+      <MemoryRouter initialEntries={[`/equipes/${TEAM_ID}`]}>
+        <DataProvider initialData={{ ...baseTestData(), games }}>
+          <Routes>
+            <Route path="/equipes/:id" element={<TeamDetailPage />} />
+          </Routes>
+        </DataProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it("shows the game's own time beside its date", () => {
+    renderWithGames(mockGames)
+
+    // g1-8: team-1 at home, with a time of its own (9h30).
+    expect(screen.getByText('9h30')).toBeInTheDocument()
+  })
+
+  it("falls back to the home team's default time when the game has none", () => {
+    // team-1 receives, plays Saturdays at 16h00, and this fixture carries no time.
+    const games = mockGames.map((g) =>
+      g.id === 'g1-1' ? { ...g, homeTeamId: 'team-1', awayTeamId: 'opp-etival-1' } : g,
+    )
+    renderWithGames(games)
+
+    expect(screen.getByText('16h00')).toBeInTheDocument()
+  })
+
+  it('shows no time for an away game at an opponent whose playing day is unknown', () => {
+    renderWithGames(mockGames)
+
+    // g1-1..g1-7 are away at auto-created opponents (no default day/time), so
+    // only the journée's nominal date is shown — no invented slot.
+    expect(screen.queryByText('16h00')).not.toBeInTheDocument()
+  })
+})
