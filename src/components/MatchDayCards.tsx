@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ChevronRightIcon, HomeIcon, AwayIcon } from '@/components/icons'
+import { MatchDate } from '@/components/MatchDate'
 import type { Game, MatchDay, Team } from '@/types'
 
 export interface MatchDayCardEntry {
@@ -14,6 +15,8 @@ export interface MatchDayCardEntry {
   isMine?: boolean
   isHome: boolean
   dateLabel: string
+  /** False while the receiving club's playing day is unknown (#429). */
+  confirmed: boolean
   time?: string
   availableCount: number
   selectedCount: number
@@ -37,7 +40,7 @@ export function MatchDayCards({ entries }: { entries: MatchDayCardEntry[] }) {
 
   return (
     <ul className="flex flex-col gap-3">
-      {entries.map(({ team, game, matchDay, teamName, divisionName, isMine, opponentName, isHome, dateLabel, time, availableCount, selectedCount, playersPerGame }) => {
+      {entries.map(({ team, game, matchDay, teamName, divisionName, isMine, opponentName, isHome, dateLabel, confirmed, time, availableCount, selectedCount, playersPerGame }) => {
         const short = selectedCount < playersPerGame || availableCount < playersPerGame
         const matchup = isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`
         return (
@@ -84,7 +87,7 @@ export function MatchDayCards({ entries }: { entries: MatchDayCardEntry[] }) {
                   <span className="truncate font-medium text-slate-800">{matchup}</span>
                 </span>
                 <span className="text-xs text-slate-500">
-                  {dateLabel}
+                  <MatchDate label={dateLabel} confirmed={confirmed} />
                   {time ? ` · ${time}` : ''}
                 </span>
                 <span className={`text-xs ${short ? 'font-medium text-amber-700' : 'text-slate-500'}`}>

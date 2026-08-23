@@ -5,10 +5,11 @@ import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
-import { gameDate, gameTime, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
 import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
@@ -167,7 +168,10 @@ export function MatchDayDetailPage() {
         </p>
         <div className="mt-1 flex items-center justify-between gap-2">
           <p className="text-sm text-slate-500">
-            {dateLabel}
+            <MatchDate
+              label={dateLabel}
+              confirmed={isSlotConfirmed(game, matchDay, teams.find((t) => t.id === game.homeTeamId))}
+            />
             {time ? ` · ${time}` : ''}
           </p>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />

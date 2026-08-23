@@ -119,3 +119,37 @@ describe('TeamDetailPage — game times in the match list (#424)', () => {
     expect(screen.queryByText('16h00')).not.toBeInTheDocument()
   })
 })
+
+describe('TeamDetailPage — unconfirmed dates (#429)', () => {
+  function renderWithGames(games: typeof mockGames) {
+    return render(
+      <MemoryRouter initialEntries={[`/equipes/${TEAM_ID}`]}>
+        <DataProvider initialData={{ ...baseTestData(), games }}>
+          <Routes>
+            <Route path="/equipes/:id" element={<TeamDetailPage />} />
+          </Routes>
+        </DataProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it("marks a date the receiving club's playing day has not confirmed", () => {
+    // g1-1..g1-7 are away at clubs the import created: the FFTT's nominal
+    // week-end date is a guess, and the Journées matrix has said so since #287
+    // while this list printed it as fact.
+    renderWithGames(mockGames)
+
+    expect(screen.getAllByText('Date à confirmer,', { exact: false }).length).toBeGreaterThan(0)
+  })
+
+  it('leaves a confirmed date unmarked', () => {
+    renderWithGames(mockGames)
+
+    // One "Détails du match" button per fixture row.
+    const rows = screen.getAllByRole('button', { name: 'Détails du match' })
+    const marked = screen.getAllByText('Date à confirmer,', { exact: false })
+    // Every fixture is marked but one: g1-8, team-1 at home with a date and a
+    // time of its own. The rest are away at clubs the import created.
+    expect(marked).toHaveLength(rows.length - 1)
+  })
+})

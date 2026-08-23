@@ -21,7 +21,7 @@ import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { getVenue, getVenueAddress } from '@shared/lib/venue'
-import { gameDate, gameTime } from '@/utils/matchdays'
+import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { getMondayOf, todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -149,6 +149,8 @@ export default function HomeScreen() {
     game: Game; md: MatchDay; isHome: boolean; oppId: string; venueLabel?: string
     /** The receiving club's time — '' when its playing day is unknown (#287). */
     time: string
+    /** False while that club's playing day is unknown: the date is a guess (#429). */
+    confirmed: boolean
     /** Pre-built so the card's calendar icon has nothing left to decide (#426). */
     calendarEvent: MatchEvent
     availablePlayers: Player[]; availableCount: number; noResponseCount: number; selectedCount: number
@@ -168,6 +170,7 @@ export default function HomeScreen() {
           const time = gameTime(game, md, homeTeam)
           return {
             game, md, isHome, time,
+            confirmed: isSlotConfirmed(game, md, homeTeam),
             oppId: isHome ? game.awayTeamId : game.homeTeamId,
             venueLabel: venueFor(homeTeam),
             calendarEvent: buildMatchEvent({
@@ -235,6 +238,7 @@ export default function HomeScreen() {
                         matchDayNumber={h.md.number}
                         matchDayDate={gameDate(h.game, h.md)}
                         time={h.time || undefined}
+                        confirmed={h.confirmed}
                         divisionLabel={getDivisionLabel(myActiveTeam)}
                         teamColor={myActiveTeam.color}
                         teamNumber={myActiveTeam.number}

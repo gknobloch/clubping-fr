@@ -168,11 +168,24 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     })
   })
 
-  it('books the whole day away at a club whose playing day is unknown', async () => {
-    // An opponent created by the import: no default day, so no hour — and the
-    // viewing team's 19h30 says nothing about a hall it travels to.
+  it('offers no calendar at all away at a club whose playing day is unknown', () => {
+    // An opponent created by the import: the FFTT's nominal date is a guess, so
+    // the screen marks it and withholds the icon (#429). Nobody's agenda gets a
+    // date the Journées matrix itself refuses to vouch for.
     mockData.teams = [team, { ...opponent, defaultDay: '', defaultTime: '' }]
     mockData.games = [{ ...game, time: undefined, homeTeamId: 't2', awayTeamId: 't1' }]
+
+    render(<MatchDetailScreen />)
+
+    expect(screen.queryByLabelText('Ajouter au calendrier')).toBeNull()
+    expect(screen.getByText(/Date à confirmer/)).toBeTruthy()
+  })
+
+  it('books the whole day when the club plays a known day at no fixed hour', async () => {
+    // The date is real — the club has a playing day — but nobody set an hour,
+    // and an invented one in someone's agenda is worse than none.
+    mockData.teams = [{ ...team, defaultTime: '' }, opponent]
+    mockData.games = [{ ...game, time: undefined }]
 
     render(<MatchDetailScreen />)
     fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))

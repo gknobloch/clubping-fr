@@ -27,10 +27,10 @@ const HOME_GAME_ID = 'g1-8'
 const AWAY_GAME_ID = 'g1-1'
 
 /** The .ics the click handed to the browser, as text. */
-function renderAndClick(gameId: string) {
+function renderAndClick(gameId: string, teams = mockTeams) {
   const game = mockGames.find((g) => g.id === gameId)!
   const matchDay = mockMatchDays.find((md) => md.id === game.matchDayId)!
-  const team = mockTeams.find((t) => t.id === 'team-1')!
+  const team = teams.find((t) => t.id === 'team-1')!
 
   const blobs: Blob[] = []
   const click = vi.fn()
@@ -51,7 +51,7 @@ function renderAndClick(gameId: string) {
   })
 
   render(
-    <DataProvider initialData={testData}>
+    <DataProvider initialData={{ ...testData, teams }}>
       <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
     </DataProvider>,
   )
@@ -90,12 +90,43 @@ describe('AddToCalendarButton (#426)', () => {
     expect(ics).toContain('DESCRIPTION:Journée 8')
   })
 
-  it('books the whole day for a fixture whose slot is not confirmed', async () => {
-    const { text } = renderAndClick(AWAY_GAME_ID)
-    const ics = await text()
+  it('offers nothing at all while the date itself is unconfirmed', () => {
+    // Away at a club the import created: the date is the FFTT's guess, so the
+    // screens mark it and none of them proposes an agenda entry (#429).
+    const game = mockGames.find((g) => g.id === AWAY_GAME_ID)!
+    const matchDay = mockMatchDays.find((md) => md.id === game.matchDayId)!
+    const team = mockTeams.find((t) => t.id === 'team-1')!
 
-    // Away at a club created by the import: no playing day, so no time — and
-    // an invented hour in someone's agenda is worse than no hour at all (#287).
+    render(
+      <DataProvider initialData={testData}>
+        <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+      </DataProvider>,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Ajouter à mon agenda' })).not.toBeInTheDocument()
+  })
+
+  it('books the whole day when the club plays a known day at no fixed hour', async () => {
+    // The date is real — the club has a playing day — but nobody set an hour.
+    const teams = mockTeams.map((t) => (t.id === 'team-1' ? { ...t, defaultTime: '' } : t))
+    const games = mockGames.map((g) => (g.id === HOME_GAME_ID ? { ...g, time: undefined } : g))
+    const game = games.find((g) => g.id === HOME_GAME_ID)!
+    const matchDay = mockMatchDays.find((md) => md.id === game.matchDayId)!
+    const blobs: Blob[] = []
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn((b: Blob) => { blobs.push(b); return 'blob:ics' }),
+      revokeObjectURL: vi.fn(),
+    })
+
+    render(
+      <DataProvider initialData={{ ...testData, teams, games }}>
+        <AddToCalendarButton game={game} matchDay={matchDay} team={teams.find((t) => t.id === 'team-1')!} />
+      </DataProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter à mon agenda' }))
+    const ics = await blobs[0].text()
+
     expect(ics).toContain('DTSTART;VALUE=DATE:')
     expect(ics).not.toMatch(/DTSTART:\d/)
   })

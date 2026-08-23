@@ -14,7 +14,7 @@ import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
 import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
-import { gameDate, gameTime, playersCommittedElsewhere } from '@/utils/matchdays'
+import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
 import { pointsFor } from '@shared/lib/phasePoints'
@@ -114,6 +114,8 @@ export default function MatchDetailScreen() {
   // The receiving club's time (#287): the game's own, else the home team's
   // default, and none at all when that club's playing day is unknown.
   const thisGameTime = gameTime(game, matchDay, homeTeam)
+  // Until that club's playing day is known, the date is the FFTT's guess (#429).
+  const slotConfirmed = isSlotConfirmed(game, matchDay, homeTeam)
   const gameDatePast = thisGameDate < today
   const getAvail = (pid: string) =>
     gameAvailabilities.find((a) => a.playerId === pid && a.gameId === game.id)?.status
@@ -177,6 +179,7 @@ export default function MatchDetailScreen() {
             opponentName={opponentName}
             matchDayDate={thisGameDate}
             time={thisGameTime || undefined}
+            confirmed={slotConfirmed}
             venueLabel={venueLabel}
             onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
           />

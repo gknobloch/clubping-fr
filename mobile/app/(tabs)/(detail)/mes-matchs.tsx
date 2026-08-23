@@ -10,7 +10,7 @@ import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
-import { gameDate, gameTime } from '@/utils/matchdays'
+import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import type { Game, MatchDay, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
@@ -174,6 +174,7 @@ export default function MesMatchsScreen() {
                       opponentName={opponentName(game, team)}
                       matchDayDate={gameDate(game, md)}
                       time={gameTime(game, md, teams.find((t) => t.id === game.homeTeamId)) || undefined}
+                      confirmed={isSlotConfirmed(game, md, teams.find((t) => t.id === game.homeTeamId))}
                       label={isRenfort ? 'Renfort' : undefined}
                     />
                   </View>

@@ -29,6 +29,7 @@ export function MatchHeader({
   opponentName,
   matchDayDate,
   time,
+  confirmed = true,
   venueLabel,
   showCountdown,
   label,
@@ -44,6 +45,11 @@ export function MatchHeader({
   opponentName: string
   matchDayDate: string
   time?: string
+  /**
+   * False while the receiving club's playing day is unknown (#429): the FFTT's
+   * nominal date is then a guess, so it is marked and no calendar is offered.
+   */
+  confirmed?: boolean
   venueLabel?: string
   showCountdown?: boolean
   /** Optional badge shown right of the team (e.g. "Mon équipe" / "Renfort"). */
@@ -51,8 +57,8 @@ export function MatchHeader({
   labelMine?: boolean
   /**
    * When set, an icon button sits in the space to the right of the date and
-   * venue lines (#416). The match screen fills it; the Accueil card leaves it
-   * out, since its whole surface is already a link to that screen.
+   * venue lines (#416, #426) — unless the date is unconfirmed, which is no
+   * date to put in someone's agenda.
    */
   onAddToCalendar?: () => void
 }) {
@@ -95,8 +101,14 @@ export function MatchHeader({
       <View style={s.metaBlock}>
         <View style={s.metaLines}>
           <View style={s.metaRow}>
-            <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-            <Text style={s.meta}>{dateLabel}{time ? ` · ${time}` : ''}</Text>
+            <Ionicons
+              name={confirmed ? 'calendar-outline' : 'alert-circle-outline'}
+              size={14}
+              color={confirmed ? colors.textSecondary : colors.warningText}
+            />
+            <Text style={[s.meta, !confirmed && s.metaUnconfirmed]}>
+              {!confirmed ? 'Date à confirmer · ' : ''}{dateLabel}{time ? ` · ${time}` : ''}
+            </Text>
           </View>
           {venueLabel ? (
             <View style={s.metaRow}>
@@ -105,7 +117,7 @@ export function MatchHeader({
             </View>
           ) : null}
         </View>
-        {onAddToCalendar ? (
+        {onAddToCalendar && confirmed ? (
           <TouchableOpacity
             style={s.calendarBtn}
             onPress={onAddToCalendar}
@@ -148,6 +160,7 @@ const s = StyleSheet.create({
   metaLines: { flex: 1, gap: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
+  metaUnconfirmed: { color: colors.warningText },
   // Bare, like the team header's WhatsApp icon — the app's icon buttons carry
   // no chrome, and hitSlop rather than padding gives them their target.
   calendarBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },

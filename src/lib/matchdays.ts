@@ -95,6 +95,25 @@ export function gameSchedule(
 }
 
 /**
+ * Whether a fixture sits on a date anyone has confirmed (#429).
+ *
+ * False for the FFTT's nominal week-end date at a club whose playing day we
+ * don't know — an opponent the import created. Every screen that prints that
+ * date should mark it, and none should offer to put it in a calendar.
+ */
+export function isSlotConfirmed(
+  game: Pick<Game, 'date' | 'time'> | undefined,
+  matchDay: Pick<MatchDay, 'date'>,
+  homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
+): boolean {
+  return gameSchedule(game, matchDay, homeTeam).date !== null
+}
+
+/** What to tell someone hovering an unconfirmed date, in both apps. */
+export const UNCONFIRMED_SLOT_HINT =
+  'Date et heure non confirmées : le jour de jeu du club recevant n’est pas connu.'
+
+/**
  * Just the time from `gameSchedule` — the one every screen needs and the only
  * part most of them show (#427).
  *

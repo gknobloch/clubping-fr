@@ -13,6 +13,7 @@ export function NextMatchCard({
   matchDayNumber,
   matchDayDate,
   time,
+  confirmed,
   divisionLabel,
   teamColor,
   teamNumber,
@@ -37,6 +38,8 @@ export function NextMatchCard({
   matchDayNumber: number
   matchDayDate: string
   time?: string
+  /** False while the receiving club's playing day is unknown (#429). */
+  confirmed: boolean
   divisionLabel?: string
   teamColor?: string
   teamNumber: number
@@ -81,6 +84,7 @@ export function NextMatchCard({
           opponentName={opponentName}
           matchDayDate={matchDayDate}
           time={time}
+          confirmed={confirmed}
           venueLabel={venueLabel}
           showCountdown
           onAddToCalendar={onAddToCalendar}

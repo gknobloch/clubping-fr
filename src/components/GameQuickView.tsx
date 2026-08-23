@@ -7,9 +7,10 @@ import { AvailabilityButtons, AvailabilityPills } from '@/components/Availabilit
 import { Pill } from '@/components/icons'
 import { ModalShell } from '@/components/ModalShell'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { MatchDate } from '@/components/MatchDate'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
-import { gameDate, gameSchedule, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameSchedule, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 
 // Read-only quick view of a single game from one team's perspective — match
@@ -109,7 +110,7 @@ export function GameQuickView({
             (#426) — the same pairing as the mobile match header. */}
         <div className="mt-1 flex items-center justify-between gap-2">
           <p className="text-sm text-slate-500">
-            {dateLabel}
+            <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
             {time ? ` · ${time}` : ''}
             {venue ? ` · ${venue}` : ''}
           </p>
