@@ -1,8 +1,7 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { createEventInCalendarAsync } from 'expo-calendar'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { canManageTeam, getTeamName } from '@/utils/roles'
@@ -14,6 +13,7 @@ import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
 import { buildMatchEvent } from '@/utils/calendar'
+import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
@@ -41,10 +41,6 @@ export default function MatchDetailScreen() {
   const [showCompose, setShowCompose] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
   const [quickViewPlayer, setQuickViewPlayer] = useState<Player | null>(null)
-  // A ref, not state: nothing renders from it, and a re-render between the two
-  // taps is exactly what it has to survive.
-  const openingCalendar = useRef(false)
-
   const game = games.find((g) => g.id === id)
   const team = teams.find((t) => t.id === teamId)
   const matchDay = game ? matchDays.find((md) => md.id === game.matchDayId) : undefined
@@ -133,21 +129,6 @@ export default function MatchDetailScreen() {
     venueLabel,
   })
 
-  // Hands the match to the OS's own "new event" screen, pre-filled (#416). The
-  // agenda to file it under, the reminder and any edit are left to that screen:
-  // it knows the phone's calendars, and on iOS 17+ it needs no access to them
-  // — we never read the player's calendar, we only propose an event.
-  async function addToCalendar() {
-    if (openingCalendar.current) return // the native dialog refuses a second one
-    openingCalendar.current = true
-    try {
-      await createEventInCalendarAsync(calendarEvent)
-    } catch {
-      Alert.alert('Calendrier', "Impossible d'ouvrir le calendrier du téléphone.")
-    } finally {
-      openingCalendar.current = false
-    }
-  }
 
   // Game history (this phase, across the club's teams) for the quick-view sheet.
   function historyFor(player: Player): PlayerHistoryEntry[] {
@@ -194,7 +175,7 @@ export default function MatchDetailScreen() {
             matchDayDate={thisGameDate}
             time={game.time}
             venueLabel={venueLabel}
-            onAddToCalendar={addToCalendar}
+            onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
           />
         </View>
 

@@ -18,6 +18,9 @@ import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { sortByName } from '@shared/lib/sortByName'
+import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
+import { openMatchInCalendar } from '@/utils/addToCalendar'
+import { getVenue, getVenueAddress } from '@shared/lib/venue'
 import { gameDate } from '@/utils/matchdays'
 import { getMondayOf, todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
@@ -53,15 +56,10 @@ export default function HomeScreen() {
   const divMap = useMemo(() => new Map(divisions.map((d) => [d.id, d])), [divisions])
   const groupMap = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
   // Venue for a game = the home team's game-location address ("Label, City"),
-  // falling back to the home club's city when there's no address.
-  const venueFor = (homeTeam: Team | undefined): string | undefined => {
-    if (!homeTeam) return undefined
-    const addr = clubs.flatMap((c) => c.addresses ?? []).find((a) => a.id === homeTeam.gameLocationId)
-    if (addr) return addr.label ? `${addr.label}, ${addr.city}` : addr.city
-    const homeClub = clubs.find((c) => c.id === homeTeam.clubId)
-    const cityAddr = homeClub?.addresses?.find((a) => a.isDefault) ?? homeClub?.addresses?.[0]
-    return cityAddr?.city
-  }
+  // falling back to the home club's city when there's no address. Shared with
+  // the web, which prints the same label and hands the calendar the whole
+  // address behind it (#426).
+  const venueFor = (homeTeam: Team | undefined): string | undefined => getVenue(homeTeam, clubs)
 
   const myTeamByPhase = useMemo(() => {
     if (!myPlayerId) return new Map<string, Team>()
@@ -149,6 +147,8 @@ export default function HomeScreen() {
   // ── Hero view-models (one per upcoming game, for the carousel) ──
   type Hero = {
     game: Game; md: MatchDay; isHome: boolean; oppId: string; venueLabel?: string
+    /** Pre-built so the card's calendar icon has nothing left to decide (#426). */
+    calendarEvent: MatchEvent
     availablePlayers: Player[]; availableCount: number; noResponseCount: number; selectedCount: number
   }
   const heroes: Hero[] = myActiveTeam
@@ -160,10 +160,22 @@ export default function HomeScreen() {
           const homeTeam = teams.find((t) => t.id === game.homeTeamId)
           const rosterAvail = roster.map((p) => getAvailability(p.id, game.id))
           const availablePlayers = roster.filter((_, i) => rosterAvail[i] === 'available')
+          const opponentName = getOpponentName(isHome ? game.awayTeamId : game.homeTeamId)
+          const teamName = getTeamName(myActiveTeam, clubs)
           return {
             game, md, isHome,
             oppId: isHome ? game.awayTeamId : game.homeTeamId,
             venueLabel: venueFor(homeTeam),
+            calendarEvent: buildMatchEvent({
+              date: gameDate(game, md),
+              time: game.time,
+              matchup: isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`,
+              matchDayNumber: md.number,
+              divisionLabel: getDivisionLabel(myActiveTeam),
+              playersPerGame: getPlayersPerGame(myActiveTeam),
+              address: getVenueAddress(homeTeam, clubs),
+              venueLabel: venueFor(homeTeam),
+            }),
             availablePlayers,
             availableCount: availablePlayers.length,
             noResponseCount: rosterAvail.filter((s) => s === undefined).length,
@@ -238,6 +250,7 @@ export default function HomeScreen() {
                         isCaptain={isCaptain}
                         onCompose={() => setComposeGameId(h.game.id)}
                         onOpenDetail={() => router.push({ pathname: '/match/[id]', params: { id: h.game.id, teamId: myActiveTeam.id } })}
+                        onAddToCalendar={() => openMatchInCalendar(h.calendarEvent)}
                       />
                     </View>
                   ))}

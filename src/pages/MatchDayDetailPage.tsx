@@ -8,6 +8,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
+import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { SelectionSheet } from '@/components/SelectionSheet'
 import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
@@ -162,10 +163,13 @@ export function MatchDayDetailPage() {
         <p className="mt-1 text-sm text-slate-600">
           {isHome ? 'Reçoit' : 'Se déplace à'} {getTeamLabel(opponentId)}
         </p>
-        <p className="mt-1 text-sm text-slate-500">
-          {dateLabel}
-          {game.time ? ` · ${game.time}` : ''}
-        </p>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="text-sm text-slate-500">
+            {dateLabel}
+            {game.time ? ` · ${game.time}` : ''}
+          </p>
+          <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+        </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
           <span

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { teamPhaseEntries } from '@/lib/teamPhases'
-import { gameDate } from '@/lib/matchdays'
+import { gameDate, gameSchedule } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { getTeamName } from '@/lib/teamName'
 import { Avatar } from '@/components/Avatar'
@@ -166,6 +166,11 @@ export function TeamDetailPage() {
                 const dateLabel = date
                   ? new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
                   : ''
+                // Always the HOME club's time (#287): the game's own when it
+                // has one, else the receiving team's default. Empty for a
+                // fixture at an opponent whose playing day we don't know —
+                // the viewing team's time says nothing about an away game.
+                const time = md ? gameSchedule(g, md, isHome ? team : opp).time : ''
                 return (
                   <li key={g.id} className="flex items-center justify-between gap-3 border-t border-slate-100 py-2.5">
                     <div className="flex h-7 min-w-0 items-center gap-2">
@@ -182,7 +187,17 @@ export function TeamDetailPage() {
                       </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-sm text-slate-500">{dateLabel}</span>
+                      {/* One line where the row has the width for it, two on a
+                          phone: "19 sept. 16h00" is 110px, and set beside a
+                          truncating opponent name it eats the name instead. */}
+                      <span className="text-right text-sm text-slate-500">
+                        {dateLabel}
+                        {time && (
+                          <span className="block text-xs text-slate-400 md:ml-1 md:inline md:text-sm md:text-slate-500">
+                            {time}
+                          </span>
+                        )}
+                      </span>
                       <button
                         type="button"
                         onClick={() => setQuickGame({ gameId: g.id, teamId: team.id })}

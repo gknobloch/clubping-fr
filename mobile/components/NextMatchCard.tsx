@@ -32,6 +32,7 @@ export function NextMatchCard({
   isCaptain,
   onCompose,
   onOpenDetail,
+  onAddToCalendar,
 }: {
   matchDayNumber: number
   matchDayDate: string
@@ -57,6 +58,8 @@ export function NextMatchCard({
   onCompose: () => void
   /** Open the match detail screen. */
   onOpenDetail: () => void
+  /** Hand the match to the phone's calendar (#426). */
+  onAddToCalendar: () => void
 }) {
   const stack = availablePlayers.slice(0, 3)
   const extra = Math.max(0, availableCount - stack.length)
@@ -80,6 +83,7 @@ export function NextMatchCard({
           time={time}
           venueLabel={venueLabel}
           showCountdown
+          onAddToCalendar={onAddToCalendar}
         />
       </TouchableOpacity>
 

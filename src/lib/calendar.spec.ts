@@ -1,4 +1,5 @@
-import type { Address } from '@shared/types'
+import { describe, it, expect } from 'vitest'
+import type { Address } from '../types'
 import { buildMatchEvent, parseGameTime } from './calendar'
 
 const address: Address = {
