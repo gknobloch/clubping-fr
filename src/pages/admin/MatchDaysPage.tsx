@@ -1511,6 +1511,12 @@ export function MatchDaysPage() {
                     <td className="px-3 py-1.5 text-slate-800">
                       <span className="block font-medium">
                         {player.firstName} {player.lastName}
+                        {/* Points read on the phase, not on a team (#384): these
+                            players are in none, and they have points all the same. */}
+                        {(() => {
+                          const pts = pointsFor(playerPhasePoints, selectedPhaseId, player.id)
+                          return pts ? <span className="ml-1 text-slate-500 font-normal">({pts})</span> : null
+                        })()}
                       </span>
                       {player.licenseNumber && (
                         <span className="block text-xs text-slate-400">{player.licenseNumber}</span>
