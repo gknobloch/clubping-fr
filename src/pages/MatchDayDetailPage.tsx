@@ -5,7 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
-import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
@@ -126,6 +126,8 @@ export function MatchDayDetailPage() {
     }))
 
   const date = gameDate(game, matchDay)
+  // The receiving club's time (#287), never this team's when it travels.
+  const time = gameTime(game, matchDay, teams.find((t) => t.id === game.homeTeamId))
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -166,7 +168,7 @@ export function MatchDayDetailPage() {
         <div className="mt-1 flex items-center justify-between gap-2">
           <p className="text-sm text-slate-500">
             {dateLabel}
-            {game.time ? ` · ${game.time}` : ''}
+            {time ? ` · ${time}` : ''}
           </p>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>

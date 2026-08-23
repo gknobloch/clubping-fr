@@ -16,7 +16,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { sortByName } from '@/lib/sortByName'
-import { gameDate, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, playersCommittedElsewhere } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
 export function HomePage() {
@@ -179,6 +179,8 @@ export function HomePage() {
                   const isHome = g.homeTeamId === myActiveTeam.id
                   const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
                   const homeTeam = teams.find((t) => t.id === g.homeTeamId)
+                  // The receiving club's time (#287), never this team's own.
+                  const time = gameTime(g, md, homeTeam)
                   const matchup = isHome
                     ? `${getTeamName(myActiveTeam, clubs)} – ${opp ? getTeamName(opp, clubs) : '?'}`
                     : `${opp ? getTeamName(opp, clubs) : '?'} – ${getTeamName(myActiveTeam, clubs)}`
@@ -219,7 +221,7 @@ export function HomePage() {
                             writing the match down are one gesture apart. */}
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <p className="text-sm text-slate-500">
-                            {dateLabel}{g.time ? ` · ${g.time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
+                            {dateLabel}{time ? ` · ${time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
                           </p>
                           <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>

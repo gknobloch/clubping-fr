@@ -11,7 +11,7 @@ import { sortByName } from '@shared/lib/sortByName'
 import { computeBrulage } from '@shared/lib/brulage'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { pointsFor } from '@shared/lib/phasePoints'
-import { gameDate } from '@/utils/matchdays'
+import { gameDate, gameTime } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
@@ -260,7 +260,7 @@ export default function PhaseGamesScreen() {
                   teamName={getTeamName(team, clubs)}
                   opponentName={oppName}
                   matchDayDate={gameDate(g, md)}
-                  time={g.time}
+                  time={gameTime(g, md, teams.find((t) => t.id === g.homeTeamId)) || undefined}
                 />
                 {gamePlayers.length > 0 && (
                   <View style={styles.gamePlayers}>

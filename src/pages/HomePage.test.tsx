@@ -107,3 +107,39 @@ describe('HomePage — next-match card status and shortcuts (#385)', () => {
     }
   })
 })
+
+describe('HomePage — the time on the next-match card (#427)', () => {
+  function renderWithGames(games: typeof mockGames) {
+    authState.user = { id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID }
+    return render(
+      <MemoryRouter>
+        <DataProvider initialData={{ ...testData, games }}>
+          <HomePage />
+        </DataProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it("uses the receiving club's default time when the fixture has none", () => {
+    // g1-8 is team-1 at home; team-1 plays Saturdays at 16h00. The card read
+    // game.time raw and stayed silent here, while the team's match list said
+    // 16h00 — two screens, one match, two answers.
+    const games = mockGames.map((g) => (g.id === 'g1-8' ? { ...g, time: undefined } : g))
+    renderWithGames(games)
+
+    expect(screen.getByText(/· 16h00/)).toBeInTheDocument()
+  })
+
+  it('says nothing when the receiving club has no known playing day', () => {
+    // Away at an opponent the import created: no default day, so no hour —
+    // the viewing team's own would be about a hall it is not playing in.
+    const games = mockGames.map((g) =>
+      g.id === 'g1-8'
+        ? { ...g, time: undefined, homeTeamId: 'opp-etival-1', awayTeamId: 'team-1' }
+        : g,
+    )
+    renderWithGames(games)
+
+    expect(screen.queryByText(/· \d+h\d+/)).not.toBeInTheDocument()
+  })
+})

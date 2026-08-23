@@ -8,6 +8,7 @@ import { computeBrulage, isPlayerEligibleForTeam } from '@/lib/brulage'
 import {
   gameDate,
   gameSchedule,
+  gameTime,
   getPhaseMatchDays,
   activeMatchDayNumber,
   formatMatchDayRange,
@@ -460,7 +461,7 @@ export function MatchDaysPage() {
         isMine: !!user?.id && roster.includes(user.id),
         isHome,
         dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),
-        time: game.time ?? undefined,
+        time: gameTime(game, matchDay, teams.find((t) => t.id === game.homeTeamId)) || undefined,
         availableCount: roster.filter((pid) => getAvailability(game.id, pid) === 'available').length,
         selectedCount: getGameSelectionPlayerIds(game.id, team.id).length,
         playersPerGame: divisions.find((d) => d.id === team.divisionId)?.playersPerGame ?? 4,
