@@ -1112,7 +1112,7 @@ export function MatchDaysPage() {
                                             it opens the slot editor — neither leads to a calendar.
                                             Only on a confirmed slot: the branch below says the date
                                             is not known yet, and an agenda is no place for a guess. */}
-                                        <AddToCalendarButton game={game} matchDay={md} team={team} />
+                                        <AddToCalendarButton game={game} matchDay={md} team={team} compact />
                                       </span>
                                     ) : sched.week ? (
                                       <span

@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { CalendarPlusIcon } from '@/components/CalendarPlusIcon'
 import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
 import { todayIso } from '@/utils/weeks'
@@ -112,7 +113,7 @@ export function MatchHeader({
             accessibilityRole="button"
             accessibilityLabel="Ajouter au calendrier"
           >
-            <Ionicons name="calendar-number-outline" size={22} color={colors.textSecondary} />
+            <CalendarPlusIcon />
           </TouchableOpacity>
         ) : null}
       </View>

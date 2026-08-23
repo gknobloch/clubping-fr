@@ -24,12 +24,15 @@ export function AddToCalendarButton({
   game,
   matchDay,
   team,
+  compact = false,
   className = '',
 }: {
   game: Game
   matchDay: MatchDay
   /** The team whose side of the fixture this is — it names the event's matchup. */
   team: Team
+  /** For the Journées matrix, whose cells have no room for the full-size icon. */
+  compact?: boolean
   className?: string
 }) {
   const { teams, clubs, divisions } = useAppData()
@@ -74,9 +77,10 @@ export function AddToCalendarButton({
       onClick={addToCalendar}
       title="Ajouter à mon agenda"
       aria-label="Ajouter à mon agenda"
-      className={`shrink-0 text-slate-300 transition-colors hover:text-accent-600 ${ICON_TARGET_CLASS} ${className}`}
+      // The same grey as the date it sits next to: lighter read as disabled.
+      className={`shrink-0 text-slate-500 transition-colors hover:text-accent-600 ${ICON_TARGET_CLASS} ${className}`}
     >
-      <CalendarPlusIcon />
+      <CalendarPlusIcon className={compact ? 'h-4 w-4' : 'h-6 w-6 md:h-5 md:w-5'} />
     </button>
   )
 }
