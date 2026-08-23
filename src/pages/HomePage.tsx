@@ -7,6 +7,7 @@ import { IdentityCard } from '@/components/IdentityCard'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamBadge } from '@/components/TeamBadge'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { MatchDate } from '@/components/MatchDate'
 import { GameQuickView } from '@/components/GameQuickView'
 import { PlayerPhaseHistory } from '@/components/PlayerPhaseHistory'
 import { SelectionSheet } from '@/components/SelectionSheet'
@@ -16,7 +17,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { sortByName } from '@/lib/sortByName'
-import { gameDate, gameTime, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
 export function HomePage() {
@@ -221,7 +222,8 @@ export function HomePage() {
                             writing the match down are one gesture apart. */}
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <p className="text-sm text-slate-500">
-                            {dateLabel}{time ? ` · ${time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
+                            <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
+                            {time ? ` · ${time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
                           </p>
                           <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>

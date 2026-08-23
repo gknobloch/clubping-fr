@@ -2,7 +2,7 @@
 export { playersCommittedElsewhere, gameDate } from '@shared/lib/matchdays'
 // The receiving club's time, and none when its playing day is unknown (#287,
 // #427) — the same rule the web applies, from the same code.
-export { gameSchedule, gameTime } from '@shared/lib/matchdays'
+export { gameSchedule, gameTime, isSlotConfirmed } from '@shared/lib/matchdays'
 // Journée grouping lives in @shared/lib/matchdays so web and native agree on
 // what "Journée N" means (#306).
 export { getPhaseMatchDays, activeMatchDayNumber } from '@shared/lib/matchdays'

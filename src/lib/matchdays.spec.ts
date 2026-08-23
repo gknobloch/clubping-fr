@@ -6,6 +6,7 @@ import {
   gameSchedule,
   gameTime,
   getPhaseMatchDays,
+  isSlotConfirmed,
   isoWeekRange,
   playersCommittedElsewhere,
 } from './matchdays'
@@ -150,6 +151,27 @@ describe('gameSchedule', () => {
   it('uses the HOME team’s default time, not the viewer’s', () => {
     expect(gameSchedule({ date: '2026-11-06', time: undefined }, md, { defaultDay: 'Vendredi', defaultTime: '20h00' }).time)
       .toBe('20h00')
+  })
+})
+
+describe('isSlotConfirmed', () => {
+  const md = { date: '2026-11-08' }
+  const known = { defaultDay: 'Jeudi', defaultTime: '19h30' }
+  const unknown = { defaultDay: '', defaultTime: '' }
+
+  it('is true once the receiving club has a playing day', () => {
+    expect(isSlotConfirmed({ date: '2026-11-05', time: undefined }, md, known)).toBe(true)
+  })
+
+  it('is true for a fixture that carries its own time, whoever receives', () => {
+    expect(isSlotConfirmed({ date: '2026-11-07', time: '14h00' }, md, unknown)).toBe(true)
+  })
+
+  it('is false at a club the import created', () => {
+    // The FFTT's nominal week-end date, which no one has confirmed: every
+    // screen marks it, and none offers it to a calendar (#429).
+    expect(isSlotConfirmed({ date: '2026-11-08', time: undefined }, md, unknown)).toBe(false)
+    expect(isSlotConfirmed({ date: '2026-11-08', time: undefined }, md, undefined)).toBe(false)
   })
 })
 

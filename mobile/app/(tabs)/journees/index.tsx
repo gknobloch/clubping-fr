@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
-import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate, gameTime } from '@/utils/matchdays'
+import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import type { Game, Team } from '@shared/types'
@@ -17,13 +17,14 @@ import { fonts } from '@/constants/typography'
 // ---------------------------------------------------------------------------
 function MatchCard({
   team, teamName, label, mine, divisionLabel, playersPerGame,
-  matchDayNumber, matchDayDate, time, opponentName, isHome, selectedCount, availableCount, onPress,
+  matchDayNumber, matchDayDate, time, confirmed, opponentName, isHome, selectedCount, availableCount, onPress,
 }: {
   team: Team; teamName: string; label?: string; mine?: boolean
   divisionLabel?: string; playersPerGame: number
   matchDayNumber: number; matchDayDate: string
   /** The receiving club's time — absent when its playing day is unknown (#287). */
   time?: string
+  confirmed: boolean
   opponentName: string; isHome: boolean
   selectedCount: number; availableCount: number | null; onPress: () => void
 }) {
@@ -41,6 +42,7 @@ function MatchCard({
           opponentName={opponentName}
           matchDayDate={matchDayDate}
           time={time}
+          confirmed={confirmed}
           label={label}
           labelMine={!!mine && label === 'Mon équipe'}
         />
@@ -169,6 +171,7 @@ export default function JourneesScreen() {
         matchDayNumber={md.number}
         matchDayDate={gameDate(game, md)}
         time={gameTime(game, md, teams.find((t) => t.id === game.homeTeamId)) || undefined}
+        confirmed={isSlotConfirmed(game, md, teams.find((t) => t.id === game.homeTeamId))}
         opponentName={opp ? getTeamName(opp, clubs) : '?'}
         isHome={isHome}
         selectedCount={selectedCount}

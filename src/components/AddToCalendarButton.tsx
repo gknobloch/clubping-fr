@@ -3,7 +3,7 @@ import { ICON_TARGET_CLASS } from '@/components/Button'
 import { CalendarPlusIcon } from '@/components/icons'
 import { buildMatchEvent } from '@/lib/calendar'
 import { downloadIcs, icsFileName, toIcs } from '@/lib/ics'
-import { gameDate, gameSchedule } from '@/lib/matchdays'
+import { gameDate, gameSchedule, isSlotConfirmed } from '@/lib/matchdays'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue, getVenueAddress } from '@/lib/venue'
 import type { Game, MatchDay, Team } from '@/types'
@@ -42,6 +42,10 @@ export function AddToCalendarButton({
   const opponent = teams.find((t) => t.id === (isHome ? game.awayTeamId : game.homeTeamId))
   const opponentName = opponent ? getTeamName(opponent, clubs) : '?'
   const division = divisions.find((d) => d.id === team.divisionId)
+  // Nothing to offer while the date is the FFTT's guess (#429): the screens
+  // that print it now mark it, and an agenda is no place for a guess. One
+  // rule, so the Journées matrix and the team's match list agree.
+  const confirmed = isSlotConfirmed(game, matchDay, homeTeam)
 
   function addToCalendar(e: React.MouseEvent) {
     // The matrix cell this can sit in is itself a button that opens the slot
@@ -70,6 +74,8 @@ export function AddToCalendarButton({
       toIcs(event, `${game.id}@clubping.fr`),
     )
   }
+
+  if (!confirmed) return null
 
   return (
     <button
