@@ -94,6 +94,24 @@ export function gameSchedule(
   return { date: null, time: '', week: isoWeekRange(date) }
 }
 
+/**
+ * Just the time from `gameSchedule` — the one every screen needs and the only
+ * part most of them show (#427).
+ *
+ * It is always the receiving club's: the game's own when it has one, else the
+ * home team's default, and an empty string when that club's playing day is
+ * unknown. Reach for this rather than `game.time`, which is silent about a
+ * home fixture the club never gave an explicit hour, and which used to leave
+ * two screens disagreeing about the same match.
+ */
+export function gameTime(
+  game: Pick<Game, 'date' | 'time'> | undefined,
+  matchDay: Pick<MatchDay, 'date'>,
+  homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
+): string {
+  return gameSchedule(game, matchDay, homeTeam).time
+}
+
 // ---------------------------------------------------------------------------
 // Journées across the club
 //

@@ -153,6 +153,34 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     })
   })
 
+  it("takes the receiving club's default time when the fixture has none", async () => {
+    // The screen read game.time raw (#427): a home fixture the club never gave
+    // an explicit hour showed none, while the web said 19h30 for the same match.
+    mockData.games = [{ ...game, time: undefined }]
+
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+
+    await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
+    expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({
+      startDate: new Date(2025, 8, 17, 19, 30),
+      allDay: false,
+    })
+  })
+
+  it('books the whole day away at a club whose playing day is unknown', async () => {
+    // An opponent created by the import: no default day, so no hour — and the
+    // viewing team's 19h30 says nothing about a hall it travels to.
+    mockData.teams = [team, { ...opponent, defaultDay: '', defaultTime: '' }]
+    mockData.games = [{ ...game, time: undefined, homeTeamId: 't2', awayTeamId: 't1' }]
+
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+
+    await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
+    expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({ allDay: true })
+  })
+
   it('says so rather than failing silently when the calendar cannot be opened', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
     mockCreateEvent.mockRejectedValue(new Error('no calendar'))

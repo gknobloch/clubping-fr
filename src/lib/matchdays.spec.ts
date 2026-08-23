@@ -4,6 +4,7 @@ import {
   deriveMatchDayDate,
   gameDate,
   gameSchedule,
+  gameTime,
   getPhaseMatchDays,
   isoWeekRange,
   playersCommittedElsewhere,
@@ -149,6 +150,27 @@ describe('gameSchedule', () => {
   it('uses the HOME team’s default time, not the viewer’s', () => {
     expect(gameSchedule({ date: '2026-11-06', time: undefined }, md, { defaultDay: 'Vendredi', defaultTime: '20h00' }).time)
       .toBe('20h00')
+  })
+})
+
+describe('gameTime', () => {
+  const md = { date: '2026-11-08' }
+  const known = { defaultDay: 'Jeudi', defaultTime: '19h30' }
+  const unknown = { defaultDay: '', defaultTime: '' }
+
+  it('is the game’s own time when it has one', () => {
+    expect(gameTime({ date: '2026-11-07', time: '14h00' }, md, known)).toBe('14h00')
+  })
+
+  it('falls back to the receiving club’s default', () => {
+    expect(gameTime({ date: '2026-11-05', time: undefined }, md, known)).toBe('19h30')
+  })
+
+  it('is empty when the receiving club’s playing day is unknown', () => {
+    // Away at a club the import created: no screen in either app may print an
+    // hour here, and #427 is what stops them disagreeing about it.
+    expect(gameTime({ date: '2026-11-08', time: undefined }, md, unknown)).toBe('')
+    expect(gameTime({ date: '2026-11-08', time: undefined }, md, undefined)).toBe('')
   })
 })
 

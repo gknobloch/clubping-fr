@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
-import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate } from '@/utils/matchdays'
+import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate, gameTime } from '@/utils/matchdays'
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import type { Game, Team } from '@shared/types'
@@ -16,12 +16,14 @@ import { fonts } from '@/constants/typography'
 // Match card — consistent with the Accueil next-match header
 // ---------------------------------------------------------------------------
 function MatchCard({
-  team, game, teamName, label, mine, divisionLabel, playersPerGame,
-  matchDayNumber, matchDayDate, opponentName, isHome, selectedCount, availableCount, onPress,
+  team, teamName, label, mine, divisionLabel, playersPerGame,
+  matchDayNumber, matchDayDate, time, opponentName, isHome, selectedCount, availableCount, onPress,
 }: {
-  team: Team; game: Game; teamName: string; label?: string; mine?: boolean
+  team: Team; teamName: string; label?: string; mine?: boolean
   divisionLabel?: string; playersPerGame: number
   matchDayNumber: number; matchDayDate: string
+  /** The receiving club's time — absent when its playing day is unknown (#287). */
+  time?: string
   opponentName: string; isHome: boolean
   selectedCount: number; availableCount: number | null; onPress: () => void
 }) {
@@ -38,7 +40,7 @@ function MatchCard({
           teamName={teamName}
           opponentName={opponentName}
           matchDayDate={matchDayDate}
-          time={game.time}
+          time={time}
           label={label}
           labelMine={!!mine && label === 'Mon équipe'}
         />
@@ -159,7 +161,6 @@ export default function JourneesScreen() {
       <MatchCard
         key={game.id}
         team={team}
-        game={game}
         teamName={getTeamName(team, clubs)}
         label={mineLabel.get(team.id)}
         mine={isMine}
@@ -167,6 +168,7 @@ export default function JourneesScreen() {
         playersPerGame={perGame(team)}
         matchDayNumber={md.number}
         matchDayDate={gameDate(game, md)}
+        time={gameTime(game, md, teams.find((t) => t.id === game.homeTeamId)) || undefined}
         opponentName={opp ? getTeamName(opp, clubs) : '?'}
         isHome={isHome}
         selectedCount={selectedCount}

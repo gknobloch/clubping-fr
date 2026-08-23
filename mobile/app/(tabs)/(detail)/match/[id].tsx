@@ -14,7 +14,7 @@ import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
 import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
-import { gameDate, playersCommittedElsewhere } from '@/utils/matchdays'
+import { gameDate, gameTime, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
 import { sortByName } from '@shared/lib/sortByName'
 import { pointsFor } from '@shared/lib/phasePoints'
@@ -111,6 +111,9 @@ export default function MatchDetailScreen() {
 
   const canManage = !!(user && canManageTeam(user, team))
   const thisGameDate = gameDate(game, matchDay)
+  // The receiving club's time (#287): the game's own, else the home team's
+  // default, and none at all when that club's playing day is unknown.
+  const thisGameTime = gameTime(game, matchDay, homeTeam)
   const gameDatePast = thisGameDate < today
   const getAvail = (pid: string) =>
     gameAvailabilities.find((a) => a.playerId === pid && a.gameId === game.id)?.status
@@ -120,7 +123,7 @@ export default function MatchDetailScreen() {
   // nested function.
   const calendarEvent = buildMatchEvent({
     date: thisGameDate,
-    time: game.time,
+    time: thisGameTime,
     matchup,
     matchDayNumber: matchDay.number,
     divisionLabel: div?.displayName,
@@ -173,7 +176,7 @@ export default function MatchDetailScreen() {
             teamName={teamName}
             opponentName={opponentName}
             matchDayDate={thisGameDate}
-            time={game.time}
+            time={thisGameTime || undefined}
             venueLabel={venueLabel}
             onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
           />
