@@ -8,7 +8,8 @@ import { colors } from '@/constants/colors'
  * (src/components/icons.tsx) so the two apps offer the same glyph for the same
  * gesture. Ionicons, which the rest of the app draws from, has no plus variant
  * — its `calendar-number-outline` shows a "31", which says *a date*, not *add
- * this one to your agenda*.
+ * this one to your agenda*. Stroke 1.5, like the web's, so the icon carries the
+ * same visual weight as the grey line it sits beside rather than reading darker.
  */
 export function CalendarPlusIcon({
   size = 22,
@@ -26,21 +27,21 @@ export function CalendarPlusIcon({
         height={16}
         rx={2}
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <Path
         d="M3 10h18M8 3v4M16 3v4"
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <Path
         d="M12 13v5M9.5 15.5h5"
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />

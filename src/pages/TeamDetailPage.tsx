@@ -187,9 +187,16 @@ export function TeamDetailPage() {
                       </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {/* One line where the row has the width for it, two on a
+                          phone: "19 sept. 16h00" is 110px, and set beside a
+                          truncating opponent name it eats the name instead. */}
                       <span className="text-right text-sm text-slate-500">
                         {dateLabel}
-                        {time && <span className="block text-xs text-slate-400">{time}</span>}
+                        {time && (
+                          <span className="block text-xs text-slate-400 md:ml-1 md:inline md:text-sm md:text-slate-500">
+                            {time}
+                          </span>
+                        )}
                       </span>
                       <button
                         type="button"
