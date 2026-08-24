@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
+import { orderPhases, defaultPhase } from '@shared/lib/phases'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
 import { Switcher } from '@/components/Switcher'
@@ -20,13 +21,10 @@ export default function EquipesScreen() {
       : teams.filter((t) => t.clubId === user?.clubId)
 
   // Phases ordered for the < > switcher (chronological by name); default active.
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = phases.find((p) => p.status === 'active')
-  const [phaseId, setPhaseId] = useState<string | undefined>(activePhase?.id ?? orderedPhases[0]?.id)
-  const phase = phases.find((p) => p.id === phaseId) ?? activePhase
+  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
+  const fallbackPhase = useMemo(() => defaultPhase(phases), [phases])
+  const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
+  const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   function selectPhase(next: number) {

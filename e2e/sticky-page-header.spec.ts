@@ -27,7 +27,13 @@ test.describe('En-tête de page — mobile (#311)', () => {
     await loginAs(page, 'club.admin')
   })
 
-  test('sur Journées, le contenu commence dans le premier tiers de l’écran', async ({ page }) => {
+  // Was "le premier tiers" (270px). Journées carries two navigation controls
+  // on a phone since #432 — the phase and the journée, stacked, each a 44px
+  // touch target — where it used to carry a select and a paginator side by
+  // side. Two of them cannot fit one row, so the budget moved: 340px, still
+  // well under half the screen, and the number below is what the layout
+  // actually produces (320px) with room for a font or a border to shift.
+  test('sur Journées, le contenu commence dans la première moitié de l’écran', async ({ page }) => {
     await page.goto('/journees')
     await page.locator('main h1').waitFor()
     // The first match card — the actual content on a phone since #306 replaced
@@ -36,9 +42,8 @@ test.describe('En-tête de page — mobile (#311)', () => {
     await firstCard.waitFor()
 
     const top = await firstCard.evaluate((el) => el.getBoundingClientRect().top)
-    const third = 812 / 3
     expect(top).toBeGreaterThan(0)
-    expect(top).toBeLessThanOrEqual(third)
+    expect(top).toBeLessThanOrEqual(340)
   })
 
   // On /equipes rather than /journees: since #306 the mobile Journées view is a
@@ -71,17 +76,24 @@ test.describe('En-tête de page — mobile (#311)', () => {
     expect(toolbarTop).toBeCloseTo(APP_BAR, 0)
   })
 
-  test('la barre de contrôles tient sur une seule rangée', async ({ page }) => {
-    await page.goto('/journees')
-    await page.locator('[data-testid="page-toolbar"]').waitFor()
+  // The rule this pins is "the band stays small and predictable", not "one
+  // row": #311 was written against a header that *wrapped* to three rows
+  // without anyone deciding it should. Journées now declares two — phase over
+  // journée (#432) — and Équipes, Groupes and the rest still declare one, at
+  // 90px. Whatever a screen declares, it may not drift past it.
+  test('la barre de contrôles garde une hauteur bornée', async ({ page }) => {
+    const heightOf = async (path: string) => {
+      await page.goto(path)
+      await page.locator('[data-testid="page-toolbar"]').waitFor()
+      return page
+        .locator('[data-testid="page-toolbar"]')
+        .evaluate((el) => el.getBoundingClientRect().height)
+    }
 
-    const height = await page
-      .locator('[data-testid="page-toolbar"]')
-      .evaluate((el) => el.getBoundingClientRect().height)
-
-    // One row of 44px touch targets plus the card's padding. Two rows would be
-    // ~110px, which is what wrapping used to produce on a phone.
-    expect(height).toBeLessThan(90)
+    // One row of 44px touch targets plus the band's padding.
+    expect(await heightOf('/equipes')).toBeLessThan(90)
+    // Two, plus the journée's second line of text. Three would be ~180px.
+    expect(await heightOf('/journees')).toBeLessThan(140)
   })
 
   test('les écrans sans contrôles n’ont pas de barre collante', async ({ page }) => {

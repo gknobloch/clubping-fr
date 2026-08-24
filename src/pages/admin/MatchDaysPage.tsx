@@ -16,12 +16,14 @@ import {
 } from '@/lib/matchdays'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDayCards, type MatchDayCardEntry } from '@/components/MatchDayCards'
+import { Switcher } from '@/components/Switcher'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
+import { orderPhases, defaultPhase } from '@/lib/phases'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
-import { ImportIcon } from '@/components/icons'
+import { ImportIcon, PhaseSwitchButton } from '@/components/icons'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
   AVAILABILITY_COLORS,
@@ -147,9 +149,8 @@ export function MatchDaysPage() {
   const hasClubScope = (user?.role === 'club_admin' || user?.role === 'player') && !!user?.clubId
   const scopedClub = hasClubScope ? clubs.find((c) => c.id === user?.clubId) : undefined
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
-  const [selectedPhaseId, setSelectedPhaseId] = useState<string>(
-    () => phases.find((p) => p.status === 'active')?.id ?? phases[0]?.id ?? ''
-  )
+  // Opens on the active phase; a deep link to a fixture overrides it below.
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string>(() => defaultPhase(phases)?.id ?? '')
   const [importGamesOpen, setImportGamesOpen] = useState(false)
 
   // Deep link into one fixture (#347). Read once: the params stay in the URL so
@@ -574,8 +575,12 @@ export function MatchDaysPage() {
         .flatMap((id) => teams.find((t) => t.id === id) ?? [])
     : []
 
-  const selectedPhaseIndex = phases.findIndex((p) => p.id === selectedPhaseId)
-  const selectedPhase = phases[selectedPhaseIndex]
+  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
+  const selectedPhaseIndex = orderedPhases.findIndex((p) => p.id === selectedPhaseId)
+  const selectedPhase = orderedPhases[selectedPhaseIndex]
+  const previousPhase = selectedPhaseIndex > 0 ? orderedPhases[selectedPhaseIndex - 1] : undefined
+  const nextPhase =
+    selectedPhaseIndex >= 0 ? orderedPhases[selectedPhaseIndex + 1] : undefined
 
   const handlePhaseChange = (phaseId: string) => {
     autoPositionedPhaseRef.current = null // allow auto-positioning for new phase
@@ -741,89 +746,60 @@ export function MatchDaysPage() {
         }
         controls={
           <>
-            {/* Phase switcher. Below md: a select — two 44px chevrons plus the
-                full "2025/2026 Phase 1" label needs 230px, and with the journée
-                switcher beside it the row overflowed a 375px screen. A select
-                carries the same label in 60px less, and a phase is something
-                you change once a season. */}
-            <label className="min-w-0 flex-1 md:hidden">
-              <span className="sr-only">Phase</span>
-              <select
-                value={selectedPhaseId ?? ''}
-                onChange={(e) => handlePhaseChange(e.target.value)}
-                className="h-11 w-full rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700"
-              >
-                {phases.map((ph) => (
-                  <option key={ph.id} value={ph.id}>
-                    {ph.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="hidden h-9 items-center gap-2 rounded border border-slate-200 bg-white px-2 md:flex">
-              <button
-                type="button"
-                onClick={() => handlePhaseChange(phases[selectedPhaseIndex - 1].id)}
-                disabled={selectedPhaseIndex <= 0}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-                aria-label="Phase précédente"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="whitespace-nowrap text-xs font-medium text-slate-700 tabular-nums">
-                {selectedPhase?.displayName ?? '—'}
-              </span>
-              <button
-                type="button"
-                onClick={() => handlePhaseChange(phases[selectedPhaseIndex + 1].id)}
-                disabled={selectedPhaseIndex >= phases.length - 1}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-                aria-label="Phase suivante"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+            {/* Phase and journée, below md: — two stacked switchers, the form
+                the mobile app draws (#432). The phase was a native `<select>`
+                here, the only one of its kind in a toolbar: side by side the
+                two controls did not fit 375px, so one of them had to shrink.
+                Stacked, neither has to, and the journée regains the week it
+                covers. The band is two rows tall on a phone; PageHeader
+                measures it, so the sticky offset follows. */}
+            <div className="flex w-full flex-col gap-2 md:hidden">
+              <Switcher
+                title={selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
+                onPrev={previousPhase ? () => handlePhaseChange(previousPhase.id) : undefined}
+                onNext={nextPhase ? () => handlePhaseChange(nextPhase.id) : undefined}
+              />
+              {mobileMatchDayGroup && (
+                <Switcher
+                  large
+                  title={`Journée ${mobileMatchDayGroup.number}`}
+                  subtitle={formatMatchDayRange(
+                    mobileMatchDayGroup.startDate,
+                    mobileMatchDayGroup.endDate,
+                  )}
+                  prevLabel="Journée précédente"
+                  nextLabel="Journée suivante"
+                  onPrev={
+                    mobileMatchDayIndex > 0
+                      ? () => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex - 1].number)
+                      : undefined
+                  }
+                  onNext={
+                    mobileMatchDayIndex >= 0 && mobileMatchDayIndex < matchDayGroups.length - 1
+                      ? () => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex + 1].number)
+                      : undefined
+                  }
+                />
+              )}
             </div>
 
-            {/* Journée switcher — the single navigation control below md:,
-                where the matrix (and its two paginators) is replaced by the
-                card list (#306). */}
-            {mobileMatchDayGroup && (
-              <div className="flex h-11 shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-1 md:hidden">
-                <button
-                  type="button"
-                  onClick={() => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex - 1].number)}
-                  disabled={mobileMatchDayIndex <= 0}
-                  className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-                  aria-label="Journée précédente"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <span className="whitespace-nowrap text-xs font-medium text-slate-700 tabular-nums">
-                  {/* "J8" matches the matrix's own column headers, and keeps the
-                      row inside 375px next to the phase select. */}
-                  <span className="sm:hidden">J{mobileMatchDayGroup.number}</span>
-                  <span className="hidden sm:inline">Journée {mobileMatchDayGroup.number}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setMobileMatchDayNumber(matchDayGroups[mobileMatchDayIndex + 1].number)}
-                  disabled={mobileMatchDayIndex >= matchDayGroups.length - 1}
-                  className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-                  aria-label="Journée suivante"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            )}
+            {/* Phase switcher, md: and up — the same pill as Équipes, down to
+                the wording: one control, one label, on both screens. */}
+            <div className="hidden h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:flex">
+              <PhaseSwitchButton
+                dir="prev"
+                disabled={!previousPhase}
+                onClick={() => previousPhase && handlePhaseChange(previousPhase.id)}
+              />
+              <span className="whitespace-nowrap font-display text-sm font-semibold text-slate-800">
+                {selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
+              </span>
+              <PhaseSwitchButton
+                dir="next"
+                disabled={!nextPhase}
+                onClick={() => nextPhase && handlePhaseChange(nextPhase.id)}
+              />
+            </div>
 
             {/* Team shortcuts — matrix-only: they jump between the per-team
                 tables, which do not exist below md:. */}
@@ -1511,6 +1487,12 @@ export function MatchDaysPage() {
                     <td className="px-3 py-1.5 text-slate-800">
                       <span className="block font-medium">
                         {player.firstName} {player.lastName}
+                        {/* Points read on the phase, not on a team (#384): these
+                            players are in none, and they have points all the same. */}
+                        {(() => {
+                          const pts = pointsFor(playerPhasePoints, selectedPhaseId, player.id)
+                          return pts ? <span className="ml-1 text-slate-500 font-normal">({pts})</span> : null
+                        })()}
                       </span>
                       {player.licenseNumber && (
                         <span className="block text-xs text-slate-400">{player.licenseNumber}</span>

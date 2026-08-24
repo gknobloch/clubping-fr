@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { orderPhases, defaultPhase } from '@shared/lib/phases'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
@@ -79,13 +80,10 @@ export default function JourneesScreen() {
   const myPlayerId = user?.isPlayer ? user.id : undefined
 
   // Phases ordered for the < > switcher (chronological by name); default active.
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = phases.find((p) => p.status === 'active')
-  const [phaseId, setPhaseId] = useState<string | undefined>(activePhase?.id ?? orderedPhases[0]?.id)
-  const phase = phases.find((p) => p.id === phaseId) ?? activePhase
+  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
+  const fallbackPhase = useMemo(() => defaultPhase(phases), [phases])
+  const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
+  const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   const matchDayGroups = useMemo(
