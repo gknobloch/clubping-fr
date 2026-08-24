@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { BrandMark } from '@/components/BrandMark'
+import { CONTACT_EMAIL, CONTROLLER } from './legalContact'
 
 /**
  * Public privacy policy (#356). Google Play and the App Store both require a
@@ -20,11 +21,6 @@ import { BrandMark } from '@/components/BrandMark'
  * so no member can use them — describing them would overstate what is collected.
  * Re-add a section here as part of whatever change turns them back on.
  */
-
-const CONTACT_EMAIL = 'clubping@leskno.fr'
-// TODO(#356): confirm before publishing to the stores. The legal entity acting
-// as data controller is not derivable from the codebase.
-const CONTROLLER = 'Club Ping'
 
 /** Last substantive review of this text. Shown to the reader; update when the content changes. */
 const LAST_UPDATED = '17 août 2026'
@@ -176,7 +172,11 @@ export function PrivacyPage() {
                 {CONTACT_EMAIL}
               </a>
               . La suppression de votre compte et des données associées peut être demandée par la
-              même voie.
+              même voie :{' '}
+              <Link className="text-accent-600 underline" to="/suppression-compte">
+                la marche à suivre est détaillée ici
+              </Link>
+              .
             </p>
             <p>
               Si vous estimez que vos droits ne sont pas respectés, vous pouvez introduire une
