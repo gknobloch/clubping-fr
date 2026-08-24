@@ -9,6 +9,8 @@
 
 export const CONTACT_EMAIL = 'clubping@leskno.fr'
 
-// TODO(#356): confirm before publishing to the stores. The legal entity acting
-// as data controller is not derivable from the codebase.
+// Confirmed before the Play Store listing went up (#434): Club Ping is the name
+// that appears as data controller, and clubping@leskno.fr identifies it. Left as
+// a constant because the two legal pages must not drift into naming it
+// differently, not because it is expected to change.
 export const CONTROLLER = 'Club Ping'
