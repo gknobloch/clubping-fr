@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
+  Switch,
   StyleSheet,
 } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -13,6 +14,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
 import { sortByName } from '@shared/lib/sortByName'
 import { hasVisited, lastSeenSentence } from '@shared/lib/lastSeen'
+import {
+  ACTIVE_ONLY_LABEL,
+  canSeeArchivedPlayers,
+  visiblePlayers,
+} from '@shared/lib/playerVisibility'
 import { Avatar } from '@/components/Avatar'
 import { fonts } from '@/constants/typography'
 
@@ -26,8 +32,14 @@ export default function JoueursScreen() {
   const { user } = useAuth()
   const router = useRouter()
   const [query, setQuery] = useState('')
+  // The roster is the active players, for everybody, every time the screen
+  // opens (#438). Only the people who administer the club are given the switch
+  // that widens it — an archived member has left, and looking someone up is
+  // what this tab is for.
+  const [activeOnly, setActiveOnly] = useState(true)
+  const canSeeArchived = canSeeArchivedPlayers(user?.role)
 
-  const visiblePlayers =
+  const clubPlayers =
     user?.role === 'general_admin'
       ? players
       : players.filter((p) => p.clubId === user?.clubId)
@@ -38,7 +50,7 @@ export default function JoueursScreen() {
   const showLastSeen = user?.role === 'general_admin' || user?.role === 'club_admin'
 
   const filtered = sortByName(
-    visiblePlayers.filter((p) => {
+    visiblePlayers(clubPlayers, { role: user?.role, activeOnly }).filter((p) => {
       const q = query.toLowerCase()
       return (
         p.firstName.toLowerCase().includes(q) ||
@@ -59,6 +71,17 @@ export default function JoueursScreen() {
           onChangeText={setQuery}
           clearButtonMode="while-editing"
         />
+        {canSeeArchived && (
+          <View style={styles.filterRow}>
+            <Switch
+              value={activeOnly}
+              onValueChange={setActiveOnly}
+              trackColor={{ true: colors.accent, false: colors.border }}
+              accessibilityLabel={ACTIVE_ONLY_LABEL}
+            />
+            <Text style={styles.filterLabel}>{ACTIVE_ONLY_LABEL}</Text>
+          </View>
+        )}
       </View>
       <FlatList
         data={filtered}
@@ -90,11 +113,14 @@ export default function JoueursScreen() {
                   )}
                 </Text>
               </View>
-              <View style={[styles.statusBadge, p.status !== 'active' && styles.statusBadgeMuted]}>
-                <Text style={[styles.statusText, p.status !== 'active' && styles.statusTextMuted]}>
-                  {STATUS_LABELS[p.status] ?? p.status}
-                </Text>
-              </View>
+              {/* Only when it says something. With the list on active-only by
+                  default (#438) a green «Actif» on every card is a badge that
+                  never varies; the web list has always shown it this way. */}
+              {p.status !== 'active' && (
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusText}>{STATUS_LABELS[p.status] ?? p.status}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           )
         }}
@@ -119,6 +145,8 @@ const styles = StyleSheet.create({
     // explicit value is set; pin it to 0 so placeholders track normally (#118).
     letterSpacing: 0,
   },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  filterLabel: { fontSize: 13, color: colors.textSecondary },
   list: { padding: 12, gap: 8 },
   card: {
     backgroundColor: colors.card,
@@ -135,12 +163,10 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   metaNever: { color: colors.warningText },
   statusBadge: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
   },
-  statusBadgeMuted: { backgroundColor: '#f1f5f9' },
-  statusText: { fontSize: 11, fontFamily: fonts.semiBold, color: '#16a34a' },
-  statusTextMuted: { color: colors.textSecondary },
+  statusText: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary },
 })

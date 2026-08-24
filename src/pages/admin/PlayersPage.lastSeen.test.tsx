@@ -11,6 +11,9 @@ import { PlayersPage } from './PlayersPage'
 // none of it exists for a member who does not administer the club.
 
 const auth = vi.hoisted(() => ({ role: 'club_admin' as Role }))
+// Mutable, so a test can pose the club a different question — «nobody has
+// opened it yet» needs a roster that says exactly that.
+const data = vi.hoisted(() => ({ players: [] as Player[] }))
 
 vi.mock('@/contexts/AuthContext', () => ({
   DEV_LOGIN: true,
@@ -40,7 +43,7 @@ const archived: Player = { ...base, id: 'p4', firstName: 'Nello', lastName: 'Cri
 
 vi.mock('@/contexts/DataContext', () => ({
   useAppData: () => ({
-    players: [today, lastWeek, never, archived],
+    players: data.players,
     clubs: [club],
     updatePlayer: vi.fn(),
     addPlayer: vi.fn(),
@@ -58,6 +61,7 @@ const rowFor = (name: string) => screen.getByRole('row', { name: new RegExp(name
 
 beforeEach(() => {
   auth.role = 'club_admin'
+  data.players = [today, lastWeek, never, archived]
 })
 
 describe('Joueurs — last visit, for the people who administer the club (#406)', () => {
@@ -86,19 +90,20 @@ describe('Joueurs — last visit, for the people who administer the club (#406)'
     expect(screen.getByText(/2 joueurs sur 3 ont déjà ouvert l'application\./)).toBeInTheDocument()
   })
 
-  // Archived members are out by the default filter, and that is the point: the
-  // club is not waiting on someone who has left it.
-  it('follows the status filter, so archived members join the tally only under Tous', async () => {
+  // Archived members are out by default, and that is the point: the club is not
+  // waiting on someone who has left it. They join the tally with the list, when
+  // an admin turns «Joueurs actifs uniquement» off (#438).
+  it('follows the visible roster, archived members included once the toggle is off', async () => {
     const user = renderPage()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Statut' }), 'all')
+    await user.click(screen.getByRole('checkbox', { name: 'Joueurs actifs uniquement' }))
 
     expect(screen.getByText(/2 joueurs sur 4 ont déjà ouvert l'application\./)).toBeInTheDocument()
   })
 
   // The state the club is in on the day it is given the link.
-  it('stays singular when nobody has opened it yet', async () => {
-    const user = renderPage()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Statut' }), 'archived')
+  it('stays singular when nobody has opened it yet', () => {
+    data.players = [never]
+    renderPage()
 
     expect(screen.getByText(/0 joueur sur 1 a déjà ouvert l'application\./)).toBeInTheDocument()
   })
