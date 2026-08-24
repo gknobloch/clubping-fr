@@ -23,5 +23,12 @@ d1-backup*.sql
 .env
 !.env.example
 
-# Claude Code
-.claude
+# Claude Code. Local state stays out; shared skills come in, because a skill is
+# a workflow the repo depends on (.claude/skills/) rather than a personal
+# setting. Order matters here: every .claude is ignored first, the one at the
+# root is opened back up, its contents are closed again, and skills alone are
+# let through. Nested ones — mobile/.claude — are local state only.
+**/.claude/
+!/.claude/
+/.claude/*
+!/.claude/skills/
