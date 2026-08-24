@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
+import { orderPhases, defaultPhase } from '@/lib/phases'
 import { CaptainIcon, ClockIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -56,14 +57,10 @@ export function TeamsPage() {
   const archivedTeams = useMemo(() => allVisibleTeams.filter((t) => t.isArchived), [allVisibleTeams])
   const teamsInScope = showArchived ? allVisibleTeams : activeTeams
 
-  // Phase switcher — defaults to the active phase, chronological order.
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = phases.find((p) => p.status === 'active')
+  // Phase switcher — defaults to the active phase, chronological order (#432).
+  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
+  const phase = phases.find((p) => p.id === phaseId) ?? defaultPhase(phases)
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   const teams = useMemo(

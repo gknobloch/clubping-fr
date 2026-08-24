@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
-import type { PlayerPhasePoints } from '@/types'
+import type { Phase, PlayerPhasePoints } from '@/types'
+import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange } from '@/lib/matchdays'
 import {
   mockClubs,
   mockDivisions,
@@ -50,18 +51,20 @@ const OTHER_PLAYER = (() => {
   return p
 })()
 
+function baseData() {
+  return {
+    divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
+    groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
+    games: mockGames, gameAvailabilities: mockGameAvailabilities,
+    gameSelections: mockGameSelections, users: mockUsers,
+    playerPhasePoints: mockPlayerPhasePoints,
+  }
+}
+
 function renderPage(playerPhasePoints: PlayerPhasePoints[]) {
   render(
     <MemoryRouter initialEntries={['/journees']}>
-      <DataProvider
-        initialData={{
-          divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-          groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
-          games: mockGames, gameAvailabilities: mockGameAvailabilities,
-          gameSelections: mockGameSelections, users: mockUsers,
-          playerPhasePoints,
-        }}
-      >
+      <DataProvider initialData={{ ...baseData(), playerPhasePoints }}>
         <MatchDaysPage />
       </DataProvider>
     </MemoryRouter>,
@@ -105,5 +108,86 @@ describe('MatchDaysPage — "Autres joueurs du club" (#431)', () => {
     ])
 
     expect(nameCellText(section)).toBe(fullName)
+  })
+})
+
+// #432 — the switcher paged through `phases` in API order, so "phase
+// précédente" was not reliably the previous phase.
+describe('MatchDaysPage — sélecteur de phase (#432)', () => {
+  const phase = (id: string, displayName: string, status: Phase['status']): Phase => ({
+    ...mockPhases[0],
+    id,
+    name: displayName.slice(10),
+    displayName,
+    status,
+  })
+
+  const OLDEST = phase('phase-26-1', '2025/2026 Phase 1', 'active')
+  const MIDDLE = phase('phase-26-2', '2025/2026 Phase 2', 'archived')
+  const NEWEST = phase('phase-27-1', '2026/2027 Phase 1', 'archived')
+
+  /** Deliberately not chronological — this is what the API can hand back. */
+  const SHUFFLED = [OLDEST, NEWEST, MIDDLE]
+
+  function renderWithPhases(phases: Phase[]) {
+    render(
+      <MemoryRouter initialEntries={['/journees']}>
+        <DataProvider initialData={{ ...baseData(), phases }}>
+          <MatchDaysPage />
+        </DataProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  /** The switcher is drawn twice — stacked below `md:`, a pill above — and
+      happy-dom applies no media queries, so both are in the tree. */
+  const switcherLabels = () =>
+    screen.getAllByText(/^Saison /).map((el) => el.textContent)
+
+  it('opens on the active phase', () => {
+    renderWithPhases(SHUFFLED)
+    expect(new Set(switcherLabels())).toEqual(new Set(['Saison 2025/2026 Phase 1']))
+  })
+
+  it('opens on the most recent phase when none is active', () => {
+    renderWithPhases(SHUFFLED.map((p) => ({ ...p, status: 'archived' as const })))
+    expect(new Set(switcherLabels())).toEqual(new Set(['Saison 2026/2027 Phase 1']))
+  })
+
+  it('pages to the chronological neighbour, not to the next one in the array', () => {
+    renderWithPhases(SHUFFLED)
+
+    // Next in the array is 2026/2027 Phase 1; next in time is 2025/2026 Phase 2.
+    fireEvent.click(screen.getAllByLabelText('Phase suivante')[0])
+    expect(new Set(switcherLabels())).toEqual(new Set(['Saison 2025/2026 Phase 2']))
+
+    fireEvent.click(screen.getAllByLabelText('Phase suivante')[0])
+    expect(new Set(switcherLabels())).toEqual(new Set(['Saison 2026/2027 Phase 1']))
+
+    fireEvent.click(screen.getAllByLabelText('Phase précédente')[0])
+    expect(new Set(switcherLabels())).toEqual(new Set(['Saison 2025/2026 Phase 2']))
+  })
+
+  it('stops at both ends of the ordered list', () => {
+    renderWithPhases(SHUFFLED)
+    // Oldest phase: nothing before it.
+    for (const b of screen.getAllByLabelText('Phase précédente')) expect(b).toBeDisabled()
+
+    fireEvent.click(screen.getAllByLabelText('Phase suivante')[0])
+    fireEvent.click(screen.getAllByLabelText('Phase suivante')[0])
+    for (const b of screen.getAllByLabelText('Phase suivante')) expect(b).toBeDisabled()
+  })
+
+  it('names the journée and the week it covers, instead of a bare "J8"', () => {
+    renderWithPhases(mockPhases)
+
+    const groups = getPhaseMatchDays(mockPhases[0].id, mockMatchDays, mockGroups, mockDivisions)
+    const current = groups.find((g) => g.number === activeMatchDayNumber(groups))
+    expect(current, 'mock data needs at least one journée').toBeDefined()
+
+    expect(screen.getByText(`Journée ${current!.number}`)).toBeInTheDocument()
+    expect(
+      screen.getByText(formatMatchDayRange(current!.startDate, current!.endDate)),
+    ).toBeInTheDocument()
   })
 })

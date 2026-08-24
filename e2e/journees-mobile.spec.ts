@@ -83,8 +83,9 @@ test.describe('Journées sur mobile (#306)', () => {
 
   // The controls used to need 416px in a 343px row, so the toolbar scrolled
   // sideways and drew a scrollbar across a 44px control row — it read as a
-  // glitch. Phase is a select below md: precisely so the pair fits.
-  test('la barre de contrôles tient sans défiler, phase puis journée', async ({ page }) => {
+  // glitch. The phase became a native select to buy the 60px back; since #432
+  // the two are stacked instead, which buys the whole row.
+  test('la barre de contrôles tient sans défiler, phase au-dessus de journée', async ({ page }) => {
     await page.goto('/journees')
     await page.locator('[data-testid="page-toolbar"]').waitFor()
 
@@ -95,13 +96,21 @@ test.describe('Journées sur mobile (#306)', () => {
     }))
     expect(scroll).toBe(client)
 
-    // Phase comes first, journée second.
-    const phase = page.locator('[data-testid="page-toolbar"] select')
-    const journee = page.getByRole('button', { name: 'Journée précédente' })
-    await expect(phase).toBeVisible()
-    const phaseLeft = await phase.evaluate((el) => el.getBoundingClientRect().left)
-    const journeeLeft = await journee.evaluate((el) => el.getBoundingClientRect().left)
-    expect(phaseLeft).toBeLessThan(journeeLeft)
+    // No native select any more: two switchers, phase on top.
+    await expect(page.locator('[data-testid="page-toolbar"] select')).toHaveCount(0)
+    // Drawn twice — stacked here, a pill above md: — so only one is visible.
+    await expect(page.locator('[data-testid="page-toolbar"] :text-matches("^Saison "):visible')).toHaveCount(1)
+
+    const visible = (label: string) =>
+      page.locator(`[data-testid="page-toolbar"] button[aria-label="${label}"]:visible`)
+    const phase = visible('Phase précédente')
+    const journee = visible('Journée précédente')
+    await expect(phase).toHaveCount(1)
+    await expect(journee).toHaveCount(1)
+
+    const phaseBottom = await phase.evaluate((el) => el.getBoundingClientRect().bottom)
+    const journeeTop = await journee.evaluate((el) => el.getBoundingClientRect().top)
+    expect(phaseBottom).toBeLessThanOrEqual(journeeTop)
   })
 
   test('le sélecteur de journée change les matchs affichés', async ({ page }) => {
