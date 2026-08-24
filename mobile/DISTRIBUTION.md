@@ -66,7 +66,9 @@ npm run submit:ios
 npm run submit:android
 ```
 
-The `submit:*` scripts upload the most recent finished `production` build.
+The `submit:*` scripts upload the most recent finished `production` build — which is
+not always the one you just built. See the Android section on `--auto-submit` before
+reaching for `submit:android`.
 
 ---
 
@@ -84,34 +86,76 @@ is pinned in `eas.json` under `submit.production.ios.ascAppId`.
 Package name: `fr.clubping.app`. The upload keystore is generated and stored by EAS on
 the first Android build — never commit a keystore to this repo.
 
-## First submission must be manual
+## The first release is already published
 
-Google Play **refuses API uploads for an app that has no release yet**: the Play
-Developer API cannot create the first release. So `--auto-submit` and
-`npm run submit:android` will not work until one build has been published by hand.
+Google Play **refuses API uploads for an app that has no release yet** — the Play
+Developer API cannot create a first release, so `--auto-submit` and
+`npm run submit:android` fail until one build has been published by hand.
 
-1. Register a Google Play developer account (one-time $25 fee) if you don't have one.
-2. Build the app bundle:
-   ```
-   npm run build:android
-   ```
-3. Download the resulting `.aab` from the EAS build page.
-4. In the Play Console, create the app with package `fr.clubping.app`, then
-   **Testing → Internal testing → Create new release** and upload the `.aab` manually.
-5. Complete the store listing, content rating and **data safety** form. The app requests
-   no sensitive runtime permissions, which keeps this form short — keep it that way and
-   only add permissions to `app.json` when a feature actually needs them.
+That was done on **24 August 2026**: 1.1.2 / versionCode 9, uploaded manually to the
+**internal** track. Nothing here needs repeating — it is recorded so the next person
+knows why the automated path works now and did not before. It would only come back
+if the app were ever recreated under a new package name.
+
+For reference, that first upload was: Play Console → create the app with package
+`fr.clubping.app` → **Testing → Internal testing → Create new release** → upload the
+`.aab` from the EAS build page, then complete the store listing, content rating and
+**data safety** form.
+
+## Store listing assets
+
+The Play listing is filled from files in this repo:
+
+| Play field                   | File                                    | Required size |
+| ---------------------------- | --------------------------------------- | ------------- |
+| Icône de l'application       | `assets/store/icon-512.png`             | 512x512       |
+| Image de présentation        | `assets/store/feature-graphic.png`      | 1024x500      |
+| Captures d'écran téléphone   | `assets/store/screenshots/*.png`        | 1080x1920     |
+
+The icon and the feature graphic are rendered from SVG by `assets/logo/render.mjs`
+(`node mobile/assets/logo/render.mjs`, from the repo root, where playwright lives) —
+change the SVG and re-run it rather than resizing a PNG. Both come out opaque on
+purpose: Play applies its own rounded mask to the icon, and transparent corners look
+wrong under it. The screenshots are captured from the running app, not generated.
+
+Two URLs the listing points at, both public routes of the web app and both outside the
+auth guard so a reviewer can fetch them anonymously:
+
+- privacy policy — `https://clubping.fr/confidentialite` (#356)
+- account deletion — `https://clubping.fr/suppression-compte` (#434)
+
+The data safety form is answered against what those pages claim. `src/pages/*.test.tsx`
+pins the claims; if the app starts collecting something new, the pages and the form are
+part of that change, not a follow-up.
 
 ## Service account for automated submissions
 
-Once the first release exists, set up a service account so EAS can upload on its own:
+Three steps, and the second one is the one that bites.
 
-1. Play Console → **Setup → API access** → link a Google Cloud project.
-2. Create a service account, then grant it the **Release manager** role for this app.
-3. Download its JSON key and save it as `mobile/google-play-service-account.json`.
-   That filename is git-ignored — **never commit the key**.
+1. **Create the service account.** Either Play Console → **Paramètres → Accès à l'API**
+   (owner-only, and it links a Cloud project for you), or directly in the Google Cloud
+   console under **IAM → Service accounts**. It needs no roles on the Cloud side.
+2. **Enable the Google Play Android Developer API** (`androidpublisher.googleapis.com`)
+   in that Cloud project. The Play Console route does this as a side effect; creating
+   the account by hand in Cloud does **not**, and nothing warns you. The submission
+   builds fine and then dies at the upload with:
 
-`eas.json` already points at it:
+   ```
+   PERMISSION_DENIED: Google Play Android Developer API has not been used
+   in project <number> before or it is disabled.
+   ```
+
+   Enabling it takes a minute or two to propagate. The build is not wasted — re-submit
+   the same artifact with `eas submit --platform android --profile production --id <buildId>`.
+3. **Grant it access to the app.** Play Console → **Utilisateurs et autorisations** →
+   invite the service account's `…@….iam.gserviceaccount.com` address, scoped to Club
+   Ping alone. For the `internal` track it needs *Déployer les applications sur des
+   canaux de test*; add *Mettre les applications à disposition de tous les utilisateurs*
+   for the day production releases go through the API too. It needs nothing else — no
+   financial data, no store presence: EAS never touches the listing.
+
+Save the JSON key as `mobile/google-play-service-account.json`. That filename is
+git-ignored — **never commit the key**. `eas.json` already points at it:
 
 ```json
 "submit": {
@@ -124,17 +168,19 @@ Once the first release exists, set up a service account so EAS can upload on its
 }
 ```
 
-After that, subsequent releases are one command:
+## Releasing
 
-```
-npm run build:android && npm run submit:android
-```
-
-or, in a single step:
+One command, from `mobile/`:
 
 ```
 eas build --platform android --profile production --auto-submit
 ```
+
+Prefer it over `npm run build:android && npm run submit:android`. The `submit:*` scripts
+pass `--latest`, which means "the most recent production build" and not "the build we
+just made" — so a submit that runs after a manual upload, or after any build that did
+not reach the store, retries a `versionCode` Play has already seen and is rejected for
+it. `--auto-submit` submits the artifact it just produced.
 
 Builds land on the `internal` track. Promote to `closed`, `open` or `production` from
 the Play Console, or change `track` in `eas.json`.
