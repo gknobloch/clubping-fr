@@ -9,7 +9,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
+import { ACTIVE_ONLY_LABEL, canSeeArchivedPlayers, visiblePlayers } from '@/lib/playerVisibility'
 import { ModalShell } from '@/components/ModalShell'
+import { Toggle } from '@/components/Toggle'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 
 const STATUS_LABELS: Record<PlayerType['status'], string> = {
@@ -17,17 +19,11 @@ const STATUS_LABELS: Record<PlayerType['status'], string> = {
   archived: 'Archivé',
 }
 
-const STATUS_FILTERS: { value: PlayerType['status'] | 'all'; label: string }[] = [
-  { value: 'active', label: 'Actif' },
-  { value: 'archived', label: 'Archivé' },
-  { value: 'all', label: 'Tous' },
-]
-
 export function PlayersPage() {
   const { user } = useAuth()
   const { players: allPlayers, clubs, updatePlayer, addPlayer } = useAppData()
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<PlayerType['status'] | 'all'>('active')
+  const [activeOnly, setActiveOnly] = useState(true)
   const [editing, setEditing] = useState<PlayerType | null>(null)
   const [creating, setCreating] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -57,8 +53,8 @@ export function PlayersPage() {
   }, [allPlayers, hasClubScope, adminClubIds])
 
   const playersByStatus = useMemo(
-    () => (statusFilter === 'all' ? players : players.filter((p) => p.status === statusFilter)),
-    [players, statusFilter],
+    () => visiblePlayers(players, { role: user?.role, activeOnly }),
+    [players, user?.role, activeOnly],
   )
 
   const filteredPlayers = useMemo(() => {
@@ -92,10 +88,10 @@ export function PlayersPage() {
   // members, so the column and the count are theirs alone — for anyone else the
   // field is uniformly absent and would read as "nobody has ever signed in".
   //
-  // Counted over the status filter but not the search box: the question is how
+  // Counted over the visible roster but not the search box: the question is how
   // far the app has spread through the club, which a half-typed name should not
-  // change. Archived members are excluded with everything else by the default
-  // filter, which is the point — they are not who the club is waiting on.
+  // change. Archived members are out of it by default, which is the point —
+  // they are not who the club is waiting on.
   const showLastSeen = canEditPlayers
   const visitedCount = useMemo(
     () => playersByStatus.filter((p) => hasVisited(p.lastSeenAt)).length,
@@ -208,7 +204,10 @@ export function PlayersPage() {
           )
         }
       />
-      <div className="flex items-center gap-3">
+      {/* Wraps: «Joueurs actifs uniquement» plus a 256px search box does not
+          fit a phone on one line, and squeezing the box is worse than a second
+          row. */}
+      <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
           value={query}
@@ -216,18 +215,13 @@ export function PlayersPage() {
           placeholder="Rechercher par nom…"
           className="w-64 min-h-[44px] md:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
         />
-        <select
-          aria-label="Statut"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as PlayerType['status'] | 'all')}
-          className="min-h-[44px] md:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
-        >
-          {STATUS_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
+        {/* Offered to the people who administer the club and to nobody else
+            (#438): for a member the roster IS the active players, so a control
+            that only ever says the same thing is a control that shouldn't be
+            there. */}
+        {canSeeArchivedPlayers(user?.role) && (
+          <Toggle checked={activeOnly} onChange={setActiveOnly} label={ACTIVE_ONLY_LABEL} />
+        )}
         {query && (
           <span className="text-sm text-slate-500">
             {filteredPlayers.length} résultat{filteredPlayers.length !== 1 ? 's' : ''}
