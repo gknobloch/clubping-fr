@@ -20,6 +20,7 @@ import { PlayerDetailPage } from '@/pages/PlayerDetailPage'
 import { TeamDetailPage } from '@/pages/TeamDetailPage'
 import { ComptePage } from '@/pages/ComptePage'
 import { PrivacyPage } from '@/pages/PrivacyPage'
+import { DeleteAccountPage } from '@/pages/DeleteAccountPage'
 
 function AuthLoading() {
   return (
@@ -58,6 +59,10 @@ export default function App() {
           {/* Public and outside the auth guard on purpose: store reviewers fetch
               this URL anonymously (#356). */}
           <Route path="/confidentialite" element={<PrivacyPage />} />
+          {/* Public for the same reason, and for one more: Google Play prints
+              this URL on the listing, and a member who can no longer sign in
+              still has to be able to read how to leave (#434). */}
+          <Route path="/suppression-compte" element={<DeleteAccountPage />} />
           <Route path="/" element={<ProtectedLayout />}>
             <Route index element={<HomePage />} />
             <Route path="clubs" element={<ClubsPage />} />

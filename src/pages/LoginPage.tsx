@@ -41,6 +41,10 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
           <Link className="underline hover:text-slate-600" to="/confidentialite">
             Politique de confidentialité
           </Link>
+          {' · '}
+          <Link className="underline hover:text-slate-600" to="/suppression-compte">
+            Supprimer mon compte
+          </Link>
         </p>
       </div>
     </div>
