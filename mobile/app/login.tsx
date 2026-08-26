@@ -102,7 +102,9 @@ export default function LoginScreen() {
         locations={[0, 0.45, 1]}
         style={StyleSheet.absoluteFill}
       />
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      {/* All four edges: the page is the one screen outside the app shell, so
+          nothing else keeps it off a landscape notch (#446). */}
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView
           style={styles.safe}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -315,10 +317,25 @@ function DevLogin() {
   )
 }
 
+/** Widest the sign-in card gets — a one-field form needs no more. */
+const FORM_MAX_WIDTH = 420
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
   safe: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 64, paddingBottom: 24 },
+  // The brand block and the form move as one column, centred and capped, so
+  // they still read as a pair on a tablet rather than as a title in one corner
+  // and a card stretched across the slab (#446). 420 for the card itself, plus
+  // the column's own padding.
+  scroll: {
+    flexGrow: 1,
+    width: '100%',
+    maxWidth: FORM_MAX_WIDTH + 36,
+    alignSelf: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 64,
+    paddingBottom: 24,
+  },
   brandBlock: { paddingHorizontal: 6 },
   markDisc: {
     width: 72,

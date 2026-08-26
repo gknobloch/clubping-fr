@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  useWindowDimensions,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useMemo, useState } from 'react'
@@ -14,6 +13,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { canManageTeam, getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
+import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
@@ -40,8 +41,14 @@ export default function HomeScreen() {
     refreshing, refresh,
   } = useAppData()
 
-  const { width } = useWindowDimensions()
-  const cardWidth = width - 32 // matches the scroll container's 16px padding
+  // The carousel pages by its own width, so the card and the scroller are the
+  // same width by construction — `onMomentumScrollEnd` below divides the offset
+  // by this to find the page, and a scroller wider than its cards would put the
+  // dots on the wrong one. Inside the capped content column (#446), not the
+  // window: on a slab the column stops at one reading width, and 480 keeps the
+  // card from stretching into a letterbox even inside that.
+  const { width, contentMaxWidth } = useLayout()
+  const cardWidth = Math.min(Math.min(width, contentMaxWidth) - 32, 480)
 
   const [composeGameId, setComposeGameId] = useState<string | null>(null)
   const [matchPage, setMatchPage] = useState(0)
@@ -195,9 +202,9 @@ export default function HomeScreen() {
   const composeGame = upcomingGames.find((g) => g.id === composeGameId)
 
   return (
-    <View style={styles.container}>
+    <Screen>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, contentWidth()]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
         {/* Identity header — shared with the player detail screen */}
@@ -226,6 +233,8 @@ export default function HomeScreen() {
                 <ScrollView
                   horizontal
                   pagingEnabled
+                  testID="next-match-carousel"
+                  style={{ width: cardWidth, alignSelf: 'center' }}
                   showsHorizontalScrollIndicator={false}
                   scrollEnabled={heroes.length > 1}
                   onMomentumScrollEnd={(e) =>
@@ -233,7 +242,7 @@ export default function HomeScreen() {
                   }
                 >
                   {heroes.map((h) => (
-                    <View key={h.game.id} style={{ width: cardWidth }}>
+                    <View key={h.game.id} testID="next-match-page" style={{ width: cardWidth }}>
                       <NextMatchCard
                         matchDayNumber={h.md.number}
                         matchDayDate={gameDate(h.game, h.md)}
@@ -368,12 +377,11 @@ export default function HomeScreen() {
           onClose={() => setComposeGameId(null)}
         />
       )}
-    </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: 16, gap: 12 },
   welcomeCard: { marginBottom: 4 },
 

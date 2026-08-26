@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
 import { sortByName } from '@shared/lib/sortByName'
 import { hasVisited, lastSeenSentence } from '@shared/lib/lastSeen'
 import {
@@ -19,6 +20,7 @@ import {
   canSeeArchivedPlayers,
   visiblePlayers,
 } from '@shared/lib/playerVisibility'
+import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { fonts } from '@/constants/typography'
 
@@ -38,6 +40,10 @@ export default function JoueursScreen() {
   // what this tab is for.
   const [activeOnly, setActiveOnly] = useState(true)
   const canSeeArchived = canSeeArchivedPlayers(user?.role)
+  // Two columns of licenciés on a tablet, one on a phone (#446). A card is a
+  // name and a line of meta: one per row across a slab is mostly empty card.
+  const { isTablet } = useLayout()
+  const columns = isTablet ? 2 : 1
 
   const clubPlayers =
     user?.role === 'general_admin'
@@ -61,8 +67,8 @@ export default function JoueursScreen() {
   )
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchBar}>
+    <Screen>
+      <View style={[styles.searchBar, contentWidth(columns)]}>
         <TextInput
           style={styles.input}
           placeholder="Rechercher…"
@@ -84,14 +90,21 @@ export default function JoueursScreen() {
         )}
       </View>
       <FlatList
+        // `numColumns` is fixed for the life of a FlatList — React Native throws
+        // when it changes — so the key changes with it and the list remounts.
+        key={`columns-${columns}`}
         data={filtered}
         keyExtractor={(p) => p.id}
-        contentContainerStyle={styles.list}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? styles.row : undefined}
+        contentContainerStyle={[styles.list, contentWidth(columns)]}
         renderItem={({ item: p }) => {
           const club = clubs.find((c) => c.id === p.clubId)
           return (
             <TouchableOpacity
-              style={styles.card}
+              // Only in a grid: as the single child of a column, `flex: 1`
+              // would stretch the card down the whole list instead.
+              style={[styles.card, columns > 1 && styles.cardInGrid]}
               onPress={() => router.push(`/player/${p.id}`)}
             >
               <Avatar
@@ -125,12 +138,11 @@ export default function JoueursScreen() {
           )
         }}
       />
-    </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   searchBar: { padding: 12, paddingBottom: 4 },
   input: {
     backgroundColor: colors.card,
@@ -148,6 +160,7 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   filterLabel: { fontSize: 13, color: colors.textSecondary },
   list: { padding: 12, gap: 8 },
+  row: { gap: 8 },
   card: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -158,6 +171,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  cardInGrid: { flex: 1 },
   cardBody: { flex: 1 },
   name: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },

@@ -1,5 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react-native'
+import { fireEvent, screen } from '@testing-library/react-native'
+import { render } from '@/__tests__/support/render'
+import {
+  PHONE_WIDTH,
+  TABLET_SMALL,
+  resetWindowSize,
+  setWindowSize,
+} from '@/__tests__/support/window'
+import { FlatList } from 'react-native'
 import type { Club, Player, Role, User } from '@shared/types'
+import { CONTENT_MAX_WIDTH } from '@/constants/layout'
 import JoueursScreen from '@/app/(tabs)/joueurs'
 
 // ---------------------------------------------------------------------------
@@ -75,5 +84,45 @@ describe('Joueurs — joueurs actifs uniquement (#438)', () => {
     render(<JoueursScreen />)
 
     expect(screen.queryByText('Actif')).toBeNull()
+  })
+})
+
+describe('Joueurs — deux colonnes sur tablette (#446)', () => {
+  afterEach(resetWindowSize)
+
+  /** The list's own props — `numColumns` is not a rendered attribute. */
+  const list = () => screen.UNSAFE_getByType(FlatList).props
+
+  it('stays one card per row on a phone', () => {
+    signIn('club_admin')
+    setWindowSize(PHONE_WIDTH)
+
+    render(<JoueursScreen />)
+
+    expect(list().numColumns).toBe(1)
+  })
+
+  it('lays the roster out two across on a tablet', () => {
+    // A card is a name and a line of meta: one per row across a slab is
+    // mostly empty card.
+    signIn('club_admin')
+    setWindowSize(TABLET_SMALL)
+
+    render(<JoueursScreen />)
+
+    expect(list().numColumns).toBe(2)
+  })
+
+  it('gives the grid one reading width per column', () => {
+    // Not the plain cap: two columns inside 640pt would be two 300pt cards on a
+    // slab with room for twice that.
+    signIn('club_admin')
+    setWindowSize(TABLET_SMALL)
+
+    render(<JoueursScreen />)
+
+    expect(list().contentContainerStyle).toEqual(
+      expect.arrayContaining([expect.objectContaining({ maxWidth: CONTENT_MAX_WIDTH * 2 })]),
+    )
   })
 })

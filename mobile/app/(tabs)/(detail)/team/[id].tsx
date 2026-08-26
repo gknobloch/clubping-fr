@@ -21,6 +21,7 @@ import {
 import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
+import { Screen, contentWidth } from '@/components/Screen'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { PlayerSheet } from '@/components/PlayerSheet'
@@ -152,9 +153,9 @@ export default function TeamDetailScreen() {
 
   if (!team) {
     return (
-      <View style={styles.container}>
+      <Screen>
         <Text style={styles.notFound}>Équipe introuvable.</Text>
-      </View>
+      </Screen>
     )
   }
 
@@ -217,8 +218,8 @@ export default function TeamDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <Screen>
+      <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
 
         {/* Identity header — mirrors the player header: a round team-colour
             badge (the team number) on the left, where a player's avatar sits.
@@ -361,7 +362,7 @@ export default function TeamDetailScreen() {
               style={styles.modalList}
               data={shownEligiblePlayers}
               keyExtractor={(p) => p.id}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[styles.listContent, contentWidth()]}
               keyboardShouldPersistTaps="handled"
               ListHeaderComponent={
                 <View style={styles.modalFields}>
@@ -449,12 +450,11 @@ export default function TeamDetailScreen() {
           </SafeAreaView>
         </Modal>
       )}
-    </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { gap: 12, paddingTop: 16, paddingBottom: 24 },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 

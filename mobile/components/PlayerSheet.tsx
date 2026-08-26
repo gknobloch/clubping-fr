@@ -1,9 +1,10 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { Sheet } from '@/components/Sheet'
 import { TeamBadge } from '@/components/TeamBadge'
 import type { Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -69,122 +70,104 @@ export function PlayerSheet({
     onProfile ?? (() => { onClose(); router.push(`/player/${player.id}`) })
 
   return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose}>
-        <View style={s.sheet} onStartShouldSetResponder={() => true}>
-          <View style={s.handle} />
-          <ScrollView showsVerticalScrollIndicator={false}>
+    <Sheet onClose={onClose} testID="player-sheet">
+      <ScrollView showsVerticalScrollIndicator={false}>
 
-            {/* Identity */}
-            <Text style={s.name}>{player.firstName} {player.lastName}</Text>
+        {/* Identity */}
+        <Text style={s.name}>{player.firstName} {player.lastName}</Text>
+        <View style={s.row}>
+          <Text style={s.label}>Licence</Text>
+          <Text style={s.value}>{player.licenseNumber}</Text>
+        </View>
+
+        <View style={s.divider} />
+
+        {/* Phase stats */}
+        {phaseLabel && <Text style={s.sectionHeading}>{phaseLabel}</Text>}
+        <View style={s.rows}>
+          {phasePoints && (
             <View style={s.row}>
-              <Text style={s.label}>Licence</Text>
-              <Text style={s.value}>{player.licenseNumber}</Text>
+              <Text style={s.label}>Points</Text>
+              <Text style={s.value}>{phasePoints}</Text>
             </View>
+          )}
+          <View style={s.row}>
+            <Text style={s.label}>Matchs joués</Text>
+            <Text style={s.value}>
+              {gamesTotal != null ? `${gamesPlayed} / ${gamesTotal}` : String(gamesPlayed)}
+            </Text>
+          </View>
+          {team && (
+            <View style={s.row}>
+              <Text style={s.label}>Équipe</Text>
+              <TeamBadge large color={team.color} label={getTeamName(team, clubs)} />
+            </View>
+          )}
+          {brulageTeam && (
+            <View style={s.row}>
+              <Text style={s.label}>Brûlage</Text>
+              <TeamBadge large danger color={brulageTeam.color} label={getTeamName(brulageTeam, clubs)} />
+            </View>
+          )}
+        </View>
 
-            <View style={s.divider} />
-
-            {/* Phase stats */}
-            {phaseLabel && <Text style={s.sectionHeading}>{phaseLabel}</Text>}
-            <View style={s.rows}>
-              {phasePoints && (
-                <View style={s.row}>
-                  <Text style={s.label}>Points</Text>
-                  <Text style={s.value}>{phasePoints}</Text>
+        {/* Game history — no heading, flows directly */}
+        {history.length > 0 && (
+          <View style={s.historySection}>
+            {history.map((entry, i) => (
+              <View key={i} style={s.historyRow}>
+                <View style={s.historyLeft}>
+                  {entry.jNumber != null && (
+                    <Text style={[s.historyJ, entry.isPast && s.historyPast]}>
+                      J{entry.jNumber}
+                    </Text>
+                  )}
+                  {entry.team && (() => {
+                    const tc = entry.team.color ?? colors.accent
+                    return (
+                      <View style={[s.historyTeamBadge, { borderColor: tc, backgroundColor: hexToRgba(tc, 0.1) }]}>
+                        <Text style={[s.historyTeamNum, { color: tc }]}>{entry.team.number}</Text>
+                      </View>
+                    )
+                  })()}
+                  {entry.icon ? (
+                    <Ionicons
+                      name={entry.icon}
+                      size={13}
+                      color={entry.isPast ? '#94a3b8' : colors.textSecondary}
+                    />
+                  ) : entry.jNumber != null ? (
+                    <Text style={[s.historyDot, entry.isPast && s.historyPast]}>·</Text>
+                  ) : null}
+                  <Text
+                    style={[s.historyText, entry.isPast && s.historyPast]}
+                    numberOfLines={1}
+                  >
+                    {entry.text}
+                  </Text>
                 </View>
-              )}
-              <View style={s.row}>
-                <Text style={s.label}>Matchs joués</Text>
-                <Text style={s.value}>
-                  {gamesTotal != null ? `${gamesPlayed} / ${gamesTotal}` : String(gamesPlayed)}
+                <Text style={[s.historyDate, entry.isPast && s.historyPast]}>
+                  {entry.date}
                 </Text>
               </View>
-              {team && (
-                <View style={s.row}>
-                  <Text style={s.label}>Équipe</Text>
-                  <TeamBadge large color={team.color} label={getTeamName(team, clubs)} />
-                </View>
-              )}
-              {brulageTeam && (
-                <View style={s.row}>
-                  <Text style={s.label}>Brûlage</Text>
-                  <TeamBadge large danger color={brulageTeam.color} label={getTeamName(brulageTeam, clubs)} />
-                </View>
-              )}
-            </View>
+            ))}
+          </View>
+        )}
 
-            {/* Game history — no heading, flows directly */}
-            {history.length > 0 && (
-              <View style={s.historySection}>
-                {history.map((entry, i) => (
-                  <View key={i} style={s.historyRow}>
-                    <View style={s.historyLeft}>
-                      {entry.jNumber != null && (
-                        <Text style={[s.historyJ, entry.isPast && s.historyPast]}>
-                          J{entry.jNumber}
-                        </Text>
-                      )}
-                      {entry.team && (() => {
-                        const tc = entry.team.color ?? colors.accent
-                        return (
-                          <View style={[s.historyTeamBadge, { borderColor: tc, backgroundColor: hexToRgba(tc, 0.1) }]}>
-                            <Text style={[s.historyTeamNum, { color: tc }]}>{entry.team.number}</Text>
-                          </View>
-                        )
-                      })()}
-                      {entry.icon ? (
-                        <Ionicons
-                          name={entry.icon}
-                          size={13}
-                          color={entry.isPast ? '#94a3b8' : colors.textSecondary}
-                        />
-                      ) : entry.jNumber != null ? (
-                        <Text style={[s.historyDot, entry.isPast && s.historyPast]}>·</Text>
-                      ) : null}
-                      <Text
-                        style={[s.historyText, entry.isPast && s.historyPast]}
-                        numberOfLines={1}
-                      >
-                        {entry.text}
-                      </Text>
-                    </View>
-                    <Text style={[s.historyDate, entry.isPast && s.historyPast]}>
-                      {entry.date}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <View style={s.footer}>
-              <TouchableOpacity style={[s.footerBtn, s.footerClose]} onPress={onClose}>
-                <Text style={s.footerCloseTxt}>Fermer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.footerBtn, s.footerProfile]} onPress={openProfile}>
-                <Text style={s.footerProfileTxt}>Profil</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+        <View style={s.footer}>
+          <TouchableOpacity style={[s.footerBtn, s.footerClose]} onPress={onClose}>
+            <Text style={s.footerCloseTxt}>Fermer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.footerBtn, s.footerProfile]} onPress={openProfile}>
+            <Text style={s.footerProfileTxt}>Profil</Text>
+          </TouchableOpacity>
         </View>
-      </Pressable>
-    </Modal>
+      </ScrollView>
+    </Sheet>
   )
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: '85%',
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.border, alignSelf: 'center', marginBottom: 12,
-  },
   name: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 12 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 14 },
   sectionHeading: {

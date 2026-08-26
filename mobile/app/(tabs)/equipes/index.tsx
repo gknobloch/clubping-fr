@@ -4,6 +4,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { orderPhases, defaultPhase } from '@shared/lib/phases'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
+import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { colors } from '@/constants/colors'
@@ -41,9 +42,9 @@ export default function EquipesScreen() {
   )
 
   return (
-    <View style={styles.container}>
+    <Screen>
       <ScrollView
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, contentWidth()]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
         {phase ? (
@@ -76,12 +77,11 @@ export default function EquipesScreen() {
           <Text style={styles.empty}>Aucune équipe pour cette phase.</Text>
         )}
       </ScrollView>
-    </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   list: { padding: 16, gap: 8 },
 
   card: {

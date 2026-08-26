@@ -1,6 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import {
+  PHONE_WIDTH,
+  TABLET_LARGE,
+  resetWindowSize,
+  setWindowSize,
+} from '@/__tests__/support/window'
 import type { User } from '@shared/types'
 import { AppHeader } from './AppHeader'
 
@@ -115,4 +121,26 @@ it('keeps its content clear of a landscape notch', () => {
   expect(style.paddingLeft).toBe(12 + 59)
   expect(style.paddingRight).toBe(12 + 59)
   expect(style.paddingTop).toBe(0)
+})
+
+describe('on a tablet (#446)', () => {
+  afterEach(resetWindowSize)
+
+  const titleStyle = (title: string) => StyleSheet.flatten(screen.getByText(title).props.style)
+
+  it('centres the title in the bar on a phone', () => {
+    setWindowSize(PHONE_WIDTH)
+
+    renderHeader(<AppHeader title="Journées" />)
+
+    expect(titleStyle('Journées').textAlign).toBe('center')
+  })
+
+  it('sets the title beside the mark rather than in the middle of nothing', () => {
+    setWindowSize(TABLET_LARGE)
+
+    renderHeader(<AppHeader title="Journées" />)
+
+    expect(titleStyle('Journées').textAlign).toBe('left')
+  })
 })

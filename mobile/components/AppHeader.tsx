@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
 import { displayFonts } from '@/constants/typography'
 import { AccountHeaderButton } from '@/components/AccountHeaderButton'
 import { BrandMark } from '@/components/BrandMark'
@@ -43,6 +44,7 @@ export function AppHeader({
 }) {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const { isTablet } = useLayout()
 
   return (
     // Left/right insets, not just the top one (#445): now that the app rotates,
@@ -82,7 +84,10 @@ export function AppHeader({
         )}
       </View>
 
-      <Text style={styles.title} numberOfLines={1}>
+      {/* Centred in the bar on a phone, where the bar is the width of the
+          screen. On a slab the middle is a long way from anything, so the title
+          sits next to the mark instead (#446). */}
+      <Text style={[styles.title, isTablet && styles.titleLeft]} numberOfLines={1}>
         {title}
       </Text>
 
@@ -120,4 +125,5 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: displayFonts.semiBold,
   },
+  titleLeft: { textAlign: 'left' },
 })

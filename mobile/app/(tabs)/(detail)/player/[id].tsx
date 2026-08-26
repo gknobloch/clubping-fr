@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
 import { getTeamName } from '@/utils/roles'
+import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
 import { fonts } from '@/constants/typography'
@@ -37,15 +38,15 @@ export default function PlayerDetailScreen() {
 
   if (!player) {
     return (
-      <View style={styles.container}>
+      <Screen>
         <Text style={styles.notFound}>Joueur introuvable.</Text>
-      </View>
+      </Screen>
     )
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <Screen>
+      <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
         {/* Identity header — shared with the Accueil welcome header */}
         <PlayerIdentityCard
           style={styles.identityCard}
@@ -114,7 +115,7 @@ export default function PlayerDetailScreen() {
           onClose={() => setAvatarOpen(false)}
         />
       )}
-    </View>
+    </Screen>
   )
 }
 
@@ -141,7 +142,6 @@ function PhoneRow({ phone }: { phone: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { gap: 12, paddingTop: 16, paddingBottom: 32 },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 
