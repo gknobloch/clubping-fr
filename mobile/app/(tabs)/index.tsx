@@ -7,7 +7,7 @@ import {
   RefreshControl,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
@@ -209,6 +209,42 @@ export default function HomeScreen() {
 
   const composeGame = upcomingGames.find((g) => g.id === composeGameId)
 
+  // On a phone the dots sit under the card, where a carousel puts them. In the
+  // two-column dashboard they move up into the label row, where the web keeps
+  // its « ‹ 1/7 › » pager — which is also what leaves the two columns exactly
+  // the same height, so the card and the counters beside it line up top and
+  // bottom.
+  const dots =
+    heroes.length > 1 ? (
+      <View style={styles.dots}>
+        {heroes.map((h, i) => (
+          <View
+            key={h.game.id}
+            style={[styles.dot, i === Math.min(matchPage, heroes.length - 1) && styles.dotActive]}
+          />
+        ))}
+      </View>
+    ) : null
+
+  // Above the threshold the counters wear their label outside the box, as the
+  // web does: it is that label row, present in both columns, that lines their
+  // tops up across the gap. On a phone the label belongs inside the tile, which
+  // is what a phone tile is.
+  const counter = (label: string, value: ReactNode) =>
+    dashColumns === 2 ? (
+      <View key={label} style={styles.counterBlock}>
+        <View testID="section-head" style={styles.sectionHead}>
+          <Text style={styles.sectionLabel}>{label}</Text>
+        </View>
+        <View style={[styles.tile, styles.tileTall]}>{value}</View>
+      </View>
+    ) : (
+      <View key={label} style={styles.tile}>
+        <Text style={styles.tileLabel}>{label}</Text>
+        {value}
+      </View>
+    )
+
   return (
     <Screen>
       <ScrollView
@@ -234,9 +270,12 @@ export default function HomeScreen() {
               style={[styles.dashboard, dashColumns === 2 && styles.dashboardRow]}
             >
               <View style={[styles.dashSection, dashColumns === 2 && styles.dashColumn]}>
-                <Text style={styles.sectionLabel}>
-                  {heroes.length > 1 ? 'Prochains matchs' : 'Prochain match'}
-                </Text>
+                <View testID="section-head" style={styles.sectionHead}>
+                  <Text style={styles.sectionLabel}>
+                    {heroes.length > 1 ? 'Prochains matchs' : 'Prochain match'}
+                  </Text>
+                  {dashColumns === 2 && dots}
+                </View>
                 {heroes.length === 0 ? (
                   <View style={styles.card}>
                     <Text style={styles.empty}>Pas de prochain match prévu.</Text>
@@ -285,16 +324,7 @@ export default function HomeScreen() {
                         </View>
                       ))}
                     </ScrollView>
-                    {heroes.length > 1 && (
-                      <View style={styles.dots}>
-                        {heroes.map((h, i) => (
-                          <View
-                            key={h.game.id}
-                            style={[styles.dot, i === Math.min(matchPage, heroes.length - 1) && styles.dotActive]}
-                          />
-                        ))}
-                      </View>
-                    )}
+                    {dashColumns === 1 && dots}
                   </>
                 )}
               </View>
@@ -304,16 +334,16 @@ export default function HomeScreen() {
                   otherwise they are two tall, near-empty boxes (the web settled
                   this in #389). */}
               <View style={[styles.tiles, dashColumns === 2 && styles.tilesStacked]}>
-                <View style={[styles.tile, dashColumns === 2 && styles.tileTall]}>
-                  <Text style={styles.tileLabel}>Matchs joués</Text>
-                  <Text style={styles.tileValue}>{playedCount} / {playedTotal}</Text>
-                </View>
-                <View style={[styles.tile, dashColumns === 2 && styles.tileTall]}>
-                  <Text style={styles.tileLabel}>À confirmer</Text>
+                {counter(
+                  'Matchs joués',
+                  <Text style={styles.tileValue}>{playedCount} / {playedTotal}</Text>,
+                )}
+                {counter(
+                  'À confirmer',
                   <Text style={[styles.tileValue, toConfirm > 0 && { color: colors.warning }]}>
                     {toConfirm} match{toConfirm !== 1 ? 's' : ''}
-                  </Text>
-                </View>
+                  </Text>,
+                )}
               </View>
             </View>
 
@@ -413,6 +443,10 @@ const styles = StyleSheet.create({
   dashboardRow: { flexDirection: 'row', alignItems: 'stretch' },
   dashSection: { gap: GAP },
   dashColumn: { flex: 1 },
+  // One line of label, and whatever shares it. Both columns start with one, so
+  // what follows starts at the same height in each.
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  counterBlock: { flex: 1, gap: GAP },
   welcomeCard: { marginBottom: 4 },
 
   sectionLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: -4 },

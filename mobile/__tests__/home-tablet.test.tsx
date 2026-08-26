@@ -121,6 +121,20 @@ it('sets the counters beside the match card on a tablet', () => {
   expect(dashboard().flexDirection).toBe('row')
 })
 
+it('starts both columns with a label row, which is what lines them up', () => {
+  // The card had a label above it and the counters did not, so the right column
+  // began 30pt higher than the left. Three rows on a tablet — the matches, and
+  // one per counter, as on the web; one on a phone, where there is one column.
+  setWindowSize(TABLET_LARGE)
+  render(<HomeScreen />)
+  expect(screen.getAllByTestId('section-head')).toHaveLength(3)
+
+  screen.unmount()
+  setWindowSize(PHONE_WIDTH)
+  render(<HomeScreen />)
+  expect(screen.getAllByTestId('section-head')).toHaveLength(1)
+})
+
 it('gives the carousel the left column, not the slab', () => {
   setWindowSize(TABLET_LARGE)
 
