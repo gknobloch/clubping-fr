@@ -14,7 +14,7 @@ import {
   setSessionToken,
   verifyEmailCode,
 } from '@/utils/api'
-import { IS_DEPLOYED_API } from '@/constants/api'
+import { IS_PRODUCTION_API } from '@/constants/api'
 
 // Real session token (SecureStore) and the pre-#358 dev user-id (AsyncStorage),
 // kept only so an old install's leftover is cleared on logout.
@@ -22,11 +22,16 @@ const SESSION_KEY = 'pp-club-session'
 const DEV_USER_KEY = 'clubping-user-id'
 
 // Dev login ("pick any user") is available in dev builds (or when explicitly
-// enabled) so local dev doesn't need a real email/OAuth — but NEVER when the
-// app targets the deployed backend, where it can't work anyway (the API guard
-// rejects sessionless dev logins) and would only be confusing.
+// enabled) so local dev doesn't need a real email/OAuth — but NEVER against
+// production, which is the one backend we must not even ask for a user list.
+//
+// Whether it actually appears is the backend's call, not this flag's: the
+// picker lists what `GET /api/auth/dev/users` returns, and that endpoint
+// answers 404 unless DEV_LOGIN_ENABLED is set. So a local server and a PR
+// preview both work — the preview being the anonymised database the web PRs
+// are tested on (#452).
 export const DEV_LOGIN =
-  !IS_DEPLOYED_API &&
+  !IS_PRODUCTION_API &&
   ((typeof __DEV__ !== 'undefined' && __DEV__) || process.env.EXPO_PUBLIC_DEV_LOGIN === 'true')
 
 // ---------------------------------------------------------------------------

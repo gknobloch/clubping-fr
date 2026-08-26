@@ -2,14 +2,14 @@ import { renderHook, waitFor } from '@testing-library/react-native'
 import { AuthProvider, DEV_LOGIN, useAuth } from './AuthContext'
 
 // ---------------------------------------------------------------------------
-// The other half of the dev-login gate (#112, #358): against the deployed
-// backend there must be no picker and no request for one. A separate file
-// because IS_DEPLOYED_API is read at module load, so the two cases cannot
-// share one module registry.
+// The other half of the dev-login gate (#112, #358): against production there
+// must be no picker and no request for one — a preview is another matter
+// (#452). A separate file because IS_PRODUCTION_API is read at module load, so
+// the cases cannot share one module registry.
 // ---------------------------------------------------------------------------
 jest.mock('@/constants/api', () => ({
   API_BASE_URL: 'https://clubping.fr',
-  IS_DEPLOYED_API: true,
+  IS_PRODUCTION_API: true,
   apiUrl: (path: string) => `https://clubping.fr/api${path}`,
 }))
 
