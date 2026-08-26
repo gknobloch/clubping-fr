@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { render } from '@/__tests__/support/render'
+import { CONTENT_MAX_WIDTH } from '@/constants/layout'
 import {
   PHONE_WIDTH,
   TABLET_LARGE,
@@ -18,7 +19,8 @@ import HomeScreen from '@/app/(tabs)/index'
 // other than the one on screen. They are the same number here by construction,
 // and this is what holds them to it — the card was `width - 32`, which on a
 // slab is a 992pt letterbox, and inside the capped content column was wrong
-// twice over.
+// twice over. It measures that column now, so the card lines up with the tiles
+// beneath it.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null; displayName: string } = { user: null, displayName: 'Bo Martin' }
 const mockData = {
@@ -98,12 +100,14 @@ it('fills the width of a phone, less the padding around it', () => {
   expect(carouselWidth()).toBe(PHONE_WIDTH.width - 32)
 })
 
-it('stops at a card rather than stretching across a slab', () => {
+it('stops at the content column rather than stretching across a slab', () => {
   setWindowSize(TABLET_LARGE)
 
   render(<HomeScreen />)
 
-  expect(carouselWidth()).toBe(480)
+  // The column, less its padding — the same width as the tiles below it, not
+  // the 992pt the window would have given.
+  expect(carouselWidth()).toBe(CONTENT_MAX_WIDTH - 32)
 })
 
 it('pages by exactly the width of a card, at either size', () => {

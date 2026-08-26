@@ -44,11 +44,11 @@ export default function HomeScreen() {
   // The carousel pages by its own width, so the card and the scroller are the
   // same width by construction — `onMomentumScrollEnd` below divides the offset
   // by this to find the page, and a scroller wider than its cards would put the
-  // dots on the wrong one. Inside the capped content column (#446), not the
-  // window: on a slab the column stops at one reading width, and 480 keeps the
-  // card from stretching into a letterbox even inside that.
+  // dots on the wrong one. It is the capped content column that is measured
+  // (#446), not the window: `width - 32` was a 992pt letterbox on a slab, and
+  // one card narrower than the tiles under it is a column that does not line up.
   const { width, contentMaxWidth } = useLayout()
-  const cardWidth = Math.min(Math.min(width, contentMaxWidth) - 32, 480)
+  const cardWidth = Math.min(width, contentMaxWidth) - 32
 
   const [composeGameId, setComposeGameId] = useState<string | null>(null)
   const [matchPage, setMatchPage] = useState(0)
