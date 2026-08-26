@@ -221,3 +221,53 @@ describe('MatchDaysPage — sélecteur de phase (#432)', () => {
     ).toBeInTheDocument()
   })
 })
+
+// #454 — that table is the club minus the phase's rosters. In a club where
+// most licenciés play in no team it is the longest list on the page, and until
+// now the only way through it was the scrollbar.
+describe('MatchDaysPage — filtrer « Autres joueurs du club » (#454)', () => {
+  /** One team in the phase, so nearly the whole club lands in the table. */
+  function renderWithOneTeam() {
+    const teams = mockTeams.filter((t) => t.id === 'team-1' || t.phaseId !== PHASE_ID)
+    render(
+      <MemoryRouter initialEntries={['/journees']}>
+        <DataProvider initialData={{ ...baseData(), teams }}>
+          <MatchDaysPage />
+        </DataProvider>
+      </MemoryRouter>,
+    )
+    const section = document.getElementById('other-players')
+    if (!section) throw new Error('the "Autres joueurs du club" section did not render')
+    return section
+  }
+
+  it('n’offre pas de recherche quand la liste est courte', () => {
+    const section = renderPage(mockPlayerPhasePoints)
+    expect(within(section).queryByLabelText('Rechercher un joueur')).not.toBeInTheDocument()
+  })
+
+  it('filtre le tableau par nom au-delà de dix joueurs', () => {
+    const section = renderWithOneTeam()
+    const search = within(section).getByLabelText('Rechercher un joueur')
+
+    const kept = mockPlayers.find((p) => p.lastName === 'Buchi')!
+    const dropped = mockPlayers.find((p) => p.lastName === 'Philippe')!
+    fireEvent.change(search, { target: { value: 'buchi' } })
+
+    expect(
+      within(section).getByText(new RegExp(`${kept.firstName} ${kept.lastName}`)),
+    ).toBeInTheDocument()
+    expect(
+      within(section).queryByText(new RegExp(`${dropped.firstName} ${dropped.lastName}`)),
+    ).not.toBeInTheDocument()
+  })
+
+  it('le dit quand rien ne correspond', () => {
+    const section = renderWithOneTeam()
+    fireEvent.change(within(section).getByLabelText('Rechercher un joueur'), {
+      target: { value: 'zzz' },
+    })
+
+    expect(within(section).getByText(/Aucun joueur ne correspond/)).toBeInTheDocument()
+  })
+})

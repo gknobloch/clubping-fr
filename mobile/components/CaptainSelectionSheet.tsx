@@ -1,9 +1,15 @@
-import { Modal, Pressable, ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
+import { Modal, Pressable, ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useMemo, useState } from 'react'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
 import { isPlayerEligibleForTeam } from '@shared/lib/brulage'
+import {
+  PLAYER_SEARCH_LABEL,
+  PLAYER_SEARCH_THRESHOLD,
+  filterPlayersBySearch,
+} from '@shared/lib/playerSearch'
+import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
 import type { AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -42,15 +48,30 @@ export function CaptainSelectionSheet({
   onClose: () => void
 }) {
   const [selection, setSelection] = useState<string[]>(initialSelection)
+  const [query, setQuery] = useState('')
   const { matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections } = selectionData
+
+  // Archived players have left the club and are not offered (#454); the web
+  // sheet has always filtered them out, this one did not. `initialSelection`
+  // rather than the live selection, so no row disappears mid-tap.
+  const fieldableRoster = useMemo(
+    () => selectablePlayers(teamPlayers, initialSelection),
+    [teamPlayers, initialSelection],
+  )
 
   const eligibleOthers = useMemo(() => {
     const teamPlayerIds = new Set(teamPlayers.map((p) => p.id))
-    return allClubPlayers.filter((p) => {
+    return selectablePlayers(allClubPlayers, initialSelection).filter((p) => {
       if (teamPlayerIds.has(p.id)) return false
       return isPlayerEligibleForTeam(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId)
     })
-  }, [allClubPlayers, teamPlayers, team, clubTeams, matchDays, games, gameSelections, matchDayId])
+  }, [allClubPlayers, teamPlayers, initialSelection, team, clubTeams, matchDays, games, gameSelections, matchDayId])
+
+  // The filter earns its row of screen and its keyboard only on a long list,
+  // so it is the whole sheet that is counted, not one section (#454).
+  const searchable = fieldableRoster.length + eligibleOthers.length > PLAYER_SEARCH_THRESHOLD
+  const shownRoster = searchable ? filterPlayersBySearch(fieldableRoster, query) : fieldableRoster
+  const shownOthers = searchable ? filterPlayersBySearch(eligibleOthers, query) : eligibleOthers
 
   // Players already fielded by another club team this same journée — can't be
   // picked again. Keyed by playerId → that team's number.
@@ -114,14 +135,38 @@ export function CaptainSelectionSheet({
           <Text style={sel.title}>
             Sélection — {getTeamName(team, clubs)} ({selection.length}/{playersPerGame})
           </Text>
-          <ScrollView style={sel.list} showsVerticalScrollIndicator={false}>
-            <Text style={sel.sectionLabel}>Cette équipe</Text>
-            {teamPlayers.map(renderPlayerRow)}
-            {eligibleOthers.length > 0 && (
+          {searchable && (
+            <TextInput
+              style={sel.search}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={PLAYER_SEARCH_LABEL}
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+            />
+          )}
+          <ScrollView
+            style={sel.list}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {shownRoster.length > 0 && (
+              <>
+                <Text style={sel.sectionLabel}>Cette équipe</Text>
+                {shownRoster.map(renderPlayerRow)}
+              </>
+            )}
+            {shownOthers.length > 0 && (
               <>
                 <Text style={sel.sectionLabel}>Autres joueurs</Text>
-                {eligibleOthers.map(renderPlayerRow)}
+                {shownOthers.map(renderPlayerRow)}
               </>
+            )}
+            {shownRoster.length === 0 && shownOthers.length === 0 && query.trim() !== '' && (
+              <Text style={sel.empty}>Aucun joueur ne correspond à « {query.trim()} ».</Text>
             )}
           </ScrollView>
           <View style={sel.actions}>
@@ -153,7 +198,16 @@ const sel = StyleSheet.create({
     fontSize: 11, fontFamily: fonts.bold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4,
   },
+  search: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: 10,
+    paddingHorizontal: 12, minHeight: 44, fontSize: 15,
+    color: colors.textPrimary, backgroundColor: colors.bg, marginTop: 4,
+  },
   list: { marginBottom: 16 },
+  empty: {
+    fontSize: 13, color: colors.textSecondary,
+    textAlign: 'center', paddingVertical: 24,
+  },
   playerRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border,

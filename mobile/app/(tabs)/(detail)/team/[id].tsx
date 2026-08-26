@@ -13,6 +13,12 @@ import { sortByName } from '@shared/lib/sortByName'
 import { computeBrulage } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
+import {
+  PLAYER_SEARCH_LABEL,
+  PLAYER_SEARCH_THRESHOLD,
+  filterPlayersBySearch,
+} from '@shared/lib/playerSearch'
+import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
 import { ClubLogo } from '@/components/ClubLogo'
@@ -39,6 +45,7 @@ export default function TeamDetailScreen() {
   const [draftPlayerIds, setDraftPlayerIds] = useState<string[]>([])
   const [draftCaptainId, setDraftCaptainId] = useState<string>('')
   const [whatsappDraft, setWhatsappDraft] = useState('')
+  const [rosterQuery, setRosterQuery] = useState('')
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
 
   const team = teams.find((t) => t.id === id)
@@ -70,7 +77,9 @@ export default function TeamDetailScreen() {
     [team, teams, phases, matchDays, games],
   )
 
-  // Players available to join this team: active, same club, not on another team in the same phase
+  // Players available to join this team: active, same club, not on another team
+  // in the same phase. An archived player already on the roster stays listed,
+  // otherwise the captain could not take them off it (#454).
   const eligiblePlayers = useMemo(() => {
     if (!team) return []
     const takenElsewhere = new Set(
@@ -79,11 +88,18 @@ export default function TeamDetailScreen() {
         .flatMap((t) => t.playerIds),
     )
     return sortByName(
-      players.filter(
-        (p) => p.clubId === team.clubId && p.status === 'active' && !takenElsewhere.has(p.id),
+      selectablePlayers(
+        players.filter((p) => p.clubId === team.clubId && !takenElsewhere.has(p.id)),
+        team.playerIds,
       ),
     )
   }, [team, teams, players])
+
+  // Past a dozen licenciés this is the whole club to scroll through (#454).
+  const rosterSearchable = eligiblePlayers.length > PLAYER_SEARCH_THRESHOLD
+  const shownEligiblePlayers = rosterSearchable
+    ? filterPlayersBySearch(eligiblePlayers, rosterQuery)
+    : eligiblePlayers
 
   // --- Player quick-view (PlayerSheet) data, computed for the tapped player ---
   const today = new Date().toISOString().slice(0, 10)
@@ -146,6 +162,7 @@ export default function TeamDetailScreen() {
     setDraftPlayerIds(team!.playerIds)
     setDraftCaptainId(team!.captainId)
     setWhatsappDraft(team!.whatsappLink ?? '')
+    setRosterQuery('')
     setShowRosterPicker(true)
   }
 
@@ -342,7 +359,7 @@ export default function TeamDetailScreen() {
             </View>
             <FlatList
               style={styles.modalList}
-              data={eligiblePlayers}
+              data={shownEligiblePlayers}
               keyExtractor={(p) => p.id}
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
@@ -364,7 +381,27 @@ export default function TeamDetailScreen() {
                   </Text>
                   <Text style={styles.fieldLabel}>Composition</Text>
                   <Text style={styles.fieldHint}>Touchez ★ pour le capitaine</Text>
+                  {rosterSearchable && (
+                    <TextInput
+                      style={styles.searchInput}
+                      value={rosterQuery}
+                      onChangeText={setRosterQuery}
+                      placeholder={PLAYER_SEARCH_LABEL}
+                      placeholderTextColor={colors.textSecondary}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      clearButtonMode="while-editing"
+                      returnKeyType="search"
+                    />
+                  )}
                 </View>
+              }
+              ListEmptyComponent={
+                rosterQuery.trim() !== '' ? (
+                  <Text style={styles.pickerEmpty}>
+                    Aucun joueur ne correspond à « {rosterQuery.trim()} ».
+                  </Text>
+                ) : null
               }
               renderItem={({ item: p }) => {
                 const selected = draftPlayerIds.includes(p.id)
@@ -518,6 +555,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
     backgroundColor: colors.bg,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    fontSize: 15,
+    color: colors.textPrimary,
+    backgroundColor: colors.bg,
+    marginTop: 4,
+  },
+  pickerEmpty: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 
   // Roster button

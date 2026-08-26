@@ -18,6 +18,11 @@ import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDayCards, type MatchDayCardEntry } from '@/components/MatchDayCards'
 import { Switcher } from '@/components/Switcher'
 import { sortByName } from '@/lib/sortByName'
+import {
+  PLAYER_SEARCH_LABEL,
+  PLAYER_SEARCH_THRESHOLD,
+  filterPlayersBySearch,
+} from '@/lib/playerSearch'
 import { pointsFor } from '@/lib/phasePoints'
 import { orderPhases, defaultPhase } from '@/lib/phases'
 import { PageHeader } from '@/components/PageHeader'
@@ -219,6 +224,14 @@ export function MatchDaysPage() {
       ),
     )
   }, [players, userClubId, myClubTeamsInPhase])
+
+  // Name filter for "Autres joueurs du club": that table is the whole club
+  // minus the rosters, so in a big club it is the longest list on the page (#454).
+  const [otherPlayersQuery, setOtherPlayersQuery] = useState('')
+  const shownOtherPlayers =
+    otherPlayers.length > PLAYER_SEARCH_THRESHOLD
+      ? filterPlayersBySearch(otherPlayers, otherPlayersQuery)
+      : otherPlayers
 
   const [editingMatchDay, setEditingMatchDay] = useState<MatchDay | null>(null)
   const [creatingMatchDay, setCreatingMatchDay] = useState(false)
@@ -1391,7 +1404,26 @@ export function MatchDaysPage() {
               Joueurs non rattachés à une équipe ; uniquement la composition (équipe retenue) par match.
             </p>
           </div>
-          <div className="flex items-center justify-end gap-2 border-b border-slate-100 px-4 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2">
+            {otherPlayers.length > PLAYER_SEARCH_THRESHOLD ? (
+              <>
+                <label htmlFor="other-players-search" className="sr-only">
+                  {PLAYER_SEARCH_LABEL}
+                </label>
+                <input
+                  id="other-players-search"
+                  type="search"
+                  value={otherPlayersQuery}
+                  onChange={(e) => setOtherPlayersQuery(e.target.value)}
+                  placeholder={PLAYER_SEARCH_LABEL}
+                  autoComplete="off"
+                  className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                />
+              </>
+            ) : (
+              <span />
+            )}
+            <span className="flex items-center gap-2">
             {otherGroupMatchDays.length > VISIBLE_MATCH_DAY_COUNT && (
               <>
                 <button
@@ -1425,6 +1457,7 @@ export function MatchDaysPage() {
                 </button>
               </>
             )}
+            </span>
           </div>
           <div className="overflow-x-auto">
             {(() => {
@@ -1491,7 +1524,17 @@ export function MatchDaysPage() {
                 </tr>
               </thead>
               <tbody>
-                {otherPlayers.map((player) => (
+                {shownOtherPlayers.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4 + otherVisibleMatchDays.length * 2}
+                      className="px-3 py-8 text-center text-sm text-slate-500"
+                    >
+                      Aucun joueur ne correspond à « {otherPlayersQuery.trim()} ».
+                    </td>
+                  </tr>
+                )}
+                {shownOtherPlayers.map((player) => (
                   <tr key={player.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                     <td className="px-3 py-1.5 text-slate-800">
                       <span className="block font-medium">
