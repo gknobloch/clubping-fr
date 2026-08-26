@@ -3,7 +3,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import type { Phase, PlayerPhasePoints } from '@/types'
-import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange } from '@/lib/matchdays'
+import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate } from '@/lib/matchdays'
 import {
   mockClubs,
   mockDivisions,
@@ -33,6 +33,16 @@ const { MatchDaysPage } = await import('./MatchDaysPage')
 
 /** The phase the page opens on. */
 const PHASE_ID = mockPhases.find((p) => p.status === 'active')?.id ?? mockPhases[0].id
+
+/** The teams the page's journée switcher speaks for (#450). */
+const clubTeamIds = () =>
+  new Set(mockTeams.filter((t) => t.clubId === CLUB_ID && t.phaseId === PHASE_ID).map((t) => t.id))
+
+const clubMatchDayGroups = () =>
+  getPhaseMatchDays(PHASE_ID, mockMatchDays, mockGroups, mockDivisions, {
+    games: mockGames,
+    teamIds: clubTeamIds(),
+  })
 
 /**
  * A club player in none of the phase's rosters — the population of the
@@ -181,13 +191,33 @@ describe('MatchDaysPage — sélecteur de phase (#432)', () => {
   it('names the journée and the week it covers, instead of a bare "J8"', () => {
     renderWithPhases(mockPhases)
 
-    const groups = getPhaseMatchDays(mockPhases[0].id, mockMatchDays, mockGroups, mockDivisions)
+    const groups = clubMatchDayGroups()
     const current = groups.find((g) => g.number === activeMatchDayNumber(groups))
     expect(current, 'mock data needs at least one journée').toBeDefined()
 
     expect(screen.getByText(`Journée ${current!.number}`)).toBeInTheDocument()
     expect(
       screen.getByText(formatMatchDayRange(current!.startDate, current!.endDate)),
+    ).toBeInTheDocument()
+  })
+
+  // #450 — the subtitle used to span every poule of the phase, so it could
+  // name a week in which the club plays nothing at all.
+  it('covers the dates of the club’s own matches, and no others', () => {
+    renderWithPhases(mockPhases)
+
+    const groups = clubMatchDayGroups()
+    const current = groups.find((g) => g.number === activeMatchDayNumber(groups))!
+    const roundIds = new Set(current.matchDays.map((m) => m.id))
+    const clubDates = mockGames
+      .filter((g) => roundIds.has(g.matchDayId))
+      .filter((g) => clubTeamIds().has(g.homeTeamId) || clubTeamIds().has(g.awayTeamId))
+      .map((g) => gameDate(g, mockMatchDays.find((m) => m.id === g.matchDayId)!))
+      .sort()
+    expect(clubDates.length, 'mock data needs a club match this journée').toBeGreaterThan(0)
+
+    expect(
+      screen.getByText(formatMatchDayRange(clubDates[0], clubDates[clubDates.length - 1])),
     ).toBeInTheDocument()
   })
 })

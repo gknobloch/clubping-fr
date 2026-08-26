@@ -149,12 +149,26 @@ export interface MatchDayGroup {
   endDate: string
 }
 
+/**
+ * Whose matches a round's dates describe. Without it a journée spans every
+ * poule of the phase, at the poule's own date — two steps away from what the
+ * Journées screen lists, which is the club's teams at each game's own date
+ * (#450). One badly dated round in a poule the club has no team in was enough
+ * to stretch the header over half a season, and to keep that journée "active"
+ * for months.
+ */
+export interface MatchDayScope {
+  games: Game[]
+  teamIds: Iterable<string>
+}
+
 /** A phase's match-days grouped by journée number, ordered by number. */
 export function getPhaseMatchDays(
   phaseId: string,
   matchDays: MatchDay[],
   groups: Group[],
   divisions: Division[],
+  scope?: MatchDayScope,
 ): MatchDayGroup[] {
   const divPhase = new Map(divisions.map((d) => [d.id, d.phaseId]))
   const groupToPhase = new Map<string, string>()
@@ -169,9 +183,25 @@ export function getPhaseMatchDays(
     byNumber.set(md.number, [...(byNumber.get(md.number) ?? []), md])
   }
 
+  // Dates of the scoped teams' own games, per match-day.
+  const scopedDates = new Map<string, string[]>()
+  if (scope) {
+    const teamIds = new Set(scope.teamIds)
+    const mdById = new Map(matchDays.map((m) => [m.id, m]))
+    for (const g of scope.games) {
+      if (!teamIds.has(g.homeTeamId) && !teamIds.has(g.awayTeamId)) continue
+      const md = mdById.get(g.matchDayId)
+      if (!md) continue
+      scopedDates.set(md.id, [...(scopedDates.get(md.id) ?? []), gameDate(g, md)])
+    }
+  }
+
   return [...byNumber.entries()]
     .map(([number, mds]) => {
-      const dates = mds.map((m) => m.date).sort()
+      // A round the club sits out has no game to speak for it, so its poules'
+      // dates stand in — the screen says "aucun match" under them anyway.
+      const scoped = mds.flatMap((m) => scopedDates.get(m.id) ?? [])
+      const dates = (scoped.length ? scoped : mds.map((m) => m.date)).sort()
       return { number, matchDays: mds, startDate: dates[0], endDate: dates[dates.length - 1] }
     })
     .sort((a, b) => a.number - b.number)
@@ -193,7 +223,12 @@ export function activeMatchDayNumber(matchDayGroups: MatchDayGroup[]): number | 
   return matchDayGroups[matchDayGroups.length - 1].number
 }
 
-/** Date-range label, e.g. "sam. 27 oct." or "sam. 27 – dim. 28 oct.". */
+/**
+ * Date-range label, e.g. "sam. 27 oct." or "sam. 27 – dim. 28 oct.".
+ *
+ * The month is dropped from the start only when both ends share it: across
+ * two months, "mar. 13 – sam. 18 mai" reads as 13 to 18 May (#450).
+ */
 export function formatMatchDayRange(startDate: string, endDate: string): string {
   const fmt = (d: string, withMonth: boolean) =>
     new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', {
@@ -201,5 +236,7 @@ export function formatMatchDayRange(startDate: string, endDate: string): string 
       day: 'numeric',
       ...(withMonth ? { month: 'short' } : {}),
     })
-  return startDate === endDate ? fmt(startDate, true) : `${fmt(startDate, false)} – ${fmt(endDate, true)}`
+  if (startDate === endDate) return fmt(startDate, true)
+  const sameMonth = startDate.slice(0, 7) === endDate.slice(0, 7)
+  return `${fmt(startDate, !sameMonth)} – ${fmt(endDate, true)}`
 }

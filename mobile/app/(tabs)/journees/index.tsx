@@ -7,7 +7,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { orderPhases, defaultPhase } from '@shared/lib/phases'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
-import { getPhaseMatchDays, activeMatchDayNumber, formatDateRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
+import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import type { Game, Team } from '@shared/types'
@@ -86,9 +86,23 @@ export default function JourneesScreen() {
   const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
+  const clubTeams = useMemo(
+    () => (phase ? teams.filter((t) => t.clubId === myClubId && t.phaseId === phase.id) : []),
+    [phase, teams, myClubId],
+  )
+
+  // Scoped to the club's teams and their games' own dates: the switcher's
+  // subtitle has to describe the cards below it, not every poule of the phase
+  // (#450).
   const matchDayGroups = useMemo(
-    () => (phase ? getPhaseMatchDays(phase.id, matchDays, groups, divisions) : []),
-    [phase, matchDays, groups, divisions],
+    () =>
+      phase
+        ? getPhaseMatchDays(phase.id, matchDays, groups, divisions, {
+            games,
+            teamIds: clubTeams.map((t) => t.id),
+          })
+        : [],
+    [phase, matchDays, groups, divisions, games, clubTeams],
   )
 
   const [mdNumber, setMdNumber] = useState<number | null>(null)
@@ -118,7 +132,6 @@ export default function JourneesScreen() {
   const clubGames = useMemo(() => {
     if (!phase || !mdGroup) return [] as { team: Team; game: Game }[]
     const roundMdIds = new Set(mdGroup.matchDays.map((m) => m.id))
-    const clubTeams = teams.filter((t) => t.clubId === myClubId && t.phaseId === phase.id)
     const result: { team: Team; game: Game }[] = []
     for (const team of clubTeams) {
       const game = games.find(
@@ -127,7 +140,7 @@ export default function JourneesScreen() {
       if (game) result.push({ team, game })
     }
     return result.sort((a, b) => a.team.number - b.team.number)
-  }, [phase, mdGroup, teams, games, myClubId])
+  }, [phase, mdGroup, clubTeams, games])
 
   // Which teams am I playing for this match-day (roster team + any that borrowed me)?
   const mineLabel = useMemo(() => {
@@ -197,7 +210,7 @@ export default function JourneesScreen() {
           <Switcher
             large
             title={`Journée ${mdGroup.number}`}
-            subtitle={formatDateRange(mdGroup.startDate, mdGroup.endDate)}
+            subtitle={formatMatchDayRange(mdGroup.startDate, mdGroup.endDate)}
             onPrev={mdIndex > 0 ? () => setMdNumber(matchDayGroups[mdIndex - 1].number) : undefined}
             onNext={mdIndex < matchDayGroups.length - 1 ? () => setMdNumber(matchDayGroups[mdIndex + 1].number) : undefined}
           />

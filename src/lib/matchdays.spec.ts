@@ -6,6 +6,7 @@ import {
   gameSchedule,
   gameTime,
   getPhaseMatchDays,
+  formatMatchDayRange,
   isSlotConfirmed,
   isoWeekRange,
   playersCommittedElsewhere,
@@ -236,6 +237,68 @@ describe('getPhaseMatchDays', () => {
 
   it('returns nothing for a phase with no match-days', () => {
     expect(getPhaseMatchDays('phase-3', mds, groups, divisions)).toEqual([])
+  })
+
+  // #450 — the header used to span every poule of the phase, at the poule's
+  // own date. Both are a step away from the cards the screen lists.
+  describe('scoped to a club', () => {
+    const scopedMds: MatchDay[] = [
+      // The club's poule, and a poule it has no team in whose round 1 is
+      // months off — a mis-imported date, but one the club can do nothing
+      // about and should never see.
+      { id: 'a1', groupId: 'grp-1', number: 1, date: '2026-01-10' },
+      { id: 'b1', groupId: 'grp-2', number: 1, date: '2026-05-18' },
+      { id: 'a2', groupId: 'grp-1', number: 2, date: '2026-01-17' },
+    ]
+    const scopedGames: Game[] = [
+      { id: 'g1', matchDayId: 'a1', homeTeamId: 'team-1', awayTeamId: 'opp-1' },
+      { id: 'g2', matchDayId: 'b1', homeTeamId: 'opp-2', awayTeamId: 'opp-3' },
+      { id: 'g3', matchDayId: 'a2', homeTeamId: 'opp-1', awayTeamId: 'team-1' },
+    ]
+    const scope = { games: scopedGames, teamIds: ['team-1'] }
+
+    it('spans only the rounds the club actually plays', () => {
+      const out = getPhaseMatchDays('phase-1', scopedMds, groups, divisions, scope)
+      expect(out[0].startDate).toBe('2026-01-10')
+      expect(out[0].endDate).toBe('2026-01-10')
+      // The other poule's match-day still belongs to the round: the cards are
+      // filtered by team, not by which poules the round is drawn from.
+      expect(out[0].matchDays.map((m) => m.id).sort()).toEqual(['a1', 'b1'])
+    })
+
+    it('reads each game\u2019s own date, not its poule\u2019s', () => {
+      const postponed: Game[] = [{ ...scopedGames[0], date: '2026-01-13' }, ...scopedGames.slice(1)]
+      const out = getPhaseMatchDays('phase-1', scopedMds, groups, divisions, {
+        ...scope,
+        games: postponed,
+      })
+      expect(out[0].startDate).toBe('2026-01-13')
+      expect(out[0].endDate).toBe('2026-01-13')
+    })
+
+    it('falls back to the poules\u2019 dates for a round the club sits out', () => {
+      const out = getPhaseMatchDays('phase-1', scopedMds, groups, divisions, {
+        games: [scopedGames[1]],
+        teamIds: ['team-1'],
+      })
+      expect(out[0].startDate).toBe('2026-01-10')
+      expect(out[0].endDate).toBe('2026-05-18')
+    })
+  })
+})
+
+describe('formatMatchDayRange', () => {
+  it('names the month once for a single date', () => {
+    expect(formatMatchDayRange('2026-10-17', '2026-10-17')).toBe('sam. 17 oct.')
+  })
+
+  it('drops the month from the start within one month', () => {
+    expect(formatMatchDayRange('2026-10-15', '2026-10-17')).toBe('jeu. 15 – sam. 17 oct.')
+  })
+
+  it('keeps the month on both ends across two months (#450)', () => {
+    // "mar. 13 – sam. 18 mai" reads as 13 to 18 May.
+    expect(formatMatchDayRange('2026-10-13', '2027-05-18')).toBe('mar. 13 oct. – mar. 18 mai')
   })
 })
 
