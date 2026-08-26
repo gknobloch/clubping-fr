@@ -27,6 +27,9 @@ export const HEADER_HEIGHT = 52
 // not in whatever space the back button and the avatar happen to leave.
 const SIDE_WIDTH = 44
 
+/** Bar padding, before the safe-area insets are added to it. */
+const HEADER_PADDING_X = 12
+
 export function AppHeader({
   title,
   showBack = false,
@@ -42,7 +45,22 @@ export function AppHeader({
   const router = useRouter()
 
   return (
-    <View style={[styles.header, { paddingTop: insets.top, height: HEADER_HEIGHT + insets.top }]}>
+    // Left/right insets, not just the top one (#445): now that the app rotates,
+    // a landscape notch eats into the bar's ends — the brand mark on one side,
+    // the avatar on the other. The background still runs edge to edge; only its
+    // content moves in.
+    <View
+      testID="app-header"
+      style={[
+        styles.header,
+        {
+          paddingTop: insets.top,
+          height: HEADER_HEIGHT + insets.top,
+          paddingLeft: HEADER_PADDING_X + insets.left,
+          paddingRight: HEADER_PADDING_X + insets.right,
+        },
+      ]}
+    >
       <View style={styles.side}>
         {/* router.back() rather than the native stack's own back: the first
             detail screen pushed onto the shared stack has nothing beneath it
@@ -91,7 +109,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
+    // Horizontal padding is applied inline, insets included — see above.
   },
   side: { width: SIDE_WIDTH, justifyContent: 'center' },
   sideRight: { alignItems: 'flex-end' },

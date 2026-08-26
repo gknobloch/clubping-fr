@@ -38,6 +38,18 @@ npm run ios
 npm run android
 ```
 
+**On a tablet.** The app runs full-screen on iPad and Android tablets and follows
+the device's rotation (#445); its layout is still the phone one, which is #446.
+`--device` with no value lists the installed simulators so you can pick an iPad:
+
+```bash
+npm run ios -- --device
+```
+
+Two things only show up there, and are worth a look after any layout change:
+**rotation** (turn the device on every tab, not just Accueil) and iPadOS
+**split view**, which hands the app a phone's width without relaunching it.
+
 ## Tests
 
 Unit tests run on [jest-expo](https://docs.expo.dev/develop/unit-testing/), separately from the web app's Vitest suite (own config, own `node_modules`). Both `npm run typecheck` and `npm run test:run` run on every PR.

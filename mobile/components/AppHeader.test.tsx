@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
+import { StyleSheet } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { User } from '@shared/types'
 import { AppHeader } from './AppHeader'
@@ -23,6 +24,14 @@ const member: User = { id: 'u1', role: 'player', isPlayer: true, firstName: 'Bo'
 const metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
+}
+
+// The same phone on its side: no status-bar inset any more, and a notch on one
+// end of the bar instead. Only reachable since the app stopped being locked to
+// portrait (#445).
+const landscapeMetrics = {
+  frame: { x: 0, y: 0, width: 844, height: 390 },
+  insets: { top: 0, left: 59, right: 59, bottom: 21 },
 }
 
 function renderHeader(element: React.ReactElement) {
@@ -91,4 +100,19 @@ it('renders nothing for the account of a signed-out user', () => {
 
   expect(screen.getByText('Accueil')).toBeTruthy()
   expect(screen.queryByLabelText('Mon compte')).toBeNull()
+})
+
+it('keeps its content clear of a landscape notch', () => {
+  render(
+    <SafeAreaProvider initialMetrics={landscapeMetrics}>
+      <AppHeader title="Journées" />
+    </SafeAreaProvider>,
+  )
+
+  // The bar's own 12pt, plus the inset — the background still runs edge to
+  // edge, only the mark and the avatar move in.
+  const style = StyleSheet.flatten(screen.getByTestId('app-header').props.style)
+  expect(style.paddingLeft).toBe(12 + 59)
+  expect(style.paddingRight).toBe(12 + 59)
+  expect(style.paddingTop).toBe(0)
 })

@@ -38,7 +38,18 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const activeName = pathToTab(usePathname(), !!playerId)
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    // Left/right insets alongside the bottom one (#445): in landscape the notch
+    // sits beside the bar, and the first and last tabs would slide under it.
+    <View
+      style={[
+        styles.bar,
+        {
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+    >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
         // Skip hidden tabs — expo-router turns href:null into display:'none'
