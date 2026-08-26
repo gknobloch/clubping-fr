@@ -59,14 +59,37 @@ test.describe('Player — Accueil (captain shortcut)', () => {
     await loginAs(page, 'colle')
   })
 
-  test('opens the line-up sheet in one tap, from the card itself', async ({ page }) => {
-    const compose = page.getByRole('button', { name: /Composer l'équipe/ })
+  // #456 — the shortcut leads somewhere different at each width, the same
+  // split "Détails" makes above. On a wide screen the sheet was a full-height
+  // list of the club laid over the matrix, which already shows the
+  // availabilities, the brûlage and the club's other teams.
+  test('mène à la journée, le match entouré, sur grand écran', async ({ page }) => {
+    const compose = page.getByRole('link', { name: /Composer l'équipe/ })
     await expect(compose).toBeVisible()
     await expect(compose).toContainText('4/4')
+    // The sheet's own trigger is not merely unused here — it is not rendered.
+    await expect(page.getByRole('button', { name: /Composer l'équipe/ })).toBeHidden()
 
     await compose.click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByText(/Sélection — PPA Rixheim 1/)).toBeVisible()
+    await expect(page).toHaveURL(/\/journees\?equipe=team-1&match=g1-8/)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    // #347's ring — the point of the deep link is that the fixture is findable
+    // in a matrix of otherwise identical cells.
+    await expect(page.locator('.ring-accent-500').first()).toBeVisible()
+  })
+
+  test.describe('sur téléphone', () => {
+    test.use({ viewport: { width: 375, height: 812 } })
+
+    test('ouvre la feuille en un geste, depuis la carte', async ({ page }) => {
+      const compose = page.getByRole('button', { name: /Composer l'équipe/ })
+      await expect(compose).toBeVisible()
+      await expect(compose).toContainText('4/4')
+
+      await compose.click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+      await expect(page.getByText(/Sélection — PPA Rixheim 1/)).toBeVisible()
+    })
   })
 })
 
