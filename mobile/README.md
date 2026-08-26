@@ -61,6 +61,26 @@ Set them in `mobile/.env` (git-ignored):
 EXPO_PUBLIC_API_URL=http://localhost:8788
 ```
 
+### Testing a pull request (#452)
+
+A PR's preview deployment is the same backend the web PR is reviewed on: the
+anonymised `clubping-fr-dev` database, with dev login enabled. Point the app at
+it by PR number — no `.env` to edit, and nothing to remember to undo:
+
+```bash
+PR=451 npm run start:pr
+```
+
+That is `EXPO_PUBLIC_API_URL=https://pr-451.clubping-fr.pages.dev expo start
+--clear`. Sign in with "Connexion dev (test)" and pick one of the anonymised
+profiles; the e-mail codes are of no use here, since those accounts' addresses
+are `@example.invalid` and nothing is ever sent to them.
+
+The default backend is production, and only production hides dev login — a
+preview, a LAN address and `localhost` all offer it in a dev build. What
+decides is the backend itself: the picker lists whatever
+`GET /api/auth/dev/users` returns, and production answers 404.
+
 ### Dev login against a local backend
 
 "Connexion dev (test)" lists the backend's own users, from `GET
