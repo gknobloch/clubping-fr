@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canSeeArchivedPlayers, visiblePlayers } from './playerVisibility'
+import { canSeeArchivedPlayers, selectablePlayers, visiblePlayers } from './playerVisibility'
 
 const roster = [
   { id: 'p1', status: 'active' },
@@ -41,5 +41,25 @@ describe('visiblePlayers (#438)', () => {
     expect(
       visiblePlayers(roster, { role: 'player', activeOnly: false }).map((p) => p.id),
     ).toEqual(['p1', 'p3'])
+  })
+})
+
+describe('selectablePlayers (#454)', () => {
+  const p = (id: string, status: string) => ({ id, status })
+
+  it('drops archived players', () => {
+    expect(selectablePlayers([p('1', 'active'), p('2', 'archived')], []).map((x) => x.id)).toEqual([
+      '1',
+    ])
+  })
+
+  it('keeps an archived player who is already in the line-up', () => {
+    expect(
+      selectablePlayers([p('1', 'active'), p('2', 'archived')], ['2']).map((x) => x.id),
+    ).toEqual(['1', '2'])
+  })
+
+  it('returns an empty list for an empty input', () => {
+    expect(selectablePlayers([], ['1'])).toEqual([])
   })
 })

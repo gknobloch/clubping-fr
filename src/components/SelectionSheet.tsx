@@ -3,6 +3,12 @@ import { ModalShell } from '@/components/ModalShell'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { AVAILABILITY_COLORS, AVAILABILITY_LABELS } from '@/components/availabilityControls'
 import { sortByName } from '@/lib/sortByName'
+import {
+  PLAYER_SEARCH_LABEL,
+  PLAYER_SEARCH_THRESHOLD,
+  filterPlayersBySearch,
+} from '@/lib/playerSearch'
+import { selectablePlayers } from '@/lib/playerVisibility'
 import type { AvailabilityStatus, Player } from '@/types'
 
 /**
@@ -42,6 +48,7 @@ export function SelectionSheet({
 }) {
   const [selection, setSelection] = useState<string[]>(initialSelection)
   const [limitHit, setLimitHit] = useState(false)
+  const [query, setQuery] = useState('')
 
   const full = selection.length >= playersPerGame
 
@@ -59,8 +66,21 @@ export function SelectionSheet({
     })
   }
 
-  const sortedRoster = useMemo(() => sortByName(roster), [roster])
+  // The callers already keep archived players out of `others`; the roster is
+  // the team's own list, where one may have been archived since (#454). Kept
+  // when already picked, so a stale name can still be removed.
+  const sortedRoster = useMemo(
+    () => sortByName(selectablePlayers(roster, initialSelection)),
+    [roster, initialSelection],
+  )
   const sortedOthers = useMemo(() => sortByName(others), [others])
+
+  // Past a dozen names this stops being a list you read (#454). Counted over
+  // the whole sheet rather than one section: it is the scrolling that hurts.
+  const searchable = sortedRoster.length + sortedOthers.length > PLAYER_SEARCH_THRESHOLD
+  const shownRoster = searchable ? filterPlayersBySearch(sortedRoster, query) : sortedRoster
+  const shownOthers = searchable ? filterPlayersBySearch(sortedOthers, query) : sortedOthers
+  const noMatch = searchable && query.trim() !== '' && shownRoster.length + shownOthers.length === 0
 
   const row = (player: Player) => {
     const picked = selection.includes(player.id)
@@ -125,18 +145,47 @@ export function SelectionSheet({
           )}
         </div>
 
-        <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Cette équipe
-        </p>
-        <ul>{sortedRoster.map(row)}</ul>
+        {searchable && (
+          <div className="border-b border-slate-100 px-4 py-3">
+            <label htmlFor="selection-search" className="sr-only">
+              {PLAYER_SEARCH_LABEL}
+            </label>
+            <input
+              id="selection-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={PLAYER_SEARCH_LABEL}
+              autoComplete="off"
+              className="min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+            />
+          </div>
+        )}
 
-        {sortedOthers.length > 0 && (
+        {/* Without a query the header shows even on an empty roster, as it always
+            has; while filtering an empty section is just noise. */}
+        {(shownRoster.length > 0 || query.trim() === '') && (
+          <>
+            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Cette équipe
+            </p>
+            <ul>{shownRoster.map(row)}</ul>
+          </>
+        )}
+
+        {shownOthers.length > 0 && (
           <>
             <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Autres joueurs
             </p>
-            <ul>{sortedOthers.map(row)}</ul>
+            <ul>{shownOthers.map(row)}</ul>
           </>
+        )}
+
+        {noMatch && (
+          <p className="px-4 py-8 text-center text-sm text-slate-500">
+            Aucun joueur ne correspond à « {query.trim()} ».
+          </p>
         )}
 
         <div className="flex gap-2 border-t border-slate-100 p-4">

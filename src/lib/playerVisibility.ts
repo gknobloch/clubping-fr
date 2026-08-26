@@ -35,3 +35,18 @@ export function visiblePlayers<T extends { status: string }>(
   if (!activeOnly && canSeeArchivedPlayers(role)) return players
   return players.filter((p) => p.status === 'active')
 }
+
+/**
+ * Who a captain may field (#454).
+ *
+ * An archived player has left the club, so they are never offered for a
+ * line-up. One already picked stays listed, though: dropping them from the
+ * sheet would leave a stale name in the composition with no way to remove it.
+ */
+export function selectablePlayers<T extends { id: string; status: string }>(
+  players: T[],
+  alreadySelected: Iterable<string>,
+): T[] {
+  const kept = new Set(alreadySelected)
+  return players.filter((p) => p.status === 'active' || kept.has(p.id))
+}

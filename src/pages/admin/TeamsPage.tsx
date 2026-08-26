@@ -14,6 +14,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { ImportTeamsModal } from '@/components/ImportTeamsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
+import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
 
 export function TeamsPage() {
@@ -722,24 +723,18 @@ export function TeamsPage() {
                 </div>
                 {availablePlayersToAdd.length > 0 && (
                   <div className="mt-2">
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        const id = e.target.value
-                        if (id && !form.playerIds.includes(id)) {
-                          setForm((f) => ({ ...f, playerIds: [...f.playerIds, id] }))
-                        }
-                        e.target.value = ''
-                      }}
-                      className="min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                    >
-                      <option value="">+ Ajouter un joueur</option>
-                      {availablePlayersToAdd.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.firstName} {p.lastName}
-                        </option>
-                      ))}
-                    </select>
+                    {/* A searchable sheet, not a dropdown: a club of fifty made
+                        the native list unusable, on a phone most of all (#454). */}
+                    <PlayerPicker
+                      players={availablePlayersToAdd}
+                      onPick={(id) =>
+                        setForm((f) =>
+                          f.playerIds.includes(id)
+                            ? f
+                            : { ...f, playerIds: [...f.playerIds, id] },
+                        )
+                      }
+                    />
                   </div>
                 )}
               </div>
