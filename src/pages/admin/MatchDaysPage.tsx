@@ -429,9 +429,18 @@ export function MatchDaysPage() {
   // Below md: the matrix is replaced by one card per team for a single
   // journée, so the two paginators collapse into one switcher over journée
   // numbers. Desktop keeps the matrix and its own controls untouched.
+  // Scoped to the club's teams and their games' own dates: the switcher's
+  // subtitle has to describe the cards below it, not every poule of the phase
+  // (#450).
   const matchDayGroups = useMemo(
-    () => (selectedPhaseId ? getPhaseMatchDays(selectedPhaseId, matchDays, groups, divisions) : []),
-    [selectedPhaseId, matchDays, groups, divisions]
+    () =>
+      selectedPhaseId
+        ? getPhaseMatchDays(selectedPhaseId, matchDays, groups, divisions, {
+            games,
+            teamIds: myClubTeamsInPhase.map((t) => t.id),
+          })
+        : [],
+    [selectedPhaseId, matchDays, groups, divisions, games, myClubTeamsInPhase]
   )
   const [mobileMatchDayNumber, setMobileMatchDayNumber] = useState<number | null>(null)
   // Default — and re-default on phase change — to the active journée.
