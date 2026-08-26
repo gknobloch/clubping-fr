@@ -12,15 +12,15 @@ import type { Club, Division, Game, Group, MatchDay, Phase, Player, Season, Team
 import HomeScreen from '@/app/(tabs)/index'
 
 // ---------------------------------------------------------------------------
-// Accueil — the next-match carousel at width (#446)
+// Accueil at tablet width (#446)
 //
-// The carousel pages by its own width, and `onMomentumScrollEnd` divides the
-// offset by the card's: if the two ever disagree, the dots point at a card
-// other than the one on screen. They are the same number here by construction,
-// and this is what holds them to it — the card was `width - 32`, which on a
-// slab is a 992pt letterbox, and inside the capped content column was wrong
-// twice over. It measures that column now, so the card lines up with the tiles
-// beneath it.
+// Two things, and the second falls out of the first. The dashboard becomes two
+// columns above the threshold, as the web has always been — the match card on
+// the left, the counters stacked beside it. The carousel is therefore as wide
+// as that left column, and `onMomentumScrollEnd` divides the scroll offset by
+// the card's width to find the page: if the two ever disagree, the dots point
+// at a card other than the one on screen. They are the same number by
+// construction, and this is what holds them to it.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null; displayName: string } = { user: null, displayName: 'Bo Martin' }
 const mockData = {
@@ -91,23 +91,45 @@ afterEach(resetWindowSize)
 const carouselWidth = () =>
   StyleSheet.flatten(screen.getByTestId('next-match-carousel').props.style).width
 const pageWidth = () => StyleSheet.flatten(screen.getByTestId('next-match-page').props.style).width
+const dashboard = () => StyleSheet.flatten(screen.getByTestId('dashboard').props.style)
+
+/** The screen's padding, and the gap between the two columns. */
+const PADDING = 16
+const GAP = 12
 
 it('fills the width of a phone, less the padding around it', () => {
   setWindowSize(PHONE_WIDTH)
 
   render(<HomeScreen />)
 
-  expect(carouselWidth()).toBe(PHONE_WIDTH.width - 32)
+  expect(carouselWidth()).toBe(PHONE_WIDTH.width - PADDING * 2)
 })
 
-it('stops at the content column rather than stretching across a slab', () => {
+it('stacks the card and the counters on a phone', () => {
+  setWindowSize(PHONE_WIDTH)
+
+  render(<HomeScreen />)
+
+  expect(dashboard().flexDirection).toBeUndefined()
+})
+
+it('sets the counters beside the match card on a tablet', () => {
   setWindowSize(TABLET_LARGE)
 
   render(<HomeScreen />)
 
-  // The column, less its padding — the same width as the tiles below it, not
-  // the 992pt the window would have given.
-  expect(carouselWidth()).toBe(CONTENT_MAX_WIDTH - 32)
+  expect(dashboard().flexDirection).toBe('row')
+})
+
+it('gives the carousel the left column, not the slab', () => {
+  setWindowSize(TABLET_LARGE)
+
+  render(<HomeScreen />)
+
+  // Half of the two-column content, less the padding and the gap between them
+  // — not the 992pt the window would have given.
+  const content = Math.min(TABLET_LARGE.width, CONTENT_MAX_WIDTH * 2) - PADDING * 2
+  expect(carouselWidth()).toBe((content - GAP) / 2)
 })
 
 it('pages by exactly the width of a card, at either size', () => {
