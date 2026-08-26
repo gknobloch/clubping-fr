@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
@@ -266,21 +267,62 @@ export function HomePage() {
                             </button>
                           </div>
                         </div>
-                        {canCompose && (
-                          <button
-                            type="button"
-                            onClick={() => setComposing(true)}
-                            className="mt-3 flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50"
-                          >
-                            <span className="text-sm font-medium text-slate-800">Composer l'équipe</span>
-                            <span className="flex shrink-0 items-center gap-2">
-                              <span className={`text-sm font-semibold ${selectedIds.length >= playersPerGame ? 'text-green-700' : 'text-amber-600'}`}>
-                                {selectedIds.length}/{playersPerGame}
+                        {canCompose && (() => {
+                          /* One row, two destinations — the same split
+                             GameQuickView's "Détails" makes, and for the same
+                             reason (#456).
+
+                             Below md: the sheet, which is the phone's whole
+                             answer to composing a line-up (#380, #382).
+
+                             From md up: the Journées matrix, deep-linked so it
+                             picks the phase, slides its window onto this
+                             journée, scrolls to the team and rings the fixture
+                             (#347). At that width the sheet was a full-height
+                             list of the club laid over a screen that already
+                             does the job better — with the availabilities, the
+                             brûlage and the club's other teams in view.
+
+                             Two elements rather than a width test in JS: a
+                             `hidden` element simply is not there, so exactly
+                             one is live at any width, and nothing has to
+                             re-measure on resize.
+
+                             The display utility is left off the shared classes
+                             so each element states its own — `flex` and
+                             `hidden` in one list would decide by stylesheet
+                             order rather than intent. */
+                          const rowClass =
+                            'mt-3 min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50'
+                          const inner = (
+                            <>
+                              <span className="text-sm font-medium text-slate-800">Composer l'équipe</span>
+                              <span className="flex shrink-0 items-center gap-2">
+                                <span className={`text-sm font-semibold ${selectedIds.length >= playersPerGame ? 'text-green-700' : 'text-amber-600'}`}>
+                                  {selectedIds.length}/{playersPerGame}
+                                </span>
+                                <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-400" />
                               </span>
-                              <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-400" />
-                            </span>
-                          </button>
-                        )}
+                            </>
+                          )
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setComposing(true)}
+                                className={`${rowClass} flex md:hidden`}
+                              >
+                                {inner}
+                              </button>
+                              <Link
+                                to={`/journees?equipe=${myActiveTeam.id}&match=${g.id}`}
+                                className={`${rowClass} hidden md:flex`}
+                              >
+                                {inner}
+                              </Link>
+                            </>
+                          )
+                        })()}
                       </div>
                       {composing && canCompose && (
                         <SelectionSheet

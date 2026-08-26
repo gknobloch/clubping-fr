@@ -88,6 +88,28 @@ describe('HomePage — next-match card status and shortcuts (#385)', () => {
     expect(screen.getByRole('heading', { name: /Sélection — PPA Rixheim 1/ })).toBeInTheDocument()
   })
 
+  // #456 — the sheet is the phone's answer. On a wide screen it was a
+  // full-height list of the club laid over the Journées matrix, which already
+  // does the job with the availabilities and the brûlage in view. Both
+  // elements are in the DOM at once here: which one is live is a media query,
+  // and jsdom applies none — so they are told apart by role, as the two
+  // "Détails" links in GameQuickView.test.tsx are.
+  it('sends the captain to the deep-linked journée instead, from md up', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    const link = screen.getByRole('link', { name: /Composer l'équipe/ })
+    expect(link).toHaveAttribute('href', '/journees?equipe=team-1&match=g1-8')
+    // The ring and the fill state travel together: the count is the reason to
+    // click either one.
+    expect(link).toHaveTextContent('4/4')
+  })
+
+  it('keeps the two destinations behind the same gate', () => {
+    renderAs({ id: ROSTER_MEMBER_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    expect(screen.queryByRole('link', { name: /Composer l'équipe/ })).not.toBeInTheDocument()
+  })
+
   it('shows "Matchs joués" alongside "À confirmer" at every width', () => {
     renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
 
