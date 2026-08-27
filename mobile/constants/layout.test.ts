@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react-native'
 import { CONTENT_MAX_WIDTH, TABLET_MIN_SIDE, useLayout } from './layout'
 import {
   PHONE_WIDTH,
+  TABLET_LANDSCAPE,
   TABLET_LARGE,
   TABLET_SMALL,
   resetWindowSize,
@@ -77,4 +78,43 @@ it('reports the window width and the reading width', () => {
 
   expect(layout().width).toBe(TABLET_LARGE.width)
   expect(layout().contentMaxWidth).toBe(CONTENT_MAX_WIDTH)
+})
+
+// ---------------------------------------------------------------------------
+// The two rules #447 hangs off. Both are read from `isTablet`, and the
+// difference between them is the whole design: one follows the rotation and
+// the other must not.
+// ---------------------------------------------------------------------------
+describe('the tablet layouts (#447)', () => {
+  it('rails the tab bar on a slab held sideways, and only there', () => {
+    setWindowSize(TABLET_LANDSCAPE)
+    expect(layout().hasSideRail).toBe(true)
+
+    // Standing up it is short of width, not of height: the row stays.
+    setWindowSize(TABLET_LARGE)
+    expect(layout().hasSideRail).toBe(false)
+
+    // And a phone on its side is still a phone, however wide.
+    setWindowSize({ width: 874, height: 402 })
+    expect(layout().hasSideRail).toBe(false)
+  })
+
+  it('keeps the two-pane sections through a rotation', () => {
+    // The trap this avoids: were the panes tied to landscape, the same tap
+    // would push a screen in portrait and select a row in landscape. The short
+    // side does not change when the slab turns, so neither does the answer.
+    setWindowSize(TABLET_LARGE)
+    expect(layout().isTwoPane).toBe(true)
+
+    setWindowSize(TABLET_LANDSCAPE)
+    expect(layout().isTwoPane).toBe(true)
+  })
+
+  it('leaves a phone with one pane, either way up', () => {
+    setWindowSize(PHONE_WIDTH)
+    expect(layout().isTwoPane).toBe(false)
+
+    setWindowSize({ width: 844, height: 390 })
+    expect(layout().isTwoPane).toBe(false)
+  })
 })

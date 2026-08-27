@@ -37,6 +37,19 @@ it('lets a screen add to its frame without losing the insets', () => {
   expect(frameStyle().paddingLeft).toBe(59)
 })
 
+it('leaves the insets to the screen around it when it is only a pane', () => {
+  // A two-pane section frames itself once (#447). The fiche in the right-hand
+  // pane taking the window's insets again would push it in by a notch that is
+  // nowhere near it — the left one belongs to the list beside it.
+  render(<Screen pane><Text>Rixheim PPA 2</Text></Screen>, { metrics: PHONE_LANDSCAPE })
+
+  const style = StyleSheet.flatten(screen.getByTestId('pane').props.style)
+  expect(style.paddingLeft).toBeUndefined()
+  expect(style.paddingRight).toBeUndefined()
+  // Still a frame: it fills what it is given, on the app's background.
+  expect(style.flex).toBe(1)
+})
+
 describe('contentWidth', () => {
   it('caps a column of content at a reading width and centres it', () => {
     const style = StyleSheet.flatten(contentWidth())

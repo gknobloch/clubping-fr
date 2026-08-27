@@ -23,6 +23,16 @@ const detailHeader = ({ options, route }: { options: { title?: string }; route: 
 // blurred (the user taps another tab, or backs out of the last detail to a
 // tab). Drilling deeper *within* the detail flow (player → team → match) never
 // blurs this tab, so those pushes still chain correctly for the back button.
+//
+// The two-pane sections (#447) leave this rule exactly as it is, and that was
+// the point of building them the way they are. A pane is not a screen you
+// blur: had the right-hand pane been this Stack rendered beside its list, the
+// reset would have had to mean something else — and it is the only thing
+// stopping the back button from replaying every fiche ever opened. Instead the
+// pane renders the fiche's component directly (see (tabs)/equipes/index), and
+// this Stack keeps its one job: a detail *pushed over* a section, which is
+// still what a phone does everywhere, and what a tablet does for anything that
+// is not in the list beside it.
 type NavState = { routes: { name: string; key: string; state?: unknown }[]; index: number }
 type Nav = {
   getState?: () => NavState

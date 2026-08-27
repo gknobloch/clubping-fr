@@ -12,6 +12,8 @@ import { Dimensions } from 'react-native'
 export const TABLET_LARGE = { width: 1024, height: 1366 }
 /** iPad Air / 11", standing up — the narrow end of the tablet range. */
 export const TABLET_SMALL = { width: 834, height: 1112 }
+/** The 12.9" on its side — where the tab bar becomes a rail (#447). */
+export const TABLET_LANDSCAPE = { width: 1366, height: 1024 }
 /** Under the threshold: an iPad in Split View has a phone's width. */
 export const PHONE_WIDTH = { width: 390, height: 844 }
 
