@@ -12,7 +12,7 @@ import { MatchDate } from '@/components/MatchDate'
 import { GameQuickView } from '@/components/GameQuickView'
 import { PlayerPhaseHistory } from '@/components/PlayerPhaseHistory'
 import { SelectionSheet } from '@/components/SelectionSheet'
-import { AvailabilityButtons, AvailabilityChip } from '@/components/Availability'
+import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck } from '@/components/Availability'
 import { HomeIcon, AwayIcon, Pill, PhaseSwitchButton, AlertIcon, ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
@@ -90,7 +90,8 @@ export function HomePage() {
     return playersCommittedElsewhere(myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections).get(myPlayerId)
   }
 
-  const { canEditGameSelection, isEligibleForTeam } = useMatchDayEditing(activePhase?.id ?? null)
+  const { canEditAvailability, canEditGameSelection, isEligibleForTeam, isOverride } =
+    useMatchDayEditing(activePhase?.id ?? null)
 
   const statusOf = (gameId: string, playerId: string): AvailabilityStatus | undefined =>
     gameAvailabilities.find((a) => a.gameId === gameId && a.playerId === playerId)?.status
@@ -145,70 +146,79 @@ export function HomePage() {
 
       {isPlayerDashboard && myActiveTeam ? (
         <>
-          {/* Upcoming matches — set your availability inline; à confirmer count on the side */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="flex flex-col gap-3">
-              <div className="flex h-7 items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochains matchs</p>
-                {upcoming.length > 1 && (
-                  <div className="flex items-center gap-1">
-                    <PhaseSwitchButton
-                      dir="prev"
-                      disabled={matchIndex <= 0}
-                      onClick={() => setMatchIndex((i) => Math.max(0, i - 1))}
-                      prevLabel="Match précédent"
-                    />
-                    <span className="text-xs font-medium text-slate-400">
-                      {Math.min(matchIndex, upcoming.length - 1) + 1}/{upcoming.length}
-                    </span>
-                    <PhaseSwitchButton
-                      dir="next"
-                      disabled={matchIndex >= upcoming.length - 1}
-                      onClick={() => setMatchIndex((i) => Math.min(upcoming.length - 1, i + 1))}
-                      nextLabel="Match suivant"
-                    />
-                  </div>
-                )}
-              </div>
-              {upcoming.length === 0 ? (
-                <div className="flex flex-1 items-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-base font-bold text-slate-800">Pas de prochain match prévu</p>
+          {/* The next match, full width: from md: up the card splits in two on
+              its own — the game on the left, the team's answers on the right —
+              so it no longer shares the row with two counters (#461). */}
+          <div className="flex flex-col gap-3">
+            <div className="flex h-7 items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochains matchs</p>
+              {upcoming.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <PhaseSwitchButton
+                    dir="prev"
+                    disabled={matchIndex <= 0}
+                    onClick={() => setMatchIndex((i) => Math.max(0, i - 1))}
+                    prevLabel="Match précédent"
+                  />
+                  <span className="text-xs font-medium text-slate-400">
+                    {Math.min(matchIndex, upcoming.length - 1) + 1}/{upcoming.length}
+                  </span>
+                  <PhaseSwitchButton
+                    dir="next"
+                    disabled={matchIndex >= upcoming.length - 1}
+                    onClick={() => setMatchIndex((i) => Math.min(upcoming.length - 1, i + 1))}
+                    nextLabel="Match suivant"
+                  />
                 </div>
-              ) : (
-                (() => {
-                  const g = upcoming[Math.min(matchIndex, upcoming.length - 1)]
-                  const md = mdMap.get(g.matchDayId)!
-                  const isHome = g.homeTeamId === myActiveTeam.id
-                  const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
-                  const homeTeam = teams.find((t) => t.id === g.homeTeamId)
-                  // The receiving club's time (#287), never this team's own.
-                  const time = gameTime(g, md, homeTeam)
-                  const matchup = isHome
-                    ? `${getTeamName(myActiveTeam, clubs)} – ${opp ? getTeamName(opp, clubs) : '?'}`
-                    : `${opp ? getTeamName(opp, clubs) : '?'} – ${getTeamName(myActiveTeam, clubs)}`
-                  const dateLabel = new Date(gameDate(g, md) + 'T12:00:00').toLocaleDateString('fr-FR', {
-                    weekday: 'long', day: 'numeric', month: 'long',
-                  })
-                  const locked = committedElsewhere(g.id)
-                  const playersPerGame = divisions.find((d) => d.id === myActiveTeam.divisionId)?.playersPerGame ?? 4
-                  const availableCount = teamRoster.filter((p) => statusOf(g.id, p.id) === 'available').length
-                  const noResponseCount = teamRoster.filter((p) => statusOf(g.id, p.id) === undefined).length
-                  const selectedIds = gameSelections.find((s) => s.gameId === g.id && s.teamId === myActiveTeam.id)?.playerIds ?? []
-                  const canCompose = canEditGameSelection(myActiveTeam.id)
-                  const short = availableCount < playersPerGame
-                  const eligibleOthers = players.filter(
-                    (p) =>
-                      p.clubId === myActiveTeam.clubId &&
-                      p.status === 'active' &&
-                      !myActiveTeam.playerIds.includes(p.id) &&
-                      isEligibleForTeam(p.id, myActiveTeam.id, md.id),
-                  )
-                  const composeCommittedElsewhere = playersCommittedElsewhere(
-                    myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections,
-                  )
-                  return (
-                    <>
-                      <div key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              )}
+            </div>
+            {upcoming.length === 0 ? (
+              <div className="flex flex-1 items-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-base font-bold text-slate-800">Pas de prochain match prévu</p>
+              </div>
+            ) : (
+              (() => {
+                const g = upcoming[Math.min(matchIndex, upcoming.length - 1)]
+                const md = mdMap.get(g.matchDayId)!
+                const isHome = g.homeTeamId === myActiveTeam.id
+                const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
+                const homeTeam = teams.find((t) => t.id === g.homeTeamId)
+                // The receiving club's time (#287), never this team's own.
+                const time = gameTime(g, md, homeTeam)
+                const matchup = isHome
+                  ? `${getTeamName(myActiveTeam, clubs)} – ${opp ? getTeamName(opp, clubs) : '?'}`
+                  : `${opp ? getTeamName(opp, clubs) : '?'} – ${getTeamName(myActiveTeam, clubs)}`
+                const dateLabel = new Date(gameDate(g, md) + 'T12:00:00').toLocaleDateString('fr-FR', {
+                  weekday: 'long', day: 'numeric', month: 'long',
+                })
+                const locked = committedElsewhere(g.id)
+                const playersPerGame = divisions.find((d) => d.id === myActiveTeam.divisionId)?.playersPerGame ?? 4
+                const availableCount = teamRoster.filter((p) => statusOf(g.id, p.id) === 'available').length
+                const noResponseCount = teamRoster.filter((p) => statusOf(g.id, p.id) === undefined).length
+                const selectedIds = gameSelections.find((s) => s.gameId === g.id && s.teamId === myActiveTeam.id)?.playerIds ?? []
+                const canCompose = canEditGameSelection(myActiveTeam.id)
+                const short = availableCount < playersPerGame
+                const eligibleOthers = players.filter(
+                  (p) =>
+                    p.clubId === myActiveTeam.clubId &&
+                    p.status === 'active' &&
+                    !myActiveTeam.playerIds.includes(p.id) &&
+                    isEligibleForTeam(p.id, myActiveTeam.id, md.id),
+                )
+                const composeCommittedElsewhere = playersCommittedElsewhere(
+                  myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections,
+                )
+                return (
+                  <>
+                    {/* Two halves from md: up — the game and what it asks of
+                        me on the left, what everybody else answered on the
+                        right. Left is the answer I owe, right the answers I am
+                        waiting on, and the rule holds at every width and for
+                        every role. Below md: one column, in the order game → my
+                        answer → the team, so the control never sits under a
+                        list (#461). */}
+                    <div key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:flex md:items-stretch md:gap-5">
+                      <div className="md:w-1/2 md:min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Pill>J{md.number}</Pill>
                           {divisionOf(myActiveTeam) && <Pill>{divisionOf(myActiveTeam)}</Pill>}
@@ -241,32 +251,81 @@ export function HomePage() {
                             <AvailabilityChip status={availOf(g.id)} />
                           )}
                         </div>
-                        {/* Team-level response summary — the count a captain opens
-                            "Aperçu" for today (#385). Labelled to distinguish it
-                            from the player's own availability above. Amber + alert
-                            when the club can't yet field the team. "Aperçu" lives
-                            here since its quick view shows this team's responses. */}
-                        <div className="mt-3">
+                      </div>
+
+                      <div className="mt-3 flex flex-col md:mt-0 md:w-1/2 md:min-w-0 md:border-l md:border-slate-200 md:pl-5">
+                        <div className="flex items-baseline justify-between gap-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Disponibilité de l'équipe</p>
-                          <div className="mt-1 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-1.5">
-                              {short && <AlertIcon className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
-                              <p className={`text-xs ${short ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>
-                                {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setQuickGame({ gameId: g.id, teamId: myActiveTeam.id })}
-                              className={`shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
-                            >
-                              {/* "Aperçu": this opens the quick view, and "Détails"
-                                  now names the button inside it that goes to the
-                                  real thing. */}
-                              Aperçu
-                            </button>
-                          </div>
+                          {noResponseCount > 0 && (
+                            <p className="hidden shrink-0 text-xs font-semibold text-amber-600 md:block">
+                              {noResponseCount} sans réponse
+                            </p>
+                          )}
                         </div>
+
+                        {/* Below md: the count, and "Aperçu" to open the list.
+                            From md: up the list is right here, so the button has
+                            nothing left to open — the same split "Composer
+                            l'équipe" makes below, by the same means: two
+                            elements, exactly one of them live at any width,
+                            rather than a width test in JS (#456). */}
+                        <div className="mt-1 flex items-center justify-between gap-3 md:hidden">
+                          <div className="flex items-center gap-1.5">
+                            {short && <AlertIcon className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
+                            <p className={`text-xs ${short ? 'font-semibold text-amber-600' : 'text-slate-500'}`}>
+                              {availableCount} disponible{availableCount !== 1 ? 's' : ''} · {noResponseCount} sans réponse
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setQuickGame({ gameId: g.id, teamId: myActiveTeam.id })}
+                            className={`shrink-0 text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+                          >
+                            {/* "Aperçu": this opens the quick view, and "Détails"
+                                names the button inside it that goes to the real
+                                thing. */}
+                            Aperçu
+                          </button>
+                        </div>
+
+                        <ul
+                          aria-label="Disponibilité de l'équipe"
+                          className="mt-1 hidden divide-y divide-slate-100 md:block"
+                        >
+                          {teamRoster.map((p) => {
+                            const lockedTeam = !selectedIds.includes(p.id)
+                              ? composeCommittedElsewhere.get(p.id)
+                              : undefined
+                            return (
+                              <li key={p.id} className="flex items-center justify-between gap-3 py-1.5">
+                                <Link
+                                  to={`/joueurs/${p.id}`}
+                                  className={`flex min-w-0 items-center gap-2 hover:opacity-80 ${TEXT_TARGET_CLASS}`}
+                                >
+                                  <LineupCheck on={selectedIds.includes(p.id)} />
+                                  <span className={`truncate text-sm ${p.id === myPlayerId ? 'font-semibold text-accent-600' : 'text-slate-800'}`}>
+                                    {p.firstName} {p.lastName}
+                                  </span>
+                                </Link>
+                                {/* Answering for someone already fielded on this
+                                    round means nothing — the quick view this
+                                    column replaces said so, and so does it. */}
+                                {lockedTeam !== undefined ? (
+                                  <span className="shrink-0 text-xs italic text-slate-500">Joue en Équipe {lockedTeam}</span>
+                                ) : canEditAvailability(p.id, myActiveTeam.id) ? (
+                                  <AvailabilityButtons
+                                    size="sm"
+                                    status={statusOf(g.id, p.id)}
+                                    onSet={(s) => setGameAvailability(g.id, p.id, s, isOverride(p.id, myActiveTeam.id))}
+                                    onClear={() => clearGameAvailability(g.id, p.id)}
+                                  />
+                                ) : (
+                                  <AvailabilityPills size="sm" status={statusOf(g.id, p.id)} />
+                                )}
+                              </li>
+                            )
+                          })}
+                        </ul>
                         {canCompose && (() => {
                           /* One row, two destinations — the same split
                              GameQuickView's "Détails" makes, and for the same
@@ -293,7 +352,7 @@ export function HomePage() {
                              `hidden` in one list would decide by stylesheet
                              order rather than intent. */
                           const rowClass =
-                            'mt-3 min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50'
+                            'mt-3 min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50 md:mt-auto md:pt-3'
                           const inner = (
                             <>
                               <span className="text-sm font-medium text-slate-800">Composer l'équipe</span>
@@ -324,46 +383,40 @@ export function HomePage() {
                           )
                         })()}
                       </div>
-                      {composing && canCompose && (
-                        <SelectionSheet
-                          teamLabel={getTeamName(myActiveTeam, clubs)}
-                          playersPerGame={playersPerGame}
-                          roster={teamRoster}
-                          others={eligibleOthers}
-                          initialSelection={selectedIds}
-                          availabilityOf={(playerId) => statusOf(g.id, playerId)}
-                          committedElsewhere={composeCommittedElsewhere}
-                          onSave={(playerIds) => setGameSelection(g.id, myActiveTeam.id, playerIds)}
-                          onClose={() => setComposing(false)}
-                        />
-                      )}
-                    </>
-                  )
-                })()
-              )}
+                    </div>
+                    {composing && canCompose && (
+                      <SelectionSheet
+                        teamLabel={getTeamName(myActiveTeam, clubs)}
+                        playersPerGame={playersPerGame}
+                        roster={teamRoster}
+                        others={eligibleOthers}
+                        initialSelection={selectedIds}
+                        availabilityOf={(playerId) => statusOf(g.id, playerId)}
+                        committedElsewhere={composeCommittedElsewhere}
+                        onSave={(playerIds) => setGameSelection(g.id, myActiveTeam.id, playerIds)}
+                        onClose={() => setComposing(false)}
+                      />
+                    )}
+                  </>
+                )
+              })()
+            )}
+          </div>
+
+          {/* Season facts, not match facts: a footer under the card rather than
+              a column beside it. One line each from md: up — label at one end,
+              figure at the other — and stacked below that, where « Matchs
+              joués » and its figure do not fit on one 170pt line (#461). */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-0.5 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm md:flex-row md:items-center md:justify-between md:gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Matchs joués</p>
+              <p className="text-base font-bold tabular-nums text-slate-800">{playedCount}/{playedTotal}</p>
             </div>
-            {/* Two across on a phone; stacked from md: up, sharing the height
-                of the match card beside them half and half — otherwise they are
-                two tall, near-empty boxes (#389 review). */}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-1 md:grid-rows-2">
-              <div className="flex flex-col gap-3">
-                <div className="flex h-7 items-center">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Matchs joués</p>
-                </div>
-                <div className="flex flex-1 items-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="text-base font-bold text-slate-800">{playedCount}/{playedTotal}</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3">
-                <div className="flex h-7 items-center">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">À confirmer</p>
-                </div>
-                <div className="flex flex-1 items-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className={`text-base font-bold ${toConfirm > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
-                    {toConfirm} match{toConfirm !== 1 ? 's' : ''}
-                  </p>
-                </div>
-              </div>
+            <div className="flex flex-col gap-0.5 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm md:flex-row md:items-center md:justify-between md:gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">À confirmer</p>
+              <p className={`text-base font-bold ${toConfirm > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
+                {toConfirm} match{toConfirm !== 1 ? 's' : ''}
+              </p>
             </div>
           </div>
         </>

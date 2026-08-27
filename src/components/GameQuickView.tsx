@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { TeamBadge } from '@/components/TeamBadge'
-import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
+import { AvailabilityButtons, AvailabilityPills, LineupCheck } from '@/components/Availability'
 import { Pill } from '@/components/icons'
 import { ModalShell } from '@/components/ModalShell'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
@@ -132,7 +132,7 @@ export function GameQuickView({
                   onClick={onClose}
                   className={`flex min-w-0 items-center gap-2 hover:opacity-80 ${TEXT_TARGET_CLASS}`}
                 >
-                  <Check on={selected} />
+                  <LineupCheck on={selected} />
                   <span className={`truncate text-sm ${selected ? 'font-semibold text-accent-600' : 'text-slate-800'}`}>
                     {p.firstName} {p.lastName}
                   </span>
@@ -159,7 +159,7 @@ export function GameQuickView({
                 onClick={onClose}
                 className={`flex min-w-0 items-center gap-2 hover:opacity-80 ${TEXT_TARGET_CLASS}`}
               >
-                <Check on />
+                <LineupCheck on />
                 <span className="truncate text-sm font-semibold text-accent-600">
                   {p.firstName} {p.lastName}
                 </span>
@@ -211,16 +211,5 @@ export function GameQuickView({
         </div>
       </div>
     </ModalShell>
-  )
-}
-
-function Check({ on }: { on?: boolean }) {
-  if (!on) return <span className="h-4 w-4 shrink-0" aria-hidden="true" />
-  return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-600 text-white" aria-label="Sélectionné">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-    </span>
   )
 }
