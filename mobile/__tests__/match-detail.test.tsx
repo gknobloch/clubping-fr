@@ -1,5 +1,6 @@
 import { Alert } from 'react-native'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { fireEvent, screen, waitFor } from '@testing-library/react-native'
+import { render } from '@/__tests__/support/render'
 import type { Club, Division, Game, Group, MatchDay, Player, Team, User } from '@shared/types'
 import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 

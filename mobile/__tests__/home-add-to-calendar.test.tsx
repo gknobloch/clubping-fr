@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
+import { fireEvent, screen, waitFor } from '@testing-library/react-native'
+import { render } from '@/__tests__/support/render'
 import type { Club, Division, Game, Group, MatchDay, Phase, Player, Season, Team, User } from '@shared/types'
 import HomeScreen from '@/app/(tabs)/index'
 

@@ -1,5 +1,6 @@
 import { Linking } from 'react-native'
-import { fireEvent, render, screen } from '@testing-library/react-native'
+import { fireEvent, screen } from '@testing-library/react-native'
+import { render } from '@/__tests__/support/render'
 import type { Club, Division, Phase, Player, Team, User } from '@shared/types'
 import TeamDetailScreen from '@/app/(tabs)/(detail)/team/[id]'
 

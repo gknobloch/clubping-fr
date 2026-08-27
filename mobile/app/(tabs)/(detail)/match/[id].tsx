@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { canManageTeam, getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
 import { PlayerRow } from '@/components/PlayerRow'
 import { PlayerSheet } from '@/components/PlayerSheet'
@@ -69,9 +70,9 @@ export default function MatchDetailScreen() {
 
   if (!game || !team || !matchDay) {
     return (
-      <View style={styles.container}>
+      <Screen>
         <Text style={styles.notFound}>Match introuvable.</Text>
-      </View>
+      </Screen>
     )
   }
 
@@ -165,8 +166,8 @@ export default function MatchDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <Screen>
+      <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
         {/* Summary */}
         <View style={styles.card}>
           <MatchHeader
@@ -355,12 +356,11 @@ export default function MatchDetailScreen() {
           />
         )
       })()}
-    </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: 16, gap: 12 },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 

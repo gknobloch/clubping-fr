@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { Screen, contentWidth } from '@/components/Screen'
 import { ClubLogo } from '@/components/ClubLogo'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
@@ -107,11 +108,11 @@ export default function ClubScreen() {
     // The tab is hidden for a member with no club, so this is the transient
     // case: the payload has not arrived yet, or the club was archived away.
     return (
-      <View style={s.container}>
+      <Screen>
         <View style={s.empty}>
           <Text style={s.emptyText}>Club introuvable.</Text>
         </View>
-      </View>
+      </Screen>
     )
   }
 
@@ -119,9 +120,9 @@ export default function ClubScreen() {
   const channels = [...(club.channels ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
 
   return (
-    <View style={s.container}>
+    <Screen>
       <ScrollView
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={[s.scroll, contentWidth()]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
         <View style={s.identity}>
@@ -153,12 +154,11 @@ export default function ClubScreen() {
           )}
         </Section>
       </ScrollView>
-    </View>
+    </Screen>
   )
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: 16, gap: 16 },
   identity: {
     flexDirection: 'row',

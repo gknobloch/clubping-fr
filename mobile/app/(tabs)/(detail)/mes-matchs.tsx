@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
@@ -132,9 +133,9 @@ export default function MesMatchsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <Screen>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, contentWidth()]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
         {!targetPlayerId || orderedPhases.length === 0 ? (
@@ -185,12 +186,11 @@ export default function MesMatchsScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: 16, gap: 12 },
   empty: { fontSize: 14, color: colors.textSecondary },
 

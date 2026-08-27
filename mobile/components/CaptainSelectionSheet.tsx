@@ -1,5 +1,6 @@
-import { Modal, Pressable, ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
+import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useMemo, useState } from 'react'
+import { Sheet } from '@/components/Sheet'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
@@ -126,73 +127,57 @@ export function CaptainSelectionSheet({
   }
 
   return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={sel.backdrop} onPress={onClose}>
-        {/* View + onStartShouldSetResponder stops backdrop from closing when tapping
-            the sheet, without competing with nested TouchableOpacity rows */}
-        <View style={sel.sheet} onStartShouldSetResponder={() => true}>
-          <View style={sel.handle} />
-          <Text style={sel.title}>
-            Sélection — {getTeamName(team, clubs)} ({selection.length}/{playersPerGame})
-          </Text>
-          {searchable && (
-            <TextInput
-              style={sel.search}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={PLAYER_SEARCH_LABEL}
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              returnKeyType="search"
-            />
-          )}
-          <ScrollView
-            style={sel.list}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {shownRoster.length > 0 && (
-              <>
-                <Text style={sel.sectionLabel}>Cette équipe</Text>
-                {shownRoster.map(renderPlayerRow)}
-              </>
-            )}
-            {shownOthers.length > 0 && (
-              <>
-                <Text style={sel.sectionLabel}>Autres joueurs</Text>
-                {shownOthers.map(renderPlayerRow)}
-              </>
-            )}
-            {shownRoster.length === 0 && shownOthers.length === 0 && query.trim() !== '' && (
-              <Text style={sel.empty}>Aucun joueur ne correspond à « {query.trim()} ».</Text>
-            )}
-          </ScrollView>
-          <View style={sel.actions}>
-            <TouchableOpacity style={sel.cancelBtn} onPress={onClose}>
-              <Text style={sel.cancelTxt}>Annuler</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={sel.saveBtn} onPress={() => { onSave(selection); onClose() }}>
-              <Text style={sel.saveTxt}>Enregistrer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
+    <Sheet onClose={onClose} testID="selection-sheet">
+      <Text style={sel.title}>
+        Sélection — {getTeamName(team, clubs)} ({selection.length}/{playersPerGame})
+      </Text>
+      {searchable && (
+        <TextInput
+          style={sel.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={PLAYER_SEARCH_LABEL}
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
+      )}
+      <ScrollView
+        style={sel.list}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {shownRoster.length > 0 && (
+          <>
+            <Text style={sel.sectionLabel}>Cette équipe</Text>
+            {shownRoster.map(renderPlayerRow)}
+          </>
+        )}
+        {shownOthers.length > 0 && (
+          <>
+            <Text style={sel.sectionLabel}>Autres joueurs</Text>
+            {shownOthers.map(renderPlayerRow)}
+          </>
+        )}
+        {shownRoster.length === 0 && shownOthers.length === 0 && query.trim() !== '' && (
+          <Text style={sel.empty}>Aucun joueur ne correspond à « {query.trim()} ».</Text>
+        )}
+      </ScrollView>
+      <View style={sel.actions}>
+        <TouchableOpacity style={sel.cancelBtn} onPress={onClose}>
+          <Text style={sel.cancelTxt}>Annuler</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={sel.saveBtn} onPress={() => { onSave(selection); onClose() }}>
+          <Text style={sel.saveTxt}>Enregistrer</Text>
+        </TouchableOpacity>
+      </View>
+    </Sheet>
   )
 }
 
 const sel = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.card, borderTopLeftRadius: 20,
-    borderTopRightRadius: 20, padding: 24, paddingBottom: 40, maxHeight: '85%',
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.border, alignSelf: 'center', marginBottom: 12,
-  },
   title: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 8 },
   sectionLabel: {
     fontSize: 11, fontFamily: fonts.bold, color: colors.textSecondary,

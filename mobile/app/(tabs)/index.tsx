@@ -5,17 +5,18 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  useWindowDimensions,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { canManageTeam, getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
+import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
-import { NextMatchCard } from '@/components/NextMatchCard'
+import { CARD_SPLIT_MIN_WIDTH, NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
@@ -40,8 +41,7 @@ export default function HomeScreen() {
     refreshing, refresh,
   } = useAppData()
 
-  const { width } = useWindowDimensions()
-  const cardWidth = width - 32 // matches the scroll container's 16px padding
+  const { width, contentMaxWidth, isTablet } = useLayout()
 
   const [composeGameId, setComposeGameId] = useState<string | null>(null)
   const [matchPage, setMatchPage] = useState(0)
@@ -75,6 +75,31 @@ export default function HomeScreen() {
   const myActiveTeam = activePhase ? myTeamByPhase.get(activePhase.id) : undefined
   const isCaptain = !!(user && myActiveTeam && canManageTeam(user, myActiveTeam))
   const isPlayer = !!myPlayerId && !!myActiveTeam
+
+  // The match card runs the width of the content and splits inside itself
+  // (#459), so the dashboard is one column again — a wide one. Only the player
+  // dashboard has that width to fill: the generic view is a short stack of
+  // cards, and 1280pt of it would be the stretched phone all over again.
+  const dashColumns = isTablet && isPlayer ? 2 : 1
+  // The carousel pages by its own width, so the card and the scroller are the
+  // same number by construction — `onMomentumScrollEnd` below divides the
+  // offset by it to find the page, and a scroller wider than its cards would
+  // put the dots on the wrong one. That number is the column it sits in, never
+  // the window: `width - 32` was a 992pt letterbox on a slab.
+  // Measured, not derived. The content column is capped and centred by
+  // `contentWidth()`, and the safe-area insets come off it before that — deriving
+  // the same number a second time from the window means two formulas that have
+  // to agree, and they stopped agreeing the moment either end moved. The card
+  // asks the column how wide it is, so it is exactly as wide as the identity
+  // card above it and the counters below, at every size, by construction.
+  //
+  // The fallback covers the first frame, before the layout event lands.
+  const [columnWidth, setColumnWidth] = useState(0)
+  const cardWidth =
+    columnWidth || Math.min(width, contentMaxWidth * dashColumns) - SCREEN_PADDING * 2
+  // The card's own width decides whether it splits — not the window's, and not
+  // the device's.
+  const splitCard = cardWidth >= CARD_SPLIT_MIN_WIDTH
 
   function getTeamGames(teamId: string) {
     return games.filter((g) => g.homeTeamId === teamId || g.awayTeamId === teamId)
@@ -194,10 +219,36 @@ export default function HomeScreen() {
 
   const composeGame = upcomingGames.find((g) => g.id === composeGameId)
 
+  // Under the card, at either size: that is where a carousel puts them, and
+  // where the thumb that swipes expects to find them. It costs the two columns
+  // an exact match at the bottom — the counters run 18pt past the card — which
+  // is the cheaper of the two prices.
+  const dots =
+    heroes.length > 1 ? (
+      <View style={styles.dots}>
+        {heroes.map((h, i) => (
+          <View
+            key={h.game.id}
+            style={[styles.dot, i === Math.min(matchPage, heroes.length - 1) && styles.dotActive]}
+          />
+        ))}
+      </View>
+    ) : null
+
+  // Season facts, not match facts: they read as a footer under the card rather
+  // than as a column beside it (#459). Two across, one line each above the
+  // threshold — the label and its figure at either end of the row.
+  const counter = (label: string, value: ReactNode) => (
+    <View key={label} style={[styles.tile, splitCard && styles.tileRow]}>
+      <Text style={styles.tileLabel}>{label}</Text>
+      {value}
+    </View>
+  )
+
   return (
-    <View style={styles.container}>
+    <Screen>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, contentWidth(dashColumns)]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
         {/* Identity header — shared with the player detail screen */}
@@ -214,80 +265,95 @@ export default function HomeScreen() {
         {/* ── Player dashboard ── */}
         {isPlayer && myActiveTeam && (
           <>
-            <Text style={styles.sectionLabel}>
-              {heroes.length > 1 ? 'Prochains matchs' : 'Prochain match'}
-            </Text>
-            {heroes.length === 0 ? (
-              <View style={styles.card}>
-                <Text style={styles.empty}>Pas de prochain match prévu.</Text>
-              </View>
-            ) : (
-              <>
-                <ScrollView
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  scrollEnabled={heroes.length > 1}
-                  onMomentumScrollEnd={(e) =>
-                    setMatchPage(Math.round(e.nativeEvent.contentOffset.x / cardWidth))
-                  }
-                >
-                  {heroes.map((h) => (
-                    <View key={h.game.id} style={{ width: cardWidth }}>
-                      <NextMatchCard
-                        matchDayNumber={h.md.number}
-                        matchDayDate={gameDate(h.game, h.md)}
-                        time={h.time || undefined}
-                        confirmed={h.confirmed}
-                        divisionLabel={getDivisionLabel(myActiveTeam)}
-                        teamColor={myActiveTeam.color}
-                        teamNumber={myActiveTeam.number}
-                        isHome={h.isHome}
-                        teamName={getTeamName(myActiveTeam, clubs)}
-                        opponentName={getOpponentName(h.oppId)}
-                        venueLabel={h.venueLabel}
-                        myAvailability={myPlayerId ? getAvailability(myPlayerId, h.game.id) : undefined}
-                        canSetAvailability={!!myPlayerId}
-                        onPickAvailability={(status) => myPlayerId && setAvailability(myPlayerId, h.game.id, status)}
-                        onClearAvailability={() => myPlayerId && clearAvailability(myPlayerId, h.game.id)}
-                        availableCount={h.availableCount}
-                        noResponseCount={h.noResponseCount}
-                        availablePlayers={h.availablePlayers}
-                        playersPerGame={getPlayersPerGame(myActiveTeam)}
-                        selectedCount={h.selectedCount}
-                        isCaptain={isCaptain}
-                        onCompose={() => setComposeGameId(h.game.id)}
-                        onOpenDetail={() => router.push({ pathname: '/match/[id]', params: { id: h.game.id, teamId: myActiveTeam.id } })}
-                        onAddToCalendar={() => openMatchInCalendar(h.calendarEvent)}
-                      />
-                    </View>
-                  ))}
-                </ScrollView>
-                {heroes.length > 1 && (
-                  <View style={styles.dots}>
-                    {heroes.map((h, i) => (
-                      <View
-                        key={h.game.id}
-                        style={[styles.dot, i === Math.min(matchPage, heroes.length - 1) && styles.dotActive]}
-                      />
+            {/* The section exists to be measured as much as to group: it spans
+                the content column, so its width is the width the card gets. */}
+            <View
+              testID="match-column"
+              style={styles.column}
+              onLayout={(e) => setColumnWidth(e.nativeEvent.layout.width)}
+            >
+              <Text style={styles.sectionLabel}>
+                {heroes.length > 1 ? 'Prochains matchs' : 'Prochain match'}
+              </Text>
+              {heroes.length === 0 ? (
+                <View style={styles.card}>
+                  <Text style={styles.empty}>Pas de prochain match prévu.</Text>
+                </View>
+              ) : (
+                <>
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    testID="next-match-carousel"
+                    style={{ width: cardWidth }}
+                    showsHorizontalScrollIndicator={false}
+                    scrollEnabled={heroes.length > 1}
+                    onMomentumScrollEnd={(e) =>
+                      setMatchPage(Math.round(e.nativeEvent.contentOffset.x / cardWidth))
+                    }
+                  >
+                    {heroes.map((h) => (
+                      <View key={h.game.id} testID="next-match-page" style={{ width: cardWidth }}>
+                        <NextMatchCard
+                          matchDayNumber={h.md.number}
+                          matchDayDate={gameDate(h.game, h.md)}
+                          time={h.time || undefined}
+                          confirmed={h.confirmed}
+                          divisionLabel={getDivisionLabel(myActiveTeam)}
+                          teamColor={myActiveTeam.color}
+                          teamNumber={myActiveTeam.number}
+                          isHome={h.isHome}
+                          teamName={getTeamName(myActiveTeam, clubs)}
+                          opponentName={getOpponentName(h.oppId)}
+                          venueLabel={h.venueLabel}
+                          myAvailability={myPlayerId ? getAvailability(myPlayerId, h.game.id) : undefined}
+                          canSetAvailability={!!myPlayerId}
+                          onPickAvailability={(status) => myPlayerId && setAvailability(myPlayerId, h.game.id, status)}
+                          onClearAvailability={() => myPlayerId && clearAvailability(myPlayerId, h.game.id)}
+                          availableCount={h.availableCount}
+                          noResponseCount={h.noResponseCount}
+                          availablePlayers={h.availablePlayers}
+                          playersPerGame={getPlayersPerGame(myActiveTeam)}
+                          selectedCount={h.selectedCount}
+                          isCaptain={isCaptain}
+                          wide={splitCard}
+                          team={{
+                            roster,
+                            mePlayerId: myPlayerId,
+                            availabilityOf: (pid) => getAvailability(pid, h.game.id),
+                            selectedIds: getSelectedForGame(myActiveTeam.id, h.game.id),
+                            // A captain answers for the rest of the team from
+                            // here; everyone else reads the answers and sets
+                            // only their own row.
+                            canEdit: isCaptain,
+                            onSet: (pid, status) => setAvailability(pid, h.game.id, status),
+                            onClear: (pid) => clearAvailability(pid, h.game.id),
+                            onOpenPlayer: (pid) => router.push(`/player/${pid}`),
+                          }}
+                          onCompose={() => setComposeGameId(h.game.id)}
+                          onOpenDetail={() => router.push({ pathname: '/match/[id]', params: { id: h.game.id, teamId: myActiveTeam.id } })}
+                          onAddToCalendar={() => openMatchInCalendar(h.calendarEvent)}
+                        />
+                      </View>
                     ))}
-                  </View>
-                )}
-              </>
-            )}
+                  </ScrollView>
+                  {dots}
+                </>
+              )}
+            </View>
 
-            {/* Quick stats */}
+            {/* Season counters, two across under the card. */}
             <View style={styles.tiles}>
-              <View style={styles.tile}>
-                <Text style={styles.tileLabel}>Matchs joués</Text>
-                <Text style={styles.tileValue}>{playedCount} / {playedTotal}</Text>
-              </View>
-              <View style={styles.tile}>
-                <Text style={styles.tileLabel}>À confirmer</Text>
+              {counter(
+                'Matchs joués',
+                <Text style={styles.tileValue}>{playedCount} / {playedTotal}</Text>,
+              )}
+              {counter(
+                'À confirmer',
                 <Text style={[styles.tileValue, toConfirm > 0 && { color: colors.warning }]}>
                   {toConfirm} match{toConfirm !== 1 ? 's' : ''}
-                </Text>
-              </View>
+                </Text>,
+              )}
             </View>
 
             {/* All matches */}
@@ -368,13 +434,19 @@ export default function HomeScreen() {
           onClose={() => setComposeGameId(null)}
         />
       )}
-    </View>
+    </Screen>
   )
 }
 
+/** The screen's own padding — shared with the carousel maths above. */
+const SCREEN_PADDING = 16
+/** Between stacked cards, and between the two dashboard columns. */
+const GAP = 12
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  scroll: { padding: 16, gap: 12 },
+  scroll: { padding: SCREEN_PADDING, gap: GAP },
+  column: { gap: GAP },
+
   welcomeCard: { marginBottom: 4 },
 
   sectionLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: -4 },
@@ -395,13 +467,16 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: colors.accent, width: 18 },
 
   // Metric tiles
-  tiles: { flexDirection: 'row', gap: 12 },
+  tiles: { flexDirection: 'row', gap: GAP },
   tile: {
     flex: 1, backgroundColor: colors.card, borderRadius: 12,
     borderWidth: 1, borderColor: colors.border, padding: 14, gap: 2,
   },
+  // Wide enough to split the card, wide enough to put the figure at the end of
+  // the label's own line instead of under it: half the height, same two facts.
+  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   tileLabel: { fontSize: 13, color: colors.textSecondary },
-  tileValue: { fontSize: 24, fontFamily: fonts.bold, color: colors.textPrimary },
+  tileValue: { fontSize: 24, fontFamily: fonts.bold, color: colors.textPrimary, marginLeft: 'auto' },
 
   // All matches row
   allMatches: {

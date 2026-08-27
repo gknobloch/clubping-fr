@@ -13,6 +13,7 @@ import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
+import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
 import { PlayerSheet } from '@/components/PlayerSheet'
@@ -158,9 +159,9 @@ export default function PhaseGamesScreen() {
 
   if (!baseTeam) {
     return (
-      <View style={styles.container}>
+      <Screen>
         <Text style={styles.empty}>Équipe introuvable.</Text>
-      </View>
+      </Screen>
     )
   }
 
@@ -170,8 +171,8 @@ export default function PhaseGamesScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <Screen>
+      <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
 
         {/* Phase switcher — aligned with Équipes / Mes matchs */}
         {currentEntry && (
@@ -306,7 +307,7 @@ export default function PhaseGamesScreen() {
           onProfile={() => openProfile(selectedPlayer)}
         />
       )}
-    </View>
+    </Screen>
   )
 }
 
@@ -314,7 +315,6 @@ export default function PhaseGamesScreen() {
 // Styles
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { gap: 12, padding: 16, paddingBottom: 32 },
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', padding: 24 },
 

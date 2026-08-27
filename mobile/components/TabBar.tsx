@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useGlobalSearchParams } from 'expo-router'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
 import { fonts } from '@/constants/typography'
 
 // The shared detail screens (player, team, match, match list) live in the hidden
@@ -32,8 +33,16 @@ export function pathToTab(path: string, hasPlayerId: boolean): string {
   return 'index' // Accueil
 }
 
+/**
+ * Widest the row of five tabs gets (#446). Spread over a whole slab, each tab
+ * is a 10pt label centred in 200pt of nothing; capped, it stays a row of tabs.
+ * The bar's background still runs edge to edge. The side rail is #447.
+ */
+const TAB_ROW_MAX_WIDTH = 560
+
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
+  const { isTablet } = useLayout()
   const { playerId } = useGlobalSearchParams<{ playerId?: string }>()
   const activeName = pathToTab(usePathname(), !!playerId)
 
@@ -50,54 +59,57 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         },
       ]}
     >
-      {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key]
-        // Skip hidden tabs — expo-router turns href:null into display:'none'
-        // (covers the (detail) stack).
-        const itemStyle = options.tabBarItemStyle as { display?: string } | undefined
-        if (itemStyle?.display === 'none') return null
+      <View style={[styles.row, isTablet && styles.rowCentred]}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key]
+          // Skip hidden tabs — expo-router turns href:null into display:'none'
+          // (covers the (detail) stack).
+          const itemStyle = options.tabBarItemStyle as { display?: string } | undefined
+          if (itemStyle?.display === 'none') return null
 
-        const isActive = route.name === activeName
-        const isFocused = state.index === index
-        const color = isActive ? colors.tabActive : colors.tabInactive
-        const label = (options.title ?? route.name) as string
+          const isActive = route.name === activeName
+          const isFocused = state.index === index
+          const color = isActive ? colors.tabActive : colors.tabInactive
+          const label = (options.title ?? route.name) as string
 
-        return (
-          <TouchableOpacity
-            key={route.key}
-            accessibilityRole="button"
-            accessibilityState={isActive ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel}
-            onPress={() => {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              })
-              if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name)
-            }}
-            style={styles.item}
-            activeOpacity={0.7}
-          >
-            {options.tabBarIcon?.({ focused: isActive, color, size: 24 })}
-            <Text style={[styles.label, { color }]} numberOfLines={1}>
-              {label}
-            </Text>
-          </TouchableOpacity>
-        )
-      })}
+          return (
+            <TouchableOpacity
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={isActive ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              onPress={() => {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                })
+                if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name)
+              }}
+              style={styles.item}
+              activeOpacity={0.7}
+            >
+              {options.tabBarIcon?.({ focused: isActive, color, size: 24 })}
+              <Text style={[styles.label, { color }]} numberOfLines={1}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   bar: {
-    flexDirection: 'row',
     backgroundColor: colors.card,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: 8,
   },
+  row: { flexDirection: 'row', width: '100%' },
+  rowCentred: { maxWidth: TAB_ROW_MAX_WIDTH, alignSelf: 'center' },
   item: { flex: 1, alignItems: 'center', gap: 3 },
   label: { fontSize: 10, fontFamily: fonts.semiBold },
 })

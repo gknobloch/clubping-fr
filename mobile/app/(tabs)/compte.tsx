@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
 import { getTeamName, getRoleLabel } from '@/utils/roles'
+import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import type { Player } from '@shared/types'
@@ -112,8 +113,8 @@ export default function MonCompteScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <Screen>
+      <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
         {/* Avatar */}
         <View style={styles.header}>
           {player ? (
@@ -211,7 +212,7 @@ export default function MonCompteScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalScroll}>
+            <ScrollView contentContainerStyle={[styles.modalScroll, contentWidth()]}>
               <Field
                 label="Email"
                 value={form.email}
@@ -242,7 +243,7 @@ export default function MonCompteScreen() {
           </SafeAreaView>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </Screen>
   )
 }
 
@@ -304,7 +305,6 @@ function Field({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
   scroll: { gap: 12, paddingBottom: 40 },
   header: { alignItems: 'center', paddingVertical: 32, gap: 10 },
   avatar: {
