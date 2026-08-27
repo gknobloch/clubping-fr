@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react-native'
-import { CONTENT_MAX_WIDTH, TABLET_MIN_WIDTH, useLayout } from './layout'
+import { CONTENT_MAX_WIDTH, TABLET_MIN_SIDE, useLayout } from './layout'
 import {
   PHONE_WIDTH,
   TABLET_LARGE,
@@ -33,14 +33,30 @@ it.each([
 })
 
 it('turns over at the threshold itself, not around it', () => {
-  setWindowSize({ width: TABLET_MIN_WIDTH - 1, height: 1024 })
+  setWindowSize({ width: TABLET_MIN_SIDE - 1, height: 1024 })
   expect(layout().isTablet).toBe(false)
 
-  setWindowSize({ width: TABLET_MIN_WIDTH, height: 1024 })
+  setWindowSize({ width: TABLET_MIN_SIDE, height: 1024 })
   expect(layout().isTablet).toBe(true)
 })
 
-it('reads a split-screen iPad as the phone-width window it is', () => {
+it('does not promote a phone turned sideways', () => {
+  // An iPhone 17 in landscape is 874 wide — wider than any tablet threshold
+  // read off the width alone, and still 402pt tall. Its short side is what
+  // says so.
+  setWindowSize({ width: 874, height: 402 })
+
+  expect(layout().isTablet).toBe(false)
+})
+
+it('does not demote a small tablet standing up', () => {
+  // An iPad mini is 744×1133: narrower than a landscape phone, and a tablet.
+  setWindowSize({ width: 744, height: 1133 })
+
+  expect(layout().isTablet).toBe(true)
+})
+
+it('reads a split-screen iPad as the phone-shaped window it is', () => {
   // The point of measuring the window and not the device: half of a 1024pt
   // slab is 507pt, and two columns of anything in it would be unreadable.
   setWindowSize({ width: 507, height: 1366 })
