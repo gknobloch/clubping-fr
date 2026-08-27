@@ -25,6 +25,7 @@ import type {
   Game,
   GameAvailability,
   GameSelection,
+  AvailabilityOverriddenBy,
   AvailabilityStatus,
   User,
 } from '@shared/types'
@@ -101,6 +102,8 @@ interface DataContextValue extends DataState {
     playerId: string,
     gameId: string,
     status: AvailabilityStatus,
+    /** Set when somebody answers for this player — see `availabilityOverride`. */
+    overriddenBy?: AvailabilityOverriddenBy,
   ) => Promise<void>
   clearAvailability: (playerId: string, gameId: string) => Promise<void>
   setGameSelection: (
@@ -263,7 +266,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   )
 
   const setAvailability = useCallback(
-    async (playerId: string, gameId: string, status: AvailabilityStatus) => {
+    async (
+      playerId: string,
+      gameId: string,
+      status: AvailabilityStatus,
+      overriddenBy?: AvailabilityOverriddenBy,
+    ) => {
       // Availabilities are keyed on (gameId, playerId) since 0033 (#282) — there
       // is no record ID to carry, and the API upserts on that pair.
       setState((prev) => {
@@ -274,7 +282,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           return {
             ...prev,
             gameAvailabilities: prev.gameAvailabilities.map((a) =>
-              a.playerId === playerId && a.gameId === gameId ? { ...a, status } : a,
+              a.playerId === playerId && a.gameId === gameId ? { ...a, status, overriddenBy } : a,
             ),
           }
         }
@@ -282,7 +290,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           gameAvailabilities: [
             ...prev.gameAvailabilities,
-            { playerId, gameId, status },
+            { playerId, gameId, status, overriddenBy },
           ],
         }
       })
@@ -291,7 +299,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         fetch(apiUrl('/game-availabilities/set'), {
           method: 'POST',
           headers: dataHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ playerId, gameId, status }),
+          // The upsert writes this column every time, so answering for
+          // yourself sends `undefined` and clears somebody else's override.
+          body: JSON.stringify({ playerId, gameId, status, overriddenBy }),
         }).catch(() => {})
       }
     },
