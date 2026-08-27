@@ -9,6 +9,8 @@ import {
   resetWindowSize,
   setWindowSize,
 } from '@/__tests__/support/window'
+import { HEADER_HEIGHT } from './AppHeader'
+import { colors } from '@/constants/colors'
 import { TabBar, pathToTab } from './TabBar'
 
 jest.mock('expo-router', () => ({
@@ -116,13 +118,26 @@ describe('the tab bar on a tablet', () => {
 
     renderBar()
 
-    // A fixed width — the rail is paid for out of the content's — and the
-    // status-bar inset, since nothing is drawn above it there.
-    const style = barStyle()
-    expect(style.width).toBe(88)
-    expect(style.paddingTop).toBe(24 + 12)
-    expect(style.borderRightWidth).toBe(StyleSheet.hairlineWidth)
-    expect(style.borderTopWidth).toBeUndefined()
+    // A fixed width — the rail is paid for out of the content's — and a rule
+    // down its inner edge rather than across its top.
+    expect(barStyle().width).toBe(88)
+    const items = StyleSheet.flatten(screen.getByTestId('tab-rail-items').props.style)
+    expect(items.borderRightWidth).toBe(StyleSheet.hairlineWidth)
+    expect(barStyle().borderTopWidth).toBeUndefined()
+  })
+
+  it('carries the header across its own top rather than starting beside it', () => {
+    // The rail is a sibling *before* the screens, so it runs the full height
+    // and the header begins to its right. Without this the white column runs
+    // up behind the status bar, whose clock and date are drawn across the
+    // whole width and land on it.
+    setWindowSize(TABLET_LANDSCAPE)
+
+    renderBar()
+
+    const cap = StyleSheet.flatten(screen.getByTestId('tab-rail-cap').props.style)
+    expect(cap.height).toBe(HEADER_HEIGHT + 24) // the bar, plus the status bar
+    expect(cap.backgroundColor).toBe(colors.primary) // the header's own navy
   })
 
   it('stays a row across the foot when the slab stands up', () => {
@@ -135,6 +150,7 @@ describe('the tab bar on a tablet', () => {
     expect(style.borderTopWidth).toBe(StyleSheet.hairlineWidth)
     // The bottom inset, not the top one: it sits at the foot of the window.
     expect(style.paddingBottom).toBe(20)
+    expect(screen.queryByTestId('tab-rail-cap')).toBeNull()
   })
 
   it('leaves a phone the bar it has always had', () => {

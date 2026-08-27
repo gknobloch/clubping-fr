@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useGlobalSearchParams } from 'expo-router'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { HEADER_HEIGHT } from '@/components/AppHeader'
 import { colors } from '@/constants/colors'
 import { useLayout } from '@/constants/layout'
 import { fonts } from '@/constants/typography'
@@ -92,24 +93,32 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   // A slab held sideways: the five destinations run down the left edge and the
   // screen's whole height goes to the content instead of to a horizontal bar
-  // (#447). The navigator puts us here rather than at the foot — see
-  // `tabBarPosition` in (tabs)/_layout — so this is a full-height column, above
-  // which nothing else is drawn: it carries the status-bar inset itself.
+  // (#447).
+  //
+  // `tabBarPosition: 'left'` makes this a sibling *before* the screens rather
+  // than after them, so the column is the full height of the window and the
+  // header — which every screen renders inside itself — begins to its right.
+  // Left plain, that reads as a broken screen: the white rail runs up behind
+  // the status bar, whose clock and date are drawn across the whole width and
+  // land on it. So the rail wears the header's own navy for exactly the
+  // header's own height, and the bar above reads as the one bar it is, edge to
+  // edge, with the rail hanging below it.
   if (hasSideRail) {
     return (
       <View
         testID="tab-bar"
-        style={[
-          styles.rail,
-          {
-            width: RAIL_WIDTH + insets.left,
-            paddingTop: insets.top + 12,
-            paddingBottom: Math.max(insets.bottom, 12),
-            paddingLeft: insets.left,
-          },
-        ]}
+        style={[styles.rail, { width: RAIL_WIDTH + insets.left, paddingLeft: insets.left }]}
       >
-        {items}
+        <View
+          testID="tab-rail-cap"
+          style={[styles.railHeaderCap, { height: HEADER_HEIGHT + insets.top }]}
+        />
+        <View
+          testID="tab-rail-items"
+          style={[styles.railItems, { paddingBottom: Math.max(insets.bottom, 12) }]}
+        >
+          {items}
+        </View>
       </View>
     )
   }
@@ -140,8 +149,13 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingTop: 8,
   },
-  rail: {
-    backgroundColor: colors.card,
+  rail: { backgroundColor: colors.card },
+  // The header's colour, for the header's height: the bar above carries on
+  // across the top of the rail instead of stopping at its edge.
+  railHeaderCap: { backgroundColor: colors.primary },
+  railItems: {
+    flex: 1,
+    paddingTop: 12,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.border,
   },
