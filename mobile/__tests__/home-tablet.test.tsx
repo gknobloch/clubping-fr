@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native'
+import { fireEvent, screen } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { render } from '@/__tests__/support/render'
 import { CONTENT_MAX_WIDTH } from '@/constants/layout'
@@ -12,15 +12,16 @@ import type { Club, Division, Game, Group, MatchDay, Phase, Player, Season, Team
 import HomeScreen from '@/app/(tabs)/index'
 
 // ---------------------------------------------------------------------------
-// Accueil at tablet width (#446)
+// Accueil at tablet width (#446, #459)
 //
-// Two things, and the second falls out of the first. The dashboard becomes two
-// columns above the threshold, as the web has always been — the match card on
-// the left, the counters stacked beside it. The carousel is therefore as wide
-// as that left column, and `onMomentumScrollEnd` divides the scroll offset by
-// the card's width to find the page: if the two ever disagree, the dots point
-// at a card other than the one on screen. They are the same number by
-// construction, and this is what holds them to it.
+// The match card runs the width of the content and splits inside itself: the
+// game and my answer on the left, the team's answers on the right. Below the
+// threshold it is the card the phone has always had, summary line and all.
+//
+// The carousel is as wide as that card, and `onMomentumScrollEnd` divides the
+// scroll offset by the card's width to find the page: if the two ever disagree,
+// the dots point at a card other than the one on screen. They are the same
+// number by construction, and this is what holds them to it.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null; displayName: string } = { user: null, displayName: 'Bo Martin' }
 const mockData = {
@@ -91,11 +92,8 @@ afterEach(resetWindowSize)
 const carouselWidth = () =>
   StyleSheet.flatten(screen.getByTestId('next-match-carousel').props.style).width
 const pageWidth = () => StyleSheet.flatten(screen.getByTestId('next-match-page').props.style).width
-const dashboard = () => StyleSheet.flatten(screen.getByTestId('dashboard').props.style)
-
-/** The screen's padding, and the gap between the two columns. */
+/** The screen's own padding, on either side of the content. */
 const PADDING = 16
-const GAP = 12
 
 it('fills the width of a phone, less the padding around it', () => {
   setWindowSize(PHONE_WIDTH)
@@ -105,45 +103,15 @@ it('fills the width of a phone, less the padding around it', () => {
   expect(carouselWidth()).toBe(PHONE_WIDTH.width - PADDING * 2)
 })
 
-it('stacks the card and the counters on a phone', () => {
-  setWindowSize(PHONE_WIDTH)
-
-  render(<HomeScreen />)
-
-  expect(dashboard().flexDirection).toBeUndefined()
-})
-
-it('sets the counters beside the match card on a tablet', () => {
+it('gives the carousel the width of the content, not of the slab', () => {
   setWindowSize(TABLET_LARGE)
 
   render(<HomeScreen />)
 
-  expect(dashboard().flexDirection).toBe('row')
-})
-
-it('starts both columns with a label row, which is what lines them up', () => {
-  // The card had a label above it and the counters did not, so the right column
-  // began 30pt higher than the left. Three rows on a tablet — the matches, and
-  // one per counter, as on the web; one on a phone, where there is one column.
-  setWindowSize(TABLET_LARGE)
-  render(<HomeScreen />)
-  expect(screen.getAllByTestId('section-head')).toHaveLength(3)
-
-  screen.unmount()
-  setWindowSize(PHONE_WIDTH)
-  render(<HomeScreen />)
-  expect(screen.getAllByTestId('section-head')).toHaveLength(1)
-})
-
-it('gives the carousel the left column, not the slab', () => {
-  setWindowSize(TABLET_LARGE)
-
-  render(<HomeScreen />)
-
-  // Half of the two-column content, less the padding and the gap between them
-  // — not the 992pt the window would have given.
+  // Two reading widths, less the padding — not the 992pt the window would have
+  // given, and not the 608 a single reading column would have.
   const content = Math.min(TABLET_LARGE.width, CONTENT_MAX_WIDTH * 2) - PADDING * 2
-  expect(carouselWidth()).toBe((content - GAP) / 2)
+  expect(carouselWidth()).toBe(content)
 })
 
 it('pages by exactly the width of a card, at either size', () => {
@@ -155,4 +123,53 @@ it('pages by exactly the width of a card, at either size', () => {
   setWindowSize(PHONE_WIDTH)
   render(<HomeScreen />)
   expect(pageWidth()).toBe(carouselWidth())
+})
+
+it('splits the card on a tablet and stacks it on a phone', () => {
+  setWindowSize(TABLET_LARGE)
+  render(<HomeScreen />)
+  expect(screen.getByTestId('match-card-split')).toBeTruthy()
+
+  screen.unmount()
+  setWindowSize(PHONE_WIDTH)
+  render(<HomeScreen />)
+  expect(screen.queryByTestId('match-card-split')).toBeNull()
+})
+
+it('stacks an iPad in Split View, which is handed a phone-width window', () => {
+  // The card's own width decides, not the device: half a slab is 507pt, and
+  // two halves of that are two cramped columns.
+  setWindowSize({ width: 507, height: 1366 })
+
+  render(<HomeScreen />)
+
+  expect(screen.queryByTestId('match-card-split')).toBeNull()
+})
+
+it('takes the width the column reports, not the one the window implies', () => {
+  // The derived formula and the real column had to agree, and stopped agreeing
+  // as soon as either end moved — insets, a cap, a padding. The card asks.
+  setWindowSize(TABLET_LARGE)
+  render(<HomeScreen />)
+
+  fireEvent(screen.getByTestId('match-column'), 'layout', {
+    nativeEvent: { layout: { x: 0, y: 0, width: 512, height: 400 } },
+  })
+
+  expect(carouselWidth()).toBe(512)
+  expect(pageWidth()).toBe(512)
+  // And the split follows that measurement, not the 992pt window behind it.
+  expect(screen.queryByTestId('match-card-split')).toBeNull()
+})
+
+it('keeps a phone on its side a phone', () => {
+  // An iPhone 17 in landscape is 874×402: wider than the tablet threshold read
+  // off the width alone, and 402pt tall. It used to be handed a two-column
+  // content width and a card wider than the column that held it.
+  setWindowSize({ width: 874, height: 402 })
+
+  render(<HomeScreen />)
+
+  expect(carouselWidth()).toBe(CONTENT_MAX_WIDTH - PADDING * 2)
+  expect(screen.queryByTestId('match-card-split')).toBeNull()
 })
