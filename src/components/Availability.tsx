@@ -92,3 +92,18 @@ export function AvailabilityChip({ status }: { status?: AvailabilityStatus }) {
   const v = status ? map[status] : { label: 'À confirmer', cls: 'border-slate-200 bg-slate-50 text-slate-500' }
   return <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${v.cls}`}>{v.label}</span>
 }
+
+// The "selected for the line-up" mark that goes in front of a name, wherever a
+// roster is listed with its answers — the quick view, and the Accueil card that
+// replaces it from md: up (#461). Reserves its own width when off, so the names
+// under it line up whether anyone is selected or not.
+export function LineupCheck({ on }: { on?: boolean }) {
+  if (!on) return <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+  return (
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-600 text-white" aria-label="Sélectionné">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    </span>
+  )
+}

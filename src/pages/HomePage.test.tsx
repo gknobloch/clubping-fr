@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import {
@@ -114,15 +114,14 @@ describe('HomePage — next-match card status and shortcuts (#385)', () => {
     renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
 
     const playedLabel = screen.getByText('Matchs joués')
-    const playedValue = playedLabel.parentElement!.nextElementSibling
-    expect(playedValue).toHaveTextContent('2/7')
+    // Label and figure are the two ends of one line now — a footer under the
+    // card rather than a column beside it (#461).
+    expect(playedLabel.nextElementSibling).toHaveTextContent('2/7')
     expect(screen.getByText('À confirmer')).toBeInTheDocument()
 
     // What matters is that neither tile is hidden at a breakpoint: they are
-    // content, not a mobile affordance (#385). How the pair is *arranged* does
-    // vary — side by side on a phone, stacked from md: up, since beside the
-    // match card they would otherwise be two tall, near-empty boxes (#389
-    // review) — so this asserts visibility, not the grid's classes.
+    // content, not a mobile affordance (#385). How the pair is *arranged* is
+    // free to change, so this asserts visibility, not the grid's classes.
     for (const el of [playedLabel, screen.getByText('À confirmer')]) {
       expect(el.closest('.hidden')).toBeNull()
       expect(el.className).not.toMatch(/\bhidden\b/)
@@ -163,5 +162,61 @@ describe('HomePage — the time on the next-match card (#427)', () => {
     renderWithGames(games)
 
     expect(screen.queryByText(/· \d+h\d+/)).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// #461 — the card carries the team from md: up
+//
+// Both halves of every width-dependent pair are in the DOM at once: which one
+// is live is a media query, and jsdom applies none. They are told apart by the
+// class that decides, exactly as the two "Composer l'équipe" elements above are
+// told apart by role.
+// ---------------------------------------------------------------------------
+describe('HomePage — the next-match card carries the team (#461)', () => {
+  const roster = () => screen.getByRole('list', { name: /Disponibilité de l'équipe/ })
+
+  it('names every team-mate and their answer, from md up', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    const list = roster()
+    expect(list.className).toMatch(/\bhidden\b/)
+    expect(list.className).toMatch(/md:block/)
+    for (const name of ['Joris Szulc', 'Grégory Canaque', 'Quentin Colle', 'Stéphane Lach', 'Enzo Lotz']) {
+      expect(within(list).getByText(name)).toBeInTheDocument()
+    }
+  })
+
+  it('leaves the count and its "Aperçu" to the phone', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    // With the list on screen the button would open a modal repeating the
+    // column beside it, so above the threshold it is not there at all.
+    const apercu = screen.getByRole('button', { name: 'Aperçu' })
+    expect(apercu.closest('.md\\:hidden')).not.toBeNull()
+    expect(screen.getByText('2 disponibles · 1 sans réponse').closest('.md\\:hidden')).not.toBeNull()
+  })
+
+  it('lets a captain answer for a team-mate, from the row itself', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    // Grégory answered "peut-être"; his captain moves him to "oui" in one tap.
+    const row = within(roster()).getByText('Grégory Canaque').closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'OUI' }))
+
+    expect(within(row).getByRole('button', { name: 'OUI' }).className).toContain('bg-green-50')
+  })
+
+  it('leaves everyone else reading', () => {
+    // A roster member is not their team-mates' captain: they see the answers,
+    // and the only row they can act on is their own.
+    renderAs({ id: 'p2-player-4', role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    const list = roster()
+    const other = within(list).getByText('Grégory Canaque').closest('li')!
+    expect(within(other).queryByRole('button', { name: 'OUI' })).not.toBeInTheDocument()
+
+    const mine = within(list).getByText('Enzo Lotz').closest('li')!
+    expect(within(mine).getByRole('button', { name: 'OUI' })).toBeInTheDocument()
   })
 })
