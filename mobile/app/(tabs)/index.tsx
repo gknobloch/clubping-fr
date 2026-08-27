@@ -11,7 +11,12 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { canManageTeam, getTeamName } from '@/utils/roles'
+import {
+  availabilityOverride,
+  canEditAvailability,
+  canManageTeam,
+  getTeamName,
+} from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { useLayout } from '@/constants/layout'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -322,11 +327,17 @@ export default function HomeScreen() {
                             mePlayerId: myPlayerId,
                             availabilityOf: (pid) => getAvailability(pid, h.game.id),
                             selectedIds: getSelectedForGame(myActiveTeam.id, h.game.id),
-                            // A captain answers for the rest of the team from
-                            // here; everyone else reads the answers and sets
-                            // only their own row.
-                            canEdit: isCaptain,
-                            onSet: (pid, status) => setAvailability(pid, h.game.id, status),
+                            // Answering is its own rule, not the line-up's:
+                            // yourself, your captain, your club's admin — and
+                            // the answer carries who gave it (#462).
+                            canEdit: (pid) => !!user && canEditAvailability(user, myActiveTeam, pid),
+                            onSet: (pid, status) =>
+                              setAvailability(
+                                pid,
+                                h.game.id,
+                                status,
+                                user ? availabilityOverride(user, myActiveTeam, pid) : undefined,
+                              ),
                             onClear: (pid) => clearAvailability(pid, h.game.id),
                             onOpenPlayer: (pid) => router.push(`/player/${pid}`),
                           }}

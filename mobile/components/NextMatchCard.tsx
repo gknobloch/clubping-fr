@@ -29,8 +29,12 @@ export interface TeamAnswers {
   mePlayerId?: string
   availabilityOf: (playerId: string) => AvailabilityStatus | undefined
   selectedIds: string[]
-  /** Captains answer for the rest of the team from here; nobody else can. */
-  canEdit: boolean
+  /**
+   * Per player, not per viewer: everybody may answer for themselves, a captain
+   * and a club's administrator for the team, and a general administrator for
+   * nobody (#462).
+   */
+  canEdit: (playerId: string) => boolean
   onSet: (playerId: string, status: AvailabilityStatus) => void
   /** Back to "sans réponse" — re-tapping the pill that is already on. */
   onClear: (playerId: string) => void
@@ -216,7 +220,7 @@ export function NextMatchCard({
             availability={team.availabilityOf(p.id)}
             selected={team.selectedIds.includes(p.id)}
             isMe={p.id === team.mePlayerId}
-            canEdit={team.canEdit || p.id === team.mePlayerId}
+            canEdit={team.canEdit(p.id)}
             gameDatePast={false}
             onPickAvailability={(status) => team.onSet(p.id, status)}
             onClear={() => team.onClear(p.id)}

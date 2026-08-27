@@ -259,6 +259,41 @@ describe('DataProvider — setAvailability', () => {
     })
   })
 
+  it('sends who answered, when it was not the player themselves', async () => {
+    // `game_availabilities.overridden_by` is written on every upsert, so the
+    // fourth argument is not decoration: without it a captain's answer is
+    // stored as though the player had given it (#462).
+    const { result } = await mounted()
+
+    await act(async () => {
+      await result.current.setAvailability('p1', 'g1', 'available', 'captain')
+    })
+
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
+      playerId: 'p1',
+      gameId: 'g1',
+      status: 'available',
+      overriddenBy: 'captain',
+    })
+    expect(result.current.gameAvailabilities[0].overriddenBy).toBe('captain')
+  })
+
+  it('clears a previous override when the player answers for themselves', async () => {
+    const { result } = await mounted(
+      payload({
+        gameAvailabilities: [
+          { playerId: 'p1', gameId: 'g1', status: 'available', overriddenBy: 'captain' },
+        ],
+      }),
+    )
+
+    await act(async () => {
+      await result.current.setAvailability('p1', 'g1', 'unavailable')
+    })
+
+    expect(result.current.gameAvailabilities[0].overriddenBy).toBeUndefined()
+  })
+
   it('updates the existing row in place rather than duplicating it', async () => {
     const { result } = await mounted(
       payload({ gameAvailabilities: [{ playerId: 'p1', gameId: 'g1', status: 'available' }] }),

@@ -41,7 +41,7 @@ function team(over: Partial<TeamAnswers> = {}): TeamAnswers {
     mePlayerId: 'p1',
     availabilityOf: (id) => answers[id],
     selectedIds: [],
-    canEdit: false,
+    canEdit: () => false,
     onSet,
     onClear,
     onOpenPlayer: jest.fn(),
@@ -49,7 +49,11 @@ function team(over: Partial<TeamAnswers> = {}): TeamAnswers {
   }
 }
 
-function renderCard({ wide = false, canEdit = false, isCaptain = false } = {}) {
+function renderCard({
+  wide = false,
+  canEdit = (() => false) as (playerId: string) => boolean,
+  isCaptain = false,
+} = {}) {
   render(
     <NextMatchCard
       matchDayNumber={1}
@@ -125,7 +129,7 @@ describe('split', () => {
 
 describe('a captain answering for the team', () => {
   it('sets a team-mate with one tap on the pill, no menu in between', () => {
-    renderCard({ wide: true, canEdit: true, isCaptain: true })
+    renderCard({ wide: true, canEdit: () => true, isCaptain: true })
 
     // Row order is roster order: Hugo is the second.
     fireEvent.press(screen.getAllByText('NON')[1])
@@ -134,7 +138,7 @@ describe('a captain answering for the team', () => {
   })
 
   it('clears an answer by tapping the pill that is already on', () => {
-    renderCard({ wide: true, canEdit: true, isCaptain: true })
+    renderCard({ wide: true, canEdit: () => true, isCaptain: true })
 
     fireEvent.press(screen.getAllByText('PE')[1])
 
@@ -143,7 +147,9 @@ describe('a captain answering for the team', () => {
   })
 
   it('leaves everyone else reading, and answering only for themselves', () => {
-    renderCard({ wide: true, canEdit: false })
+    // The card asks per player now: the rule lives in `canEditAvailability`,
+    // and this is what the screen hands down (#462).
+    renderCard({ wide: true, canEdit: (pid) => pid === 'p1' })
 
     fireEvent.press(screen.getAllByText('NON')[1])
     expect(onSet).not.toHaveBeenCalled()

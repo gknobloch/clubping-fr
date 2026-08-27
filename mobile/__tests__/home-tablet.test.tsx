@@ -57,11 +57,13 @@ const player: Player = {
   id: 'p1', firstName: 'Bo', lastName: 'Martin', licenseNumber: '681001',
   phone: '0600000000', status: 'active', clubId: 'c1',
 }
+/** A team-mate to answer for — the whole question of #462. */
+const mate: Player = { ...player, id: 'p2', firstName: 'Alex', lastName: 'Petit' }
 
 const team: Team = {
   id: 't1', clubId: 'c1', phaseId: 'ph1', number: 4, divisionId: 'd1', groupId: 'grp1',
   gameLocationId: 'a1', defaultDay: 'Jeudi', defaultTime: '19h30', captainId: 'p1',
-  isArchived: false, playerIds: ['p1'],
+  isArchived: false, playerIds: ['p1', 'p2'],
 }
 const opponent: Team = { ...team, id: 't2', clubId: 'c2', number: 6, playerIds: [] }
 
@@ -78,7 +80,7 @@ beforeEach(() => {
   mockData.seasons = [{ id: 's1', displayName: '2025/2026', status: 'active' }]
   mockData.phases = [{ id: 'ph1', seasonId: 's1', name: 'phase1', displayName: 'Phase 1', status: 'active' }]
   mockData.teams = [team, opponent]
-  mockData.players = [player]
+  mockData.players = [player, mate]
   mockData.matchDays = [{ id: 'md1', groupId: 'grp1', number: 1, date: inTwoWeeks() }]
   mockData.games = [{ id: 'g1', matchDayId: 'md1', homeTeamId: 't1', awayTeamId: 't2', time: '19h30' }]
   mockData.groups = [{ id: 'grp1', divisionId: 'd1', number: 1, teamIds: ['t1', 't2'], isArchived: false }]
@@ -172,4 +174,66 @@ it('keeps a phone on its side a phone', () => {
 
   expect(carouselWidth()).toBe(CONTENT_MAX_WIDTH - PADDING * 2)
   expect(screen.queryByTestId('match-card-split')).toBeNull()
+})
+
+// ---------------------------------------------------------------------------
+// Who may answer for whom (#462)
+//
+// The card asked `canManageTeam` — the line-up rule — and the two differ
+// exactly where it matters. These render the card at a width where the roster
+// is on screen, since that is the only place the question arises.
+// ---------------------------------------------------------------------------
+describe('answering for a team-mate', () => {
+  afterEach(resetWindowSize)
+  beforeEach(() => (mockData.setAvailability as jest.Mock).mockClear())
+
+  /** Roster order is by name: Bo Martin (p1, the captain), then Alex Petit (p2). */
+  const CAPTAIN_ROW = 0
+  const MATE_ROW = 1
+
+  /** Signed in as the captain, who is p1. */
+  const asCaptain = () => {
+    mockAuth.user = { ...player, role: 'player', isPlayer: true } as User
+  }
+  /** Signed in as p2, who captains nothing — whatever else they administer. */
+  const asGeneralAdmin = () => {
+    mockAuth.user = { ...mate, role: 'general_admin', isPlayer: true } as User
+  }
+
+  it('lets the captain do it, and records that they did', () => {
+    asCaptain()
+    setWindowSize(TABLET_LARGE)
+
+    render(<HomeScreen />)
+    fireEvent.press(screen.getAllByText('OUI')[MATE_ROW])
+
+    expect(mockData.setAvailability).toHaveBeenCalledWith('p2', 'g1', 'available', 'captain')
+  })
+
+  it('does not let a general administrator, who answers for nobody', () => {
+    // `canManageTeam` says yes to this account — it composes any team in the
+    // country. An availability is a personal declaration, and it is not in
+    // that loop; the card used to ask the wrong one of the two rules.
+    asGeneralAdmin()
+    setWindowSize(TABLET_LARGE)
+
+    render(<HomeScreen />)
+    // The pills are still drawn — a read-only row shows the answer given.
+    // What changes is that pressing one does nothing.
+    fireEvent.press(screen.getAllByText('OUI')[CAPTAIN_ROW])
+
+    expect(mockData.setAvailability).not.toHaveBeenCalled()
+  })
+
+  it('leaves my own answer mine, whatever the role', () => {
+    asGeneralAdmin()
+    setWindowSize(TABLET_LARGE)
+
+    render(<HomeScreen />)
+    fireEvent.press(screen.getAllByText('OUI')[MATE_ROW])
+
+    // No provenance: I answered for myself, which is also what clears an
+    // override a captain had left on the row.
+    expect(mockData.setAvailability).toHaveBeenCalledWith('p2', 'g1', 'available', undefined)
+  })
 })

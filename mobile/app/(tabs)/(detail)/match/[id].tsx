@@ -4,7 +4,12 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { canManageTeam, getTeamName } from '@/utils/roles'
+import {
+  availabilityOverride,
+  canEditAvailability,
+  canManageTeam,
+  getTeamName,
+} from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
@@ -208,7 +213,9 @@ export default function MatchDetailScreen() {
                 />
               )
             }
-            const canEdit = (canManage || p.id === myPlayerId) && !gameDatePast
+            // `canManage` is the line-up rule; answering has its own, which
+            // stops one step short of a general administrator (#462).
+            const canEdit = !!user && canEditAvailability(user, team, p.id) && !gameDatePast
             return (
               <PlayerRow
                 key={p.id}
@@ -218,7 +225,14 @@ export default function MatchDetailScreen() {
                 isMe={p.id === myPlayerId}
                 canEdit={canEdit}
                 gameDatePast={gameDatePast}
-                onPickAvailability={(status) => setAvailability(p.id, game.id, status)}
+                onPickAvailability={(status) =>
+                  setAvailability(
+                    p.id,
+                    game.id,
+                    status,
+                    user ? availabilityOverride(user, team, p.id) : undefined,
+                  )
+                }
                 onClear={() => clearAvailability(p.id, game.id)}
                 onPressName={() => setQuickViewPlayer(p)}
               />
