@@ -15,22 +15,43 @@ test.describe('Player — Accueil', () => {
 
   test('setting availability updates the "À confirmer" tile', async ({ page }) => {
     await expect(page.getByText('1 match', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'OUI' }).click()
+    // Scoped: from md: up the card carries the team's answers too, so a bare
+    // "OUI" is two controls — mine, and my own row in the roster (#461).
+    await page.getByRole('group', { name: 'Ma disponibilité' }).getByRole('button', { name: 'OUI' }).click()
     await expect(page.getByText('0 matchs')).toBeVisible()
   })
 
-  test('Aperçu opens the game modal, whose Détails leads to the round', async ({ page }) => {
-    await page.getByRole('button', { name: 'Aperçu' }).click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByText('Disponibilités')).toBeVisible()
+  // #461 — the card carries the team from md: up, so the button that used to
+  // open that list has nothing left to open at this width. Same split
+  // "Composer l'équipe" makes below, and "Détails" makes inside the modal.
+  test('porte la composition sur la carte, sans Aperçu à ouvrir', async ({ page }) => {
+    const roster = page.getByRole('list', { name: "Disponibilité de l'équipe" })
+    await expect(roster).toBeVisible()
+    await expect(roster.getByText('Enzo Lotz')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Aperçu' })).toBeHidden()
+  })
 
-    // The way on is a link, not a button, and the destination depends on the
-    // viewport (#347) — desktop here, so the deep-linked matrix.
-    const details = page.getByRole('dialog').getByRole('link', { name: 'Détails', exact: true })
-    await expect(details).toHaveAttribute('href', /^\/journees\?equipe=.+&match=.+/)
+  test.describe('sur téléphone', () => {
+    test.use({ viewport: { width: 375, height: 812 } })
 
-    await page.getByRole('button', { name: 'Fermer' }).click()
-    await expect(page.getByRole('dialog')).not.toBeVisible()
+    test('Aperçu opens the game modal, whose Détails leads to the round', async ({ page }) => {
+      // The list would cost a screen of scrolling here, so the summary line
+      // stays and the modal is still the way to the names.
+      await expect(page.getByRole('list', { name: "Disponibilité de l'équipe" })).toBeHidden()
+      await expect(page.getByText(/disponible.*sans réponse/)).toBeVisible()
+
+      await page.getByRole('button', { name: 'Aperçu' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+      await expect(page.getByText('Disponibilités')).toBeVisible()
+
+      // The way on is a link, not a button, and the destination depends on the
+      // viewport (#347) — a phone here, so the match screen.
+      const details = page.getByRole('dialog').getByRole('link', { name: 'Détails', exact: true })
+      await expect(details).toHaveAttribute('href', /^\/journees\/.+/)
+
+      await page.getByRole('button', { name: 'Fermer' }).click()
+      await expect(page.getByRole('dialog')).not.toBeVisible()
+    })
   })
 
   test('shows the "Tous mes matchs" section with a phase card', async ({ page }) => {
@@ -41,8 +62,12 @@ test.describe('Player — Accueil', () => {
   // #385 — the card used to say nothing about the team's own state; a player
   // (let alone a captain) had to open "Aperçu" to learn it. Enzo Lotz is on
   // team-1's roster but not its captain, so the shortcut below is his to not see.
-  test('shows how many are available and how many have not answered', async ({ page }) => {
-    await expect(page.getByText(/disponible.*sans réponse/)).toBeVisible()
+  //
+  // From md: up the card says it in full (#461), and the count beside the
+  // heading is what remains of the summary line — anchored, since the phone's
+  // own line ends in the same three words.
+  test('shows how many have not answered, and no shortcut to a non-captain', async ({ page }) => {
+    await expect(page.getByText(/^\d+ sans réponse$/)).toBeVisible()
     await expect(page.getByRole('button', { name: /Composer l'équipe/ })).toHaveCount(0)
   })
 

@@ -238,18 +238,25 @@ export function HomePage() {
                           </p>
                           <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>
+                        {/* Labelled now that the team's own answers sit beside
+                            it from md: up: two identical OUI / PE / NON
+                            triplets in one card, one meaning "me" and the other
+                            "everyone", have to say which is which (#461). */}
                         <div className="mt-3">
-                          {locked !== undefined ? (
-                            <span className="text-xs italic text-slate-500">Joue en Équipe {locked}</span>
-                          ) : myPlayerId ? (
-                            <AvailabilityButtons
-                              status={availOf(g.id)}
-                              onSet={(s) => setGameAvailability(g.id, myPlayerId, s)}
-                              onClear={() => clearGameAvailability(g.id, myPlayerId)}
-                            />
-                          ) : (
-                            <AvailabilityChip status={availOf(g.id)} />
-                          )}
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ma disponibilité</p>
+                          <div className="mt-1" role="group" aria-label="Ma disponibilité">
+                            {locked !== undefined ? (
+                              <span className="text-xs italic text-slate-500">Joue en Équipe {locked}</span>
+                            ) : myPlayerId ? (
+                              <AvailabilityButtons
+                                status={availOf(g.id)}
+                                onSet={(s) => setGameAvailability(g.id, myPlayerId, s)}
+                                onClear={() => clearGameAvailability(g.id, myPlayerId)}
+                              />
+                            ) : (
+                              <AvailabilityChip status={availOf(g.id)} />
+                            )}
+                          </div>
                         </div>
                       </div>
 
