@@ -9,10 +9,11 @@ import {
   StyleSheet,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
-import { useLayout } from '@/constants/layout'
+import { LIST_PANE_WIDTH, useLayout } from '@/constants/layout'
 import { sortByName } from '@shared/lib/sortByName'
 import { hasVisited, lastSeenSentence } from '@shared/lib/lastSeen'
 import {
@@ -22,6 +23,7 @@ import {
 } from '@shared/lib/playerVisibility'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
+import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
 
 const STATUS_LABELS = {
@@ -29,6 +31,18 @@ const STATUS_LABELS = {
   archived: 'Archivé',
 }
 
+// ---------------------------------------------------------------------------
+// Joueurs, sur une tablette : la liste et la fiche, côte à côte (#466)
+//
+// The pattern #447 built for Équipes, on the section that wanted it most. This
+// tab opens on a search box — it exists to look somebody up — and until now
+// every look-up cost a pushed screen and a way back out of it.
+//
+// It replaces the two-column grid #446 gave the tablet here, deliberately: a
+// 320pt list pane holds one column, so the two cannot both exist. The grid
+// served *scanning* a roster; the panes serve *finding one person*, which is
+// what the search box at the top says this tab is for.
+// ---------------------------------------------------------------------------
 export default function JoueursScreen() {
   const { players, clubs } = useAppData()
   const { user } = useAuth()
@@ -40,10 +54,9 @@ export default function JoueursScreen() {
   // what this tab is for.
   const [activeOnly, setActiveOnly] = useState(true)
   const canSeeArchived = canSeeArchivedPlayers(user?.role)
-  // Two columns of licenciés on a tablet, one on a phone (#446). A card is a
-  // name and a line of meta: one per row across a slab is mostly empty card.
-  const { isTablet } = useLayout()
-  const columns = isTablet ? 2 : 1
+  // The fiche beside the list rather than pushed over it (#466).
+  const { isTwoPane } = useLayout()
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const clubPlayers =
     user?.role === 'general_admin'
@@ -55,20 +68,34 @@ export default function JoueursScreen() {
   // read as "nobody in this club has ever signed in".
   const showLastSeen = user?.role === 'general_admin' || user?.role === 'club_admin'
 
-  const filtered = sortByName(
-    visiblePlayers(clubPlayers, { role: user?.role, activeOnly }).filter((p) => {
-      const q = query.toLowerCase()
-      return (
-        p.firstName.toLowerCase().includes(q) ||
-        p.lastName.toLowerCase().includes(q) ||
-        p.email?.toLowerCase().includes(q)
-      )
-    }),
-  )
+  /** The roster this member may see — the actif/archivé rule (#438), unsearched. */
+  const roster = sortByName(visiblePlayers(clubPlayers, { role: user?.role, activeOnly }))
 
-  return (
-    <Screen>
-      <View style={[styles.searchBar, contentWidth(columns)]}>
+  const filtered = roster.filter((p) => {
+    const q = query.toLowerCase()
+    return (
+      p.firstName.toLowerCase().includes(q) ||
+      p.lastName.toLowerCase().includes(q) ||
+      p.email?.toLowerCase().includes(q)
+    )
+  })
+
+  // Read from the roster and *not* from the search results — the one place this
+  // differs from Équipes, where the selection is read from the phase on screen
+  // because changing phase changes the subject. Typing does not: narrowing the
+  // list to find the next person must not blank the fiche being read. The
+  // switch that hides the archived ones does empty it, which is right — that
+  // one is a change of who this list is about.
+  const selectedPlayer = roster.find((p) => p.id === selectedId) ?? null
+
+  function openPlayer(id: string) {
+    if (isTwoPane) setSelectedId(id)
+    else router.push(`/player/${id}`)
+  }
+
+  const list = (
+    <>
+      <View style={[styles.searchBar, contentWidth()]}>
         <TextInput
           style={styles.input}
           placeholder="Rechercher…"
@@ -90,22 +117,18 @@ export default function JoueursScreen() {
         )}
       </View>
       <FlatList
-        // `numColumns` is fixed for the life of a FlatList — React Native throws
-        // when it changes — so the key changes with it and the list remounts.
-        key={`columns-${columns}`}
         data={filtered}
         keyExtractor={(p) => p.id}
-        numColumns={columns}
-        columnWrapperStyle={columns > 1 ? styles.row : undefined}
-        contentContainerStyle={[styles.list, contentWidth(columns)]}
+        contentContainerStyle={[styles.list, contentWidth()]}
         renderItem={({ item: p }) => {
           const club = clubs.find((c) => c.id === p.clubId)
+          const isSelected = p.id === selectedPlayer?.id
           return (
             <TouchableOpacity
-              // Only in a grid: as the single child of a column, `flex: 1`
-              // would stretch the card down the whole list instead.
-              style={[styles.card, columns > 1 && styles.cardInGrid]}
-              onPress={() => router.push(`/player/${p.id}`)}
+              testID={`player-row-${p.id}`}
+              style={[styles.card, isSelected && styles.cardSelected]}
+              accessibilityState={isSelected ? { selected: true } : {}}
+              onPress={() => openPlayer(p.id)}
             >
               <Avatar
                 playerId={p.id}
@@ -138,6 +161,28 @@ export default function JoueursScreen() {
           )
         }}
       />
+    </>
+  )
+
+  if (!isTwoPane) return <Screen>{list}</Screen>
+
+  return (
+    // One frame for the two panes: `Screen` takes the window's side insets
+    // once, here, and each pane sits inside them.
+    <Screen style={styles.split}>
+      <View style={styles.listPane}>{list}</View>
+      <View style={styles.detailPane}>
+        {selectedPlayer ? (
+          <PlayerDetail playerId={selectedPlayer.id} embedded />
+        ) : (
+          <View style={styles.placeholder}>
+            <Ionicons name="person-outline" size={44} color={colors.textSecondary} />
+            <Text style={styles.placeholderText}>
+              Choisissez un licencié pour afficher sa fiche.
+            </Text>
+          </View>
+        )}
+      </View>
     </Screen>
   )
 }
@@ -160,7 +205,22 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   filterLabel: { fontSize: 13, color: colors.textSecondary },
   list: { padding: 12, gap: 8 },
-  row: { gap: 8 },
+
+  split: { flexDirection: 'row' },
+  listPane: {
+    width: LIST_PANE_WIDTH,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.border,
+  },
+  detailPane: { flex: 1 },
+  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+  placeholderText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 260,
+  },
+
   card: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -171,7 +231,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  cardInGrid: { flex: 1 },
+  // The row showing in the pane beside it — the same red-tinted surface the
+  // Équipes list uses (#447).
+  cardSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   cardBody: { flex: 1 },
   name: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },

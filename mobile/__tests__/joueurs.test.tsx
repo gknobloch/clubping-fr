@@ -1,14 +1,13 @@
 import { fireEvent, screen } from '@testing-library/react-native'
-import { render } from '@/__tests__/support/render'
+import { render, TABLET } from '@/__tests__/support/render'
 import {
   PHONE_WIDTH,
+  TABLET_LANDSCAPE,
   TABLET_SMALL,
   resetWindowSize,
   setWindowSize,
 } from '@/__tests__/support/window'
-import { FlatList } from 'react-native'
-import type { Club, Player, Role, User } from '@shared/types'
-import { CONTENT_MAX_WIDTH } from '@/constants/layout'
+import type { Club, Phase, Player, Role, Season, Team, User } from '@shared/types'
 import JoueursScreen from '@/app/(tabs)/joueurs'
 
 // ---------------------------------------------------------------------------
@@ -17,12 +16,24 @@ import JoueursScreen from '@/app/(tabs)/joueurs'
 // member has left the club: they are only of interest to the people who
 // administer it, and even for them the list opens on the active roster.
 // ---------------------------------------------------------------------------
+const mockPush = jest.fn()
 const mockAuth: { user: User | null } = { user: null }
-const mockData: { players: Player[]; clubs: Club[] } = { players: [], clubs: [] }
+// The fiche in the right-hand pane reads more of the payload than the list does.
+const mockData: {
+  players: Player[]
+  clubs: Club[]
+  teams: Team[]
+  phases: Phase[]
+  seasons: Season[]
+  playerPhasePoints: never[]
+} = { players: [], clubs: [], teams: [], phases: [], seasons: [], playerPhasePoints: [] }
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }))
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useNavigation: () => ({ setOptions: jest.fn() }),
+}))
 
 const club: Club = {
   id: 'c1', affiliationNumber: '06680123', displayName: 'Rixheim PPA',
@@ -45,8 +56,12 @@ const signIn = (role: Role) => {
 const LABEL = 'Joueurs actifs uniquement'
 
 beforeEach(() => {
+  mockPush.mockClear()
   mockData.players = [active, archived]
   mockData.clubs = [club]
+  mockData.teams = []
+  mockData.phases = []
+  mockData.seasons = []
 })
 
 describe('Joueurs — joueurs actifs uniquement (#438)', () => {
@@ -87,42 +102,107 @@ describe('Joueurs — joueurs actifs uniquement (#438)', () => {
   })
 })
 
-describe('Joueurs — deux colonnes sur tablette (#446)', () => {
+// ---------------------------------------------------------------------------
+// Joueurs en deux panneaux (#466)
+//
+// The two-column grid #446 gave the tablet here is gone: a 320pt list pane
+// holds one column, so the grid and the panes cannot both exist. The grid
+// served scanning a roster; the panes serve finding one person, which is what
+// the search box says this tab is for.
+//
+// The rule that is *not* Équipes' rule is the last test here, and it is the
+// reason this section could not be a copy: the selection is read from the
+// roster and not from the search results.
+// ---------------------------------------------------------------------------
+describe('Joueurs — la fiche à côté de la liste (#466)', () => {
   afterEach(resetWindowSize)
 
-  /** The list's own props — `numColumns` is not a rendered attribute. */
-  const list = () => screen.UNSAFE_getByType(FlatList).props
+  const PLACEHOLDER = 'Choisissez un licencié pour afficher sa fiche.'
+  /** Rendered by the fiche, and by nothing in the list. */
+  const FICHE_SECTION = 'Informations'
 
-  it('stays one card per row on a phone', () => {
+  it('pushes the fiche on a phone, as it always has', () => {
     signIn('club_admin')
     setWindowSize(PHONE_WIDTH)
 
     render(<JoueursScreen />)
+    fireEvent.press(screen.getByTestId('player-row-p1'))
 
-    expect(list().numColumns).toBe(1)
+    expect(mockPush).toHaveBeenCalledWith('/player/p1')
+    expect(screen.queryByText(PLACEHOLDER)).toBeNull()
   })
 
-  it('lays the roster out two across on a tablet', () => {
-    // A card is a name and a line of meta: one per row across a slab is
-    // mostly empty card.
+  it('opens on the roster and an invitation, not on an arbitrary licencié', () => {
     signIn('club_admin')
     setWindowSize(TABLET_SMALL)
 
-    render(<JoueursScreen />)
+    render(<JoueursScreen />, { metrics: TABLET })
 
-    expect(list().numColumns).toBe(2)
+    expect(screen.getByText('Joris Szulc')).toBeTruthy()
+    expect(screen.getByText(PLACEHOLDER)).toBeTruthy()
   })
 
-  it('gives the grid one reading width per column', () => {
-    // Not the plain cap: two columns inside 640pt would be two 300pt cards on a
-    // slab with room for twice that.
+  it('shows the fiche beside the list instead of over it', () => {
     signIn('club_admin')
     setWindowSize(TABLET_SMALL)
 
-    render(<JoueursScreen />)
+    render(<JoueursScreen />, { metrics: TABLET })
+    fireEvent.press(screen.getByTestId('player-row-p1'))
 
-    expect(list().contentContainerStyle).toEqual(
-      expect.arrayContaining([expect.objectContaining({ maxWidth: CONTENT_MAX_WIDTH * 2 })]),
-    )
+    expect(mockPush).not.toHaveBeenCalled()
+    expect(screen.getByText(FICHE_SECTION)).toBeTruthy()
+    // The name is on screen twice — once per pane — and the row is marked.
+    expect(screen.getAllByText('Joris Szulc')).toHaveLength(2)
+    expect(screen.getByTestId('player-row-p1').props.accessibilityState).toEqual({
+      selected: true,
+    })
+  })
+
+  it('keeps the two panes when the slab turns', () => {
+    signIn('club_admin')
+    setWindowSize(TABLET_LANDSCAPE)
+
+    render(<JoueursScreen />, { metrics: TABLET })
+    fireEvent.press(screen.getByTestId('player-row-p1'))
+
+    expect(mockPush).not.toHaveBeenCalled()
+    expect(screen.getByText(FICHE_SECTION)).toBeTruthy()
+  })
+
+  it('does not blank the fiche being read while you type to find the next one', () => {
+    // Équipes reads its selection from the phase on screen, so the switcher
+    // empties the pane — changing phase changes the subject. Typing does not.
+    // Read from the search results, this fiche would vanish on the first
+    // keystroke that no longer matches the person you are reading about.
+    signIn('club_admin')
+    setWindowSize(TABLET_SMALL)
+
+    render(<JoueursScreen />, { metrics: TABLET })
+    fireEvent.press(screen.getByTestId('player-row-p1'))
+
+    fireEvent.changeText(screen.getByPlaceholderText('Rechercher…'), 'ancien')
+
+    // The list has narrowed past the selected licencié…
+    expect(screen.queryByTestId('player-row-p1')).toBeNull()
+    // …and the fiche is still there.
+    expect(screen.getByText(FICHE_SECTION)).toBeTruthy()
+    expect(screen.getByText('Joris Szulc')).toBeTruthy()
+  })
+
+  it('does empty the pane when the roster itself changes under it', () => {
+    // The archived switch is the other kind of change: it is a statement about
+    // who this list is about, and a fiche from outside it has no business
+    // staying open.
+    signIn('club_admin')
+    setWindowSize(TABLET_SMALL)
+
+    render(<JoueursScreen />, { metrics: TABLET })
+    fireEvent(screen.getByLabelText(LABEL), 'valueChange', false)
+    fireEvent.press(screen.getByTestId('player-row-p2')) // the archived member
+    expect(screen.getByText(FICHE_SECTION)).toBeTruthy()
+
+    fireEvent(screen.getByLabelText(LABEL), 'valueChange', true)
+
+    expect(screen.getByText(PLACEHOLDER)).toBeTruthy()
   })
 })
