@@ -19,8 +19,19 @@ import { useWindowDimensions } from 'react-native'
 //     a phone's width, and Android has no such flag. Width decides, not device.
 // ---------------------------------------------------------------------------
 
-/** Above this width the app lays out for a tablet. Below it, for a phone. */
-export const TABLET_MIN_WIDTH = 768
+/**
+ * A tablet is a window whose *smallest* side reaches this, which is the same
+ * measure Android calls `sw600dp`.
+ *
+ * The short side and not the width, because a phone turned sideways is wider
+ * than this and is still a phone: an iPhone 17 in landscape is 874×402, and
+ * reading its width alone hands a 402pt-tall screen a tablet's layout. An iPad
+ * mini standing up is 744×1133, and reading its width alone would deny a tablet
+ * its own layout. The short side gets both right, and still answers about the
+ * window rather than the device — half a slab in Split View is 507 wide and
+ * lays out as the phone-shaped window it is.
+ */
+export const TABLET_MIN_SIDE = 600
 
 /**
  * One column of reading. Wider than this and a line of French runs past the
@@ -42,7 +53,7 @@ export function useLayout(): Layout {
   const { width, height } = useWindowDimensions()
   return {
     width,
-    isTablet: width >= TABLET_MIN_WIDTH,
+    isTablet: Math.min(width, height) >= TABLET_MIN_SIDE,
     isLandscape: width > height,
     contentMaxWidth: CONTENT_MAX_WIDTH,
   }
