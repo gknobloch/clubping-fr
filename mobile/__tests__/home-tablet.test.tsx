@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native'
+import { fireEvent, screen } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { render } from '@/__tests__/support/render'
 import { CONTENT_MAX_WIDTH } from '@/constants/layout'
@@ -143,5 +143,33 @@ it('stacks an iPad in Split View, which is handed a phone-width window', () => {
 
   render(<HomeScreen />)
 
+  expect(screen.queryByTestId('match-card-split')).toBeNull()
+})
+
+it('takes the width the column reports, not the one the window implies', () => {
+  // The derived formula and the real column had to agree, and stopped agreeing
+  // as soon as either end moved — insets, a cap, a padding. The card asks.
+  setWindowSize(TABLET_LARGE)
+  render(<HomeScreen />)
+
+  fireEvent(screen.getByTestId('match-column'), 'layout', {
+    nativeEvent: { layout: { x: 0, y: 0, width: 512, height: 400 } },
+  })
+
+  expect(carouselWidth()).toBe(512)
+  expect(pageWidth()).toBe(512)
+  // And the split follows that measurement, not the 992pt window behind it.
+  expect(screen.queryByTestId('match-card-split')).toBeNull()
+})
+
+it('keeps a phone on its side a phone', () => {
+  // An iPhone 17 in landscape is 874×402: wider than the tablet threshold read
+  // off the width alone, and 402pt tall. It used to be handed a two-column
+  // content width and a card wider than the column that held it.
+  setWindowSize({ width: 874, height: 402 })
+
+  render(<HomeScreen />)
+
+  expect(carouselWidth()).toBe(CONTENT_MAX_WIDTH - PADDING * 2)
   expect(screen.queryByTestId('match-card-split')).toBeNull()
 })
