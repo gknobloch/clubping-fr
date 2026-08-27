@@ -209,11 +209,10 @@ export default function HomeScreen() {
 
   const composeGame = upcomingGames.find((g) => g.id === composeGameId)
 
-  // On a phone the dots sit under the card, where a carousel puts them. In the
-  // two-column dashboard they move up into the label row, where the web keeps
-  // its « ‹ 1/7 › » pager — which is also what leaves the two columns exactly
-  // the same height, so the card and the counters beside it line up top and
-  // bottom.
+  // Under the card, at either size: that is where a carousel puts them, and
+  // where the thumb that swipes expects to find them. It costs the two columns
+  // an exact match at the bottom — the counters run 18pt past the card — which
+  // is the cheaper of the two prices.
   const dots =
     heroes.length > 1 ? (
       <View style={styles.dots}>
@@ -274,7 +273,6 @@ export default function HomeScreen() {
                   <Text style={styles.sectionLabel}>
                     {heroes.length > 1 ? 'Prochains matchs' : 'Prochain match'}
                   </Text>
-                  {dashColumns === 2 && dots}
                 </View>
                 {heroes.length === 0 ? (
                   <View style={styles.card}>
@@ -324,7 +322,7 @@ export default function HomeScreen() {
                         </View>
                       ))}
                     </ScrollView>
-                    {dashColumns === 1 && dots}
+                    {dots}
                   </>
                 )}
               </View>
