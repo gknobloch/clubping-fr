@@ -26,18 +26,26 @@ import { CONTENT_MAX_WIDTH } from '@/constants/layout'
 export function Screen({
   children,
   style,
+  pane = false,
 }: {
   children: ReactNode
   style?: StyleProp<ViewStyle>
+  /**
+   * This one is a pane inside a `Screen`, not a screen (#447): a two-pane
+   * section frames itself once, and the fiche in its right-hand pane must not
+   * take the window's insets a second time — the left one, in particular,
+   * belongs to the list beside it and not to the fiche.
+   */
+  pane?: boolean
 }) {
   const insets = useSafeAreaInsets()
 
   return (
     <View
-      testID="screen"
+      testID={pane ? 'pane' : 'screen'}
       style={[
         s.screen,
-        { paddingLeft: insets.left, paddingRight: insets.right },
+        !pane && { paddingLeft: insets.left, paddingRight: insets.right },
         style,
       ]}
     >

@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { TabBar } from '@/components/TabBar'
 import { AppHeader, appHeader } from '@/components/AppHeader'
+import { useLayout } from '@/constants/layout'
 import { useAuth } from '@/contexts/AuthContext'
 
 type IconName = ComponentProps<typeof Ionicons>['name']
@@ -27,6 +28,11 @@ export default function TabLayout() {
   // No club, no Club tab. Same condition as the web link, which a general
   // admin (who belongs to no club) never sees either.
   const hasClub = !!user?.clubId
+  // A slab held sideways puts the menu down the left edge instead of across
+  // the foot (#447). This one option is the whole navigator-side change: it
+  // flips the container to a row and renders the tab bar before the screens,
+  // and `TabBar` reads the same rule to draw itself as a rail.
+  const { hasSideRail } = useLayout()
 
   return (
     <Tabs
@@ -34,7 +40,7 @@ export default function TabLayout() {
       tabBar={(props) => <TabBar {...props} />}
       // One header for the whole app — the section stacks render the same
       // component, so the bar does not shift from one tab to the next (#365).
-      screenOptions={{ header: appHeader }}
+      screenOptions={{ header: appHeader, tabBarPosition: hasSideRail ? 'left' : 'bottom' }}
     >
       <Tabs.Screen
         name="index"

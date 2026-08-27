@@ -36,20 +36,89 @@ export function pathToTab(path: string, hasPlayerId: boolean): string {
 /**
  * Widest the row of five tabs gets (#446). Spread over a whole slab, each tab
  * is a 10pt label centred in 200pt of nothing; capped, it stays a row of tabs.
- * The bar's background still runs edge to edge. The side rail is #447.
+ * The bar's background still runs edge to edge.
  */
 const TAB_ROW_MAX_WIDTH = 560
 
+/**
+ * The rail's width, insets aside (#447). Wide enough for the longest label —
+ * «Journées» at 10pt — on one line under its icon, and no wider: the rail is
+ * paid for out of the content's width.
+ */
+const RAIL_WIDTH = 88
+
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
-  const { isTablet } = useLayout()
+  const { isTablet, hasSideRail } = useLayout()
   const { playerId } = useGlobalSearchParams<{ playerId?: string }>()
   const activeName = pathToTab(usePathname(), !!playerId)
+
+  const items = state.routes.map((route, index) => {
+    const { options } = descriptors[route.key]
+    // Skip hidden tabs — expo-router turns href:null into display:'none'
+    // (covers the (detail) stack).
+    const itemStyle = options.tabBarItemStyle as { display?: string } | undefined
+    if (itemStyle?.display === 'none') return null
+
+    const isActive = route.name === activeName
+    const isFocused = state.index === index
+    const color = isActive ? colors.tabActive : colors.tabInactive
+    const label = (options.title ?? route.name) as string
+
+    return (
+      <TouchableOpacity
+        key={route.key}
+        accessibilityRole="button"
+        accessibilityState={isActive ? { selected: true } : {}}
+        accessibilityLabel={options.tabBarAccessibilityLabel}
+        onPress={() => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          })
+          if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name)
+        }}
+        style={hasSideRail ? styles.railItem : styles.item}
+        activeOpacity={0.7}
+      >
+        {options.tabBarIcon?.({ focused: isActive, color, size: 24 })}
+        <Text style={[styles.label, { color }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    )
+  })
+
+  // A slab held sideways: the five destinations run down the left edge and the
+  // screen's whole height goes to the content instead of to a horizontal bar
+  // (#447). The navigator puts us here rather than at the foot — see
+  // `tabBarPosition` in (tabs)/_layout — so this is a full-height column, above
+  // which nothing else is drawn: it carries the status-bar inset itself.
+  if (hasSideRail) {
+    return (
+      <View
+        testID="tab-bar"
+        style={[
+          styles.rail,
+          {
+            width: RAIL_WIDTH + insets.left,
+            paddingTop: insets.top + 12,
+            paddingBottom: Math.max(insets.bottom, 12),
+            paddingLeft: insets.left,
+          },
+        ]}
+      >
+        {items}
+      </View>
+    )
+  }
 
   return (
     // Left/right insets alongside the bottom one (#445): in landscape the notch
     // sits beside the bar, and the first and last tabs would slide under it.
     <View
+      testID="tab-bar"
       style={[
         styles.bar,
         {
@@ -59,44 +128,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         },
       ]}
     >
-      <View style={[styles.row, isTablet && styles.rowCentred]}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key]
-          // Skip hidden tabs — expo-router turns href:null into display:'none'
-          // (covers the (detail) stack).
-          const itemStyle = options.tabBarItemStyle as { display?: string } | undefined
-          if (itemStyle?.display === 'none') return null
-
-          const isActive = route.name === activeName
-          const isFocused = state.index === index
-          const color = isActive ? colors.tabActive : colors.tabInactive
-          const label = (options.title ?? route.name) as string
-
-          return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isActive ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              onPress={() => {
-                const event = navigation.emit({
-                  type: 'tabPress',
-                  target: route.key,
-                  canPreventDefault: true,
-                })
-                if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name)
-              }}
-              style={styles.item}
-              activeOpacity={0.7}
-            >
-              {options.tabBarIcon?.({ focused: isActive, color, size: 24 })}
-              <Text style={[styles.label, { color }]} numberOfLines={1}>
-                {label}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
+      <View style={[styles.row, isTablet && styles.rowCentred]}>{items}</View>
     </View>
   )
 }
@@ -108,8 +140,16 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingTop: 8,
   },
+  rail: {
+    backgroundColor: colors.card,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.border,
+  },
   row: { flexDirection: 'row', width: '100%' },
   rowCentred: { maxWidth: TAB_ROW_MAX_WIDTH, alignSelf: 'center' },
   item: { flex: 1, alignItems: 'center', gap: 3 },
+  // Not `flex: 1`: five destinations spread down 800pt would be a tap target
+  // the height of a hand. They sit at the top of the rail, as a menu does.
+  railItem: { alignItems: 'center', gap: 3, paddingVertical: 14 },
   label: { fontSize: 10, fontFamily: fonts.semiBold },
 })
