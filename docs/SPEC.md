@@ -19,7 +19,10 @@ Your job is to develop a mobile-friendly web application allowing Table Tennis c
 
 The application has the following roles:
 - *General Admin* - Who has ability to create/approve new clubs to use the application. There could eventually be multiple General Admins. A general admin is potentially a Club Admin, a Captain or Player of a club.
-- *Club Admin* - Who has full control over his own club. There can be multiple admins per club.
+- *Club Admin* - Who has full control over his own club. There can be multiple admins per
+  club, up to a maximum of 5, and never fewer than one once the club has any. A club
+  admin is not necessarily a licensed player: a secretary or a president with no licence
+  can administer the club.
 - *Captain* - This special player is responsible for his team(s). There's only one captain per team.
 - *Player* - A player is part of a club, and assigned to maximum one team per phase.
 
@@ -28,6 +31,47 @@ The application has the following roles:
 A club is identifiable by an identifier (user driven, it's the affiliation number) and a display name, e.g. 06680011 for "PPA Rixheim".
 
 It also has multiple addresses where games can be played, one of them being the default.
+
+### Onboarding a club
+
+A club enters the application through one of two doors, and both end at the same
+place: a General Admin decides.
+
+- **On request.** Anyone — typically the club's FFTT correspondent — can ask for
+  access from a public page, without an account, by giving the club's affiliation
+  number. The FFTT club record is read live and shown back so both sides agree on
+  which club is meant. The requester gives their name, e-mail and phone, and may
+  say who they are in the club. The request waits for a decision.
+- **Directly.** A General Admin creates the club and designates its first admin
+  themselves, with no request and no waiting.
+
+The FFTT club record publishes an official correspondent for the club — a name,
+an e-mail and a phone. This is the evidence a General Admin weighs a request
+against, not a credential: it is shown for comparison, and the correspondent is
+never contacted by the application. A request whose e-mail differs from the
+published one is perfectly ordinary and is not refused on that ground.
+
+Approving a request creates the club if it does not exist yet, taking its name
+and venue from the FFTT record, and makes the requester a Club Admin. Refusing
+one keeps it, with the reason, rather than erasing it.
+
+No e-mail is sent by the application as part of this flow — neither to the club's
+correspondent nor to the requester. An approved requester can simply sign in;
+they learn of the decision out of band.
+
+Two consequences of the correspondent being evidence rather than proof are worth
+stating, because they are easy to get backwards:
+
+- **The FFTT record shown on the public page is masked.** The address and phone
+  the federation publishes are shown with most of their characters hidden —
+  enough for a requester to recognise their own club, not enough to turn a page
+  open to anyone into a directory of every club's contact details.
+- **What the requester's browser read is part of their request, not a source.**
+  The application cannot read the FFTT record itself, so the requester's browser
+  does and submits what it saw. It is therefore theirs, and the reviewing admin
+  is never shown a verdict computed from it: the comparison that decides
+  anything is made against a fresh reading taken in the admin's own browser at
+  the moment of the decision.
 
 ## Season
  
@@ -133,6 +177,11 @@ There are also rules determining if a player is allowed to play in a certain tea
 ### Club Admin
 
 Each club has one or more admins that are able:
+- To designate the other admins of their own club, up to 5 in total, choosing either
+  a member of the club or anyone else by name and e-mail; and to stand one down,
+  except the last one, since a club with no admin can no longer be administered by
+  anyone. Standing an admin down leaves them a player of the club if that is what
+  they were.
 - To register teams in a phase / division / group - in case a global admin didn't create them
 - To define the list of players of a team, which includes defining how many points that player has at the beginning of the phase, once assigned to that team
 - To perform the actions of any captain of his club on any team of the club
@@ -140,6 +189,7 @@ Each club has one or more admins that are able:
 ### Global Admin
 
 Global admin is able
-- To create clubs
+- To create clubs, and to approve or refuse the requests of those asking to administer one
+- To designate and stand down the admins of any club, under the same limit of 5
 - To create divisions, phases, groups
 - To create teams

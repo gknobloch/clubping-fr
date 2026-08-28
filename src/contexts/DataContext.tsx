@@ -28,6 +28,7 @@ import type {
   GameSelection,
   AvailabilityStatus,
   AvailabilityOverriddenBy,
+  User,
 } from '@/types'
 import {
   mockDivisions,
@@ -342,7 +343,19 @@ function api(path: string, options?: RequestInit) {
   }).catch(console.error)
 }
 
-interface DataContextValue extends Omit<DataState, 'users'> {
+/**
+ * The answer to an admin appointment: the API decides (the cap and the
+ * never-zero rule are its to enforce), and its French refusal comes back for
+ * display rather than being rebuilt here (#474).
+ */
+export type ClubAdminResult = { ok: true } | { ok: false; message: string }
+
+/** Who to appoint: a member the club already has, or someone new by name. */
+export type ClubAdminTarget =
+  | { userId: string }
+  | { firstName: string; lastName: string; email: string; phone?: string }
+
+interface DataContextValue extends DataState {
   updateDivision: (id: string, patch: Partial<Division>) => void
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
@@ -409,6 +422,10 @@ interface DataContextValue extends Omit<DataState, 'users'> {
   moveDivisionDown: (divisionId: string) => void
   updatePlayer: (id: string, patch: Partial<Player>) => void
   addPlayer: (data: Omit<Player, 'id'>) => Player
+  /** Appoint a club admin — at most 5 per club, decided by the API (#474). */
+  addClubAdmin: (clubId: string, target: ClubAdminTarget) => Promise<ClubAdminResult>
+  /** Stand one down; refused for the last admin a club has (#474). */
+  removeClubAdmin: (clubId: string, userId: string) => Promise<ClubAdminResult>
   /** Upsert points for (phase, player) — the FFTT import's only write (#384). */
   setPlayerPhasePoints: (updates: PlayerPhasePoints[]) => void
   setAvatar: (id: string, base64: string, contentType: string) => Promise<void>
@@ -457,6 +474,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const [groups, setGroups] = useState<Group[]>(initialData?.groups ?? [])
   const [teams, setTeams] = useState<Team[]>(initialData?.teams ?? [])
   const [players, setPlayers] = useState<Player[]>(initialData?.players ?? [])
+  // Every member, players and non-playing admins alike. The payload has always
+  // carried this; before #474 nothing on the web read it, so it was dropped on
+  // the floor. A club's admins cannot be found in `players`: an invited
+  // secretary is a user who never appears there.
+  const [users, setUsers] = useState<User[]>(initialData?.users ?? [])
   const [playerPhasePoints, setPlayerPhasePointsState] = useState<PlayerPhasePoints[]>(
     initialData?.playerPhasePoints ?? []
   )
@@ -501,6 +523,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setGroups(data.groups)
       setTeams(data.teams)
       setPlayers(data.players)
+      setUsers(data.users ?? [])
       setPlayerPhasePointsState(data.playerPhasePoints ?? [])
       setMatchDays(data.matchDays)
       setGames(data.games)
@@ -1575,6 +1598,71 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     return player
   }, [persist])
 
+  // --- Club admins (#474) ---
+  // Unlike every other mutation here, these wait for the API and report back:
+  // the cap of 5 and the never-zero rule are enforced server-side, so an
+  // optimistic update would show an appointment the club never got. The
+  // refusal arrives already worded in French — the same sentence the screens
+  // would have built, so there is one place it can be wrong.
+  const clubAdminRequest = useCallback(
+    async (path: string, options: RequestInit): Promise<ClubAdminResult> => {
+      if (!persist) return { ok: true }
+      try {
+        const res = await fetch(`/api${path}`, { headers: authHeaders(), ...options })
+        if (res.ok) return { ok: true }
+        const body = (await res.json().catch(() => null)) as { message?: string } | null
+        return { ok: false, message: body?.message ?? "L'opération a échoué." }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
+
+  const addClubAdmin = useCallback(
+    async (clubId: string, target: ClubAdminTarget): Promise<ClubAdminResult> => {
+      const result = await clubAdminRequest(`/clubs/${encodeURIComponent(clubId)}/admins`, {
+        method: 'POST',
+        body: JSON.stringify(target),
+      })
+      if (!result.ok) return result
+      setUsers((prev) => {
+        if ('userId' in target) {
+          return prev.map((u) =>
+            u.id === target.userId ? { ...u, role: 'club_admin', clubId } : u,
+          )
+        }
+        // The invited member is not a player, so they belong here and nowhere
+        // else — no roster, no availabilities, nothing to add to `players`.
+        return [
+          ...prev,
+          {
+            id: nextId('user'), role: 'club_admin', isPlayer: false, clubId,
+            firstName: target.firstName, lastName: target.lastName,
+            email: target.email, phone: target.phone ?? '', status: 'active',
+          },
+        ]
+      })
+      return result
+    },
+    [clubAdminRequest],
+  )
+
+  const removeClubAdmin = useCallback(
+    async (clubId: string, adminId: string): Promise<ClubAdminResult> => {
+      const result = await clubAdminRequest(
+        `/clubs/${encodeURIComponent(clubId)}/admins/${encodeURIComponent(adminId)}`,
+        { method: 'DELETE' },
+      )
+      if (!result.ok) return result
+      // Only the role goes: they stay a member of the club, and a player if
+      // that is what they were.
+      setUsers((prev) => prev.map((u) => (u.id === adminId ? { ...u, role: 'player' } : u)))
+      return result
+    },
+    [clubAdminRequest],
+  )
+
   // --- Player phase points (#384) ---
   // Written in one call because the FFTT import is their only writer, and it
   // lands a whole club at once. Upsert semantics on (phaseId, playerId), same
@@ -1819,8 +1907,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       addTeam,
       moveDivisionUp,
       moveDivisionDown,
+      users,
       updatePlayer,
       addPlayer,
+      addClubAdmin,
+      removeClubAdmin,
       setPlayerPhasePoints,
       setAvatar,
       removeAvatar,
@@ -1847,7 +1938,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
-      updatePlayer, addPlayer, setPlayerPhasePoints, setAvatar, removeAvatar,
+      users, updatePlayer, addPlayer, addClubAdmin, removeClubAdmin,
+      setPlayerPhasePoints, setAvatar, removeAvatar,
       updateMatchDay, addMatchDay, updateGame, addGame,
       gameAvailabilities, setGameAvailability, clearGameAvailability,
       gameSelections, getGameSelectionPlayerIds, setGameSelection, setGameSelectionBatch,

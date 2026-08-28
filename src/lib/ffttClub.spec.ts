@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clubSyncFields,
+  correspondentName,
   defaultSelectedFields,
   formatVenue,
   hasVenueInfo,
@@ -37,6 +38,96 @@ describe('normalizeFfttName', () => {
   it('handles accented uppercase letters', () => {
     expect(normalizeFfttName('ÉTIVAL')).toBe('Étival')
   })
+
+  // #474 — the <=4-letter rule assumed every short token was an initialism,
+  // so the joints of a French place name came out shouting. The cases below
+  // are all real club names FFTT publishes.
+  describe('short words that are not abbreviations (#474)', () => {
+    it('lowercases a preposition between two words', () => {
+      expect(normalizeFfttName('MULHOUSE TENNIS DE TABLE')).toBe('Mulhouse Tennis de Table')
+      expect(normalizeFfttName('WILLER SUR THUR')).toBe('Willer sur THUR')
+      expect(normalizeFfttName('POIX DU NORD')).toBe('POIX du Nord')
+      expect(normalizeFfttName('ST PERE EN RETZ')).toBe('St Pere en RETZ')
+      expect(normalizeFfttName('SOULTZ SOUS FORETS')).toBe('Soultz sous Forets')
+      expect(normalizeFfttName('GENERALI SPORT ET CULTURE')).toBe('Generali Sport et Culture')
+    })
+
+    it('knows the regional spellings of lès', () => {
+      expect(normalizeFfttName('FLINES LEZ RACHES')).toBe('Flines lez Raches')
+      expect(normalizeFfttName('BOURG-LÈS-VALENCE')).toBe('Bourg-lès-Valence')
+    })
+
+    // At either end the particle is what the club is called, not a joint.
+    it('keeps a particle capitalised at the start or the end', () => {
+      expect(normalizeFfttName('LE MONDE DU PINGPONG')).toBe('Le Monde du Pingpong')
+      expect(normalizeFfttName('DE GAULLE')).toBe('De Gaulle')
+    })
+
+    // "LA" is as often part of the name ("La Robertsau") as a joint inside it
+    // ("Beuvry-la-Forêt"), and nothing here can tell the two apart — so it
+    // keeps its capital, which is the harmless way to be wrong.
+    it('capitalises an article wherever it sits', () => {
+      expect(normalizeFfttName('ASL LA ROBERTSAU STRASBOURG')).toBe('ASL La Robertsau Strasbourg')
+      expect(normalizeFfttName('AIX LES MILLES')).toBe('Aix Les Milles')
+    })
+
+    it('title-cases short words that are words', () => {
+      expect(normalizeFfttName('THANN TENNIS DE TABLE CLUB')).toBe('Thann Tennis de Table Club')
+      expect(normalizeFfttName('GEMENOS PING')).toBe('Gemenos Ping')
+      expect(normalizeFfttName('VAL DE MODER')).toBe('Val de Moder')
+      expect(normalizeFfttName('STRASBOURG ST JEAN')).toBe('Strasbourg St Jean')
+      expect(normalizeFfttName('ASSUP FOS SUR MER')).toBe('Assup FOS sur Mer')
+    })
+
+    // The boundary, stated so nobody mistakes it for a bug: the list cannot
+    // hold every French place name, so a short one still reads as an
+    // initialism. Better than the alternative, which would title-case "TT".
+    it('cannot rescue a short place name that is not on the list', () => {
+      expect(normalizeFfttName('WILLER SUR THUR')).toBe('Willer sur THUR')
+      expect(normalizeFfttName('ASSUP FOS SUR MER')).toBe('Assup FOS sur Mer')
+    })
+
+    it('still leaves a genuine abbreviation alone', () => {
+      expect(normalizeFfttName('CSS BERGHEIM')).toBe('CSS Bergheim')
+      expect(normalizeFfttName('RIXHEIM PPA')).toBe('Rixheim PPA')
+      expect(normalizeFfttName('KEMBS TT')).toBe('Kembs TT')
+      expect(normalizeFfttName('ENSISHEIM TTMC')).toBe('Ensisheim TTMC')
+    })
+  })
+
+  describe('punctuation is glue, kept exactly (#474)', () => {
+    // What follows an apostrophe finishes a word, so it is never read as an
+    // abbreviation however short — which is also what makes this the one place
+    // a 4-letter place name comes out right.
+    it('elides d’ and l’ onto the next word', () => {
+      expect(normalizeFfttName("VILLENEUVE D'ASCQ CARSAT TT")).toBe("Villeneuve d'Ascq Carsat TT")
+      expect(normalizeFfttName("VAL D'OZON TENNIS DE TABLE")).toBe("Val d'Ozon Tennis de Table")
+      expect(normalizeFfttName("VALENC'IN PIERRE TT")).toBe("Valenc'In Pierre TT")
+    })
+
+    // FFTT is fond of dotted initialisms; title-casing used to mangle them
+    // into "C.c.c." because the token is longer than four characters.
+    it('leaves a dotted initialism intact', () => {
+      expect(normalizeFfttName('COLMAR C.C.C. T.T.')).toBe('Colmar C.C.C. T.T.')
+      expect(normalizeFfttName('NORT SUR ERDRE N.A.C.T.T.')).toBe('NORT sur Erdre N.A.C.T.T.')
+    })
+
+    // FFTT lists "La Bernerie" as "BERNERIE (LA)", the directory convention.
+    it('handles the article FFTT moves into brackets', () => {
+      expect(normalizeFfttName('BERNERIE (LA)')).toBe('Bernerie (La)')
+      expect(normalizeFfttName('MONTAGNE (LA) A.S.C.')).toBe('Montagne (La) A.S.C.')
+    })
+
+    it('leaves digits and spacing where they were', () => {
+      expect(normalizeFfttName('PARIS 13 TENNIS DE TABLE')).toBe('Paris 13 Tennis de Table')
+      expect(normalizeFfttName('VILLENEUVE EN RETZ   TT')).toBe('Villeneuve en RETZ   TT')
+    })
+
+    it('returns a string with no letters unchanged', () => {
+      expect(normalizeFfttName('77')).toBe('77')
+      expect(normalizeFfttName('')).toBe('')
+    })
+  })
 })
 
 describe('hasVenueInfo', () => {
@@ -60,6 +151,13 @@ describe('parseClubDetailXml', () => {
       street: '5, rue Vaclav Havel',
       postalCode: '68170',
       city: 'Rixheim',
+      // The record has always carried a correspondent; #474 started reading it.
+      correspondent: {
+        lastName: 'Colle',
+        firstName: 'Quentin',
+        email: 'pparixheim@gmail.com',
+        phone: '0672124915',
+      },
     })
   })
 
@@ -142,5 +240,78 @@ describe('clubSyncFields', () => {
     expect(formatVenue({ label: 'Salle', street: '', postalCode: '', city: 'Thann' })).toBe('Salle · Thann')
     expect(formatVenue({ label: '', street: '', postalCode: '', city: '' })).toBeNull()
     expect(formatVenue(null)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The club's official correspondent (#474)
+// ---------------------------------------------------------------------------
+
+/** Build a club record with the four *cor fields set to whatever is given. */
+const withCorrespondent = (cor: string) =>
+  '<?xml version="1.0" encoding="ISO-8859-1"?>' +
+  '<liste><club><numero>06680011</numero><nom>RIXHEIM PPA</nom>' +
+  '<nomsalle>Complexe Sportif</nomsalle><villesalle>RIXHEIM</villesalle>' +
+  cor +
+  '</club></liste>'
+
+describe('parseClubDetailXml — correspondent (#474)', () => {
+  it('reads the contact FFTT publishes, title-casing the name', () => {
+    expect(parseClubDetailXml(RIXHEIM_XML)?.correspondent).toEqual({
+      lastName: 'Colle',
+      firstName: 'Quentin',
+      email: 'pparixheim@gmail.com',
+      phone: '0672124915',
+    })
+  })
+
+  // The address is compared against what a requester typed, so it must survive
+  // parsing exactly as published — no lower-casing, no normalisation.
+  it('leaves the address untouched, case included', () => {
+    const xml = withCorrespondent(
+      '<nomcor>BARLINGE</nomcor><prenomcor>Virginie</prenomcor>' +
+        '<mailcor>Mulhouse-tennis-de-table@orange.fr</mailcor><telcor>0686839957</telcor>',
+    )
+    expect(parseClubDetailXml(xml)?.correspondent?.email).toBe(
+      'Mulhouse-tennis-de-table@orange.fr',
+    )
+  })
+
+  it('keeps a partial contact — a name with no address is still someone', () => {
+    const xml = withCorrespondent('<nomcor>COLLE</nomcor><prenomcor>Quentin</prenomcor><mailcor/><telcor/>')
+    expect(parseClubDetailXml(xml)?.correspondent).toEqual({
+      lastName: 'Colle',
+      firstName: 'Quentin',
+      email: '',
+      phone: '',
+    })
+  })
+
+  it('omits it entirely when all four fields are empty', () => {
+    const xml = withCorrespondent('<nomcor/><prenomcor/><mailcor></mailcor><telcor/>')
+    expect(parseClubDetailXml(xml)?.correspondent).toBeUndefined()
+  })
+
+  it('omits it when the fields are absent altogether', () => {
+    expect(parseClubDetailXml(withCorrespondent(''))?.correspondent).toBeUndefined()
+  })
+
+  it('does not disturb the rest of the record', () => {
+    const parsed = parseClubDetailXml(RIXHEIM_XML)
+    expect(parsed?.displayName).toBe('Rixheim PPA')
+    expect(parsed?.city).toBe('Rixheim')
+  })
+})
+
+describe('correspondentName (#474)', () => {
+  it('reads as a person', () => {
+    expect(correspondentName({ firstName: 'Quentin', lastName: 'Colle', email: '', phone: '' }))
+      .toBe('Quentin Colle')
+  })
+
+  it('copes with half a name, and with nobody at all', () => {
+    expect(correspondentName({ firstName: '', lastName: 'Colle', email: '', phone: '' })).toBe('Colle')
+    expect(correspondentName(null)).toBe('')
+    expect(correspondentName(undefined)).toBe('')
   })
 })

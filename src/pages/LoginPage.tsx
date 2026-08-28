@@ -35,6 +35,16 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
       <div className="relative w-full max-w-md">
         <LoginHeader caption={caption} />
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
+        {/* Above the legal footnote and in full size, because it *is* a way in
+            (#474): someone whose club the app does not know gets no code from
+            the form above — nothing happens, and this is the only thing that
+            tells them why and what to do instead. */}
+        <p className="mt-5 text-center text-sm text-slate-600">
+          Votre club n’est pas encore sur Club Ping&nbsp;?{' '}
+          <Link className="font-medium text-accent-600 underline hover:text-accent-800" to="/rejoindre">
+            Demandez à l’administrer
+          </Link>
+        </p>
         {/* The stores want the policy reachable from the app itself, not only
             from the listing (#356). Muted: it is a legal footnote, not a way in. */}
         <p className="mt-6 text-center text-xs text-slate-400">

@@ -527,15 +527,24 @@ export const mockGameAvailabilities: GameAvailability[] = [
 // ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
-// Every player is a user (is_player). Plus two admin-only users.
+// Players who also administer their club (#474). A club admin is a role on the
+// member, not a separate account, so this has to be expressible in the mock:
+// Grégory administers PPA Rixheim *and* plays for it, which is the ordinary
+// case and the one that catches code confusing `role` with `is_player`.
+const PLAYER_CLUB_ADMIN_IDS = new Set(['p2-player-1'])
+
+// Every player is a user (is_player). Plus two admin-only users — the general
+// admin, and a non-playing club admin (the secretary who holds no licence).
+// Rixheim therefore has three admins in all: enough to stand one down without
+// hitting the never-zero rule, and short enough of five to appoint another.
 export const mockUsers: User[] = [
   { id: 'user-1', email: 'admin@example.com', role: 'general_admin', isPlayer: false },
-  { id: 'user-2', email: 'club.admin@example.com', role: 'club_admin', isPlayer: false, clubId: 'club-fftt-06680011' },
+  { id: 'user-2', email: 'club.admin@example.com', role: 'club_admin', isPlayer: false, clubId: 'club-fftt-06680011', firstName: 'Virginie', lastName: 'Barlinge' },
   ...mockPlayers.map(
     (p): User => ({
       id: p.id,
       email: p.email,
-      role: 'player',
+      role: PLAYER_CLUB_ADMIN_IDS.has(p.id) ? 'club_admin' : 'player',
       isPlayer: true,
       firstName: p.firstName,
       lastName: p.lastName,

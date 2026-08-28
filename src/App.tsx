@@ -20,6 +20,8 @@ import { PlayerDetailPage } from '@/pages/PlayerDetailPage'
 import { TeamDetailPage } from '@/pages/TeamDetailPage'
 import { ComptePage } from '@/pages/ComptePage'
 import { PrivacyPage } from '@/pages/PrivacyPage'
+import { JoinPage } from '@/pages/JoinPage'
+import { RequestsPage } from '@/pages/admin/RequestsPage'
 import { DeleteAccountPage } from '@/pages/DeleteAccountPage'
 
 function AuthLoading() {
@@ -58,6 +60,10 @@ export default function App() {
           <Route path="/login" element={<PublicRoute />} />
           {/* Public and outside the auth guard on purpose: store reviewers fetch
               this URL anonymously (#356). */}
+          {/* Public like the policy pages, and for a stronger reason: this is
+              the only way in for a club the app has never heard of, whose
+              correspondent has no account and cannot obtain one (#474). */}
+          <Route path="/rejoindre" element={<JoinPage />} />
           <Route path="/confidentialite" element={<PrivacyPage />} />
           {/* Public for the same reason, and for one more: Google Play prints
               this URL on the listing, and a member who can no longer sign in
@@ -67,6 +73,7 @@ export default function App() {
             <Route index element={<HomePage />} />
             <Route path="clubs" element={<ClubsPage />} />
             <Route path="clubs/:clubId" element={<ClubDetailPage />} />
+            <Route path="demandes" element={<RequestsPage />} />
             <Route path="saisons" element={<SeasonsPage />} />
             <Route path="phases" element={<PhasesPage />} />
             <Route path="divisions" element={<DivisionsPage />} />
