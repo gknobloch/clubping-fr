@@ -112,6 +112,9 @@ export interface MatrixRow {
     canEdit: boolean
     /** The club team this player is fielded in for this journée, if any. */
     selectedTeam?: { number: number; color?: string }
+    /** Whether the viewer may set that team — the line-up rule, not the
+     *  availability one: the two differ, deliberately (#462). */
+    canCompose: boolean
   }[]
 }
 
@@ -124,6 +127,7 @@ export function MatchDayMatrix({
   columns,
   pager,
   onEditAvailability,
+  onEditComposition,
   onOpenGame,
 }: {
   team: Team
@@ -135,7 +139,9 @@ export function MatchDayMatrix({
   /** Absent when the phase has no more journées than the grid shows. */
   pager?: { label: string; onPrev?: () => void; onNext?: () => void }
   onEditAvailability: (playerId: string, game: Game, dayIndex: number) => void
-  /** The journée header leads to the match, which is where line-ups are made. */
+  /** Which of the club's teams this player turns out for that journée. */
+  onEditComposition: (playerId: string, dayIndex: number) => void
+  /** The journée header leads to the match itself. */
   onOpenGame: (game: Game) => void
 }) {
   const c = columns
@@ -250,6 +256,7 @@ export function MatchDayMatrix({
                 const day = days[i]
                 const cfg = cell.status ? AVAIL[cell.status] : undefined
                 const editable = cell.canEdit && !!day?.game
+                const composable = cell.canCompose && !!day?.game
                 return (
                   <View key={i} style={s.pair}>
                     <View style={[s.cell, s.cellCentred, { width: c.day }]}>
@@ -274,10 +281,23 @@ export function MatchDayMatrix({
                       </TouchableOpacity>
                     </View>
                     <View style={[s.cell, s.cellCentred, { width: c.day }]}>
-                      {/* Read-only: composing a line-up is the match screen's
-                          job, brûlage checks included, and the journée header
-                          above leads there. */}
-                      <View style={[s.control, s.controlRead]}>
+                      <TouchableOpacity
+                        testID={`compo-${row.player.id}-${i}`}
+                        style={[
+                          s.control,
+                          cell.selectedTeam
+                            ? {
+                                borderColor: cell.selectedTeam.color ?? colors.accent,
+                                backgroundColor: colors.card,
+                              }
+                            : null,
+                          !composable && s.controlLocked,
+                        ]}
+                        disabled={!composable}
+                        onPress={() => onEditComposition(row.player.id, i)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Composition de ${row.player.firstName} ${row.player.lastName}, journée ${day?.number}`}
+                      >
                         {cell.selectedTeam ? (
                           <>
                             <View
@@ -293,7 +313,7 @@ export function MatchDayMatrix({
                         ) : (
                           <Text style={[s.controlText, s.controlTextEmpty]}>—</Text>
                         )}
-                      </View>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 )
@@ -448,7 +468,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 6,
   },
   controlLocked: { opacity: 0.5 },
-  controlRead: { borderWidth: 1, borderStyle: 'dashed' },
   controlText: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary },
   controlTextEmpty: { color: colors.textSecondary },
 

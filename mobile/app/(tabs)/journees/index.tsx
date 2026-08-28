@@ -12,6 +12,7 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import { AvailabilitySheet } from '@/components/AvailabilitySheet'
+import { CompositionSheet, type CompositionOption } from '@/components/CompositionSheet'
 import {
   MatchDayMatrix,
   matrixColumns,
@@ -20,11 +21,12 @@ import {
   type MatrixRow,
 } from '@/components/MatchDayMatrix'
 import { useLayout } from '@/constants/layout'
-import { canEditAvailability, availabilityOverride } from '@/utils/roles'
+import { canEditAvailability, availabilityOverride, canManageTeam } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
-import { computeBrulage } from '@shared/lib/brulage'
+import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
+import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
@@ -99,7 +101,7 @@ export default function JourneesScreen() {
   const {
     clubs, teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints,
-    setAvailability, clearAvailability, refreshing, refresh,
+    setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
   } = useAppData()
   const router = useRouter()
 
@@ -199,6 +201,7 @@ export default function JourneesScreen() {
   const [paneWidth, setPaneWidth] = useState<number | null>(null)
   const [dayOffset, setDayOffset] = useState<number | null>(null)
   const [editing, setEditing] = useState<{ player: Player; team: Team; game: Game; day: MatrixDay } | null>(null)
+  const [composing, setComposing] = useState<{ player: Player; day: MatrixDay; group: MatchDayGroup } | null>(null)
 
   const dayCount = visibleMatchDayCount(paneWidth ?? 0)
   const maxOffset = Math.max(0, matchDayGroups.length - dayCount)
@@ -280,6 +283,10 @@ export default function JourneesScreen() {
           status: day.game ? availabilityOf(player.id, day.game.id) : undefined,
           canEdit: !!user && canEditAvailability(user, team, player.id),
           selectedTeam: selectedTeamFor(player.id, i),
+          // The line-up rule, not the availability one. `canManageTeam` is what
+          // the match screen asks before it lets anybody compose, and asking a
+          // different question here would make the same action mean two things.
+          canCompose: !!user && canManageTeam(user, team),
         })),
       }
     })
@@ -306,6 +313,67 @@ export default function JourneesScreen() {
       }
     }
     return undefined
+  }
+
+  /**
+   * Where this player may be fielded that journée: the club's teams that
+   * actually play the round and that the brûlage rules still leave open — the
+   * web's `orderedTeamOptionIds`, same helper. The team they are already in
+   * stays listed whatever those rules now say, or there would be no undoing it.
+   */
+  function compositionOptions(group: MatchDayGroup, playerId: string): CompositionOption[] {
+    const current = selectedTeamIdFor(playerId, group)
+    return clubTeams
+      .slice()
+      .sort((a, b) => a.number - b.number)
+      .flatMap((t) => {
+        const { matchDay, game } = teamGame(t, group.matchDays)
+        if (!game || !matchDay) return []
+        const eligible =
+          t.id === current ||
+          isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id)
+        if (!eligible) return []
+        const isHome = game.homeTeamId === t.id
+        const opp = teams.find((x) => x.id === (isHome ? game.awayTeamId : game.homeTeamId))
+        return [{
+          teamId: t.id,
+          number: t.number,
+          color: t.color,
+          isHome,
+          opponentName: opp ? getTeamName(opp, clubs) : '?',
+        }]
+      })
+  }
+
+  /** The club team this player is fielded in that journée, if any. */
+  function selectedTeamIdFor(playerId: string, group: MatchDayGroup): string | undefined {
+    for (const t of clubTeams) {
+      const { game } = teamGame(t, group.matchDays)
+      if (game && selectionOf(t.id, game.id).includes(playerId)) return t.id
+    }
+    return undefined
+  }
+
+  /**
+   * Field this player in one of the club's teams for the round, or in none.
+   *
+   * A journée is one game per club team, so moving somebody means two writes at
+   * most — out of the old line-up, into the new. The web batches every game of
+   * the day; here only the lists that actually change are sent, which comes to
+   * the same thing without a batch endpoint the app does not have.
+   */
+  async function compose(group: MatchDayGroup, playerId: string, targetTeamId: string | null) {
+    setComposing(null)
+    for (const t of clubTeams) {
+      const { game } = teamGame(t, group.matchDays)
+      if (!game) continue
+      const current = selectionOf(t.id, game.id)
+      const next =
+        t.id === targetTeamId
+          ? (current.includes(playerId) ? current : [...current, playerId])
+          : current.filter((id) => id !== playerId)
+      if (next.length !== current.length) await setGameSelection(t.id, game.id, next)
+    }
   }
 
   async function answer(status: AvailabilityStatus | null) {
@@ -368,6 +436,17 @@ export default function JourneesScreen() {
     />
   )
 
+  const composeSheet = composing && (
+    <CompositionSheet
+      title={`${composing.player.firstName} ${composing.player.lastName}`}
+      subtitle={`J${composing.day.number} · ${composing.day.dateLabel}`}
+      options={compositionOptions(composing.group, composing.player.id)}
+      value={selectedTeamIdFor(composing.player.id, composing.group)}
+      onPick={(teamId) => compose(composing.group, composing.player.id, teamId)}
+      onClose={() => setComposing(null)}
+    />
+  )
+
   // ---- La matrice (#468) --------------------------------------------------
   if (isTablet) {
     return (
@@ -421,6 +500,12 @@ export default function JourneesScreen() {
                         const day = days[dayIndex]
                         if (player && day) setEditing({ player, team, game, day })
                       }}
+                      onEditComposition={(playerId, dayIndex) => {
+                        const player = players.find((p) => p.id === playerId)
+                        const day = days[dayIndex]
+                        const group = visibleGroups[dayIndex]
+                        if (player && day && group) setComposing({ player, day, group })
+                      }}
                       onOpenGame={(game) =>
                         router.push({ pathname: '/match/[id]', params: { id: game.id, teamId: team.id } })
                       }
@@ -430,6 +515,7 @@ export default function JourneesScreen() {
           </View>
         </ScrollView>
         {sheet}
+        {composeSheet}
       </Screen>
     )
   }

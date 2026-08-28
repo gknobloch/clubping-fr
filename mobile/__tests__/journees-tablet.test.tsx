@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, waitFor } from '@testing-library/react-native'
 import { render, TABLET } from '@/__tests__/support/render'
 import {
   PHONE_WIDTH,
@@ -25,6 +25,7 @@ import JourneesScreen from '@/app/(tabs)/journees'
 const mockPush = jest.fn()
 const setAvailability = jest.fn().mockResolvedValue(undefined)
 const clearAvailability = jest.fn().mockResolvedValue(undefined)
+const setGameSelection = jest.fn().mockResolvedValue(undefined)
 
 const mockAuth: { user: User | null } = { user: null }
 const mockData = {
@@ -41,6 +42,7 @@ const mockData = {
   playerPhasePoints: [] as never[],
   setAvailability,
   clearAvailability,
+  setGameSelection,
   refreshing: false,
   refresh: jest.fn(),
 }
@@ -60,6 +62,7 @@ const captain: Player = {
   phone: '0600000000', status: 'active', clubId: 'c1',
 }
 const mate: Player = { ...captain, id: 'p2', firstName: 'Inès', lastName: 'Martin', licenseNumber: '9900014' }
+const keeper: Player = { ...captain, id: 'p9', firstName: 'Jade', lastName: 'Robert', licenseNumber: '9900099' }
 
 const phase: Phase = {
   id: 'ph1', seasonId: 's1', name: 'phase1', displayName: '2026/2027 Phase 1', status: 'active',
@@ -69,8 +72,15 @@ const team: Team = {
   gameLocationId: 'a1', defaultDay: 'Samedi', defaultTime: '16h00', captainId: 'p1',
   isArchived: false, playerIds: ['p1', 'p2'],
 }
+/** A second club team in the same round, so a player has somewhere to go. */
+const teamB: Team = {
+  ...team, id: 't2', number: 4, groupId: 'grp2', captainId: 'p9', playerIds: ['p9'],
+}
 const opponents: Team[] = [4, 5, 6, 7].map((n) => ({
   ...team, id: `opp${n}`, clubId: 'c2', number: n, playerIds: [],
+}))
+const opponentsB: Team[] = [4, 5, 6, 7].map((n) => ({
+  ...team, id: `oppB${n}`, clubId: 'c2', number: n + 10, groupId: 'grp2', playerIds: [],
 }))
 
 /** Four journées, so the pager has somewhere to go from either end. */
@@ -82,10 +92,35 @@ const gamesFor = (): Game[] =>
     id: `g${n}`, matchDayId: `md${n}`, homeTeamId: 't1', awayTeamId: `opp${n + 3}`, time: '16h00',
   }))
 
+/**
+ * The club's second team, in its own poule — added only where a player needs
+ * somewhere to be moved to. One section per team, so leaving it in the base
+ * fixture would double every count the tests above read.
+ */
+function addSecondClubTeam() {
+  mockData.teams = [...mockData.teams, teamB, ...opponentsB]
+  mockData.players = [...mockData.players, keeper]
+  mockData.groups = [
+    ...mockData.groups,
+    { id: 'grp2', divisionId: 'd1', number: 2, teamIds: ['t2', ...opponentsB.map((t) => t.id)], isArchived: false },
+  ]
+  mockData.matchDays = [
+    ...mockData.matchDays,
+    ...NUMBERS.map((n) => ({ id: `mdB${n}`, groupId: 'grp2', number: n, date: `2099-01-0${n + 2}` })),
+  ]
+  mockData.games = [
+    ...mockData.games,
+    ...NUMBERS.map((n) => ({
+      id: `gB${n}`, matchDayId: `mdB${n}`, homeTeamId: 't2', awayTeamId: `oppB${n + 3}`, time: '16h00',
+    })),
+  ]
+}
+
 beforeEach(() => {
   mockPush.mockClear()
   setAvailability.mockClear()
   clearAvailability.mockClear()
+  setGameSelection.mockClear()
   mockAuth.user = { ...captain, role: 'player', isPlayer: true } as User
   mockData.clubs = [club, opponentClub]
   mockData.teams = [team, ...opponents]
@@ -227,5 +262,88 @@ describe('sur une tablette', () => {
       pathname: '/match/[id]',
       params: { id: 'g2', teamId: 't1' },
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Aligner depuis la grille (#468)
+//
+// Read-only in the first pass, and that was the wrong call: the desktop lets a
+// captain say which team a player turns out for straight from the matrix, and
+// that is half of what the screen is for.
+// ---------------------------------------------------------------------------
+describe('la composition depuis la grille', () => {
+  beforeEach(addSecondClubTeam)
+
+  const openCompo = () => {
+    setWindowSize(TABLET_SMALL)
+    render(<JourneesScreen />, { metrics: TABLET })
+    layoutAt(LANDSCAPE)
+    fireEvent.press(screen.getByTestId('compo-p1-0'))
+  }
+
+  it('offre les équipes du club qui jouent cette journée', () => {
+    openCompo()
+
+    expect(screen.getByTestId('compose-team-t1')).toBeTruthy()
+    expect(screen.getByTestId('compose-team-t2')).toBeTruthy()
+    // An opponent's team is nobody's to be picked for.
+    expect(screen.queryByTestId('compose-team-opp4')).toBeNull()
+  })
+
+  it('aligne le joueur dans l’équipe choisie', async () => {
+    openCompo()
+    fireEvent.press(screen.getByTestId('compose-team-t1'))
+
+    await waitFor(() => expect(setGameSelection).toHaveBeenCalledWith('t1', 'g1', ['p1']))
+  })
+
+  it('le sort de son ancienne équipe en l’alignant dans une autre', async () => {
+    // Two writes, not one: a player fielded twice the same journée is exactly
+    // what the brûlage rules exist to prevent. And the team he joins keeps the
+    // players already in it.
+    mockData.gameSelections = [
+      { teamId: 't1', gameId: 'g1', playerIds: ['p1', 'p2'] },
+      { teamId: 't2', gameId: 'gB1', playerIds: ['p9'] },
+    ]
+    openCompo()
+
+    fireEvent.press(screen.getByTestId('compose-team-t2'))
+
+    await waitFor(() => expect(setGameSelection).toHaveBeenCalledTimes(2))
+    expect(setGameSelection).toHaveBeenCalledWith('t1', 'g1', ['p2'])
+    expect(setGameSelection).toHaveBeenCalledWith('t2', 'gB1', ['p9', 'p1'])
+  })
+
+  it('le retire de toute équipe', async () => {
+    mockData.gameSelections = [{ teamId: 't1', gameId: 'g1', playerIds: ['p1'] }]
+    openCompo()
+
+    fireEvent.press(screen.getByTestId('compose-none'))
+
+    await waitFor(() => expect(setGameSelection).toHaveBeenCalledWith('t1', 'g1', []))
+    expect(setGameSelection).toHaveBeenCalledTimes(1)
+  })
+
+  it('ne touche que les listes qui changent', async () => {
+    // The web batches every game of the day; sending the unchanged ones would
+    // be writes for nothing.
+    openCompo()
+    fireEvent.press(screen.getByTestId('compose-team-t1'))
+
+    await waitFor(() => expect(setGameSelection).toHaveBeenCalledTimes(1))
+  })
+
+  it('reste fermé à qui ne compose pas', () => {
+    // A plain member of the team: `canManageTeam` says no, and the cell is
+    // inert rather than opening a sheet that could not save.
+    mockAuth.user = { ...mate, role: 'player', isPlayer: true, clubId: 'c1' } as User
+    setWindowSize(TABLET_SMALL)
+    render(<JourneesScreen />, { metrics: TABLET })
+    layoutAt(LANDSCAPE)
+
+    fireEvent.press(screen.getByTestId('compo-p1-0'))
+
+    expect(screen.queryByTestId('composition-sheet')).toBeNull()
   })
 })
