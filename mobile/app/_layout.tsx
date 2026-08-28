@@ -41,6 +41,15 @@ function AuthedRoutes({ fontsReady }: { fontsReady: boolean }) {
     if (!loading && fontsReady) SplashScreen.hideAsync().catch(() => {})
   }, [loading, fontsReady])
 
+  // Nothing is laid out before the brand faces are in memory (#472). Holding
+  // the splash was never enough: it hid the swap, not the measurements taken
+  // under it. A screen mounted while the fonts load is measured in the system
+  // fallback, and React Native redraws it in DM Sans without remeasuring — so
+  // any label whose frame is its own measured width, a centred button label,
+  // loses its last glyph. A simulator reads the .ttf off the host disk fast
+  // enough to win that race; a cold start on a device does not.
+  if (!fontsReady) return null
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={loading || !isAuthenticated}>

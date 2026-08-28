@@ -75,6 +75,21 @@ it('shows the brand mark', async () => {
   expect(await screen.findByLabelText('Club Ping')).toBeTruthy()
 })
 
+it('gives the primary label the whole button to sit in', async () => {
+  mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ users: [] }) })
+
+  renderScreen()
+
+  // Shrink-wrapped to its own text, the label has no slack, and a face that
+  // measures a few pixels narrower than it draws clips its last glyph —
+  // "Recevoir un cod" on a device, never on a simulator (#472). Stretched, the
+  // frame is the button's and the text centres itself inside it.
+  expect(await screen.findByText('Recevoir un code')).toHaveStyle({
+    alignSelf: 'stretch',
+    textAlign: 'center',
+  })
+})
+
 it('lists the backend users once expanded', async () => {
   mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ users: [admin, captain] }) })
 

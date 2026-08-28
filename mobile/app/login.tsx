@@ -404,7 +404,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontFamily: fonts.semiBold },
+  // The label fills the button and centres its own text, rather than being
+  // shrink-wrapped to its measured width by the button's `alignItems` (#472).
+  // Sized to the text, a label has no slack: a font measured a few pixels
+  // narrower than it draws loses its last glyph. Sized to the button, it has
+  // ~180 of them.
+  primaryBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: fonts.semiBold,
+    alignSelf: 'stretch',
+    textAlign: 'center',
+  },
   btnDisabled: { opacity: 0.5 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
   divider: { flex: 1, height: 1, backgroundColor: colors.border },
