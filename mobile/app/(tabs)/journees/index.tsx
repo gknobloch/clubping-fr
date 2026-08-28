@@ -11,7 +11,22 @@ import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate,
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
-import type { Game, Team } from '@shared/types'
+import { AvailabilitySheet } from '@/components/AvailabilitySheet'
+import { CompositionSheet, type CompositionOption } from '@/components/CompositionSheet'
+import {
+  MatchDayMatrix,
+  matrixColumns,
+  visibleMatchDayCount,
+  type MatrixDay,
+  type MatrixRow,
+} from '@/components/MatchDayMatrix'
+import { useLayout } from '@/constants/layout'
+import { canEditAvailability, availabilityOverride, canManageTeam } from '@/utils/roles'
+import { sortByName } from '@shared/lib/sortByName'
+import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
+import { pointsFor } from '@shared/lib/phasePoints'
+import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
+import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
@@ -69,12 +84,25 @@ const mc = StyleSheet.create({
   statusWarn: { color: colors.warning, fontFamily: fonts.semiBold },
 })
 
+/** «sam. 17 janv.» — the slot's own date, once the receiving club has set one. */
+function shortDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 export default function JourneesScreen() {
   const { user } = useAuth()
-  const { clubs, teams, matchDays, games, phases, divisions, groups, gameAvailabilities, gameSelections, refreshing, refresh } = useAppData()
+  const {
+    clubs, teams, players, matchDays, games, phases, divisions, groups,
+    gameAvailabilities, gameSelections, playerPhasePoints,
+    setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
+  } = useAppData()
   const router = useRouter()
 
   const myClubId = user?.clubId
@@ -160,6 +188,202 @@ export default function JourneesScreen() {
   const mine = clubGames.filter((cg) => mineLabel.has(cg.team.id))
   const others = clubGames.filter((cg) => !mineLabel.has(cg.team.id))
 
+  // -------------------------------------------------------------------------
+  // La matrice, au-dessus du seuil tablette (#468)
+  //
+  // The phone shows one journée at a time; a slab shows two or three at once,
+  // per team, which is the whole point — «qui est dispo sur les prochaines
+  // journées» is a question the stepper cannot answer.
+  // -------------------------------------------------------------------------
+  const { isTablet } = useLayout()
+  // Measured, not derived: #446 learned that the formula and the real column
+  // stop agreeing the moment either end moves — an inset, a cap, a padding.
+  const [paneWidth, setPaneWidth] = useState<number | null>(null)
+  const [dayOffset, setDayOffset] = useState<number | null>(null)
+  const [editing, setEditing] = useState<{ player: Player; team: Team; game: Game; day: MatrixDay } | null>(null)
+  const [composing, setComposing] = useState<{ player: Player; day: MatrixDay; group: MatchDayGroup } | null>(null)
+
+  const dayCount = visibleMatchDayCount(paneWidth ?? 0)
+  const maxOffset = Math.max(0, matchDayGroups.length - dayCount)
+  // Opens on [précédente, courante, suivante], like the web — the active
+  // journée in the middle rather than the season's first at the left.
+  const smartOffset = Math.min(Math.max(0, mdIndex - 1), maxOffset)
+  const offset = Math.min(dayOffset ?? smartOffset, maxOffset)
+  const visibleGroups = matchDayGroups.slice(offset, offset + dayCount)
+  const columns = matrixColumns(paneWidth ?? 0, dayCount)
+
+  /** This team's fixture for a journée — absent when it sits the round out. */
+  const teamGame = (team: Team, mds: MatchDay[]): { matchDay?: MatchDay; game?: Game } => {
+    for (const md of mds) {
+      const game = games.find(
+        (g) => g.matchDayId === md.id && (g.homeTeamId === team.id || g.awayTeamId === team.id),
+      )
+      if (game) return { matchDay: md, game }
+    }
+    return { matchDay: mds.find((m) => m.groupId === team.groupId) }
+  }
+
+  /** Every fixture this team has in the phase — the denominator of the counts. */
+  const teamGames = (team: Team): Game[] => {
+    const ids = new Set(
+      matchDayGroups.flatMap((g) => g.matchDays).filter((m) => m.groupId === team.groupId).map((m) => m.id),
+    )
+    return games.filter(
+      (g) => ids.has(g.matchDayId) && (g.homeTeamId === team.id || g.awayTeamId === team.id),
+    )
+  }
+
+  function matrixDays(team: Team): MatrixDay[] {
+    return visibleGroups.map((group) => {
+      const { matchDay, game } = teamGame(team, group.matchDays)
+      const homeTeam = game ? teams.find((t) => t.id === game.homeTeamId) : undefined
+      const isHome = !!game && game.homeTeamId === team.id
+      const opp = game ? teams.find((t) => t.id === (isHome ? game.awayTeamId : game.homeTeamId)) : undefined
+      const time = game && matchDay ? gameTime(game, matchDay, homeTeam) : ''
+      const confirmed = !!game && !!matchDay && isSlotConfirmed(game, matchDay, homeTeam)
+      const date = game && matchDay ? gameDate(game, matchDay) : matchDay?.date
+      return {
+        number: group.number,
+        matchDay,
+        game,
+        dateLabel: confirmed && date
+          ? `${shortDate(date)}${time ? ` · ${time}` : ''}`
+          : formatMatchDayRange(group.startDate, group.endDate),
+        unconfirmed: !!game && !confirmed,
+        isHome,
+        opponentName: opp ? getTeamName(opp, clubs) : '?',
+      }
+    })
+  }
+
+  function matrixRows(team: Team, days: MatrixDay[]): MatrixRow[] {
+    const roster = sortByName(
+      team.playerIds
+        .map((pid) => players.find((p) => p.id === pid))
+        .filter((p): p is Player => !!p),
+    )
+    const fixtures = teamGames(team)
+    const clubTeamsInPhase = clubTeams
+    return roster.map((player) => {
+      const brulageInfo = computeBrulage(player.id, clubTeamsInPhase, matchDays, games, gameSelections)
+      const burnedInto = brulageInfo.burnedIntoTeamId
+        ? teams.find((t) => t.id === brulageInfo.burnedIntoTeamId)
+        : undefined
+      return {
+        player,
+        isCaptain: team.captainId === player.id,
+        points: pointsFor(playerPhasePoints, team.phaseId, player.id) || undefined,
+        availableCount: fixtures.filter(
+          (g) => availabilityOf(player.id, g.id) === 'available',
+        ).length,
+        playedCount: fixtures.filter((g) => selectionOf(team.id, g.id).includes(player.id)).length,
+        totalGames: fixtures.length,
+        brulage: burnedInto ? { teamNumber: burnedInto.number, color: burnedInto.color } : undefined,
+        cells: days.map((day, i) => ({
+          status: day.game ? availabilityOf(player.id, day.game.id) : undefined,
+          canEdit: !!user && canEditAvailability(user, team, player.id),
+          selectedTeam: selectedTeamFor(player.id, i),
+          // The line-up rule, not the availability one. `canManageTeam` is what
+          // the match screen asks before it lets anybody compose, and asking a
+          // different question here would make the same action mean two things.
+          canCompose: !!user && canManageTeam(user, team),
+        })),
+      }
+    })
+  }
+
+  const availabilityOf = (playerId: string, gameId: string): AvailabilityStatus | undefined =>
+    gameAvailabilities.find((a) => a.playerId === playerId && a.gameId === gameId)?.status
+
+  const selectionOf = (teamId: string, gameId: string): string[] =>
+    gameSelections.find((sel) => sel.teamId === teamId && sel.gameId === gameId)?.playerIds ?? []
+
+  /**
+   * Which of the club's teams fielded this player that journée, if any — the
+   * whole round, not this team's fixture: a player lent to another team is
+   * exactly what the column is there to show.
+   */
+  function selectedTeamFor(playerId: string, groupIndex: number) {
+    const group = visibleGroups[groupIndex]
+    if (!group) return undefined
+    for (const t of clubTeams) {
+      const { game } = teamGame(t, group.matchDays)
+      if (game && selectionOf(t.id, game.id).includes(playerId)) {
+        return { number: t.number, color: t.color }
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Where this player may be fielded that journée: the club's teams that
+   * actually play the round and that the brûlage rules still leave open — the
+   * web's `orderedTeamOptionIds`, same helper. The team they are already in
+   * stays listed whatever those rules now say, or there would be no undoing it.
+   */
+  function compositionOptions(group: MatchDayGroup, playerId: string): CompositionOption[] {
+    const current = selectedTeamIdFor(playerId, group)
+    return clubTeams
+      .slice()
+      .sort((a, b) => a.number - b.number)
+      .flatMap((t) => {
+        const { matchDay, game } = teamGame(t, group.matchDays)
+        if (!game || !matchDay) return []
+        const eligible =
+          t.id === current ||
+          isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id)
+        if (!eligible) return []
+        const isHome = game.homeTeamId === t.id
+        const opp = teams.find((x) => x.id === (isHome ? game.awayTeamId : game.homeTeamId))
+        return [{
+          teamId: t.id,
+          number: t.number,
+          color: t.color,
+          isHome,
+          opponentName: opp ? getTeamName(opp, clubs) : '?',
+        }]
+      })
+  }
+
+  /** The club team this player is fielded in that journée, if any. */
+  function selectedTeamIdFor(playerId: string, group: MatchDayGroup): string | undefined {
+    for (const t of clubTeams) {
+      const { game } = teamGame(t, group.matchDays)
+      if (game && selectionOf(t.id, game.id).includes(playerId)) return t.id
+    }
+    return undefined
+  }
+
+  /**
+   * Field this player in one of the club's teams for the round, or in none.
+   *
+   * A journée is one game per club team, so moving somebody means two writes at
+   * most — out of the old line-up, into the new. The web batches every game of
+   * the day; here only the lists that actually change are sent, which comes to
+   * the same thing without a batch endpoint the app does not have.
+   */
+  async function compose(group: MatchDayGroup, playerId: string, targetTeamId: string | null) {
+    setComposing(null)
+    for (const t of clubTeams) {
+      const { game } = teamGame(t, group.matchDays)
+      if (!game) continue
+      const current = selectionOf(t.id, game.id)
+      const next =
+        t.id === targetTeamId
+          ? (current.includes(playerId) ? current : [...current, playerId])
+          : current.filter((id) => id !== playerId)
+      if (next.length !== current.length) await setGameSelection(t.id, game.id, next)
+    }
+  }
+
+  async function answer(status: AvailabilityStatus | null) {
+    if (!editing || !user) return
+    const { player, team, game } = editing
+    setEditing(null)
+    if (status === null) await clearAvailability(player.id, game.id)
+    else await setAvailability(player.id, game.id, status, availabilityOverride(user, team, player.id))
+  }
+
   function renderCard({ team, game }: { team: Team; game: Game }) {
     const md = matchDays.find((m) => m.id === game.matchDayId)
     if (!md) return null
@@ -193,19 +417,117 @@ export default function JourneesScreen() {
     )
   }
 
+  const phaseSwitcher = phase ? (
+    <Switcher
+      title={`Saison ${phase.displayName}`}
+      onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
+      onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
+    />
+  ) : null
+
+  const sheet = editing && (
+    <AvailabilitySheet
+      title={`${editing.player.firstName} ${editing.player.lastName}`}
+      subtitle={`J${editing.day.number} · ${editing.day.dateLabel}`}
+      value={availabilityOf(editing.player.id, editing.game.id)}
+      onPick={(status) => answer(status)}
+      onClear={() => answer(null)}
+      onClose={() => setEditing(null)}
+    />
+  )
+
+  const composeSheet = composing && (
+    <CompositionSheet
+      title={`${composing.player.firstName} ${composing.player.lastName}`}
+      subtitle={`J${composing.day.number} · ${composing.day.dateLabel}`}
+      options={compositionOptions(composing.group, composing.player.id)}
+      value={selectedTeamIdFor(composing.player.id, composing.group)}
+      onPick={(teamId) => compose(composing.group, composing.player.id, teamId)}
+      onClose={() => setComposing(null)}
+    />
+  )
+
+  // ---- La matrice (#468) --------------------------------------------------
+  if (isTablet) {
+    return (
+      <Screen>
+        <ScrollView
+          contentContainerStyle={styles.matrix}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+        >
+          {/* The grid measures this, so its width is the one the screen really
+              gives it — rail, insets and padding already taken out. */}
+          <View
+            testID="matrix-column"
+            style={styles.matrixColumn}
+            onLayout={(e) => setPaneWidth(e.nativeEvent.layout.width)}
+          >
+            {phaseSwitcher}
+
+            {matchDayGroups.length === 0 && (
+              <Text style={styles.empty}>Aucune journée pour cette phase.</Text>
+            )}
+            {matchDayGroups.length > 0 && clubTeams.length === 0 && (
+              <Text style={styles.empty}>Aucune équipe pour cette phase.</Text>
+            )}
+
+            {paneWidth !== null &&
+              clubTeams
+                .slice()
+                .sort((a, b) => a.number - b.number)
+                .map((team) => {
+                  const days = matrixDays(team)
+                  return (
+                    <MatchDayMatrix
+                      key={team.id}
+                      team={team}
+                      teamName={getTeamName(team, clubs)}
+                      divisionLabel={divLabel(team)}
+                      days={days}
+                      rows={matrixRows(team, days)}
+                      columns={columns}
+                      pager={
+                        matchDayGroups.length > dayCount
+                          ? {
+                              label: `${offset + 1}–${Math.min(offset + dayCount, matchDayGroups.length)} / ${matchDayGroups.length}`,
+                              onPrev: offset > 0 ? () => setDayOffset(offset - 1) : undefined,
+                              onNext: offset < maxOffset ? () => setDayOffset(offset + 1) : undefined,
+                            }
+                          : undefined
+                      }
+                      onEditAvailability={(playerId, game, dayIndex) => {
+                        const player = players.find((p) => p.id === playerId)
+                        const day = days[dayIndex]
+                        if (player && day) setEditing({ player, team, game, day })
+                      }}
+                      onEditComposition={(playerId, dayIndex) => {
+                        const player = players.find((p) => p.id === playerId)
+                        const day = days[dayIndex]
+                        const group = visibleGroups[dayIndex]
+                        if (player && day && group) setComposing({ player, day, group })
+                      }}
+                      onOpenGame={(game) =>
+                        router.push({ pathname: '/match/[id]', params: { id: game.id, teamId: team.id } })
+                      }
+                    />
+                  )
+                })}
+          </View>
+        </ScrollView>
+        {sheet}
+        {composeSheet}
+      </Screen>
+    )
+  }
+
+  // ---- Un téléphone : une journée, en cartes ------------------------------
   return (
     <Screen>
       <ScrollView
         contentContainerStyle={[styles.scroll, contentWidth()]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
-        {phase ? (
-          <Switcher
-            title={`Saison ${phase.displayName}`}
-            onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
-            onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
-          />
-        ) : null}
+        {phaseSwitcher}
 
         {mdGroup ? (
           <Switcher
@@ -232,5 +554,9 @@ export default function JourneesScreen() {
 
 const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 12 },
+  // Accueil's margins, so the grid sits on the same rails as the rest of the
+  // app — and no reading cap: the grid is the width, that is its whole point.
+  matrix: { padding: 16 },
+  matrixColumn: { gap: 16 },
   empty: { fontSize: 14, color: colors.textSecondary },
 })
