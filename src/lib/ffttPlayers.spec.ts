@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildImportRows,
+  findImportCandidate,
   dafunkerClubLicencesUrl,
   dafunkerLicenceUrl,
   formatPoints,
@@ -243,5 +244,77 @@ describe('playersMissingFromFftt', () => {
   it('lists the licensees FFTT no longer mentions', () => {
     const gone = player({ id: 'p-2', licenseNumber: '999999', lastName: 'Parti' })
     expect(playersMissingFromFftt([LICENCE], [player({}), gone])).toEqual([gone])
+  })
+})
+
+// #474 — an approved club admin is a `users` row with no licence, and when
+// they hold none, `is_player = 0` keeps them out of `players` entirely. The
+// licence match therefore could not see them, and importing the club's
+// licensees created the same person a second time.
+
+describe('findImportCandidate (#474)', () => {
+  const admin = { id: 'u1', firstName: 'Virginie', lastName: 'Barlinge' }
+  const licence = { firstName: 'Virginie', lastName: 'Barlinge' }
+
+  it('offers the member holding no licence who bears the same name', () => {
+    expect(findImportCandidate(licence, [admin])).toEqual(admin)
+  })
+
+  it('ignores case and surrounding space, as names arrive either way', () => {
+    expect(
+      findImportCandidate({ firstName: ' virginie ', lastName: 'BARLINGE' }, [admin]),
+    ).toEqual(admin)
+  })
+
+  it('never offers someone who already holds a different licence', () => {
+    expect(findImportCandidate(licence, [{ ...admin, licenseNumber: '999999' }])).toBeNull()
+  })
+
+  // Two namesakes in one club is a question this cannot answer, and answering
+  // it wrongly fuses two members permanently.
+  it('offers nobody when two members share the name', () => {
+    expect(findImportCandidate(licence, [admin, { ...admin, id: 'u2' }])).toBeNull()
+  })
+
+  it('offers nobody when no name matches', () => {
+    expect(findImportCandidate(licence, [{ id: 'u3', firstName: 'Quentin', lastName: 'Colle' }])).toBeNull()
+  })
+})
+
+describe('buildImportRows — linking rather than duplicating (#474)', () => {
+  const licence = {
+    licence: '425881', lastName: 'Barlinge', firstName: 'Virginie',
+    clubNumber: '06680105', clubName: 'Mulhouse TT', points: '1200',
+  }
+  const admin = { id: 'u1', firstName: 'Virginie', lastName: 'Barlinge' }
+
+  it('suggests the existing member instead of silently creating a second', () => {
+    const [row] = buildImportRows([licence], [], [], 'phase-27-1', [admin])
+    expect(row.status).toBe('new')
+    expect(row.link).toEqual({ id: 'u1', on: 'name', name: 'Virginie Barlinge' })
+  })
+
+  // A suggestion is a question, not a decision: the row still reads as new
+  // until an admin ticks it.
+  it('leaves the row unlinked when there is nobody to suggest', () => {
+    const [row] = buildImportRows([licence], [], [], 'phase-27-1', [])
+    expect(row.status).toBe('new')
+    expect(row.link).toBeUndefined()
+  })
+
+  it('prefers a licence match, which needs no confirming at all', () => {
+    const licensee = {
+      id: 'p1', firstName: 'Virginie', lastName: 'Barlinge', licenseNumber: '425881',
+      email: 'v@example.fr', phone: '', status: 'active' as const, clubId: 'club-fftt-06680105',
+    }
+    const [row] = buildImportRows([licence], [licensee], [], 'phase-27-1', [admin])
+    expect(row.playerId).toBe('p1')
+    expect(row.link).toBeUndefined()
+  })
+
+  it('is unchanged for callers that pass no candidates', () => {
+    const [row] = buildImportRows([licence], [], [], 'phase-27-1')
+    expect(row.status).toBe('new')
+    expect(row.link).toBeUndefined()
   })
 })

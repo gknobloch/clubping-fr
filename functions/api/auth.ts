@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { UserRow } from './rows'
+import { sendEmail } from './email'
 
 // Shared environment for the whole API. Secrets/vars are configured as
 // Cloudflare Pages bindings (see wrangler.toml notes).
@@ -9,6 +10,12 @@ export type Env = {
     DB: D1Database
     RESEND_API_KEY?: string
     RESEND_FROM?: string
+    // When set, EVERY outgoing e-mail goes here instead of its real
+    // recipient, carrying the original address in an X-Original-Recipient
+    // header and at the top of the body (#474). Set on preview and in local
+    // dev; never in production, where it would silently swallow every message
+    // the app sends. See functions/api/email.ts.
+    EMAIL_REDIRECT_TO?: string
     GOOGLE_CLIENT_IDS?: string // comma-separated accepted audiences
     APPLE_CLIENT_IDS?: string // comma-separated accepted audiences
     // When 'true', the session guard is bypassed (local dev only — set in
@@ -178,31 +185,16 @@ export async function verifyOidcJwt(idToken: string, opts: VerifyOpts): Promise<
 // Email (Resend)
 // ---------------------------------------------------------------------------
 /**
- * Send the OTP code by email. When RESEND_API_KEY is absent (local dev), the
- * code is logged instead of sent — callers also surface it as `devCode`.
+ * Send the OTP code by email. Delivery — the dev redirect, and the "no Resend
+ * key means log it" rule local dev relies on — belongs to sendEmail (#474);
+ * this only decides what the message says.
  */
 async function sendOtpEmail(env: Env['Bindings'], to: string, code: string): Promise<void> {
-  if (!env.RESEND_API_KEY) {
-    console.log(`[auth] OTP for ${to}: ${code}`)
-    return
-  }
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.RESEND_FROM ?? 'Club Ping <onboarding@resend.dev>',
-      to: [to],
-      subject: `Votre code de connexion : ${code}`,
-      text: `Votre code de connexion Club Ping est : ${code}\n\nIl expire dans 10 minutes.`,
-    }),
+  await sendEmail(env, {
+    to,
+    subject: `Votre code de connexion : ${code}`,
+    text: `Votre code de connexion Club Ping est : ${code}\n\nIl expire dans 10 minutes.`,
   })
-  if (!res.ok) {
-    console.error('[auth] Resend send failed', res.status, await res.text())
-    throw new Error('email_send_failed')
-  }
 }
 
 // ---------------------------------------------------------------------------

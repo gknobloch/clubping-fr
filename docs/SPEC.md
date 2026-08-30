@@ -40,10 +40,26 @@ place: a General Admin decides.
 - **On request.** Anyone — typically the club's FFTT correspondent — can ask for
   access from a public page, without an account, by giving the club's affiliation
   number. The FFTT club record is read live and shown back so both sides agree on
-  which club is meant. The requester gives their name, e-mail and phone, and may
-  say who they are in the club. The request waits for a decision.
+  which club is meant. The requester gives their name, e-mail and phone, may say
+  who they are in the club, and may give their licence number. The request then
+  takes two steps: **the club confirms, then a General Admin decides.**
 - **Directly.** A General Admin creates the club and designates its first admin
   themselves, with no request and no waiting.
+
+The club's step is a message to the address the FFTT publishes, carrying a link
+that expires in seven days. Only once it is used does the request reach a
+General Admin. Doing nothing refuses it: without the confirmation it goes no
+further, so there is nothing to click to say no. A club for which the FFTT
+publishes no address cannot confirm, and such a request goes straight to the
+General Admin, marked as unconfirmable — a club with no listed contact must not
+be a club nobody can ever join.
+
+That middle step is a courtesy and a filter, **not a proof**. The address it is
+sent to comes from the requester's own browser, so someone who submits their own
+address as the club's will duly confirm their own request. What closes that is
+the last step, unchanged: the General Admin re-reads the FFTT record and the
+review screen compares the address actually written to against the one the
+federation publishes now.
 
 The FFTT club record publishes an official correspondent for the club — a name,
 an e-mail and a phone. This is the evidence a General Admin weighs a request
@@ -55,9 +71,18 @@ Approving a request creates the club if it does not exist yet, taking its name
 and venue from the FFTT record, and makes the requester a Club Admin. Refusing
 one keeps it, with the reason, rather than erasing it.
 
-No e-mail is sent by the application as part of this flow — neither to the club's
-correspondent nor to the requester. An approved requester can simply sign in;
-they learn of the decision out of band.
+Four messages go out, and no others: the club is asked to confirm, the General
+Admins are told once it has, and the decision reaches both the requester and the
+club's address. Nobody is written to who did not either ask or get named by the
+federation as the club's contact.
+
+Approving a request that carries a **licence number** attaches the new admin to
+that licence, as a player. Without it they are created as someone who does not
+play — invisible to the player import, which matches on licence, so importing
+the club's licensees would create the same person a second time. Where the
+licence already belongs to someone, that member is promoted rather than
+duplicated; where it belongs to another club's member, the request is refused
+rather than moving them.
 
 Two consequences of the correspondent being evidence rather than proof are worth
 stating, because they are easy to get backwards:
@@ -71,7 +96,13 @@ stating, because they are easy to get backwards:
   does and submits what it saw. It is therefore theirs, and the reviewing admin
   is never shown a verdict computed from it: the comparison that decides
   anything is made against a fresh reading taken in the admin's own browser at
-  the moment of the decision.
+  the moment of the decision. The same applies to the club confirmation, which
+  is sent to an address from that same reading.
+
+Outside production, every message the application sends is diverted to a single
+development address, carrying its intended recipient in a header and at the top
+of the body. The onboarding flow writes to clubs, and a preview that could reach
+one is a preview that can mail a real club by accident.
 
 ## Season
  

@@ -44,6 +44,8 @@ export interface SubmitClubAdminRequest {
   lastName: string
   phone?: string
   message?: string
+  /** Optional; when given, approval links the admin to their licence (#474). */
+  licenseNumber?: string
   snapshot: ClubAdminRequestSnapshot
 }
 
@@ -52,11 +54,42 @@ export interface SubmitClubAdminRequest {
  * one write the app accepts from a stranger, because sign-in cannot yet reach
  * someone whose club it has never heard of.
  */
-export function submitClubAdminRequest(body: SubmitClubAdminRequest): Promise<{ ok: true }> {
+export function submitClubAdminRequest(
+  body: SubmitClubAdminRequest,
+): Promise<{ ok: true; clubNotified: boolean }> {
   return fetch('/api/onboarding/requests', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  }).then(parse<{ ok: true; clubNotified: boolean }>)
+}
+
+// --- The club's confirmation step (#474) ---
+// Addressed by the token in the e-mailed link; the correspondent has no
+// account and never gets one.
+
+export interface ConfirmableRequest {
+  clubName: string
+  affiliationNumber: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  licenseNumber: string
+  message: string
+}
+
+export function fetchConfirmableRequest(token: string): Promise<ConfirmableRequest> {
+  return fetch(`/api/onboarding/confirm?token=${encodeURIComponent(token)}`).then(
+    parse<ConfirmableRequest>,
+  )
+}
+
+export function confirmClubAdminRequest(token: string): Promise<{ ok: true }> {
+  return fetch('/api/onboarding/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
   }).then(parse<{ ok: true }>)
 }
 

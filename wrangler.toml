@@ -47,6 +47,14 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # `wrangler pages secret put RESEND_API_KEY --env preview`.
 [env.preview.vars]
 RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
+# Every e-mail the preview sends lands here instead of its real recipient,
+# carrying the intended address in an X-Original-Recipient header and at the top
+# of the body (#474). The onboarding flow writes to *clubs* — addresses read off
+# the FFTT listing — so a preview that could reach them is a preview that can
+# mail a real club by accident. NEVER add this to the top-level [vars]: in
+# production it would silently swallow every message, sign-in codes included.
+# src/test/workflows.spec.ts fails the build if it appears there.
+EMAIL_REDIRECT_TO = "clubping.dev@leskno.fr"
 # Enables /api/auth/dev/* — sign in as any user with no credential (#313).
 # NEVER add this to the top-level [vars]: on production it is a complete
 # authentication bypass. It is defensible here only because clubping-fr-dev is

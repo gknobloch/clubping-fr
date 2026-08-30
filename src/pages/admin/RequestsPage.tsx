@@ -74,9 +74,12 @@ export function RequestsPage() {
     void load()
   }, [load])
 
-  const pending = (requests ?? []).filter((r) => r.status === 'pending')
-  const decided = (requests ?? []).filter((r) => r.status !== 'pending')
-  const shown = showDecided ? decided : pending
+  // Two live states now (#474): waiting on the club, and waiting on you. Only
+  // the second is yours to act on, so it leads.
+  const toDecide = (requests ?? []).filter((r) => r.status === 'pending_admin')
+  const awaitingClub = (requests ?? []).filter((r) => r.status === 'pending_club')
+  const decided = (requests ?? []).filter((r) => r.status === 'approved' || r.status === 'rejected')
+  const shown = showDecided ? decided : [...toDecide, ...awaitingClub]
 
   if (user && user.role !== 'general_admin') {
     return (
@@ -171,7 +174,7 @@ function RequestCard({
   clubName?: string
   onDecide: () => void
 }) {
-  const isPending = request.status === 'pending'
+  const isPending = request.status === 'pending_admin'
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -210,6 +213,14 @@ function RequestCard({
           <span className="block text-xs text-slate-500">N° {request.affiliationNumber}</span>
         </Field>
         {request.phone && <Field label="Téléphone">{request.phone}</Field>}
+        {request.licenseNumber && (
+          <Field label="Licence">
+            {request.licenseNumber}
+            <span className="block text-xs text-slate-500">
+              Sera rattachée au licencié plutôt que créer une seconde fiche.
+            </span>
+          </Field>
+        )}
         <Field label="Demandée le">
           {new Date(request.createdAt).toLocaleDateString('fr-FR', {
             day: 'numeric',
@@ -253,7 +264,31 @@ function RequestCard({
         </p>
       </div>
 
-      {request.status !== 'pending' && request.decisionNote && (
+      {/* Where the club step got to. The address matters as much as the fact:
+          the confirmation went to whatever the requester's browser reported, so
+          "confirmée" means "someone at that address clicked", not "the club
+          agreed" — the live re-check below is what ties the two together. */}
+      <p className="mt-3 text-sm">
+        {request.status === 'pending_club' ? (
+          <span className="text-slate-600">
+            En attente de la confirmation du club, envoyée à{' '}
+            <span className="font-medium">{request.correspondentEmail}</span>.
+          </span>
+        ) : request.clubConfirmedAt ? (
+          <span className="text-slate-600">
+            Confirmée par le club depuis{' '}
+            <span className="font-medium">{request.correspondentEmail}</span> le{' '}
+            {new Date(request.clubConfirmedAt).toLocaleDateString('fr-FR')}.
+          </span>
+        ) : (
+          <span className="text-amber-700">
+            La FFTT ne publiait aucune adresse pour ce club : la demande n’a pas pu être confirmée
+            par le club.
+          </span>
+        )}
+      </p>
+
+      {(request.status === 'approved' || request.status === 'rejected') && request.decisionNote && (
         <p className="mt-3 text-sm text-slate-600">
           <span className="font-medium">Motif :</span> {request.decisionNote}
         </p>

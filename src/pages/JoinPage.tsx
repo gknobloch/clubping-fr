@@ -36,7 +36,10 @@ import { submitClubAdminRequest, type ClubAdminRequestError } from '@/lib/onboar
  *     club without republishing a contact address to anyone who can type eight
  *     digits; the general admin sees it whole on the review screen.
  *
- * No e-mail is sent, by anyone, at any point in this flow.
+ * Submitting writes to the club: the correspondent is e-mailed a confirmation
+ * link, and only once they have used it does the request reach a general admin.
+ * That address comes from this page's own FFTT read, so it is a filter and a
+ * courtesy rather than a proof — see migration 0043.
  */
 type Step = 'search' | 'form' | 'sent'
 type SearchState = 'idle' | 'loading' | 'not_found' | 'error'
@@ -46,7 +49,10 @@ export function JoinPage() {
   const [search, setSearch] = useState<SearchState>('idle')
   const [club, setClub] = useState<FfttClubDetail | null>(null)
   const [step, setStep] = useState<Step>('search')
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', message: '' })
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '', licenseNumber: '', message: '',
+  })
+  const [clubNotified, setClubNotified] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
@@ -85,12 +91,13 @@ export function JoinPage() {
     setSending(true)
     setError(null)
     try {
-      await submitClubAdminRequest({
+      const result = await submitClubAdminRequest({
         affiliationNumber: number,
         email: form.email.trim(),
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         phone: form.phone.trim(),
+        licenseNumber: form.licenseNumber.trim(),
         message: form.message.trim(),
         // What this browser read from FFTT, so the reviewer sees the same
         // record the requester was looking at.
@@ -107,6 +114,7 @@ export function JoinPage() {
           correspondentPhone: club.correspondent?.phone ?? '',
         },
       })
+      setClubNotified(Boolean(result.clubNotified))
       setStep('sent')
     } catch (e) {
       const err = e as ClubAdminRequestError
@@ -119,7 +127,7 @@ export function JoinPage() {
   return (
     <JoinLayout>
       {step === 'sent' ? (
-        <Sent club={club} />
+        <Sent club={club} clubNotified={clubNotified} />
       ) : step === 'form' && club ? (
         <RequestForm
           club={club}
@@ -296,7 +304,14 @@ function RequestForm({
   onSubmit,
 }: {
   club: FfttClubDetail
-  form: { firstName: string; lastName: string; email: string; phone: string; message: string }
+  form: {
+    firstName: string
+    lastName: string
+    email: string
+    phone: string
+    licenseNumber: string
+    message: string
+  }
   setForm: React.Dispatch<React.SetStateAction<typeof form>>
   error: string | null
   sending: boolean
@@ -348,6 +363,26 @@ function RequestForm({
           <input id="join-phone" type="tel" value={form.phone} onChange={set('phone')} className={inputClass} />
         </div>
         <div>
+          <label htmlFor="join-licenseNumber" className="block text-sm font-medium text-slate-700">
+            Numéro de licence (facultatif)
+          </label>
+          <input
+            id="join-licenseNumber"
+            type="text"
+            inputMode="numeric"
+            value={form.licenseNumber}
+            onChange={set('licenseNumber')}
+            className={inputClass}
+          />
+          {/* Not a formality: without it an approved licensee is created as a
+              second person, and importing the club's players then duplicates
+              them (#474). */}
+          <p className="mt-1 text-xs text-slate-500">
+            Si vous êtes licencié dans ce club, indiquez-le : votre compte sera rattaché à votre
+            licence au lieu d’en créer une seconde fiche.
+          </p>
+        </div>
+        <div>
           <label htmlFor="join-message" className="block text-sm font-medium text-slate-700">
             Votre rôle dans le club (facultatif)
           </label>
@@ -386,18 +421,34 @@ function RequestForm({
  * e-mailed, to the club or to the requester (#474), so the only truthful thing
  * to say is that a human will look and that they will hear back another way.
  */
-function Sent({ club }: { club: FfttClubDetail | null }) {
+function Sent({ club, clubNotified }: { club: FfttClubDetail | null; clubNotified: boolean }) {
   return (
     <div className="text-center">
       <p className="font-display text-lg font-semibold text-slate-800">Demande envoyée</p>
       <p className="mt-2 text-sm text-slate-600">
-        Votre demande {club ? `pour ${club.displayName} ` : ''}a bien été enregistrée. Un
-        administrateur de Club Ping va l’examiner.
+        Votre demande {club ? `pour ${club.displayName} ` : ''}a bien été enregistrée.
       </p>
-      <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        Aucun message automatique ne vous sera envoyé. Une fois la demande acceptée, connectez-vous
-        simplement avec votre adresse e-mail.
-      </p>
+      {/* Says which of the two paths it took, because the waiting is different:
+          one depends on a club reading its mail, the other does not. */}
+      <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-left text-sm text-slate-600">
+        {clubNotified ? (
+          <>
+            <p>
+              Un message vient d’être envoyé au correspondant que la FFTT publie pour ce club. Dès
+              qu’il aura confirmé, un administrateur de Club Ping examinera la demande.
+            </p>
+            <p className="mt-2">
+              Si vous êtes vous-même ce correspondant, le message est dans votre boîte.
+            </p>
+          </>
+        ) : (
+          <p>
+            La FFTT ne publie aucune adresse de contact pour ce club : la demande part directement
+            à un administrateur de Club Ping.
+          </p>
+        )}
+        <p className="mt-2">Vous serez prévenu par e-mail de la décision.</p>
+      </div>
       <Link
         to="/login"
         className={`mt-5 inline-flex text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}

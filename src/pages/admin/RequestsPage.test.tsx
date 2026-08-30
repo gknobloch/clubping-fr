@@ -62,7 +62,10 @@ const impostor: ClubAdminRequest = {
     correspondentEmail: 'imposteur@example.invalid',
     correspondentPhone: '0600000000',
   },
-  status: 'pending',
+  licenseNumber: '',
+  correspondentEmail: 'Mulhouse-tennis-de-table@orange.fr',
+  clubConfirmedAt: '2026-08-28T11:00:00.000Z',
+  status: 'pending_admin',
   createdAt: '2026-08-28T10:00:00.000Z',
 }
 
@@ -100,13 +103,45 @@ describe('the queue (#474)', () => {
     setup([honest])
     renderPage()
     expect((await screen.findAllByText('Virginie Barlinge')).length).toBeGreaterThan(0)
-    expect(screen.getByText('En attente')).toBeInTheDocument()
+    expect(screen.getByText('À traiter')).toBeInTheDocument()
   })
 
   it('says so when there is nothing to decide', async () => {
     setup([])
     renderPage()
     expect(await screen.findByText(/Aucune demande en attente/)).toBeInTheDocument()
+  })
+
+  // The club step is a filter, not a gate the admin can jump: a request still
+  // with its club is not theirs to decide yet.
+  it('shows a request still with its club, but offers no decision on it', async () => {
+    setup([{ ...honest, status: 'pending_club', clubConfirmedAt: undefined }])
+    renderPage()
+    expect(await screen.findByText('En attente du club')).toBeInTheDocument()
+    expect(screen.getByText(/En attente de la confirmation du club/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Vérifier et décider' })).not.toBeInTheDocument()
+  })
+
+  it('says which address the club confirmed from', async () => {
+    setup([honest])
+    renderPage()
+    expect(await screen.findByText(/Confirmée par le club depuis/)).toBeInTheDocument()
+  })
+
+  // A club FFTT lists no address for cannot confirm, and must not therefore be
+  // a club nobody can ever join — but the admin has to know that is why.
+  it('flags a request no club could confirm', async () => {
+    setup([{ ...honest, correspondentEmail: '', clubConfirmedAt: undefined }])
+    renderPage()
+    expect(await screen.findByText(/ne publiait aucune adresse/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Vérifier et décider' })).toBeInTheDocument()
+  })
+
+  it('shows the licence when one was given, and what it will do', async () => {
+    setup([{ ...honest, licenseNumber: '425881' }])
+    renderPage()
+    expect(await screen.findByText('425881')).toBeInTheDocument()
+    expect(screen.getByText(/plutôt que créer une seconde fiche/)).toBeInTheDocument()
   })
 
   it('is closed to anyone but a general admin', async () => {

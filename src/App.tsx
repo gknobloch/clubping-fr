@@ -21,6 +21,7 @@ import { TeamDetailPage } from '@/pages/TeamDetailPage'
 import { ComptePage } from '@/pages/ComptePage'
 import { PrivacyPage } from '@/pages/PrivacyPage'
 import { JoinPage } from '@/pages/JoinPage'
+import { ConfirmRequestPage } from '@/pages/ConfirmRequestPage'
 import { RequestsPage } from '@/pages/admin/RequestsPage'
 import { DeleteAccountPage } from '@/pages/DeleteAccountPage'
 
@@ -64,6 +65,9 @@ export default function App() {
               the only way in for a club the app has never heard of, whose
               correspondent has no account and cannot obtain one (#474). */}
           <Route path="/rejoindre" element={<JoinPage />} />
+          {/* The club's confirmation step. Public because a correspondent has
+              no account: the token in the link is their authorisation (#474). */}
+          <Route path="/confirmer-demande" element={<ConfirmRequestPage />} />
           <Route path="/confidentialite" element={<PrivacyPage />} />
           {/* Public for the same reason, and for one more: Google Play prints
               this URL on the listing, and a member who can no longer sign in

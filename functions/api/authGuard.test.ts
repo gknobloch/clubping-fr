@@ -24,6 +24,17 @@ describe('needsSession — the onboarding request (#474)', () => {
     expect(needsSession('DELETE', '/api/onboarding/requests/req-1')).toBe(true)
   })
 
+  it('lets the club confirm from its e-mailed link, with no session', () => {
+    expect(needsSession('GET', '/api/onboarding/confirm')).toBe(false)
+    expect(needsSession('POST', '/api/onboarding/confirm')).toBe(false)
+  })
+
+  it('exempts nothing else under /onboarding', () => {
+    expect(needsSession('DELETE', '/api/onboarding/confirm')).toBe(true)
+    expect(needsSession('GET', '/api/onboarding/confirmx')).toBe(true)
+    expect(needsSession('GET', '/api/onboarding/confirm/extra')).toBe(true)
+  })
+
   it('is anchored, so no neighbouring path inherits the exemption', () => {
     expect(needsSession('POST', '/api/onboarding/requests/req-1')).toBe(true)
     expect(needsSession('POST', '/api/onboarding/requestsx')).toBe(true)

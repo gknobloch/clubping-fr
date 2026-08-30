@@ -71,7 +71,11 @@ test.describe('Page publique — faire administrer son club', () => {
     let sent: Record<string, unknown> | null = null
     await page.route(REQUESTS, async (route) => {
       sent = JSON.parse(route.request().postData() ?? '{}')
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"ok":true,"clubNotified":true}',
+      })
     })
 
     await findClub(page)
@@ -79,18 +83,21 @@ test.describe('Page publique — faire administrer son club', () => {
     await page.getByLabel('Nom', { exact: true }).fill('Barlinge')
     await page.getByLabel('Adresse e-mail').fill('Mulhouse-tennis-de-table@orange.fr')
     await page.getByLabel('Téléphone (facultatif)').fill('0686839957')
+    await page.getByLabel('Numéro de licence (facultatif)').fill('425881')
     await page.getByLabel('Votre rôle dans le club (facultatif)').fill('Je suis la correspondante.')
     await page.getByRole('button', { name: 'Envoyer la demande' }).click()
 
     await expect(page.getByText('Demande envoyée')).toBeVisible()
-    // Et l'écran est franc sur ce qui ne se passera pas.
-    await expect(page.getByText(/Aucun message automatique/)).toBeVisible()
+    // L'écran dit laquelle des deux routes la demande a prise : celle qui
+    // attend le club, ou celle qui va directement à l'administrateur.
+    await expect(page.getByText(/message vient d’être envoyé au correspondant/)).toBeVisible()
 
     expect(sent).toMatchObject({
       affiliationNumber: '06680105',
       email: 'Mulhouse-tennis-de-table@orange.fr',
       firstName: 'Virginie',
       lastName: 'Barlinge',
+      licenseNumber: '425881',
       snapshot: {
         displayName: 'Mulhouse Tennis de Table',
         correspondentName: 'Virginie Barlinge',
@@ -146,5 +153,61 @@ test.describe('Page publique — faire administrer son club', () => {
     await findClub(page)
     await page.getByRole('button', { name: 'Ce n’est pas mon club' }).click()
     await expect(page.getByLabel('Numéro d’affiliation du club')).toBeVisible()
+  })
+})
+
+test.describe('Page publique — confirmation par le club', () => {
+  const CONFIRM = '**/api/onboarding/confirm*'
+  const request = {
+    clubName: 'Mulhouse Tennis de Table',
+    affiliationNumber: '06680105',
+    firstName: 'Virginie',
+    lastName: 'Barlinge',
+    email: 'v@example.fr',
+    phone: '0686839957',
+    licenseNumber: '425881',
+    message: 'Je suis la correspondante.',
+  }
+
+  test('montre la demande et ce que confirmer veut dire', async ({ page }) => {
+    await page.route(CONFIRM, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(request) }),
+    )
+    await page.goto('/confirmer-demande?token=' + 'a'.repeat(64))
+
+    await expect(page.getByText('Mulhouse Tennis de Table')).toBeVisible()
+    await expect(page.getByText('Virginie Barlinge')).toBeVisible()
+    await expect(page.getByText('425881')).toBeVisible()
+    // Confirmer n'accorde rien : la page le dit avant le bouton.
+    await expect(page.getByText(/ne lui donne pas encore accès/)).toBeVisible()
+    // Ne rien faire refuse déjà, donc il n'y a pas de bouton pour refuser.
+    await expect(page.getByRole('button', { name: /Refuser/ })).toHaveCount(0)
+    await expect(page.getByText(/sans votre confirmation, la demande n’ira pas plus loin/)).toBeVisible()
+  })
+
+  test('confirme, et le dit sans promettre un accès', async ({ page }) => {
+    await page.route(CONFIRM, (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })
+        : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(request) }),
+    )
+    await page.goto('/confirmer-demande?token=' + 'a'.repeat(64))
+    await page.getByRole('button', { name: 'Je confirme cette demande' }).click()
+
+    await expect(page.getByText('Merci')).toBeVisible()
+    await expect(page.getByText(/examinée par un administrateur/)).toBeVisible()
+  })
+
+  test('un lien déjà utilisé ou expiré donne la même réponse', async ({ page }) => {
+    await page.route(CONFIRM, (route) =>
+      route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"invalid_token"}' }),
+    )
+    await page.goto('/confirmer-demande?token=' + 'b'.repeat(64))
+    await expect(page.getByText('Lien expiré')).toBeVisible()
+  })
+
+  test('sans jeton, rien à confirmer', async ({ page }) => {
+    await page.goto('/confirmer-demande')
+    await expect(page.getByText('Lien expiré')).toBeVisible()
   })
 })

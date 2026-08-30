@@ -16,7 +16,23 @@
  * (see clubAdmins.ts).
  */
 
-export type ClubAdminRequestStatus = 'pending' | 'approved' | 'rejected'
+/**
+ * Where a request has got to (#474).
+ *
+ *   pending_club  → waiting on the club's correspondent to confirm
+ *   pending_admin → confirmed (or unconfirmable), waiting on a general admin
+ *   approved / rejected → decided, and kept as a record
+ *
+ * The club step is a courtesy and a filter, never a proof: the address it is
+ * sent to comes from the requester's browser, so it can be forged. What closes
+ * that is the general admin's live re-read at the last step — see the
+ * migration 0043 header.
+ */
+export type ClubAdminRequestStatus = 'pending_club' | 'pending_admin' | 'approved' | 'rejected'
+
+/** Still in flight, whichever step it is sitting on. */
+export const isLiveRequest = (s: ClubAdminRequestStatus) =>
+  s === 'pending_club' || s === 'pending_admin' 
 
 /**
  * What the requester's browser read from FFTT at the moment they asked.
@@ -47,6 +63,22 @@ export interface ClubAdminRequest {
   phone: string
   /** What the requester says they are in the club; free text, may be empty. */
   message: string
+  /**
+   * The requester's FFTT licence, when they gave one. Optional, and the reason
+   * it is worth asking: with it, approving creates them as the licensee they
+   * already are rather than as a second person the player import then
+   * duplicates.
+   */
+  licenseNumber: string
+  /**
+   * The address the club confirmation was actually sent to — empty when FFTT
+   * published none. Recorded separately from the snapshot because the review
+   * screen compares it against what FFTT publishes *now*: that comparison is
+   * what catches a requester who put their own address in as the club's.
+   */
+  correspondentEmail: string
+  /** When the correspondent confirmed; absent while they have not. */
+  clubConfirmedAt?: string
   snapshot: ClubAdminRequestSnapshot
   status: ClubAdminRequestStatus
   /** ISO timestamps. */
@@ -164,6 +196,7 @@ export type RequestRefusal =
   | 'missing_name'
   | 'already_pending'
   | 'already_admin'
+  | 'invalid_licence'
 
 export const REQUEST_REFUSAL_MESSAGES: Record<RequestRefusal, string> = {
   invalid_affiliation: "Le numéro d’affiliation n’est pas valide.",
@@ -171,6 +204,7 @@ export const REQUEST_REFUSAL_MESSAGES: Record<RequestRefusal, string> = {
   missing_name: 'Renseignez votre nom et votre prénom.',
   already_pending: 'Une demande est déjà en attente pour ce club avec cette adresse.',
   already_admin: 'Cette adresse administre déjà ce club.',
+  invalid_licence: 'Le numéro de licence ne semble pas valide (5 à 8 chiffres).',
 }
 
 /**
@@ -194,22 +228,35 @@ export function validateRequestForm(form: {
   email: string
   firstName: string
   lastName: string
+  licenseNumber?: string
 }): RequestRefusal | null {
   if (!isValidAffiliationNumber(form.affiliationNumber)) return 'invalid_affiliation'
   if (!form.firstName.trim() || !form.lastName.trim()) return 'missing_name'
   if (!isPlausibleEmail(form.email)) return 'invalid_email'
+  if (!isPlausibleLicenceNumber(form.licenseNumber)) return 'invalid_licence'
   return null
 }
 
 /** French label of a request’s state, for the review list. */
 export const REQUEST_STATUS_LABELS: Record<ClubAdminRequestStatus, string> = {
-  pending: 'En attente',
+  pending_club: 'En attente du club',
+  pending_admin: 'À traiter',
   approved: 'Approuvée',
   rejected: 'Refusée',
 }
 
 export const REQUEST_STATUS_BADGES: Record<ClubAdminRequestStatus, string> = {
-  pending: 'bg-amber-100 text-amber-800',
+  pending_club: 'bg-slate-100 text-slate-600',
+  pending_admin: 'bg-amber-100 text-amber-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-slate-100 text-slate-600',
+}
+
+/**
+ * A licence number as FFTT writes it: digits, 5 to 8 of them. Optional on the
+ * form, so an empty value is valid — only a malformed one is refused.
+ */
+export function isPlausibleLicenceNumber(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim()
+  return v === '' || /^\d{5,8}$/.test(v)
 }

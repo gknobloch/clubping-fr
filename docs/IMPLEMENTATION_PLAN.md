@@ -34,7 +34,7 @@ whose shape is worth reading before the code exists are listed below.
 
 | # | Description |
 |---|-------------|
-| [**#474**](https://github.com/gknobloch/clubping-fr/issues/474) | **Club onboarding and club admins** — Up to 5 admins per club, never zero, not necessarily licensed players, managed from the club sheet. Two ways in: a public request at `/rejoindre` from anyone holding an affiliation number, or direct creation by a General Admin. Requests are approved or refused at `/demandes`, against a live re-reading of the FFTT record taken in the reviewing admin's own browser — the requester's own reading is never treated as evidence. No e-mail is sent in this version. See [SPEC](SPEC.md#onboarding-a-club). |
+| [**#474**](https://github.com/gknobloch/clubping-fr/issues/474) | **Club onboarding and club admins** — Up to 5 admins per club, never zero, not necessarily licensed players, managed from the club sheet. Two ways in: a public request at `/rejoindre` from anyone holding an affiliation number, or direct creation by a General Admin. A request is confirmed by the club at `/confirmer-demande` (a link e-mailed to the address FFTT publishes) before reaching `/demandes`, where it is approved or refused against a live re-reading of the FFTT record taken in the reviewing admin's own browser — neither the requester's own reading nor their club confirmation is treated as proof. An optional licence number attaches the new admin to the licensee they already are, instead of a second fiche the player import then duplicates. Outside production every e-mail is diverted to one dev address. See [SPEC](SPEC.md#onboarding-a-club). |
 
 ---
 

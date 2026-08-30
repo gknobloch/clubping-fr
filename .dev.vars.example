@@ -24,6 +24,15 @@ RESEND_API_KEY=
 # Resend account owner's address; use a verified domain for real users.
 RESEND_FROM=Club Ping <onboarding@resend.dev>
 
+# --- E-mail redirect (#474) ---
+# When set, EVERY outgoing message goes to this address instead of its real
+# recipient, with the intended one in an X-Original-Recipient header and spelled
+# out at the top of the body. Keep it set locally: the onboarding flow e-mails
+# clubs at the address the FFTT publishes, and testing it should never reach one.
+# Set automatically on PREVIEW deployments (wrangler.toml [env.preview.vars]).
+# NEVER set it in production — it would swallow every message, silently.
+EMAIL_REDIRECT_TO=clubping.dev@leskno.fr
+
 # --- OAuth accepted audiences (comma-separated, PUBLIC) ---
 # The backend verifies each OIDC id_token's `aud` against these lists.
 # Google: include every client id that can issue a token — web + iOS + Android.

@@ -22,9 +22,13 @@ import {
   type AddRefusal, type RemoveRefusal,
 } from '../../src/lib/clubAdmins'
 import {
-  isPlausibleEmail, isValidAffiliationNumber, REQUEST_REFUSAL_MESSAGES,
+  isPlausibleEmail, isPlausibleLicenceNumber, isValidAffiliationNumber, REQUEST_REFUSAL_MESSAGES,
   type ClubAdminRequest, type ClubAdminRequestSnapshot, type ClubAdminRequestStatus,
 } from '../../src/lib/clubAdminRequests'
+import { sendEmails } from './email'
+import {
+  clubConfirmationEmail, decisionEmail, newRequestForAdminEmail, type RequestSummary,
+} from './onboardingEmails'
 
 // Exported for tests: the session guard is only observable through a real
 // request, so the suites that pin it down fetch this app directly (#320, #138).
@@ -3079,6 +3083,11 @@ interface ClubAdminRequestRow {
   phone: string
   message: string
   fftt_snapshot: string
+  license_number: string
+  correspondent_email: string
+  club_token_hash: string | null
+  club_token_expires_at: number | null
+  club_confirmed_at: number | null
   status: ClubAdminRequestStatus
   created_at: number
   decided_at: number | null
@@ -3111,6 +3120,9 @@ const requestFromRow = (r: ClubAdminRequestRow): ClubAdminRequest => ({
   lastName: r.last_name,
   phone: r.phone,
   message: r.message,
+  licenseNumber: r.license_number ?? '',
+  correspondentEmail: r.correspondent_email ?? '',
+  ...(r.club_confirmed_at ? { clubConfirmedAt: new Date(r.club_confirmed_at).toISOString() } : {}),
   snapshot: parseSnapshot(r.fftt_snapshot),
   status: r.status,
   createdAt: new Date(r.created_at).toISOString(),
@@ -3125,6 +3137,64 @@ const isGeneralAdmin = (c: { get: (k: 'user') => UserRow | undefined }) => {
   return !u || u.role === 'general_admin'
 }
 
+/** A week: long enough for a club secretary who reads mail on Sundays. */
+const CLUB_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Hashed like sessions (0041) and OTPs: the table never holds a usable link. */
+async function hashToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function randomToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** The deployment's own origin, for links inside e-mails. */
+const originOf = (c: { req: { url: string } }) => new URL(c.req.url).origin
+
+const summaryOf = (r: ClubAdminRequestRow): RequestSummary => ({
+  firstName: r.first_name,
+  lastName: r.last_name,
+  email: r.email,
+  phone: r.phone,
+  message: r.message,
+  licenseNumber: r.license_number ?? '',
+  affiliationNumber: r.affiliation_number,
+  clubName: parseSnapshot(r.fftt_snapshot).displayName || r.affiliation_number,
+})
+
+/** Every general admin who can actually receive a message. */
+async function generalAdminEmails(db: D1Database): Promise<string[]> {
+  const r = await db
+    .prepare("SELECT email FROM users WHERE role = 'general_admin' AND email IS NOT NULL AND email != ''")
+    .all<{ email: string }>()
+  return r.results.map((u) => u.email)
+}
+
+/**
+ * Move a request to the general admins' queue and tell them.
+ *
+ * Called when the club confirms, and directly at submission when FFTT
+ * publishes no correspondent to ask — a club with no listed address must not
+ * be a club nobody can ever join.
+ */
+async function handOverToAdmins(
+  c: { env: { DB: D1Database } & Record<string, unknown>; req: { url: string } },
+  row: ClubAdminRequestRow,
+  confirmedBy: string,
+) {
+  const env = c.env as Parameters<typeof sendEmails>[0]
+  const queueUrl = `${originOf(c)}/demandes`
+  const admins = await generalAdminEmails(c.env.DB)
+  await sendEmails(
+    env,
+    admins.map((to) => newRequestForAdminEmail(to, summaryOf(row), confirmedBy, queueUrl)),
+  )
+}
+
 // The public endpoint. Everything it accepts is untrusted, including the FFTT
 // snapshot — the browser read that, not us.
 app.post('/onboarding/requests', async (c) => {
@@ -3136,6 +3206,7 @@ app.post('/onboarding/requests', async (c) => {
     lastName?: string
     phone?: string
     message?: string
+    licenseNumber?: string
     snapshot?: Partial<ClubAdminRequestSnapshot>
   }>()
 
@@ -3150,6 +3221,8 @@ app.post('/onboarding/requests', async (c) => {
   if (!isValidAffiliationNumber(affiliationNumber)) return refuseRequest('invalid_affiliation')
   if (!firstName || !lastName) return refuseRequest('missing_name')
   if (!isPlausibleEmail(email)) return refuseRequest('invalid_email')
+  const licenseNumber = (b.licenseNumber ?? '').trim()
+  if (!isPlausibleLicenceNumber(licenseNumber)) return refuseRequest('invalid_licence')
 
   const clubId = clubIdFromAffiliation(affiliationNumber)
 
@@ -3164,7 +3237,7 @@ app.post('/onboarding/requests', async (c) => {
   }
 
   const pending = await db
-    .prepare("SELECT id FROM club_admin_requests WHERE lower(email) = lower(?) AND affiliation_number = ? AND status = 'pending'")
+    .prepare("SELECT id FROM club_admin_requests WHERE lower(email) = lower(?) AND affiliation_number = ? AND status IN ('pending_club', 'pending_admin')")
     .bind(email, affiliationNumber)
     .first()
   if (pending) return refuseRequest('already_pending', 409)
@@ -3187,20 +3260,116 @@ app.post('/onboarding/requests', async (c) => {
     ? await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first()
     : null
 
+  // Where the club confirmation goes. Claimant-supplied — the server cannot
+  // read the FFTT listing itself — so this is recorded, not trusted: the review
+  // screen compares it against what FFTT publishes at decision time, which is
+  // what catches a requester who put their own address in as the club's.
+  const correspondentEmail = isPlausibleEmail(snapshot.correspondentEmail)
+    ? snapshot.correspondentEmail
+    : ''
+  // A club FFTT lists no address for cannot confirm, and must not therefore be
+  // a club nobody can ever join: it goes straight to the admins, labelled.
+  const status: ClubAdminRequestStatus = correspondentEmail ? 'pending_club' : 'pending_admin'
+  const token = correspondentEmail ? randomToken() : null
+
+  const row: ClubAdminRequestRow = {
+    id, affiliation_number: affiliationNumber, club_id: knownClub ? clubId : null,
+    email, first_name: clip(firstName, 80), last_name: clip(lastName, 80),
+    phone: clip(b.phone, 40), message: clip(b.message, 500),
+    fftt_snapshot: JSON.stringify(snapshot), license_number: licenseNumber,
+    correspondent_email: correspondentEmail, club_token_hash: null,
+    club_token_expires_at: null, club_confirmed_at: null,
+    status, created_at: Date.now(), decided_at: null, decided_by: null, decision_note: null,
+  }
+
   await db
     .prepare(
       `INSERT INTO club_admin_requests
-         (id, affiliation_number, club_id, email, first_name, last_name, phone, message, fftt_snapshot, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+         (id, affiliation_number, club_id, email, first_name, last_name, phone, message,
+          fftt_snapshot, license_number, correspondent_email, club_token_hash,
+          club_token_expires_at, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
-      id, affiliationNumber, knownClub ? clubId : null, email, clip(firstName, 80), clip(lastName, 80),
-      clip(b.phone, 40), clip(b.message, 500), JSON.stringify(snapshot), Date.now(),
+      row.id, row.affiliation_number, row.club_id, row.email, row.first_name, row.last_name,
+      row.phone, row.message, row.fftt_snapshot, row.license_number, row.correspondent_email,
+      token ? await hashToken(token) : null,
+      token ? Date.now() + CLUB_TOKEN_TTL_MS : null,
+      row.status, row.created_at,
     )
     .run()
 
+  if (token) {
+    const confirmUrl = `${originOf(c)}/confirmer-demande?token=${token}`
+    await sendEmails(c.env, [clubConfirmationEmail(correspondentEmail, summaryOf(row), confirmUrl)])
+  } else {
+    await handOverToAdmins(c, row, '')
+  }
+
   // Deliberately says nothing about the club or the queue: this answer reaches
-  // anyone who can type an affiliation number.
+  // anyone who can type an affiliation number. `clubNotified` is the one thing
+  // the requester needs — whether to expect their club to be asked — and it
+  // reveals nothing they did not just submit themselves.
+  return c.json({ ok: true, clubNotified: Boolean(token) })
+})
+
+/**
+ * The club's step, and the only thing a correspondent ever touches. Public and
+ * addressed by token — they have no account, and giving them one to click a
+ * link would defeat the point.
+ *
+ * GET reads the request behind a token so the page can show what is being
+ * confirmed; POST confirms it. A token that has been used, has expired, or
+ * never existed is one answer — "ce lien n'est plus valable" — because
+ * distinguishing them tells a guesser which of their guesses was close.
+ */
+async function requestByToken(db: D1Database, token: string) {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null
+  const row = await db
+    .prepare("SELECT * FROM club_admin_requests WHERE club_token_hash = ? AND status = 'pending_club'")
+    .bind(await hashToken(token))
+    .first<ClubAdminRequestRow>()
+  if (!row) return null
+  if (row.club_token_expires_at && row.club_token_expires_at < Date.now()) return null
+  return row
+}
+
+app.get('/onboarding/confirm', async (c) => {
+  const row = await requestByToken(c.env.DB, c.req.query('token') ?? '')
+  if (!row) return c.json({ error: 'invalid_token' }, 404)
+  const snapshot = parseSnapshot(row.fftt_snapshot)
+  // Only what the correspondent needs to recognise the person asking. Not the
+  // queue, not other requests, not who else administers the club.
+  return c.json({
+    clubName: snapshot.displayName || row.affiliation_number,
+    affiliationNumber: row.affiliation_number,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    licenseNumber: row.license_number ?? '',
+    message: row.message,
+  })
+})
+
+app.post('/onboarding/confirm', async (c) => {
+  const { token } = await c.req.json<{ token?: string }>()
+  const row = await requestByToken(c.env.DB, token ?? '')
+  if (!row) return c.json({ error: 'invalid_token' }, 404)
+
+  const now = Date.now()
+  await c.env.DB
+    .prepare(
+      `UPDATE club_admin_requests
+       SET status = 'pending_admin', club_confirmed_at = ?, club_token_hash = NULL
+       WHERE id = ?`,
+    )
+    .bind(now, row.id)
+    .run()
+
+  // The token is spent, not merely expired: a confirmation link that still
+  // works after it has been used is a link worth stealing.
+  await handOverToAdmins(c, { ...row, club_confirmed_at: now }, row.correspondent_email)
   return c.json({ ok: true })
 })
 
@@ -3236,16 +3405,39 @@ app.patch('/onboarding/requests/:id', async (c) => {
     .bind(id)
     .first<ClubAdminRequestRow>()
   if (!row) return c.json({ error: 'not_found' }, 404)
-  if (row.status !== 'pending') return c.json({ error: 'already_decided' }, 409)
+  if (row.status === 'pending_club') return c.json({ error: 'awaiting_club' }, 409)
+  if (row.status !== 'pending_admin') return c.json({ error: 'already_decided' }, 409)
 
   const decidedBy = c.get('user')?.id ?? null
   const note = typeof b.note === 'string' ? b.note.trim().slice(0, 500) : null
+
+  // Both parties hear the outcome (#474): the person who asked, and the club
+  // address the confirmation went to. Deduplicated, because on a small club
+  // they are often the same person, who should not get it twice.
+  const loginUrl = `${originOf(c)}/login`
+  const notify = (decision: 'approved' | 'rejected') => {
+    // Compared case-insensitively: addresses are, and on a small club the
+    // correspondent and the requester are frequently the same person writing
+    // their own address two different ways.
+    const seen = new Set<string>()
+    const recipients = [row.email, row.correspondent_email].filter((a) => {
+      const key = (a ?? '').trim().toLowerCase()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    return sendEmails(
+      c.env,
+      recipients.map((to) => decisionEmail(to, summaryOf(row), decision, note ?? '', loginUrl)),
+    )
+  }
 
   if (b.status === 'rejected') {
     await db
       .prepare("UPDATE club_admin_requests SET status = 'rejected', decided_at = ?, decided_by = ?, decision_note = ? WHERE id = ?")
       .bind(Date.now(), decidedBy, note, id)
       .run()
+    await notify('rejected')
     return c.json({ ok: true })
   }
 
@@ -3279,10 +3471,22 @@ app.patch('/onboarding/requests/:id', async (c) => {
   // play — the same two paths POST /clubs/:id/admins takes, held to the same
   // rules so the cap cannot be walked around through this door.
   const users = await clubAdminCandidates(db)
-  const existing = await db
-    .prepare('SELECT id, role, club_id, status FROM users WHERE lower(email) = lower(?)')
-    .bind(row.email)
-    .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
+  const licence = (row.license_number ?? '').trim()
+
+  // Licence before address: it is the identity FFTT and the app agree on, and
+  // the one case where the two differ is exactly the one worth catching — a
+  // licensee asking from an address the club has never recorded for them.
+  const existing =
+    (licence
+      ? await db
+          .prepare("SELECT id, role, club_id, status FROM users WHERE license_number = ? AND license_number != ''")
+          .bind(licence)
+          .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
+      : null) ??
+    (await db
+      .prepare('SELECT id, role, club_id, status FROM users WHERE lower(email) = lower(?)')
+      .bind(row.email)
+      .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>())
 
   const candidate = existing
     ? { id: existing.id, role: existing.role, clubId: existing.club_id ?? undefined, status: existing.status }
@@ -3297,17 +3501,33 @@ app.patch('/onboarding/requests/:id', async (c) => {
   }
 
   if (existing) {
+    // Only ever fills a blank: an existing licence is the club's record and is
+    // not overwritten by something typed into a public form.
     await db
-      .prepare("UPDATE users SET role = 'club_admin', club_id = ? WHERE id = ?")
-      .bind(clubId, existing.id)
+      .prepare(
+        `UPDATE users
+         SET role = 'club_admin', club_id = ?,
+             license_number = CASE WHEN license_number = '' THEN ? ELSE license_number END,
+             is_player = CASE WHEN license_number = '' AND ? != '' THEN 1 ELSE is_player END
+         WHERE id = ?`,
+      )
+      .bind(clubId, licence, licence, existing.id)
       .run()
   } else {
+    // A licence makes them a player from the outset — which is the whole point
+    // of asking for it. Created as a non-player, a licensee is invisible to the
+    // FFTT player import, which matches on licence: it would find nothing and
+    // insert the same person a second time (#474). Given the licence here, the
+    // import finds them and fills in the rest.
     await db
       .prepare(
         `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-         VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?)`,
+         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?)`,
       )
-      .bind(candidate.id, row.email, row.first_name, row.last_name, row.phone, clubId)
+      .bind(
+        candidate.id, row.email, licence ? 1 : 0, row.first_name, row.last_name,
+        licence, row.phone, clubId,
+      )
       .run()
   }
 
@@ -3316,6 +3536,7 @@ app.patch('/onboarding/requests/:id', async (c) => {
     .bind(clubId, Date.now(), decidedBy, note, id)
     .run()
 
+  await notify('approved')
   return c.json({ ok: true, clubId, userId: candidate.id, createdClub })
 })
 

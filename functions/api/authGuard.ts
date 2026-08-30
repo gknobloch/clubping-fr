@@ -21,6 +21,13 @@ const PUBLIC_PATH = /^\/api\/auth\/(email\/|oauth$|dev\/)/
 // like everything else.
 const PUBLIC_ONBOARDING_PATH = /^\/api\/onboarding\/requests$/
 
+// The club's confirmation step (#474). A correspondent has no account — giving
+// them one to click a link would defeat the point of asking them — so the link
+// carries a one-shot token and these two are addressed by it rather than by a
+// session. GET reads the one request behind the token, POST confirms it;
+// neither can reach anything else.
+const PUBLIC_CONFIRM_PATH = /^\/api\/onboarding\/confirm$/
+
 // Image endpoints are served to <img> / <Image> tags, which cannot attach an
 // Authorization header — so GETs to them are public (read-only, non-sensitive
 // logos / avatars). Writes still require a session.
@@ -36,5 +43,6 @@ export function needsSession(method: string, path: string): boolean {
   if (PUBLIC_PATH.test(path)) return false
   if (method === 'GET' && PUBLIC_IMAGE_PATH.test(path)) return false
   if (method === 'POST' && PUBLIC_ONBOARDING_PATH.test(path)) return false
+  if ((method === 'GET' || method === 'POST') && PUBLIC_CONFIRM_PATH.test(path)) return false
   return true
 }
