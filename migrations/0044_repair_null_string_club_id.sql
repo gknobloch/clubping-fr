@@ -1,0 +1,28 @@
+-- 0044 — the general admin's club_id holds the text 'NULL', not NULL (#474)
+--
+-- One row: `users.id = 'global-admin'`, whose `club_id` is the four characters
+-- N-U-L-L rather than SQL NULL. It is the only id in the table that does not
+-- follow a generated pattern, it appears in no commit on any branch, and no SQL
+-- in this repository has ever written the string — so it was typed by hand
+-- against production, almost certainly when the first admin account was
+-- bootstrapped, with the value quoted by accident. Everything downstream
+-- carried it faithfully: the export preserves it, normalise-d1-export.py emits
+-- real nulls unquoted and this one quoted because that is what it is, and
+-- anonymise-dev-db.sql never touches the column.
+--
+-- Why it matters. `club_id` answers "which club does this member belong to",
+-- and a general admin belongs to none. A quoted 'NULL' is a truthy string in
+-- every language that reads it, so it answers "yes, that one" and names a club
+-- that does not exist. Most call sites are guarded by role and never ask, which
+-- is why it sat here unnoticed; the one that did ask — the home screen's next
+-- journées — scoped a general admin to a phantom club and showed them nothing
+-- at all.
+--
+-- The empty string is repaired alongside it. It is the benign half of the same
+-- mistake — falsy in JavaScript, so nothing has misread it yet — but it is
+-- equally invisible to `WHERE club_id IS NULL`, and leaving one of the two
+-- behind only means finding it again later.
+--
+-- Idempotent, and a no-op on any database that never had the problem.
+
+UPDATE users SET club_id = NULL WHERE club_id IN ('NULL', 'null', '');
