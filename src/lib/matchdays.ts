@@ -240,3 +240,53 @@ export function formatMatchDayRange(startDate: string, endDate: string): string 
   const sameMonth = startDate.slice(0, 7) === endDate.slice(0, 7)
   return `${fmt(startDate, !sameMonth)} – ${fmt(endDate, true)}`
 }
+
+/**
+ * The journées an admin's home screen should list next, and how many matches
+ * each holds *for them* (#474).
+ *
+ * The screen used to take every journée in the database and count every game
+ * in it. For a general admin that reads correctly — they oversee the lot — but
+ * a club admin was shown other clubs' fixtures as though they were their own.
+ * The onboarding flow is what made that visible: it creates club admins for
+ * clubs with nothing in them yet, and this is the first screen they see, so a
+ * brand-new club with no team announced three journées and twelve matches.
+ *
+ * The scope is stated, never inferred from whether a club id happens to be
+ * present. Inferring it once cost a general admin their whole list: a stray
+ * `club_id` of the literal string 'NULL' read as a club, and scoped them to one
+ * that does not exist. Who sees everything is a question about a role, so the
+ * caller answers it.
+ */
+export function upcomingMatchDays<
+  M extends { id: string; date: string },
+  G extends { matchDayId: string; homeTeamId: string; awayTeamId: string },
+  T extends { id: string; clubId: string },
+>(
+  matchDays: M[],
+  games: G[],
+  teams: T[],
+  {
+    scope,
+    today,
+    limit = 3,
+  }: { scope: 'all' | { clubId: string }; today: string; limit?: number },
+): { matchDay: M; games: number }[] {
+  const mine =
+    scope === 'all'
+      ? null
+      : new Set(teams.filter((t) => t.clubId === scope.clubId).map((t) => t.id))
+  const counts = new Map<string, number>()
+  for (const g of games) {
+    if (mine && !mine.has(g.homeTeamId) && !mine.has(g.awayTeamId)) continue
+    counts.set(g.matchDayId, (counts.get(g.matchDayId) ?? 0) + 1)
+  }
+  return matchDays
+    .filter((md) => md.date >= today)
+    // A journée the club does not play in is not their journée. Without a club
+    // scope every journée counts, including one with no games recorded yet.
+    .filter((md) => !mine || counts.has(md.id))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, limit)
+    .map((md) => ({ matchDay: md, games: counts.get(md.id) ?? 0 }))
+}

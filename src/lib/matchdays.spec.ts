@@ -10,6 +10,7 @@ import {
   isSlotConfirmed,
   isoWeekRange,
   playersCommittedElsewhere,
+  upcomingMatchDays,
 } from './matchdays'
 import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
 
@@ -333,5 +334,81 @@ describe('activeMatchDayNumber', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+// #474 — a newly onboarded club admin, whose club has no team at all, was shown
+// three journées and twelve matches on the home screen: the list took every
+// journée in the database and counted every game in it.
+describe('upcomingMatchDays (#474)', () => {
+  const md = (id: string, date: string, number = 1) => ({ id, date, number })
+  const game = (matchDayId: string, homeTeamId: string, awayTeamId: string) => ({
+    matchDayId, homeTeamId, awayTeamId,
+  })
+  const teams = [
+    { id: 't-mine', clubId: 'club-mine' },
+    { id: 't-other', clubId: 'club-other' },
+    { id: 't-third', clubId: 'club-third' },
+  ]
+  const matchDays = [md('j1', '2026-09-14'), md('j2', '2026-09-16'), md('j3', '2026-09-19')]
+  const games = [
+    game('j1', 't-other', 't-third'),
+    game('j1', 't-third', 't-other'),
+    game('j2', 't-mine', 't-other'),
+    game('j3', 't-other', 't-third'),
+  ]
+  const today = '2026-09-01'
+
+  it('shows a club only the journées it actually plays in', () => {
+    const rows = upcomingMatchDays(matchDays, games, teams, { scope: { clubId: 'club-mine' }, today })
+    expect(rows.map((r) => r.matchDay.id)).toEqual(['j2'])
+    expect(rows[0].games).toBe(1)
+  })
+
+  // The case that was reported: a club with nothing in it yet.
+  it('shows a club with no team nothing at all', () => {
+    expect(upcomingMatchDays(matchDays, games, teams, { scope: { clubId: 'club-empty' }, today })).toEqual([])
+  })
+
+  it('counts only the club’s own matches, not the whole journée', () => {
+    const busy = [...games, game('j2', 't-other', 't-third')]
+    const rows = upcomingMatchDays(matchDays, busy, teams, { scope: { clubId: 'club-mine' }, today })
+    expect(rows[0].games).toBe(1)
+  })
+
+  it('counts a match whether the club is at home or away', () => {
+    const away = [game('j1', 't-other', 't-mine')]
+    const rows = upcomingMatchDays(matchDays, away, teams, { scope: { clubId: 'club-mine' }, today })
+    expect(rows.map((r) => r.matchDay.id)).toEqual(['j1'])
+  })
+
+  // A general admin oversees everything, so their view is unscoped — including
+  // a journée with no games recorded against it yet.
+  it('leaves the general admin’s view whole', () => {
+    const rows = upcomingMatchDays(matchDays, games, teams, { scope: 'all', today })
+    expect(rows.map((r) => r.matchDay.id)).toEqual(['j1', 'j2', 'j3'])
+    expect(rows[0].games).toBe(2)
+  })
+
+  it('drops what is past and keeps the soonest three', () => {
+    const many = [
+      md('old', '2026-08-01'), md('a', '2026-09-14'), md('b', '2026-09-16'),
+      md('c', '2026-09-19'), md('d', '2026-09-26'),
+    ]
+    const rows = upcomingMatchDays(many, [], teams, { scope: 'all', today })
+    expect(rows.map((r) => r.matchDay.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  // Inferring the scope from a club id is what broke this once: a general
+  // admin carrying a junk `club_id` was scoped to a club that does not exist,
+  // and lost the whole list.
+  it('gives a club that does not exist nothing, rather than everything', () => {
+    expect(upcomingMatchDays(matchDays, games, teams, { scope: { clubId: 'NULL' }, today })).toEqual([])
+    expect(upcomingMatchDays(matchDays, games, teams, { scope: { clubId: '' }, today })).toEqual([])
+  })
+
+  it('keeps today itself, which has not happened yet', () => {
+    const rows = upcomingMatchDays([md('now', today)], [], teams, { scope: 'all', today })
+    expect(rows).toHaveLength(1)
   })
 })

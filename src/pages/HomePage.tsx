@@ -18,7 +18,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { sortByName } from '@/lib/sortByName'
-import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingMatchDays } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
 export function HomePage() {
@@ -437,10 +437,16 @@ export function HomePage() {
             </section>
           )}
           {(() => {
-            const next = matchDays
-              .filter((md) => md.date >= today)
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .slice(0, 3)
+            // Scoped to the club when the viewer has one (#474): a club admin
+            // was being shown every club's journées, so a club with no team at
+            // all still announced three of them.
+            const next = upcomingMatchDays(matchDays, games, teams, {
+              // A general admin oversees every club; anyone else sees their own
+              // and nothing else — including nothing at all when their club has
+              // no team yet, which is where a fresh onboarding leaves them.
+              scope: user?.role === 'general_admin' ? 'all' : { clubId: user?.clubId ?? '' },
+              today,
+            })
             if (next.length === 0) return null
             return (
               <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -448,8 +454,7 @@ export function HomePage() {
                   Prochaines journées
                 </h2>
                 <ul>
-                  {next.map((md) => {
-                    const count = games.filter((g) => g.matchDayId === md.id).length
+                  {next.map(({ matchDay: md, games: count }) => {
                     return (
                       <li key={md.id} className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
                         <span>
