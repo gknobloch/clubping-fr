@@ -144,6 +144,19 @@ describe('the queue (#474)', () => {
     expect(screen.getByText(/plutôt que créer une seconde fiche/)).toBeInTheDocument()
   })
 
+  // A build that meets a status it predates must not hide the work: this is
+  // the shape of the bug that was seen — a stale page filing every confirmed
+  // request under "traitées", where nobody was looking.
+  it('keeps a status it does not recognise in the queue, not in the archive', async () => {
+    setup([{ ...honest, status: 'pending_league' as unknown as ClubAdminRequest['status'] }])
+    renderPage()
+    // Listed by default, i.e. among the live ones rather than the decided.
+    expect((await screen.findAllByText('Virginie Barlinge')).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Afficher les demandes traitées/)).not.toBeInTheDocument()
+    // And badged with something a reader can act on.
+    expect(screen.getByText('pending_league')).toBeInTheDocument()
+  })
+
   it('is closed to anyone but a general admin', async () => {
     setup([honest])
     auth.user = { id: 'a1', role: 'club_admin', clubId: 'club-1', isPlayer: false }
@@ -253,10 +266,14 @@ describe('deciding, against a live reading (#474)', () => {
     expect(within(dialog).getByRole('button', { name: 'Accepter' })).toBeDisabled()
   })
 
-  it('says plainly that nobody is notified', async () => {
+  // The copy has to keep pace with the flow: it used to promise nobody was
+  // told, which stopped being true when the decision e-mails landed.
+  it('says who the decision will be sent to', async () => {
     const user = setup([honest])
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'Vérifier et décider' }))
-    expect(within(screen.getByRole('dialog')).getByText(/ne sera pas prévenue/)).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('dialog')).getByText(/envoyée par e-mail au demandeur et à l’adresse du club/),
+    ).toBeInTheDocument()
   })
 })

@@ -13,9 +13,11 @@ import {
 import {
   EMAIL_MATCH_LABELS,
   EMAIL_MATCH_TONE,
-  REQUEST_STATUS_BADGES,
-  REQUEST_STATUS_LABELS,
   emailMatch,
+  isDecidedRequest,
+  isLiveRequest,
+  requestStatusBadge,
+  requestStatusLabel,
   type ClubAdminRequest,
 } from '@/lib/clubAdminRequests'
 import {
@@ -74,12 +76,14 @@ export function RequestsPage() {
     void load()
   }, [load])
 
-  // Two live states now (#474): waiting on the club, and waiting on you. Only
-  // the second is yours to act on, so it leads.
-  const toDecide = (requests ?? []).filter((r) => r.status === 'pending_admin')
-  const awaitingClub = (requests ?? []).filter((r) => r.status === 'pending_club')
-  const decided = (requests ?? []).filter((r) => r.status === 'approved' || r.status === 'rejected')
-  const shown = showDecided ? decided : [...toDecide, ...awaitingClub]
+  // Two live states (#474): waiting on the club, and waiting on you. Only the
+  // second is yours to act on, so it leads — and anything neither decided nor
+  // recognised is still live, never quietly filed as done (see isLiveRequest).
+  const decided = (requests ?? []).filter((r) => isDecidedRequest(r.status))
+  const live = (requests ?? []).filter((r) => isLiveRequest(r.status))
+  const shown = showDecided
+    ? decided
+    : [...live.filter((r) => r.status !== 'pending_club'), ...live.filter((r) => r.status === 'pending_club')]
 
   if (user && user.role !== 'general_admin') {
     return (
@@ -94,9 +98,10 @@ export function RequestsPage() {
       <PageHeader title="Demandes d’accès" />
 
       <p className="text-sm text-slate-600">
-        Des personnes demandent à administrer un club depuis la page publique. Vérifiez la demande
-        auprès de la FFTT avant de l’accepter — aucun message ne leur est envoyé, ni maintenant ni
-        après votre décision.
+        Des personnes demandent à administrer un club depuis la page publique. Chaque demande a été
+        confirmée par le club avant d’arriver ici — mais cette confirmation part à une adresse
+        lue par le navigateur du demandeur, alors vérifiez auprès de la FFTT avant d’accepter.
+        Votre décision est envoyée au demandeur et au club.
       </p>
 
       {error && (
@@ -186,9 +191,9 @@ function RequestCard({
           <p className="text-sm text-slate-600">{request.email}</p>
         </div>
         <span
-          className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${REQUEST_STATUS_BADGES[request.status]}`}
+          className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${requestStatusBadge(request.status)}`}
         >
-          {REQUEST_STATUS_LABELS[request.status]}
+          {requestStatusLabel(request.status)}
         </span>
       </div>
 
@@ -288,7 +293,7 @@ function RequestCard({
         )}
       </p>
 
-      {(request.status === 'approved' || request.status === 'rejected') && request.decisionNote && (
+      {isDecidedRequest(request.status) && request.decisionNote && (
         <p className="mt-3 text-sm text-slate-600">
           <span className="font-medium">Motif :</span> {request.decisionNote}
         </p>
@@ -486,8 +491,8 @@ function DecideDialog({
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          La personne ne sera pas prévenue : dites-le-lui vous-même. Une fois acceptée, elle se
-          connecte avec son adresse.
+          Votre décision sera envoyée par e-mail au demandeur et à l’adresse du club. Une fois
+          acceptée, la personne se connecte avec son adresse.
         </p>
 
         {error && (

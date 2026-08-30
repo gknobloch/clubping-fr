@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   emailMatch,
+  isDecidedRequest,
+  isLiveRequest,
+  requestStatusBadge,
+  requestStatusLabel,
   isPlausibleEmail,
   isValidAffiliationNumber,
   maskEmail,
@@ -131,5 +135,48 @@ describe('validateRequestForm (#474)', () => {
     ] as const) {
       expect(REQUEST_REFUSAL_MESSAGES[r]).toMatch(/\S/)
     }
+  })
+})
+
+// A queue that files work under "done" because it does not recognise the
+// status is worse than one that shows too much: the work vanishes from the
+// only person who can do it. This came from a real sighting — a page built
+// before `pending_admin` existed put every club-confirmed request under
+// "demandes traitées", blank-badged and with no way to act on it.
+describe('what counts as done (#474)', () => {
+  it('closes on the two decided states, and only those', () => {
+    expect(isDecidedRequest('approved')).toBe(true)
+    expect(isDecidedRequest('rejected')).toBe(true)
+    expect(isDecidedRequest('pending_club')).toBe(false)
+    expect(isDecidedRequest('pending_admin')).toBe(false)
+  })
+
+  it('treats a status it has never heard of as still live', () => {
+    for (const unknown of ['pending', 'pending_league', 'escalated', '']) {
+      expect(isDecidedRequest(unknown)).toBe(false)
+      expect(isLiveRequest(unknown)).toBe(true)
+    }
+  })
+
+  it('is exactly the inverse of live', () => {
+    for (const s of ['approved', 'rejected', 'pending_club', 'pending_admin', 'wat']) {
+      expect(isLiveRequest(s)).toBe(!isDecidedRequest(s))
+    }
+  })
+})
+
+describe('status labels never come back blank (#474)', () => {
+  it('names each state it knows', () => {
+    expect(requestStatusLabel('pending_club')).toBe('En attente du club')
+    expect(requestStatusLabel('pending_admin')).toBe('À traiter')
+    expect(requestStatusLabel('approved')).toBe('Approuvée')
+    expect(requestStatusLabel('rejected')).toBe('Refusée')
+  })
+
+  // An unexplained blank chip tells a reader nothing; the raw status at least
+  // tells them the page is older than the data.
+  it('shows an unknown status as itself rather than as nothing', () => {
+    expect(requestStatusLabel('pending_league')).toBe('pending_league')
+    expect(requestStatusBadge('pending_league')).toMatch(/\S/)
   })
 })

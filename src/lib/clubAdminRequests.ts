@@ -30,9 +30,20 @@
  */
 export type ClubAdminRequestStatus = 'pending_club' | 'pending_admin' | 'approved' | 'rejected'
 
-/** Still in flight, whichever step it is sitting on. */
-export const isLiveRequest = (s: ClubAdminRequestStatus) =>
-  s === 'pending_club' || s === 'pending_admin' 
+/**
+ * Decided, and therefore done with. Deliberately the *only* closed set: a
+ * request is finished when it says so, and anything else is still live.
+ *
+ * The inverse — listing the live states and calling the rest done — is what a
+ * stale client does badly. A page built before `pending_admin` existed filed
+ * every confirmed request under "traitées", blank-badged and with no way to act
+ * on it: work vanished from the queue of the one person who had to do it. This
+ * way an unrecognised status errs towards the human instead of away from them.
+ */
+export const isDecidedRequest = (s: string): boolean => s === 'approved' || s === 'rejected'
+
+/** Still in flight — including a status this build has never heard of. */
+export const isLiveRequest = (s: string): boolean => !isDecidedRequest(s)
 
 /**
  * What the requester's browser read from FFTT at the moment they asked.
@@ -243,6 +254,19 @@ export const REQUEST_STATUS_LABELS: Record<ClubAdminRequestStatus, string> = {
   pending_admin: 'À traiter',
   approved: 'Approuvée',
   rejected: 'Refusée',
+}
+
+/**
+ * The label for a status, never empty. An unknown one is shown as itself rather
+ * than as an unexplained blank chip — if a build meets a status it predates,
+ * saying so is more use than saying nothing.
+ */
+export function requestStatusLabel(status: string): string {
+  return REQUEST_STATUS_LABELS[status as ClubAdminRequestStatus] ?? status
+}
+
+export function requestStatusBadge(status: string): string {
+  return REQUEST_STATUS_BADGES[status as ClubAdminRequestStatus] ?? 'bg-slate-100 text-slate-600'
 }
 
 export const REQUEST_STATUS_BADGES: Record<ClubAdminRequestStatus, string> = {
