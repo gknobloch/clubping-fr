@@ -10,6 +10,7 @@ import {
   isSlotConfirmed,
   isoWeekRange,
   playersCommittedElsewhere,
+  upcomingRounds,
 } from './matchdays'
 import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
 
@@ -333,5 +334,121 @@ describe('activeMatchDayNumber', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+// #474 — two bugs, one screen. A newly onboarded club admin whose club has no
+// team was shown three journées and twelve matches, because the list took every
+// journée in the database and counted every game in it. And a club whose teams
+// play in different groups saw "Journée 1 — 1 match" three times over, because
+// a MatchDay row is per group: three rows of that number, each holding the
+// club's single match in it.
+describe('upcomingRounds (#474)', () => {
+  // Two groups of one phase, each with its own row per journée — the shape
+  // Mulhouse actually has.
+  const md = (id: string, number: number, date: string, groupId: string) => ({ id, number, date, groupId })
+  const game = (matchDayId: string, homeTeamId: string, awayTeamId: string) => ({
+    matchDayId, homeTeamId, awayTeamId,
+  })
+  const teams = [
+    { id: 't1', clubId: 'club-mine' },
+    { id: 't2', clubId: 'club-mine' },
+    { id: 't-other', clubId: 'club-other' },
+    { id: 't-third', clubId: 'club-third' },
+  ]
+  const matchDays = [
+    md('j1-a', 1, '2026-09-14', 'g-a'),
+    md('j1-b', 1, '2026-09-19', 'g-b'),
+    md('j2-a', 2, '2026-09-28', 'g-a'),
+    md('j2-b', 2, '2026-10-03', 'g-b'),
+  ]
+  const games = [
+    game('j1-a', 't1', 't-other'),
+    game('j1-a', 't-other', 't-third'),
+    game('j1-b', 't-other', 't2'),
+    game('j2-a', 't1', 't-third'),
+    game('j2-b', 't2', 't-other'),
+  ]
+  const today = '2026-09-01'
+  // One phase, so every group's journée 1 is the same journée.
+  const phaseOf = () => 'phase-27-1'
+  const call = (scope: 'all' | { clubId: string }, extra = {}) =>
+    upcomingRounds(matchDays, games, teams, { scope, today, phaseOf, ...extra })
+
+  it('counts a club’s whole round, across every group its teams play in', () => {
+    const rows = call({ clubId: 'club-mine' })
+    expect(rows.map((r) => ({ n: r.number, games: r.games }))).toEqual([
+      { n: 1, games: 2 },
+      { n: 2, games: 2 },
+    ])
+  })
+
+  // The reported symptom: three lines all reading "Journée 1 — 1 match".
+  it('does not repeat a journée once per group', () => {
+    expect(call({ clubId: 'club-mine' }).filter((r) => r.number === 1)).toHaveLength(1)
+  })
+
+  it('spans the dates its groups play on', () => {
+    const [first] = call({ clubId: 'club-mine' })
+    expect(first.from).toBe('2026-09-14')
+    expect(first.to).toBe('2026-09-19')
+  })
+
+  it('collapses the span when they all play the same day', () => {
+    const sameDay = [md('a', 1, '2026-09-14', 'g-a'), md('b', 1, '2026-09-14', 'g-b')]
+    const [round] = upcomingRounds(sameDay, [game('a', 't1', 't-other'), game('b', 't2', 't-other')],
+      teams, { scope: { clubId: 'club-mine' }, today, phaseOf })
+    expect(round.from).toBe(round.to)
+  })
+
+  it('shows a club only the journées it actually plays in', () => {
+    const rows = upcomingRounds(matchDays, [game('j1-a', 't-other', 't-third')], teams,
+      { scope: { clubId: 'club-mine' }, today, phaseOf })
+    expect(rows).toEqual([])
+  })
+
+  it('shows a club with no team nothing at all', () => {
+    expect(call({ clubId: 'club-empty' })).toEqual([])
+  })
+
+  // Inferring the scope from a club id is what broke this once: a general admin
+  // carrying a junk `club_id` was scoped to a club that does not exist.
+  it('gives a club that does not exist nothing, rather than everything', () => {
+    expect(call({ clubId: 'NULL' })).toEqual([])
+    expect(call({ clubId: '' })).toEqual([])
+  })
+
+  it('leaves the general admin’s view whole, counting every club’s matches', () => {
+    const rows = call('all')
+    expect(rows.map((r) => ({ n: r.number, games: r.games }))).toEqual([
+      { n: 1, games: 3 },
+      { n: 2, games: 2 },
+    ])
+  })
+
+  // Journées are numbered per phase, so the first round of two phases is two
+  // rounds, however far apart they sit.
+  it('keeps the same number in different phases apart', () => {
+    const rows = upcomingRounds(matchDays, games, teams, {
+      scope: 'all',
+      today,
+      phaseOf: (m) => (m.groupId === 'g-a' ? 'phase-27-1' : 'phase-27-2'),
+    })
+    expect(rows.filter((r) => r.number === 1)).toHaveLength(2)
+  })
+
+  it('drops what is past and keeps the soonest three', () => {
+    const many = [
+      md('old', 1, '2026-08-01', 'g-a'), md('a', 2, '2026-09-14', 'g-a'),
+      md('b', 3, '2026-09-16', 'g-a'), md('c', 4, '2026-09-19', 'g-a'),
+      md('d', 5, '2026-09-26', 'g-a'),
+    ]
+    expect(upcomingRounds(many, [], teams, { scope: 'all', today, phaseOf }).map((r) => r.number))
+      .toEqual([2, 3, 4])
+  })
+
+  it('keeps today itself, which has not happened yet', () => {
+    expect(upcomingRounds([md('now', 1, today, 'g-a')], [], teams, { scope: 'all', today, phaseOf }))
+      .toHaveLength(1)
   })
 })

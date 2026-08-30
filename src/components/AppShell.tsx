@@ -57,6 +57,7 @@ export function AppShell() {
   if (isGeneralAdmin) {
     links.push(
       { to: '/clubs', label: 'Clubs' },
+      { to: '/demandes', label: 'Demandes' },
       { to: '/saisons', label: 'Saisons' },
       { to: '/phases', label: 'Phases' },
       { to: '/divisions', label: 'Divisions' },

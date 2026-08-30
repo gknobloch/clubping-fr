@@ -1,6 +1,6 @@
 # Implementation plan
 
-This doc maps the SPEC to a phased plan. Each row links to a GitHub issue; use one branch per issue and never push directly to main (see [working rules](../.cursor/rules/workflow.mdc)).
+This doc maps the SPEC to a phased plan. Each row links to a GitHub issue; use one branch per issue and never push directly to main (see the workflow rules in [CLAUDE.md](../CLAUDE.md)).
 
 ---
 
@@ -26,8 +26,20 @@ Status of each item can be seen from the linked GitHub issue.
 
 ---
 
+## Since Phase 0
+
+The table above is the original Phase 0 roadmap and stops at #15; the work since
+then is tracked in the issues themselves rather than restated here. Only items
+whose shape is worth reading before the code exists are listed below.
+
+| # | Description |
+|---|-------------|
+| [**#474**](https://github.com/gknobloch/clubping-fr/issues/474) | **Club onboarding and club admins** — Up to 5 admins per club, never zero, not necessarily licensed players, managed from the club sheet. Two ways in: a public request at `/rejoindre` from anyone holding an affiliation number, or direct creation by a General Admin. A request is confirmed by the club at `/confirmer-demande` (a link e-mailed to the address FFTT publishes) before reaching `/demandes`, where it is approved or refused against a live re-reading of the FFTT record taken in the reviewing admin's own browser — neither the requester's own reading nor their club confirmation is treated as proof. An optional licence number attaches the new admin to the licensee they already are, instead of a second fiche the player import then duplicates. Outside production every e-mail is diverted to one dev address. See [SPEC](SPEC.md#onboarding-a-club). |
+
+---
+
 ## Workflow reminder
 
 - Before starting a new feature: find or create the GitHub issue, then create a branch from that issue (e.g. `4-match-days`, `issue/5-availability`).
 - All merges to `main` via Pull Request; no direct push to `main`.
-- After a PR is merged: switch to `main`, pull, and [delete obsolete branches](../.cursor/rules/workflow.mdc).
+- After a PR is merged: switch to `main`, pull, and delete the local and remote feature branches.

@@ -73,7 +73,9 @@ describe('LoginPage — dev picker role context (#345)', () => {
   it('badges every role', () => {
     const list = openPicker()
     expect(within(list).getByText('Admin général')).toBeInTheDocument()
-    expect(within(list).getByText('Admin club')).toBeInTheDocument()
+    // Plural since #474: a club may have up to 5 admins, and one of them is
+    // an ordinary player of the club who was promoted.
+    expect(within(list).getAllByText('Admin club').length).toBeGreaterThan(0)
     expect(within(list).getAllByText('Joueur').length).toBeGreaterThan(0)
   })
 
@@ -83,9 +85,13 @@ describe('LoginPage — dev picker role context (#345)', () => {
       .getAllByText(/Admin général|Admin club|Joueur/)
       .map((el) => el.textContent)
 
+    // The rule is the ordering, not the count: how many club admins there are
+    // is the fixtures' business, and #474 made it more than one.
     expect(badges[0]).toBe('Admin général')
-    expect(badges[1]).toBe('Admin club')
-    expect(badges.slice(2).every((b) => b === 'Joueur')).toBe(true)
+    const firstPlayer = badges.indexOf('Joueur')
+    expect(firstPlayer).toBeGreaterThan(0)
+    expect(badges.slice(1, firstPlayer).every((b) => b === 'Admin club')).toBe(true)
+    expect(badges.slice(firstPlayer).every((b) => b === 'Joueur')).toBe(true)
   })
 
   it('marks a captain with the teams they lead', () => {

@@ -43,6 +43,18 @@ describe('wrangler.toml — server-side dev login gating (#313)', () => {
     expect(preview).toMatch(/DEV_LOGIN_ENABLED\s*=\s*"true"/)
   })
 
+  // EMAIL_REDIRECT_TO diverts every outgoing message to one address (#474).
+  // On preview that is a safety net — the onboarding flow writes to clubs, and
+  // a preview must not reach them. In production it would swallow the lot,
+  // sign-in codes included, and the app would look perfectly healthy doing it.
+  it('never redirects e-mail in production', () => {
+    expect(production).not.toContain('EMAIL_REDIRECT_TO')
+  })
+
+  it('redirects every preview e-mail to the dev address', () => {
+    expect(preview).toMatch(/EMAIL_REDIRECT_TO\s*=\s*"clubping\.dev@leskno\.fr"/)
+  })
+
   // AUTH_GUARD_DISABLED belongs to .dev.vars and nowhere else (#138). Deployed —
   // in either environment — it turns off the session guard for every request,
   // which no test of the app itself would notice: everything simply works.

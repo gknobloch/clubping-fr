@@ -286,6 +286,13 @@ export interface PlayerImportRow {
   playerId?: string
   status: PlayerImportStatus
   fields: PlayerSyncField[]
+  /**
+   * A member the club already holds who is probably this licensee, found on
+   * something short of a licence number (#474). The row still reads as `new`:
+   * nothing is linked until the import is told to, and a `name` match is a
+   * question put to the admin rather than an answer.
+   */
+  link?: { id: string; on: 'name'; name: string }
 }
 
 /** Key identifying one field of one licence in a preview's selection set. */
@@ -303,11 +310,60 @@ export function writableFields(fields: PlayerSyncField[]): PlayerSyncField[] {
  * name can be spelled differently on each side, which is half of what this
  * import is for.
  */
+/**
+ * A member the club already has who is probably this licensee, matched on
+ * something less certain than a licence number (#474).
+ *
+ * The case that forced this: an approved club admin is a `users` row with no
+ * licence and, when they hold none, `is_player = 0` — so they are not in
+ * `players` at all and the licence match below cannot see them. Importing the
+ * club's licensees then created the same person a second time.
+ *
+ * The name is all there is to go on. FFTT's licence record carries no address —
+ * it has `nom`, `prenom`, `licence`, `club` and points, and nothing else — so
+ * matching on e-mail is not available here however much one might want it.
+ *
+ * A name is not proof: two people in one club can share one, and merging them
+ * would quietly fuse two members. So a name match is returned as a suggestion
+ * for a human to confirm, and never linked on its own.
+ */
+export interface ImportCandidate {
+  id: string
+  firstName?: string
+  lastName?: string
+  email?: string
+  licenseNumber?: string
+}
+
+const nameKey = (first: string | undefined, last: string | undefined) =>
+  `${(first ?? '').trim().toLocaleLowerCase('fr-FR')}|${(last ?? '').trim().toLocaleLowerCase('fr-FR')}`
+
+/**
+ * Who, among the club's members, this licence might already be — when the
+ * licence number itself matched nobody.
+ *
+ * Anyone already holding a *different* licence is never offered: whoever they
+ * are, they are not this licensee. One namesake is a suggestion; several is a
+ * question this cannot answer, so it asks none of them rather than guessing.
+ */
+export function findImportCandidate(
+  licence: Pick<FfttLicence, 'firstName' | 'lastName'>,
+  candidates: ImportCandidate[],
+): ImportCandidate | null {
+  const wanted = nameKey(licence.firstName, licence.lastName)
+  const sameName = candidates.filter(
+    (c) => !(c.licenseNumber ?? '').trim() && nameKey(c.firstName, c.lastName) === wanted,
+  )
+  return sameName.length === 1 ? sameName[0] : null
+}
+
 export function buildImportRows(
   licences: FfttLicence[],
   players: Player[],
   phasePoints: PlayerPhasePoints[],
   phaseId: string,
+  /** Club members outside `players` — non-playing admins, chiefly (#474). */
+  candidates: ImportCandidate[] = [],
 ): PlayerImportRow[] {
   const byLicence = new Map(
     players.filter((p) => p.licenseNumber).map((p) => [p.licenseNumber.trim(), p]),
@@ -315,6 +371,22 @@ export function buildImportRows(
   return licences.map((licence) => {
     const player = byLicence.get(licence.licence.trim())
     if (!player) {
+      // No licence match. Before creating a person, see whether the club
+      // already holds them under no licence at all — an approved admin, most
+      // likely, who gave no licence when they asked (#474).
+      const suggestion = findImportCandidate(licence, candidates)
+      if (suggestion) {
+        return {
+          licence,
+          status: 'new' as const,
+          fields: playerSyncFields(licence),
+          link: {
+            id: suggestion.id,
+            on: 'name' as const,
+            name: `${suggestion.firstName ?? ''} ${suggestion.lastName ?? ''}`.trim(),
+          },
+        }
+      }
       return { licence, status: 'new' as const, fields: playerSyncFields(licence) }
     }
     const fields = playerSyncFields(licence, {

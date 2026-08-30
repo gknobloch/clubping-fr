@@ -17,6 +17,18 @@ import {
   departingTeamIds, emptiedMatchDayIds, obsoleteGames, playingTeamIds,
   type ExistingGameRef, type SourceRound,
 } from '../../src/lib/poolChanges'
+import {
+  canAddClubAdmin, canRemoveClubAdmin, refusalMessage,
+  type AddRefusal, type RemoveRefusal,
+} from '../../src/lib/clubAdmins'
+import {
+  isPlausibleEmail, isPlausibleLicenceNumber, isValidAffiliationNumber, REQUEST_REFUSAL_MESSAGES,
+  type ClubAdminRequest, type ClubAdminRequestSnapshot, type ClubAdminRequestStatus,
+} from '../../src/lib/clubAdminRequests'
+import { sendEmails } from './email'
+import {
+  clubConfirmationEmail, decisionEmail, newRequestForAdminEmail, type RequestSummary,
+} from './onboardingEmails'
 
 // Exported for tests: the session guard is only observable through a real
 // request, so the suites that pin it down fetch this app directly (#320, #138).
@@ -2922,6 +2934,610 @@ app.patch('/players/:id', async (c) => {
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
+})
+
+// --- Club admins (#474) ---
+// A club admin is `users.role = 'club_admin'` + `users.club_id`, not a row of
+// its own — so these two routes are the whole feature. The rules they enforce
+// (at most 5, never zero, who may appoint whom) live in src/lib/clubAdmins.ts
+// and are shared verbatim with both club screens: the browser disables the
+// button, and this decides.
+
+/**
+ * The viewer these routes judge against.
+ *
+ * `undefined` means AUTH_GUARD_DISABLED — the local-only escape hatch that
+ * already serves the entire dataset to an unauthenticated caller (#138). The
+ * same reasoning as `lastSeenVisibleTo` applies: refusing every appointment
+ * there would hide the feature from local development and protect nothing, so
+ * a missing viewer stands in as a general admin.
+ */
+const managingViewer = (c: { get: (k: 'user') => UserRow | undefined }) => {
+  const u = c.get('user')
+  return u ? { role: u.role, clubId: u.club_id ?? undefined } : { role: 'general_admin' }
+}
+
+/** Members shaped for the rules: role, club and status are all they read. */
+async function clubAdminCandidates(db: D1Database) {
+  const r = await db
+    .prepare('SELECT id, role, club_id, status FROM users')
+    .all<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
+  return r.results.map((u) => ({
+    id: u.id,
+    role: u.role,
+    clubId: u.club_id ?? undefined,
+    status: u.status,
+  }))
+}
+
+/**
+ * A refusal, as an HTTP answer. `not_allowed` is the only 403: everything else
+ * is a conflict with the club's current state, which the caller can act on.
+ */
+const refuse = (reason: AddRefusal | RemoveRefusal) =>
+  ({ error: reason, message: refusalMessage(reason) }) as const
+
+app.post('/clubs/:clubId/admins', async (c) => {
+  const clubId = c.req.param('clubId')
+  const db = c.env.DB
+  const viewer = managingViewer(c)
+  const body = await c.req.json<{
+    userId?: string
+    firstName?: string
+    lastName?: string
+    email?: string
+    phone?: string
+  }>()
+
+  const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first()
+  if (!club) return c.json({ error: 'club_not_found' }, 404)
+
+  const users = await clubAdminCandidates(db)
+
+  // Path 1: promote a member who already exists — a player of the club, or
+  // someone invited earlier and stood down since.
+  if (body.userId) {
+    const candidate = users.find((u) => u.id === body.userId)
+    if (!candidate) return c.json({ error: 'user_not_found' }, 404)
+    const decision = canAddClubAdmin(users, clubId, candidate, viewer)
+    if (!decision.ok) return c.json(refuse(decision.reason), decision.reason === 'not_allowed' ? 403 : 409)
+    await db
+      .prepare("UPDATE users SET role = 'club_admin', club_id = ? WHERE id = ?")
+      .bind(clubId, body.userId)
+      .run()
+    return c.json({ ok: true, userId: body.userId })
+  }
+
+  // Path 2: invite someone who is not in the app at all — the secretary or
+  // president with no licence. They are created as a member of the club who
+  // does not play (is_player = 0), which is what makes them invisible to every
+  // roster, availability and selection screen while still able to sign in.
+  const email = emailOrNull(body.email)
+  const firstName = (body.firstName ?? '').trim()
+  const lastName = (body.lastName ?? '').trim()
+  if (!email || !firstName || !lastName) return c.json({ error: 'invalid_request' }, 400)
+
+  // The rules are asked about the person we are about to create, so both paths
+  // meet the same cap and the same permission check.
+  const fresh = { id: newId('user'), role: 'player', clubId: undefined, status: 'active' }
+  const decision = canAddClubAdmin(users, clubId, fresh, viewer)
+  if (!decision.ok) return c.json(refuse(decision.reason), decision.reason === 'not_allowed' ? 403 : 409)
+
+  // `users.email` is UNIQUE and it is the sign-in identifier: a duplicate is a
+  // different person's account, never a second one for this member.
+  const taken = await db
+    .prepare('SELECT id FROM users WHERE lower(email) = lower(?)')
+    .bind(email)
+    .first()
+  if (taken) return c.json(refuse('email_taken'), 409)
+
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
+       VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?)`,
+    )
+    .bind(fresh.id, email, firstName, lastName, (body.phone ?? '').trim(), clubId)
+    .run()
+  return c.json({ ok: true, userId: fresh.id })
+})
+
+app.delete('/clubs/:clubId/admins/:userId', async (c) => {
+  const clubId = c.req.param('clubId')
+  const userId = c.req.param('userId')
+  const db = c.env.DB
+  const users = await clubAdminCandidates(db)
+
+  const decision = canRemoveClubAdmin(users, clubId, userId, managingViewer(c))
+  if (!decision.ok) {
+    const status = decision.reason === 'not_allowed' ? 403 : decision.reason === 'not_an_admin' ? 404 : 409
+    return c.json(refuse(decision.reason), status)
+  }
+
+  // Back to 'player', which is the table's default and means "no special
+  // authority" — is_player, club_id and status are untouched, so a promoted
+  // player lands exactly where they started, with their licence, their roster
+  // place and their availabilities intact.
+  //
+  // An invited non-licensee (is_player = 0) keeps their row too. Deleting a
+  // person because their role changed is a larger action than "Retirer"
+  // promises, and it is what makes re-appointing them later possible; they can
+  // do nothing in the app until then.
+  await db.prepare("UPDATE users SET role = 'player' WHERE id = ?").bind(userId).run()
+  return c.json({ ok: true })
+})
+
+// --- Club admin requests (#474) ---
+// The way in for a club the app has never heard of. POST is public — see
+// authGuard.ts — because sign-in is passwordless and only mails a code to an
+// address that already exists, so a correspondent discovering the app has no
+// account to ask from and no way to obtain one. Reading and deciding are for
+// general admins only.
+
+interface ClubAdminRequestRow {
+  id: string
+  affiliation_number: string
+  club_id: string | null
+  email: string
+  first_name: string
+  last_name: string
+  phone: string
+  message: string
+  fftt_snapshot: string
+  license_number: string
+  correspondent_email: string
+  club_token_hash: string | null
+  club_token_expires_at: number | null
+  club_confirmed_at: number | null
+  status: ClubAdminRequestStatus
+  created_at: number
+  decided_at: number | null
+  decided_by: string | null
+  decision_note: string | null
+}
+
+/** The snapshot as stored, tolerating a row written before a field existed. */
+function parseSnapshot(json: string): ClubAdminRequestSnapshot {
+  try {
+    const v = JSON.parse(json) as Partial<ClubAdminRequestSnapshot>
+    return {
+      displayName: v.displayName ?? '',
+      venue: v.venue ?? '',
+      correspondentName: v.correspondentName ?? '',
+      correspondentEmail: v.correspondentEmail ?? '',
+      correspondentPhone: v.correspondentPhone ?? '',
+    }
+  } catch {
+    return { displayName: '', venue: '', correspondentName: '', correspondentEmail: '', correspondentPhone: '' }
+  }
+}
+
+const requestFromRow = (r: ClubAdminRequestRow): ClubAdminRequest => ({
+  id: r.id,
+  affiliationNumber: r.affiliation_number,
+  ...(r.club_id ? { clubId: r.club_id } : {}),
+  email: r.email,
+  firstName: r.first_name,
+  lastName: r.last_name,
+  phone: r.phone,
+  message: r.message,
+  licenseNumber: r.license_number ?? '',
+  correspondentEmail: r.correspondent_email ?? '',
+  ...(r.club_confirmed_at ? { clubConfirmedAt: new Date(r.club_confirmed_at).toISOString() } : {}),
+  snapshot: parseSnapshot(r.fftt_snapshot),
+  status: r.status,
+  createdAt: new Date(r.created_at).toISOString(),
+  ...(r.decided_at ? { decidedAt: new Date(r.decided_at).toISOString() } : {}),
+  ...(r.decided_by ? { decidedBy: r.decided_by } : {}),
+  ...(r.decision_note ? { decisionNote: r.decision_note } : {}),
+})
+
+/** Only a general admin reads or decides. A missing viewer is the local hatch. */
+const isGeneralAdmin = (c: { get: (k: 'user') => UserRow | undefined }) => {
+  const u = c.get('user')
+  return !u || u.role === 'general_admin'
+}
+
+/** A week: long enough for a club secretary who reads mail on Sundays. */
+const CLUB_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Hashed like sessions (0041) and OTPs: the table never holds a usable link. */
+async function hashToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function randomToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** The deployment's own origin, for links inside e-mails. */
+const originOf = (c: { req: { url: string } }) => new URL(c.req.url).origin
+
+const summaryOf = (r: ClubAdminRequestRow): RequestSummary => ({
+  firstName: r.first_name,
+  lastName: r.last_name,
+  email: r.email,
+  phone: r.phone,
+  message: r.message,
+  licenseNumber: r.license_number ?? '',
+  affiliationNumber: r.affiliation_number,
+  clubName: parseSnapshot(r.fftt_snapshot).displayName || r.affiliation_number,
+})
+
+/** Every general admin who can actually receive a message. */
+async function generalAdminEmails(db: D1Database): Promise<string[]> {
+  const r = await db
+    .prepare("SELECT email FROM users WHERE role = 'general_admin' AND email IS NOT NULL AND email != ''")
+    .all<{ email: string }>()
+  return r.results.map((u) => u.email)
+}
+
+/**
+ * Move a request to the general admins' queue and tell them.
+ *
+ * Called when the club confirms, and directly at submission when FFTT
+ * publishes no correspondent to ask — a club with no listed address must not
+ * be a club nobody can ever join.
+ */
+async function handOverToAdmins(
+  c: { env: { DB: D1Database } & Record<string, unknown>; req: { url: string } },
+  row: ClubAdminRequestRow,
+  confirmedBy: string,
+) {
+  const env = c.env as Parameters<typeof sendEmails>[0]
+  const queueUrl = `${originOf(c)}/demandes`
+  const admins = await generalAdminEmails(c.env.DB)
+  await sendEmails(
+    env,
+    admins.map((to) => newRequestForAdminEmail(to, summaryOf(row), confirmedBy, queueUrl)),
+  )
+}
+
+// The public endpoint. Everything it accepts is untrusted, including the FFTT
+// snapshot — the browser read that, not us.
+app.post('/onboarding/requests', async (c) => {
+  const db = c.env.DB
+  const b = await c.req.json<{
+    affiliationNumber?: string
+    email?: string
+    firstName?: string
+    lastName?: string
+    phone?: string
+    message?: string
+    licenseNumber?: string
+    snapshot?: Partial<ClubAdminRequestSnapshot>
+  }>()
+
+  const affiliationNumber = (b.affiliationNumber ?? '').trim()
+  const email = (b.email ?? '').trim()
+  const firstName = (b.firstName ?? '').trim()
+  const lastName = (b.lastName ?? '').trim()
+
+  const refuseRequest = (reason: keyof typeof REQUEST_REFUSAL_MESSAGES, status: 400 | 409 = 400) =>
+    c.json({ error: reason, message: REQUEST_REFUSAL_MESSAGES[reason] }, status)
+
+  if (!isValidAffiliationNumber(affiliationNumber)) return refuseRequest('invalid_affiliation')
+  if (!firstName || !lastName) return refuseRequest('missing_name')
+  if (!isPlausibleEmail(email)) return refuseRequest('invalid_email')
+  const licenseNumber = (b.licenseNumber ?? '').trim()
+  if (!isPlausibleLicenceNumber(licenseNumber)) return refuseRequest('invalid_licence')
+
+  const clubId = clubIdFromAffiliation(affiliationNumber)
+
+  // Asking for what one already has is a refusal worth naming: it tells the
+  // requester to go and sign in rather than wait for a decision.
+  if (clubId) {
+    const existing = await db
+      .prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND role = 'club_admin' AND club_id = ?")
+      .bind(email, clubId)
+      .first()
+    if (existing) return refuseRequest('already_admin', 409)
+  }
+
+  const pending = await db
+    .prepare("SELECT id FROM club_admin_requests WHERE lower(email) = lower(?) AND affiliation_number = ? AND status IN ('pending_club', 'pending_admin')")
+    .bind(email, affiliationNumber)
+    .first()
+  if (pending) return refuseRequest('already_pending', 409)
+
+  // Free text from an anonymous form: bounded so a request cannot be used to
+  // push a wall of content into an admin's screen.
+  const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+  const snapshot: ClubAdminRequestSnapshot = {
+    displayName: clip(b.snapshot?.displayName, 120),
+    venue: clip(b.snapshot?.venue, 240),
+    correspondentName: clip(b.snapshot?.correspondentName, 120),
+    correspondentEmail: clip(b.snapshot?.correspondentEmail, 160),
+    correspondentPhone: clip(b.snapshot?.correspondentPhone, 40),
+  }
+
+  const id = newId('req')
+  // A club we already know is linked straight away, so the review screen can
+  // show what it would be joining rather than only a number.
+  const knownClub = clubId
+    ? await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first()
+    : null
+
+  // Where the club confirmation goes. Claimant-supplied — the server cannot
+  // read the FFTT listing itself — so this is recorded, not trusted: the review
+  // screen compares it against what FFTT publishes at decision time, which is
+  // what catches a requester who put their own address in as the club's.
+  const correspondentEmail = isPlausibleEmail(snapshot.correspondentEmail)
+    ? snapshot.correspondentEmail
+    : ''
+  // A club FFTT lists no address for cannot confirm, and must not therefore be
+  // a club nobody can ever join: it goes straight to the admins, labelled.
+  const status: ClubAdminRequestStatus = correspondentEmail ? 'pending_club' : 'pending_admin'
+  const token = correspondentEmail ? randomToken() : null
+
+  const row: ClubAdminRequestRow = {
+    id, affiliation_number: affiliationNumber, club_id: knownClub ? clubId : null,
+    email, first_name: clip(firstName, 80), last_name: clip(lastName, 80),
+    phone: clip(b.phone, 40), message: clip(b.message, 500),
+    fftt_snapshot: JSON.stringify(snapshot), license_number: licenseNumber,
+    correspondent_email: correspondentEmail, club_token_hash: null,
+    club_token_expires_at: null, club_confirmed_at: null,
+    status, created_at: Date.now(), decided_at: null, decided_by: null, decision_note: null,
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO club_admin_requests
+         (id, affiliation_number, club_id, email, first_name, last_name, phone, message,
+          fftt_snapshot, license_number, correspondent_email, club_token_hash,
+          club_token_expires_at, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      row.id, row.affiliation_number, row.club_id, row.email, row.first_name, row.last_name,
+      row.phone, row.message, row.fftt_snapshot, row.license_number, row.correspondent_email,
+      token ? await hashToken(token) : null,
+      token ? Date.now() + CLUB_TOKEN_TTL_MS : null,
+      row.status, row.created_at,
+    )
+    .run()
+
+  if (token) {
+    const confirmUrl = `${originOf(c)}/confirmer-demande?token=${token}`
+    await sendEmails(c.env, [clubConfirmationEmail(correspondentEmail, summaryOf(row), confirmUrl)])
+  } else {
+    await handOverToAdmins(c, row, '')
+  }
+
+  // Deliberately says nothing about the club or the queue: this answer reaches
+  // anyone who can type an affiliation number. `clubNotified` is the one thing
+  // the requester needs — whether to expect their club to be asked — and it
+  // reveals nothing they did not just submit themselves.
+  return c.json({ ok: true, clubNotified: Boolean(token) })
+})
+
+/**
+ * The club's step, and the only thing a correspondent ever touches. Public and
+ * addressed by token — they have no account, and giving them one to click a
+ * link would defeat the point.
+ *
+ * GET reads the request behind a token so the page can show what is being
+ * confirmed; POST confirms it. A token that has been used, has expired, or
+ * never existed is one answer — "ce lien n'est plus valable" — because
+ * distinguishing them tells a guesser which of their guesses was close.
+ */
+async function requestByToken(db: D1Database, token: string) {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null
+  const row = await db
+    .prepare("SELECT * FROM club_admin_requests WHERE club_token_hash = ? AND status = 'pending_club'")
+    .bind(await hashToken(token))
+    .first<ClubAdminRequestRow>()
+  if (!row) return null
+  if (row.club_token_expires_at && row.club_token_expires_at < Date.now()) return null
+  return row
+}
+
+app.get('/onboarding/confirm', async (c) => {
+  const row = await requestByToken(c.env.DB, c.req.query('token') ?? '')
+  if (!row) return c.json({ error: 'invalid_token' }, 404)
+  const snapshot = parseSnapshot(row.fftt_snapshot)
+  // Only what the correspondent needs to recognise the person asking. Not the
+  // queue, not other requests, not who else administers the club.
+  return c.json({
+    clubName: snapshot.displayName || row.affiliation_number,
+    affiliationNumber: row.affiliation_number,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    licenseNumber: row.license_number ?? '',
+    message: row.message,
+  })
+})
+
+app.post('/onboarding/confirm', async (c) => {
+  const { token } = await c.req.json<{ token?: string }>()
+  const row = await requestByToken(c.env.DB, token ?? '')
+  if (!row) return c.json({ error: 'invalid_token' }, 404)
+
+  const now = Date.now()
+  await c.env.DB
+    .prepare(
+      `UPDATE club_admin_requests
+       SET status = 'pending_admin', club_confirmed_at = ?, club_token_hash = NULL
+       WHERE id = ?`,
+    )
+    .bind(now, row.id)
+    .run()
+
+  // The token is spent, not merely expired: a confirmation link that still
+  // works after it has been used is a link worth stealing.
+  await handOverToAdmins(c, { ...row, club_confirmed_at: now }, row.correspondent_email)
+  return c.json({ ok: true })
+})
+
+app.get('/onboarding/requests', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'forbidden' }, 403)
+  const r = await c.env.DB
+    .prepare('SELECT * FROM club_admin_requests ORDER BY created_at DESC')
+    .all<ClubAdminRequestRow>()
+  return c.json({ requests: r.results.map(requestFromRow) })
+})
+
+/**
+ * Decide a request. Approving creates the club when it does not exist yet,
+ * taking its name and venue from what the general admin confirmed, then makes
+ * the requester an admin of it — reusing the same cap and permission rules the
+ * club screens obey, so a club already holding 5 admins refuses here too.
+ */
+app.patch('/onboarding/requests/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'forbidden' }, 403)
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const b = await c.req.json<{
+    status?: 'approved' | 'rejected'
+    note?: string
+    /** The club as the admin confirmed it against FFTT; used only on creation. */
+    club?: { displayName?: string; venueLabel?: string; street?: string; postalCode?: string; city?: string }
+  }>()
+
+  if (b.status !== 'approved' && b.status !== 'rejected') return c.json({ error: 'invalid_status' }, 400)
+
+  const row = await db
+    .prepare('SELECT * FROM club_admin_requests WHERE id = ?')
+    .bind(id)
+    .first<ClubAdminRequestRow>()
+  if (!row) return c.json({ error: 'not_found' }, 404)
+  if (row.status === 'pending_club') return c.json({ error: 'awaiting_club' }, 409)
+  if (row.status !== 'pending_admin') return c.json({ error: 'already_decided' }, 409)
+
+  const decidedBy = c.get('user')?.id ?? null
+  const note = typeof b.note === 'string' ? b.note.trim().slice(0, 500) : null
+
+  // Both parties hear the outcome (#474): the person who asked, and the club
+  // address the confirmation went to. Deduplicated, because on a small club
+  // they are often the same person, who should not get it twice.
+  const loginUrl = `${originOf(c)}/login`
+  const notify = (decision: 'approved' | 'rejected') => {
+    // Compared case-insensitively: addresses are, and on a small club the
+    // correspondent and the requester are frequently the same person writing
+    // their own address two different ways.
+    const seen = new Set<string>()
+    const recipients = [row.email, row.correspondent_email].filter((a) => {
+      const key = (a ?? '').trim().toLowerCase()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    return sendEmails(
+      c.env,
+      recipients.map((to) => decisionEmail(to, summaryOf(row), decision, note ?? '', loginUrl)),
+    )
+  }
+
+  if (b.status === 'rejected') {
+    await db
+      .prepare("UPDATE club_admin_requests SET status = 'rejected', decided_at = ?, decided_by = ?, decision_note = ? WHERE id = ?")
+      .bind(Date.now(), decidedBy, note, id)
+      .run()
+    await notify('rejected')
+    return c.json({ ok: true })
+  }
+
+  const clubId = clubIdFromAffiliation(row.affiliation_number)
+  if (!clubId) return c.json({ error: 'invalid_affiliation' }, 400)
+
+  const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first()
+  let createdClub = false
+  if (!club) {
+    const snapshot = parseSnapshot(row.fftt_snapshot)
+    const displayName = (b.club?.displayName ?? snapshot.displayName ?? '').trim() || row.affiliation_number
+    await db
+      .prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
+      .bind(clubId, row.affiliation_number, displayName)
+      .run()
+    createdClub = true
+    // The venue comes from the FFTT record the admin just confirmed, not from
+    // anything the requester typed into the form.
+    const street = (b.club?.street ?? '').trim()
+    const postalCode = (b.club?.postalCode ?? '').trim()
+    const city = (b.club?.city ?? '').trim()
+    if (street || postalCode || city) {
+      await db
+        .prepare('INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_default) VALUES (?, ?, ?, ?, ?, ?, 1)')
+        .bind(newId('addr'), clubId, (b.club?.venueLabel ?? '').trim() || 'Salle', street, postalCode, city)
+        .run()
+    }
+  }
+
+  // Promote an existing member, or create the requester as one who does not
+  // play — the same two paths POST /clubs/:id/admins takes, held to the same
+  // rules so the cap cannot be walked around through this door.
+  const users = await clubAdminCandidates(db)
+  const licence = (row.license_number ?? '').trim()
+
+  // Licence before address: it is the identity FFTT and the app agree on, and
+  // the one case where the two differ is exactly the one worth catching — a
+  // licensee asking from an address the club has never recorded for them.
+  const existing =
+    (licence
+      ? await db
+          .prepare("SELECT id, role, club_id, status FROM users WHERE license_number = ? AND license_number != ''")
+          .bind(licence)
+          .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
+      : null) ??
+    (await db
+      .prepare('SELECT id, role, club_id, status FROM users WHERE lower(email) = lower(?)')
+      .bind(row.email)
+      .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>())
+
+  const candidate = existing
+    ? { id: existing.id, role: existing.role, clubId: existing.club_id ?? undefined, status: existing.status }
+    : { id: newId('user'), role: 'player', clubId: undefined, status: 'active' }
+
+  const decision = canAddClubAdmin(users, clubId, candidate, { role: 'general_admin' })
+  if (!decision.ok) {
+    // The club may have just been created for a request that cannot complete;
+    // say so plainly rather than leaving a half-done approval looking like a
+    // success.
+    return c.json({ ...refuse(decision.reason), createdClub }, 409)
+  }
+
+  if (existing) {
+    // Only ever fills a blank: an existing licence is the club's record and is
+    // not overwritten by something typed into a public form.
+    await db
+      .prepare(
+        `UPDATE users
+         SET role = 'club_admin', club_id = ?,
+             license_number = CASE WHEN license_number = '' THEN ? ELSE license_number END,
+             is_player = CASE WHEN license_number = '' AND ? != '' THEN 1 ELSE is_player END
+         WHERE id = ?`,
+      )
+      .bind(clubId, licence, licence, existing.id)
+      .run()
+  } else {
+    // A licence makes them a player from the outset — which is the whole point
+    // of asking for it. Created as a non-player, a licensee is invisible to the
+    // FFTT player import, which matches on licence: it would find nothing and
+    // insert the same person a second time (#474). Given the licence here, the
+    // import finds them and fills in the rest.
+    await db
+      .prepare(
+        `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
+         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?)`,
+      )
+      .bind(
+        candidate.id, row.email, licence ? 1 : 0, row.first_name, row.last_name,
+        licence, row.phone, clubId,
+      )
+      .run()
+  }
+
+  await db
+    .prepare("UPDATE club_admin_requests SET status = 'approved', club_id = ?, decided_at = ?, decided_by = ?, decision_note = ? WHERE id = ?")
+    .bind(clubId, Date.now(), decidedBy, note, id)
+    .run()
+
+  await notify('approved')
+  return c.json({ ok: true, clubId, userId: candidate.id, createdClub })
 })
 
 // --- Player avatars (#124) ---

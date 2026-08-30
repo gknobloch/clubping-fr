@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, DEV_LOGIN } from '@/contexts/AuthContext'
 import { IS_PR_PREVIEW } from '@/lib/preview'
 import { BrandMark } from '@/components/BrandMark'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import type { DevUser, User } from '@/types'
@@ -35,6 +36,22 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
       <div className="relative w-full max-w-md">
         <LoginHeader caption={caption} />
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
+        {/* Above the legal footnote and in full size, because it *is* a way in
+            (#474): someone whose club the app does not know gets no code from
+            the form above — nothing happens, and this is the only thing that
+            tells them why and what to do instead. */}
+        {/* Question and answer on their own lines. As one flowing paragraph
+            the wrap fell inside the link ("Demandez à / l’administrer"), which
+            reads as a broken sentence rather than as one thing to tap. */}
+        <div className="mt-5 text-center text-sm">
+          <p className="text-slate-600">Votre club n’est pas encore sur Club Ping&nbsp;?</p>
+          <Link
+            className={`font-medium text-accent-600 underline hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+            to="/rejoindre"
+          >
+            Demandez à l’administrer
+          </Link>
+        </div>
         {/* The stores want the policy reachable from the app itself, not only
             from the listing (#356). Muted: it is a legal footnote, not a way in. */}
         <p className="mt-6 text-center text-xs text-slate-400">

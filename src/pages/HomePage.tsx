@@ -18,8 +18,21 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { sortByName } from '@/lib/sortByName'
-import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingRounds } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
+
+/**
+ * A round's date line. Its groups rarely play on the same day — the FFTT gives
+ * each one its own slot inside the week — so a single date would name one of
+ * them and quietly drop the others.
+ */
+function roundDates({ from, to }: { from: string; to: string }): string {
+  const day = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+    new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', opts)
+  if (from === to) return day(from, { weekday: 'long', day: 'numeric', month: 'long' })
+  const sameMonth = from.slice(0, 7) === to.slice(0, 7)
+  return `du ${day(from, sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'long' })} au ${day(to, { day: 'numeric', month: 'long' })}`
+}
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -33,6 +46,7 @@ export function HomePage() {
   const [composing, setComposing] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
+  const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
   const myPlayerId = user?.isPlayer ? user.id : undefined
   const me = myPlayerId ? players.find((p) => p.id === myPlayerId) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
@@ -437,10 +451,17 @@ export function HomePage() {
             </section>
           )}
           {(() => {
-            const next = matchDays
-              .filter((md) => md.date >= today)
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .slice(0, 3)
+            // Scoped to the club when the viewer has one (#474): a club admin
+            // was being shown every club's journées, so a club with no team at
+            // all still announced three of them.
+            const next = upcomingRounds(matchDays, games, teams, {
+              // A general admin oversees every club; anyone else sees their own
+              // and nothing else — including nothing at all when their club has
+              // no team yet, which is where a fresh onboarding leaves them.
+              scope: user?.role === 'general_admin' ? 'all' : { clubId: user?.clubId ?? '' },
+              today,
+              phaseOf: (md) => divisions.find((d) => d.id === groupById.get(md.groupId)?.divisionId)?.phaseId ?? '',
+            })
             if (next.length === 0) return null
             return (
               <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -448,20 +469,17 @@ export function HomePage() {
                   Prochaines journées
                 </h2>
                 <ul>
-                  {next.map((md) => {
-                    const count = games.filter((g) => g.matchDayId === md.id).length
-                    return (
-                      <li key={md.id} className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-                        <span>
-                          <span className="block text-sm font-semibold text-slate-800">Journée {md.number}</span>
-                          <span className="block text-xs text-slate-500">
-                            {new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                          </span>
-                        </span>
-                        <span className="text-sm text-slate-500">{count} match{count > 1 ? 's' : ''}</span>
-                      </li>
-                    )
-                  })}
+                  {next.map((round) => (
+                    <li key={round.id} className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-800">Journée {round.number}</span>
+                        <span className="block text-xs text-slate-500">{roundDates(round)}</span>
+                      </span>
+                      <span className="text-sm text-slate-500">
+                        {round.games} match{round.games > 1 ? 's' : ''}
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               </section>
             )

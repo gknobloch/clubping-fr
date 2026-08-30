@@ -240,3 +240,95 @@ export function formatMatchDayRange(startDate: string, endDate: string): string 
   const sameMonth = startDate.slice(0, 7) === endDate.slice(0, 7)
   return `${fmt(startDate, !sameMonth)} – ${fmt(endDate, true)}`
 }
+
+/**
+ * One journée as a club experiences it: every group's round of that number,
+ * counted together (#474).
+ *
+ * A `MatchDay` row is per *group*, so a club whose teams play in three
+ * different groups has three rows all called "Journée 1", each holding that
+ * club's single match in it. Listing those rows verbatim told a club with three
+ * teams that it had "Journée 1 — 1 match" three times over, which is true of
+ * each row and false of the club.
+ */
+export interface UpcomingRound {
+  /** `phaseId:number` — rounds are numbered per phase, not globally. */
+  id: string
+  number: number
+  /** Earliest and latest date among the rows merged here; equal when the
+   *  club's teams all play on the same day. */
+  from: string
+  to: string
+  /** Matches in this round, within the scope asked for. */
+  games: number
+}
+
+/**
+ * The rounds an admin's home screen should list next, and how many matches each
+ * holds *for them* (#474).
+ *
+ * The screen used to take every journée in the database and count every game in
+ * it. For a general admin that reads correctly — they oversee the lot — but a
+ * club admin was shown other clubs' fixtures as though they were their own. The
+ * onboarding flow is what made that visible: it creates club admins for clubs
+ * with nothing in them yet, and this is the first screen they see, so a
+ * brand-new club with no team announced three journées and twelve matches.
+ *
+ * The scope is stated, never inferred from whether a club id happens to be
+ * present. Inferring it once cost a general admin their whole list: a stray
+ * `club_id` of the literal string 'NULL' read as a club, and scoped them to one
+ * that does not exist. Who sees everything is a question about a role, so the
+ * caller answers it.
+ */
+export function upcomingRounds<
+  M extends { id: string; date: string; number: number },
+  G extends { matchDayId: string; homeTeamId: string; awayTeamId: string },
+  T extends { id: string; clubId: string },
+>(
+  matchDays: M[],
+  games: G[],
+  teams: T[],
+  {
+    scope,
+    today,
+    limit = 3,
+    phaseOf,
+  }: {
+    scope: 'all' | { clubId: string }
+    today: string
+    limit?: number
+    /** Which phase a match day belongs to. Rounds are numbered per phase, so
+     *  without this the first round of two phases would merge into one line. */
+    phaseOf: (matchDay: M) => string
+  },
+): UpcomingRound[] {
+  const mine =
+    scope === 'all'
+      ? null
+      : new Set(teams.filter((t) => t.clubId === scope.clubId).map((t) => t.id))
+
+  const counts = new Map<string, number>()
+  for (const g of games) {
+    if (mine && !mine.has(g.homeTeamId) && !mine.has(g.awayTeamId)) continue
+    counts.set(g.matchDayId, (counts.get(g.matchDayId) ?? 0) + 1)
+  }
+
+  const rounds = new Map<string, UpcomingRound>()
+  for (const md of matchDays) {
+    if (md.date < today) continue
+    // A journée the club does not play in is not their journée. Without a club
+    // scope every journée counts, including one with no games recorded yet.
+    if (mine && !counts.has(md.id)) continue
+    const id = `${phaseOf(md)}:${md.number}`
+    const found = rounds.get(id)
+    if (!found) {
+      rounds.set(id, { id, number: md.number, from: md.date, to: md.date, games: counts.get(md.id) ?? 0 })
+      continue
+    }
+    if (md.date < found.from) found.from = md.date
+    if (md.date > found.to) found.to = md.date
+    found.games += counts.get(md.id) ?? 0
+  }
+
+  return [...rounds.values()].sort((a, b) => a.from.localeCompare(b.from)).slice(0, limit)
+}
