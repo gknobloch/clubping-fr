@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
@@ -16,6 +16,11 @@ import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/t
 // It answers the one question the phone layout structurally cannot — «qui est
 // dispo sur les trois prochaines journées» — because that screen shows one
 // journée at a time, chosen with a stepper.
+//
+// The same grid draws «Autres joueurs du club» (#476), the web's last section:
+// no `team`, so no colour, no fixtures and no counts — the club's players who
+// are in no roster, and the one column that has something to say about them,
+// which team they turn out for.
 // ---------------------------------------------------------------------------
 
 /**
@@ -101,7 +106,8 @@ export interface MatrixRow {
   player: Player
   isCaptain: boolean
   points?: string
-  /** Answered available, over the team's fixtures in the phase. */
+  /** Answered available, over the team's fixtures in the phase. Ignored in a
+   *  section with no team: there are no fixtures of theirs to count. */
   availableCount: number
   /** Fielded, over the same. */
   playedCount: number
@@ -120,8 +126,10 @@ export interface MatrixRow {
 
 export function MatchDayMatrix({
   team,
-  teamName,
+  title,
+  subtitle,
   divisionLabel,
+  search,
   days,
   rows,
   columns,
@@ -130,27 +138,41 @@ export function MatchDayMatrix({
   onEditComposition,
   onOpenGame,
 }: {
-  team: Team
-  teamName: string
+  /**
+   * Absent for «Autres joueurs du club» (#476): those players are in no
+   * roster, so the section has no colour, no fixture of its own, and nothing
+   * to count — only the Compo column says anything about them.
+   */
+  team?: Team
+  title: string
+  subtitle?: string
   divisionLabel?: string
+  /** The name filter, given only once the list is long enough to need it. */
+  search?: { value: string; onChange: (value: string) => void }
   days: MatrixDay[]
   rows: MatrixRow[]
   columns: ReturnType<typeof matrixColumns>
   /** Absent when the phase has no more journées than the grid shows. */
   pager?: { label: string; onPrev?: () => void; onNext?: () => void }
-  onEditAvailability: (playerId: string, game: Game, dayIndex: number) => void
+  /** Only ever called from a roster section: see `team`. */
+  onEditAvailability?: (playerId: string, game: Game, dayIndex: number) => void
   /** Which of the club's teams this player turns out for that journée. */
   onEditComposition: (playerId: string, dayIndex: number) => void
-  /** The journée header leads to the match itself. */
-  onOpenGame: (game: Game) => void
+  /** The journée header leads to the match itself, where there is one. */
+  onOpenGame?: (game: Game) => void
 }) {
   const c = columns
+  /** A roster section counts and answers; the club's leftovers do neither. */
+  const isTeamSection = !!team
 
   return (
     <View style={s.section}>
-      {/* Team header — the coloured edge, the name, and the pager */}
-      <View style={[s.head, team.color ? { borderLeftColor: team.color } : null]}>
-        <Text style={s.teamName} numberOfLines={1}>{teamName}</Text>
+      {/* Section header — the coloured edge, the name, and the pager */}
+      <View style={[s.head, team?.color ? { borderLeftColor: team.color } : null]}>
+        <View style={s.heading}>
+          <Text style={s.teamName} numberOfLines={1}>{title}</Text>
+          {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
+        </View>
         {divisionLabel ? <Text style={s.division}>{divisionLabel}</Text> : null}
         {pager && (
           <View style={s.pager}>
@@ -177,6 +199,26 @@ export function MatchDayMatrix({
         )}
       </View>
 
+      {/* The club minus the rosters is the longest list on the screen, so it
+          gets the web's name filter once it is long enough to need it (#454). */}
+      {search && (
+        <View style={s.searchBar}>
+          <Ionicons name="search" size={16} color={colors.textSecondary} />
+          <TextInput
+            testID="matrix-search"
+            style={s.searchInput}
+            value={search.value}
+            onChangeText={search.onChange}
+            placeholder="Rechercher un joueur"
+            placeholderTextColor={colors.textSecondary}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+            accessibilityLabel="Rechercher un joueur"
+          />
+        </View>
+      )}
+
       {/* The grid is only ever wider than the screen on the smallest slab held
           upright, where even two journées overflow by 60pt (#468). */}
       <ScrollView horizontal bounces={false} showsHorizontalScrollIndicator>
@@ -191,7 +233,7 @@ export function MatchDayMatrix({
                 key={i}
                 style={[s.dayHead, { width: c.day * 2 }]}
                 disabled={!d.game}
-                onPress={() => d.game && onOpenGame(d.game)}
+                onPress={() => d.game && onOpenGame?.(d.game)}
                 accessibilityRole={d.game ? 'button' : undefined}
               >
                 <Text style={s.dayNumber}>J{d.number}</Text>
@@ -201,7 +243,7 @@ export function MatchDayMatrix({
                 >
                   {d.unconfirmed ? `⚠ ${d.dateLabel}` : d.dateLabel}
                 </Text>
-                {d.game ? (
+                {!isTeamSection ? null : d.game ? (
                   <Text style={s.dayOpponent} numberOfLines={1}>
                     {d.isHome ? '⌂ ' : '↗ '}{d.opponentName}
                   </Text>
@@ -234,10 +276,10 @@ export function MatchDayMatrix({
                 ) : null}
               </View>
               <Text style={[s.count, { width: c.dispo }]}>
-                {row.availableCount}/{row.totalGames}
+                {isTeamSection ? `${row.availableCount}/${row.totalGames}` : '—'}
               </Text>
               <Text style={[s.count, { width: c.joues }]}>
-                {row.playedCount}/{row.totalGames}
+                {isTeamSection ? `${row.playedCount}/${row.totalGames}` : '—'}
               </Text>
               <View style={[s.cell, s.cellCentred, { width: c.brulage }]}>
                 {row.brulage ? (
@@ -256,10 +298,20 @@ export function MatchDayMatrix({
                 const day = days[i]
                 const cfg = cell.status ? AVAIL[cell.status] : undefined
                 const editable = cell.canEdit && !!day?.game
-                const composable = cell.canCompose && !!day?.game
+                // A club section has no fixture of its own — the round is what
+                // it composes for, and `canCompose` already asked whether any
+                // of the club's teams plays it.
+                const composable = cell.canCompose && (!isTeamSection || !!day?.game)
                 return (
                   <View key={i} style={s.pair}>
                     <View style={[s.cell, s.cellCentred, { width: c.day }]}>
+                      {/* Nobody is available for a match their club has not
+                          picked them for: the club section leaves the column
+                          empty rather than offering an answer with no game
+                          behind it, as the web does. */}
+                      {!isTeamSection ? (
+                        <Text style={s.count}>—</Text>
+                      ) : (
                       <TouchableOpacity
                         testID={`dispo-${row.player.id}-${i}`}
                         style={[
@@ -268,7 +320,7 @@ export function MatchDayMatrix({
                           !editable && s.controlLocked,
                         ]}
                         disabled={!editable}
-                        onPress={() => day?.game && onEditAvailability(row.player.id, day.game, i)}
+                        onPress={() => day?.game && onEditAvailability?.(row.player.id, day.game, i)}
                         accessibilityRole="button"
                         accessibilityLabel={`Disponibilité de ${row.player.firstName} ${row.player.lastName}, journée ${day?.number}`}
                       >
@@ -279,6 +331,7 @@ export function MatchDayMatrix({
                           {cfg ? cfg.label : '—'}
                         </Text>
                       </TouchableOpacity>
+                      )}
                     </View>
                     <View style={[s.cell, s.cellCentred, { width: c.day }]}>
                       <TouchableOpacity
@@ -322,7 +375,13 @@ export function MatchDayMatrix({
           ))}
 
           {rows.length === 0 && (
-            <Text style={s.empty}>Aucun joueur dans cette équipe.</Text>
+            <Text style={s.empty}>
+              {isTeamSection
+                ? 'Aucun joueur dans cette équipe.'
+                : search?.value.trim()
+                  ? `Aucun joueur ne correspond à « ${search.value.trim()} ».`
+                  : 'Aucun autre joueur dans le club.'}
+            </Text>
           )}
         </View>
       </ScrollView>
@@ -350,7 +409,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
+  heading: { flexShrink: 1 },
   teamName: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  subtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
   division: {
     fontSize: 11,
     fontFamily: fonts.semiBold,
@@ -379,6 +440,22 @@ const s = StyleSheet.create({
   pagerBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   pagerBtnOff: { opacity: 0.35 },
   pagerLabel: { fontSize: 12, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textPrimary,
+    // The phone's 44pt target: a text field is a text field whatever the slab.
+    minHeight: 44,
+  },
 
   headerRow: {
     flexDirection: 'row',
