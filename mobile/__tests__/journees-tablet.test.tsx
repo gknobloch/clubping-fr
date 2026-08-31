@@ -347,3 +347,101 @@ describe('la composition depuis la grille', () => {
     expect(screen.queryByTestId('composition-sheet')).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Autres joueurs du club (#476)
+//
+// The web's last section, missing from the app's grid: the club's active
+// players who are in no roster of the phase. Without it the only way to field
+// one of them is to open a match and know the name in advance — the grid is
+// where the desktop lets you find it.
+// ---------------------------------------------------------------------------
+describe('les autres joueurs du club', () => {
+  /** In the club, in no team: exactly what the section is for. */
+  const spare: Player = {
+    ...captain, id: 'p7', firstName: 'Hugo', lastName: 'Bernard', licenseNumber: '9900077',
+  }
+
+  const renderTablet = () => {
+    setWindowSize(TABLET_SMALL)
+    render(<JourneesScreen />, { metrics: TABLET })
+    layoutAt(LANDSCAPE)
+  }
+
+  beforeEach(() => {
+    mockData.players = [...mockData.players, spare]
+  })
+
+  it('donne une ligne au joueur d’aucune équipe', () => {
+    renderTablet()
+
+    expect(screen.getByText('Autres joueurs du club')).toBeTruthy()
+    expect(screen.getByTestId('matrix-row-p7')).toBeTruthy()
+  })
+
+  it('ne montre pas les joueurs déjà dans un effectif', () => {
+    // p1 and p2 have their rows in the team's own section; a second one here
+    // would be the same player twice on one screen.
+    renderTablet()
+
+    const section = screen.getByText('Autres joueurs du club')
+    expect(section).toBeTruthy()
+    expect(screen.getAllByTestId('matrix-row-p1')).toHaveLength(1)
+  })
+
+  it('se tait quand tout le club est réparti', () => {
+    mockData.players = [captain, mate]
+
+    renderTablet()
+
+    expect(screen.queryByText('Autres joueurs du club')).toBeNull()
+  })
+
+  it('n’offre pas de disponibilité, faute de match à eux', () => {
+    renderTablet()
+
+    expect(screen.queryByTestId('dispo-p7-0')).toBeNull()
+    expect(screen.getByTestId('compo-p7-0')).toBeTruthy()
+  })
+
+  it('aligne un de ces joueurs depuis la colonne Compo', async () => {
+    renderTablet()
+
+    fireEvent.press(screen.getByTestId('compo-p7-0'))
+    fireEvent.press(screen.getByTestId('compose-team-t1'))
+
+    await waitFor(() => expect(setGameSelection).toHaveBeenCalledWith('t1', 'g1', ['p7']))
+  })
+
+  it('reste inerte pour qui ne compose aucune équipe du club', () => {
+    // A plain member: `canManageTeam` says no for every team playing the round.
+    mockAuth.user = { ...mate, role: 'player', isPlayer: true, clubId: 'c1' } as User
+
+    renderTablet()
+    fireEvent.press(screen.getByTestId('compo-p7-0'))
+
+    expect(screen.queryByTestId('composition-sheet')).toBeNull()
+  })
+
+  it('filtre par nom au-delà de dix joueurs', () => {
+    // The club minus the rosters is the longest list on the screen (#454).
+    mockData.players = [
+      ...mockData.players,
+      ...Array.from({ length: 12 }, (_, i) => ({
+        ...captain, id: `x${i}`, firstName: 'Alex', lastName: `Durand${i}`, licenseNumber: `99001${i}`,
+      })),
+    ]
+
+    renderTablet()
+    fireEvent.changeText(screen.getByTestId('matrix-search'), 'Bernard')
+
+    expect(screen.getByTestId('matrix-row-p7')).toBeTruthy()
+    expect(screen.queryByTestId('matrix-row-x0')).toBeNull()
+  })
+
+  it('garde la liste entière en deçà du seuil', () => {
+    renderTablet()
+
+    expect(screen.queryByTestId('matrix-search')).toBeNull()
+  })
+})

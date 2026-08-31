@@ -23,6 +23,7 @@ import {
 import { useLayout } from '@/constants/layout'
 import { canEditAvailability, availabilityOverride, canManageTeam } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
+import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
@@ -200,6 +201,7 @@ export default function JourneesScreen() {
   // stop agreeing the moment either end moves — an inset, a cap, a padding.
   const [paneWidth, setPaneWidth] = useState<number | null>(null)
   const [dayOffset, setDayOffset] = useState<number | null>(null)
+  const [otherQuery, setOtherQuery] = useState('')
   const [editing, setEditing] = useState<{ player: Player; team: Team; game: Game; day: MatrixDay } | null>(null)
   const [composing, setComposing] = useState<{ player: Player; day: MatrixDay; group: MatchDayGroup } | null>(null)
 
@@ -287,6 +289,71 @@ export default function JourneesScreen() {
           // the match screen asks before it lets anybody compose, and asking a
           // different question here would make the same action mean two things.
           canCompose: !!user && canManageTeam(user, team),
+        })),
+      }
+    })
+  }
+
+  /**
+   * «Autres joueurs du club» (#476) — the club's active players who are in no
+   * roster of the phase. The web's last section, and the only place either app
+   * lets you field one of them without knowing their name in advance.
+   */
+  const otherPlayers = useMemo(() => {
+    if (!myClubId) return [] as Player[]
+    const inRoster = new Set(clubTeams.flatMap((t) => t.playerIds ?? []))
+    return sortByName(
+      players.filter((p) => p.clubId === myClubId && p.status === 'active' && !inRoster.has(p.id)),
+    )
+  }, [players, myClubId, clubTeams])
+
+  /** The club minus the rosters is the longest list here; filter it past ten. */
+  const searchOtherPlayers = otherPlayers.length > PLAYER_SEARCH_THRESHOLD
+  const shownOtherPlayers = searchOtherPlayers
+    ? filterPlayersBySearch(otherPlayers, otherQuery)
+    : otherPlayers
+
+  /**
+   * The journées, without a team's fixture behind them: these players have no
+   * match of their own that round, only the club's.
+   */
+  function otherMatrixDays(): MatrixDay[] {
+    return visibleGroups.map((group) => ({
+      number: group.number,
+      dateLabel: formatMatchDayRange(group.startDate, group.endDate),
+      unconfirmed: false,
+      isHome: false,
+      opponentName: '',
+    }))
+  }
+
+  function otherMatrixRows(days: MatrixDay[]): MatrixRow[] {
+    // Whether the viewer may field anybody that round: the club's teams that
+    // actually play it, and `canManageTeam` over them — the web's
+    // `ourClubTeamsThisDay.some(canEditGameSelection)`.
+    const composable = visibleGroups.map((group) =>
+      clubTeams.some((t) => !!teamGame(t, group.matchDays).game && !!user && canManageTeam(user, t)),
+    )
+    return shownOtherPlayers.map((player) => {
+      const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
+      const burnedInto = brulageInfo.burnedIntoTeamId
+        ? teams.find((t) => t.id === brulageInfo.burnedIntoTeamId)
+        : undefined
+      return {
+        player,
+        isCaptain: false,
+        // Read on the phase, not on a team (#384): these players are in none,
+        // and they have points all the same.
+        points: phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined,
+        availableCount: 0,
+        playedCount: 0,
+        totalGames: 0,
+        brulage: burnedInto ? { teamNumber: burnedInto.number, color: burnedInto.color } : undefined,
+        cells: days.map((_, i) => ({
+          status: undefined,
+          canEdit: false,
+          selectedTeam: selectedTeamFor(player.id, i),
+          canCompose: composable[i] ?? false,
         })),
       }
     })
@@ -447,6 +514,16 @@ export default function JourneesScreen() {
     />
   )
 
+  /** One pager for the screen: every section shows the same journées. */
+  const pager =
+    matchDayGroups.length > dayCount
+      ? {
+          label: `${offset + 1}–${Math.min(offset + dayCount, matchDayGroups.length)} / ${matchDayGroups.length}`,
+          onPrev: offset > 0 ? () => setDayOffset(offset - 1) : undefined,
+          onNext: offset < maxOffset ? () => setDayOffset(offset + 1) : undefined,
+        }
+      : undefined
+
   // ---- La matrice (#468) --------------------------------------------------
   if (isTablet) {
     return (
@@ -481,20 +558,12 @@ export default function JourneesScreen() {
                     <MatchDayMatrix
                       key={team.id}
                       team={team}
-                      teamName={getTeamName(team, clubs)}
+                      title={getTeamName(team, clubs)}
                       divisionLabel={divLabel(team)}
                       days={days}
                       rows={matrixRows(team, days)}
                       columns={columns}
-                      pager={
-                        matchDayGroups.length > dayCount
-                          ? {
-                              label: `${offset + 1}–${Math.min(offset + dayCount, matchDayGroups.length)} / ${matchDayGroups.length}`,
-                              onPrev: offset > 0 ? () => setDayOffset(offset - 1) : undefined,
-                              onNext: offset < maxOffset ? () => setDayOffset(offset + 1) : undefined,
-                            }
-                          : undefined
-                      }
+                      pager={pager}
                       onEditAvailability={(playerId, game, dayIndex) => {
                         const player = players.find((p) => p.id === playerId)
                         const day = days[dayIndex]
@@ -512,6 +581,34 @@ export default function JourneesScreen() {
                     />
                   )
                 })}
+
+            {/* Les autres joueurs du club (#476) — last, after the rosters, as
+                on the web: they belong to no team, so they follow all of them. */}
+            {paneWidth !== null && otherPlayers.length > 0 && clubTeams.length > 0 &&
+              matchDayGroups.length > 0 && (() => {
+              const days = otherMatrixDays()
+              return (
+                <MatchDayMatrix
+                  title="Autres joueurs du club"
+                  subtitle="Joueurs non rattachés à une équipe ; uniquement la composition."
+                  days={days}
+                  rows={otherMatrixRows(days)}
+                  columns={columns}
+                  pager={pager}
+                  search={
+                    searchOtherPlayers
+                      ? { value: otherQuery, onChange: setOtherQuery }
+                      : undefined
+                  }
+                  onEditComposition={(playerId, dayIndex) => {
+                    const player = players.find((p) => p.id === playerId)
+                    const day = days[dayIndex]
+                    const group = visibleGroups[dayIndex]
+                    if (player && day && group) setComposing({ player, day, group })
+                  }}
+                />
+              )
+            })()}
           </View>
         </ScrollView>
         {sheet}
