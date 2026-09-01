@@ -45,6 +45,7 @@ function team(id: string, number: number, groupId: string): Team {
 
 const initialData: DataState = {
   divisions: [division],
+  competitions: [], competitionEligibilities: [],
   clubs: [club],
   seasons: [season],
   phases: [phase],

@@ -13,6 +13,9 @@ import type {
   Address,
   Club,
   ClubChannel,
+  Competition,
+  CompetitionEligibility,
+  EligibilityEffect,
   DataState,
   Organization,
   Season,
@@ -44,6 +47,8 @@ import {
   mockGameAvailabilities,
   mockGameSelections,
   mockUsers,
+  mockCompetitions,
+  mockCompetitionEligibilities,
 } from '@/mock/data'
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { seasonIdFromName } from '@/lib/season'
@@ -357,6 +362,22 @@ export type ClubAdminTarget =
 
 interface DataContextValue extends DataState {
   updateDivision: (id: string, patch: Partial<Division>) => void
+  /** Create a competition — general admin only, enforced by the API (#482). */
+  addCompetition: (data: Omit<Competition, 'id'>) => Competition
+  updateCompetition: (id: string, patch: Partial<Competition>) => void
+  /** Deleting one detaches its divisions rather than taking them with it. */
+  deleteCompetition: (id: string) => void
+  /**
+   * A club's amendment for one licensee, or 'default' to drop it. Refused by
+   * the API when the competition is locked and the player is out of category,
+   * which is why this answers rather than returning void.
+   */
+  setCompetitionEligibility: (
+    clubId: string,
+    competitionId: string,
+    playerId: string,
+    effect: EligibilityEffect | 'default',
+  ) => Promise<boolean>
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
   updateClub: (id: string, patch: Partial<Club>) => void
@@ -468,6 +489,10 @@ interface DataProviderProps {
 export function DataProvider({ children, initialData }: DataProviderProps) {
   const { token, logout, user, loading: authLoading } = useAuth()
   const [divisions, setDivisions] = useState<Division[]>(initialData?.divisions ?? [])
+  const [competitions, setCompetitions] = useState<Competition[]>(initialData?.competitions ?? [])
+  const [competitionEligibilities, setCompetitionEligibilities] = useState<CompetitionEligibility[]>(
+    initialData?.competitionEligibilities ?? [],
+  )
   const [clubs, setClubs] = useState<Club[]>(initialData?.clubs ?? [])
   const [seasons, setSeasons] = useState<Season[]>(initialData?.seasons ?? [])
   const [phases, setPhases] = useState<Phase[]>(initialData?.phases ?? [])
@@ -519,6 +544,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setSeasons(data.seasons)
       setPhases(data.phases)
       setDivisions(data.divisions)
+      setCompetitions(data.competitions ?? [])
+      setCompetitionEligibilities(data.competitionEligibilities ?? [])
       setClubs(data.clubs)
       setGroups(data.groups)
       setTeams(data.teams)
@@ -536,6 +563,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPersist(false)
       applyData({
         seasons: mockSeasons, phases: mockPhases, divisions: mockDivisions,
+        competitions: mockCompetitions,
+        competitionEligibilities: mockCompetitionEligibilities,
         clubs: mockClubs, groups: mockGroups, teams: mockTeams, players: mockPlayers,
         playerPhasePoints: mockPlayerPhasePoints,
         matchDays: mockMatchDays, games: mockGames,
@@ -1183,6 +1212,56 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     setDivisions((prev) => [...prev, division])
     if (persist) api('/divisions', { method: 'POST', body: JSON.stringify(division) })
     return division
+  }, [persist])
+
+  // --- Competitions (#482) ---
+  const addCompetition = useCallback((data: Omit<Competition, 'id'>) => {
+    const id = nextId('comp')
+    const competition: Competition = { ...data, id }
+    setCompetitions((prev) => [...prev, competition])
+    if (persist) api('/competitions', { method: 'POST', body: JSON.stringify(competition) })
+    return competition
+  }, [persist])
+
+  const updateCompetition = useCallback((id: string, patch: Partial<Competition>) => {
+    setCompetitions((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    if (persist) api(`/competitions/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+  }, [persist])
+
+  // Mirrors the API's cascade: the divisions survive, detached; the club
+  // amendments do not, since they name a competition that is gone.
+  const deleteCompetition = useCallback((id: string) => {
+    setCompetitions((prev) => prev.filter((c) => c.id !== id))
+    setDivisions((prev) => prev.map((d) => (d.competitionId === id ? { ...d, competitionId: undefined } : d)))
+    setCompetitionEligibilities((prev) => prev.filter((e) => e.competitionId !== id))
+    if (persist) api(`/competitions/${id}`, { method: 'DELETE' })
+  }, [persist])
+
+  /**
+   * Not optimistic, unlike everything around it: the API refuses an addition to
+   * a locked competition, and a screen that showed the player as added and then
+   * silently disagreed with the next reload would be worse than a short wait.
+   */
+  const setCompetitionEligibility = useCallback(async (
+    clubId: string,
+    competitionId: string,
+    playerId: string,
+    effect: EligibilityEffect | 'default',
+  ): Promise<boolean> => {
+    const apply = () => setCompetitionEligibilities((prev) => {
+      const others = prev.filter(
+        (e) => !(e.competitionId === competitionId && e.playerId === playerId),
+      )
+      return effect === 'default' ? others : [...others, { clubId, competitionId, playerId, effect }]
+    })
+    if (!persist) { apply(); return true }
+    const res = await fetch(
+      `/api/clubs/${clubId}/competitions/${competitionId}/eligibility`,
+      { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ playerId, effect }) },
+    ).catch(() => null)
+    if (!res?.ok) return false
+    apply()
+    return true
   }, [persist])
 
   const moveDivisionUp = useCallback((divisionId: string) => {
@@ -1849,6 +1928,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     () => ({
       staleSince,
       divisions,
+      competitions,
+      competitionEligibilities,
       clubs,
       seasons,
       phases,
@@ -1861,6 +1942,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateDivision,
       archiveDivision,
       deleteDivision,
+      addCompetition,
+      updateCompetition,
+      deleteCompetition,
+      setCompetitionEligibility,
       updateClub,
       archiveClub,
       deleteClub,
@@ -1929,9 +2014,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }),
     [
       staleSince,
-      divisions, clubs, seasons, phases, groups, teams, players, playerPhasePoints,
+      divisions, competitions, competitionEligibilities,
+      clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
+      addCompetition, updateCompetition, deleteCompetition, setCompetitionEligibility,
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,

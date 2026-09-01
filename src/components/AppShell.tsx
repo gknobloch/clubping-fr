@@ -60,6 +60,7 @@ export function AppShell() {
       { to: '/demandes', label: 'Demandes' },
       { to: '/saisons', label: 'Saisons' },
       { to: '/phases', label: 'Phases' },
+      { to: '/competitions', label: 'Compétitions' },
       { to: '/divisions', label: 'Divisions' },
       { to: '/groupes', label: 'Groupes' },
       { to: '/equipes', label: 'Équipes' },

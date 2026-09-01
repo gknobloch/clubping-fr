@@ -16,6 +16,7 @@ export function DivisionsPage() {
   const {
     divisions: allDivisions,
     phases,
+    competitions,
     updateDivision,
     addDivision,
     moveDivisionUp,
@@ -71,11 +72,20 @@ export function DivisionsPage() {
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
 
+  const activeCompetitions = useMemo(
+    () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
+    [competitions],
+  )
+  const competitionName = (id: string | undefined) =>
+    competitions.find((c) => c.id === id)?.displayName ?? '—'
+
   const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<Division | null>(null)
   const [creating, setCreating] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [form, setForm] = useState({ phaseId: '', displayName: '', parentId: '', playersPerGame: 4 })
+  const [form, setForm] = useState({
+    phaseId: '', displayName: '', parentId: '', playersPerGame: 4, competitionId: '',
+  })
 
   const activeDivisions = useMemo(() => allDivisions.filter((d) => !d.isArchived), [allDivisions])
   const archivedDivisions = useMemo(() => allDivisions.filter((d) => d.isArchived), [allDivisions])
@@ -111,6 +121,7 @@ export function DivisionsPage() {
       displayName: div.displayName,
       parentId: div.parentId ?? '',
       playersPerGame: div.playersPerGame,
+      competitionId: div.competitionId ?? '',
     })
   }
 
@@ -123,6 +134,7 @@ export function DivisionsPage() {
       displayName: '',
       parentId: '',
       playersPerGame: 4,
+      competitionId: '',
     })
   }
 
@@ -136,6 +148,11 @@ export function DivisionsPage() {
       updateDivision(editing.id, {
         displayName: form.displayName,
         playersPerGame: form.playersPerGame,
+        // Sent as '' rather than undefined when detaching: JSON.stringify drops
+        // an undefined value, so the PATCH would carry no field at all and the
+        // column would keep its old id. '' is what the API turns into NULL, and
+        // every reader treats it as "no competition" (#482).
+        competitionId: form.competitionId,
       })
       closeModal()
     } else if (creating && form.phaseId) {
@@ -155,6 +172,7 @@ export function DivisionsPage() {
         playersPerGame: form.playersPerGame,
         isArchived: false,
         ...(parent ? { parentId: parent.id } : {}),
+        ...(form.competitionId ? { competitionId: form.competitionId } : {}),
       })
       closeModal()
     }
@@ -252,6 +270,9 @@ export function DivisionsPage() {
                 Ordre
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
+                Compétition
+              </th>
+              <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Joueurs / match
               </th>
               <th scope="col" className={`px-4 py-3 text-right text-sm font-medium text-slate-700 ${ACTIONS_HEADER}`}>
@@ -300,6 +321,7 @@ export function DivisionsPage() {
                     </button>
                   </div>
                 </td>
+                <td className="px-4 py-3 text-sm text-slate-600">{competitionName(div.competitionId)}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{div.playersPerGame}</td>
                 <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
                   <RowActions
@@ -385,6 +407,22 @@ export function DivisionsPage() {
                   </select>
                 </div>
               )}
+              <div>
+                <label htmlFor="edit-competitionId" className="block text-sm font-medium text-slate-700">
+                  Compétition
+                </label>
+                <select
+                  id="edit-competitionId"
+                  value={form.competitionId}
+                  onChange={(e) => setForm((f) => ({ ...f, competitionId: e.target.value }))}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                >
+                  <option value="">Aucune (aucune restriction de catégorie)</option>
+                  {activeCompetitions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.displayName}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label htmlFor="edit-playersPerGame" className="block text-sm font-medium text-slate-700">
                   Joueurs par match

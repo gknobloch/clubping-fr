@@ -25,7 +25,8 @@ vi.mock('@/contexts/AuthContext', () => ({
 // so the shell now needs the provider it always has in the real tree.
 // `initialData` keeps this a pure render: no fetch, no cache.
 const EMPTY: DataState = {
-  seasons: [], phases: [], divisions: [], clubs: [], groups: [], teams: [],
+  seasons: [], phases: [], divisions: [], competitions: [], competitionEligibilities: [],
+  clubs: [], groups: [], teams: [],
   players: [], playerPhasePoints: [], matchDays: [], games: [],
   gameAvailabilities: [], gameSelections: [], users: [],
 }

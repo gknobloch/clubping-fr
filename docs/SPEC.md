@@ -139,6 +139,56 @@ A division has a display name, for instance "GE1".
 
 The division will determine how many players per game are required.
 
+## Competition
+
+A **competition** is a championship a division belongs to — the senior team
+championship, a youth one, a veterans one. Only a General Admin creates them,
+and the rattachement runs division → competition rather than team →
+competition: a team already declares a division, and a championship is what a
+set of divisions is.
+
+Each competition carries the **player categories it admits by default**.
+Listing none means it admits every category, which is how the senior
+championship is expressed and what makes an unconfigured competition harmless.
+A competition may additionally be **reserved to its categories**: a club can
+then take a licensee out of it but never put one in — a youth championship does
+not admit a veteran because a club asked.
+
+A division that belongs to no competition restricts nobody. That is what every
+division is until a General Admin says otherwise, so nothing changes anywhere
+in the app until the first competition exists.
+
+### Category
+
+Every licensee has an age category, as the FFTT states it in the licence record
+the player import already reads: a letter for the young and the seniors (P, B,
+M, C, J, S — sometimes suffixed, "B2") and a five-year band for the veterans
+(V40 … V90). It is stored exactly as the FFTT sent it and normalised on read:
+the youth suffixes are dropped, since nothing is organised that separates them,
+while the veteran bands are kept apart, since "vétérans 50 ans et plus" is a
+real competition. A code we do not recognise leaves the licensee without a
+category, and someone without one is eligible only to competitions that admit
+every category — or by their club's explicit say-so.
+
+### Eligibility
+
+A licensee is eligible to **as many competitions as the mapping allows**: a
+cadet plays in their own category and with the adults, so eligibility is a list
+and never a field on the player. A club amends the global default for its own
+licensees, as exceptions rather than as a second list:
+
+- **Excluding** someone the default admits — always allowed.
+- **Adding** someone the default turns away — allowed unless the competition is
+  reserved to its categories.
+
+Both are refused server-side, not merely hidden: a club administers its own
+club's licensees and no others.
+
+Where this bites is what can be *added*: a team's roster only offers licensees
+its competition admits, and so does the "autres joueurs" list of a line-up.
+Availabilities already given and line-ups already made are never filtered — the
+rule restricts what can be added, it does not erase what exists.
+
 ## Group
 
 A group is made of multiple teams, which might even be from the same club.
@@ -184,6 +234,7 @@ A player has
 - A phone number
 - A birth date (optional)
 - A birth place (optional)
+- An age category, from the FFTT licence record (see [Competition](#competition))
 
 For each new phase, a player will have a locked amount of points, that will be valid for the entire season.
 
@@ -216,6 +267,9 @@ Each club has one or more admins that are able:
 - To register teams in a phase / division / group - in case a global admin didn't create them
 - To define the list of players of a team, which includes defining how many points that player has at the beginning of the phase, once assigned to that team
 - To perform the actions of any captain of his club on any team of the club
+- To amend, for their own club's licensees only, the categories a competition
+  admits by default — excluding one it admits, adding one it turns away, except
+  where the competition is reserved to its categories
 
 ### Global Admin
 
@@ -224,3 +278,5 @@ Global admin is able
 - To designate and stand down the admins of any club, under the same limit of 5
 - To create divisions, phases, groups
 - To create teams
+- To create competitions, to say which categories each admits by default, and
+  to reserve one to its categories

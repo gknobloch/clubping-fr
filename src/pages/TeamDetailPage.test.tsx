@@ -16,6 +16,8 @@ import {
   mockSeasons,
   mockTeams,
   mockUsers,
+  mockCompetitions,
+  mockCompetitionEligibilities,
 } from '@/mock/data'
 
 // AuthContext is mocked because ClubLogo and Avatar both read the auth token;
@@ -32,6 +34,7 @@ const CLUB_ID = 'club-fftt-06680011'
 function baseTestData(clubs = mockClubs) {
   return {
     divisions: mockDivisions, clubs, seasons: mockSeasons, phases: mockPhases,
+    competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,

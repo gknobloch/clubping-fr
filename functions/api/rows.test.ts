@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { jsonParseIds } from './rows'
+import { jsonParseCategories, jsonParseIds } from './rows'
 
 // These replaced `jsonParse(x) as string[]` (#285). The cast promised a shape
 // nothing checked; what matters here is what they do with a column that does
@@ -26,5 +26,27 @@ describe('jsonParseIds', () => {
     expect(jsonParseIds('{"team":"a"}')).toEqual([])
     expect(jsonParseIds('not json')).toEqual([])
     expect(jsonParseIds(7)).toEqual([])
+  })
+})
+
+// #482 — narrower than jsonParseIds: a category has to be one of ours, because
+// a code the schema never had must not make a competition admit someone.
+describe('jsonParseCategories', () => {
+  it('decodes the codes it knows', () => {
+    expect(jsonParseCategories('["B","M","V50"]')).toEqual(['B', 'M', 'V50'])
+  })
+
+  it('reads an empty list as an empty list — the caller decides it means "everyone"', () => {
+    expect(jsonParseCategories('[]')).toEqual([])
+    expect(jsonParseCategories(null)).toEqual([])
+  })
+
+  it('drops a code that is not one of ours', () => {
+    expect(jsonParseCategories('["B","ZZZ","v50",42,null]')).toEqual(['B'])
+  })
+
+  it('returns an empty list when the column is not an array at all', () => {
+    expect(jsonParseCategories('"B"')).toEqual([])
+    expect(jsonParseCategories('not json')).toEqual([])
   })
 })

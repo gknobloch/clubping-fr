@@ -8,18 +8,36 @@ INSERT INTO seasons (id, display_name, status) VALUES
 INSERT INTO phases (id, season_id, name, display_name, status) VALUES
   ('phase-26-1', '26', 'Phase 1', '2025/2026 Phase 1', 'active');
 
+-- competitions (#482)
+-- The senior championship lists no category on purpose: an empty array admits
+-- everyone, so the existing fixtures behave exactly as they did. The other two
+-- are what the feature is for — one reserved to the young, one left to the
+-- club's judgement.
+INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived) VALUES
+  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0),
+  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0),
+  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0);
+
+-- club_competition_eligibility — one of each amendment, so both halves of the
+-- club screen have a row: a V45 the club fields with its veterans anyway, and
+-- one its default admits who does not play that championship.
+-- (club_id, competition_id, player_id) is the primary key.
+INSERT INTO club_competition_eligibility (club_id, competition_id, player_id, effect) VALUES
+  ('club-fftt-06680011', 'comp-veterans', 'p2-player-16', 'included'),
+  ('club-fftt-06680011', 'comp-veterans', 'p2-player-30', 'excluded');
+
 -- divisions
 -- Ids, identifiers and names are the real FFTT ones for 2025/2026 Phase 1
 -- (#275). GE 1 -> GE 5 form a parent chain (#236); GE 6/GE 7 are orphans here,
 -- same as real FFTT data (see src/mock/data.ts for the rationale).
-INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES
-  ('198609', 'phase-26-1', 'GE 1', 1, 4, 0, NULL, 'GE1P1'),
-  ('198755', 'phase-26-1', 'GE 2', 2, 4, 0, '198609', 'GE2P1'),
-  ('198305', 'phase-26-1', 'GE 3', 3, 4, 0, '198755', 'GE3P1'),
-  ('198821', 'phase-26-1', 'GE 4', 4, 4, 0, '198305', 'GE4P1'),
-  ('198895', 'phase-26-1', 'GE 5', 5, 4, 0, '198821', 'GE5P1'),
-  ('198435', 'phase-26-1', 'GE 6', 6, 3, 0, NULL, 'GE6P1'),
-  ('198907', 'phase-26-1', 'GE 7', 7, 3, 0, NULL, 'GE7P1');
+INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES
+  ('198609', 'phase-26-1', 'GE 1', 1, 4, 0, NULL, 'GE1P1', 'comp-seniors'),
+  ('198755', 'phase-26-1', 'GE 2', 2, 4, 0, '198609', 'GE2P1', 'comp-seniors'),
+  ('198305', 'phase-26-1', 'GE 3', 3, 4, 0, '198755', 'GE3P1', 'comp-seniors'),
+  ('198821', 'phase-26-1', 'GE 4', 4, 4, 0, '198305', 'GE4P1', 'comp-seniors'),
+  ('198895', 'phase-26-1', 'GE 5', 5, 4, 0, '198821', 'GE5P1', 'comp-seniors'),
+  ('198435', 'phase-26-1', 'GE 6', 6, 3, 0, NULL, 'GE6P1', 'comp-seniors'),
+  ('198907', 'phase-26-1', 'GE 7', 7, 3, 0, NULL, 'GE7P1', 'comp-seniors');
 
 -- clubs
 INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES
@@ -350,54 +368,54 @@ INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) VALU
   ('g7-8', 'p2-player-35', 'unavailable', NULL);
 
 -- users
-INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id) VALUES
-  ('user-1', 'admin@example.com', 'general_admin', 0, NULL, NULL, NULL, '', NULL, NULL, 'active', NULL),
-  ('user-2', 'club.admin@example.com', 'club_admin', 0, NULL, NULL, NULL, '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-5', 'joris.szulc@example.com', 'player', 1, 'Joris', 'Szulc', '686910', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-1', 'gregory.canaque@example.com', 'player', 1, 'Grégory', 'Canaque', '425881', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-2', 'quentin.colle@example.com', 'player', 1, 'Quentin', 'Colle', '8810008', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-3', 'stephane.lach@example.com', 'player', 1, 'Stéphane', 'Lach', '681364', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-4', 'enzo.lotz@example.com', 'player', 1, 'Enzo', 'Lotz', '6716966', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-6', 'christian.buchi@example.com', 'player', 1, 'Christian', 'Buchi', '6815117', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-10', 'olivier.philippe@example.com', 'player', 1, 'Olivier', 'Philippe', '683975', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-7', 'herve.ceroni@example.com', 'player', 1, 'Hervé', 'Ceroni', '684545', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-9', 'fabrice.dangelser@example.com', 'player', 1, 'Fabrice', 'Dangelser', '682480', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-8', 'cedric.cunin@example.com', 'player', 1, 'Cédric', 'Cunin', '6810711', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-12', 'sebastien.rentz@example.com', 'player', 1, 'Sébastien', 'Rentz', '687433', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-13', 'sebastien.schatt@example.com', 'player', 1, 'Sébastien', 'Schatt', '685143', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-14', 'yannick.schill@example.com', 'player', 1, 'Yannick', 'Schill', '6814304', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-11', 'nello.cristini@example.com', 'player', 1, 'Nello', 'Cristini', '683787', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-17', 'bastien.dangelser@example.com', 'player', 1, 'Bastien', 'Dangelser', '684113', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-16', 'didier.clement@example.com', 'player', 1, 'Didier', 'Clément', '392885', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-19', 'mathieu.mougey@example.com', 'player', 1, 'Mathieu', 'Mougey', '6810243', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-18', 'bertrand.decoatpont@example.com', 'player', 1, 'Bertrand', 'De Coatpont', '6813454', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-15', 'nicolas.broglin@example.com', 'player', 1, 'Nicolas', 'Broglin', '6815877', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-20', 'david.schmitt@example.com', 'player', 1, 'David', 'Schmitt', '6815675', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-22', 'patricia.depauli@example.com', 'player', 1, 'Patricia', 'De Pauli', '6812597', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-24', 'gilles.knobloch@example.com', 'player', 1, 'Gilles', 'Knobloch', '6814428', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-21', 'abdelaziz.arif@example.com', 'player', 1, 'Abdelaziz', 'Arif', '9131446', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-23', 'christophe.heurtin@example.com', 'player', 1, 'Christophe', 'Heurtin', '6816317', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-26', 'frederic.zilbermann@example.com', 'player', 1, 'Frédéric', 'Zilbermann', '689768', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-29', 'christophe.hueber@example.com', 'player', 1, 'Christophe', 'Hueber', '686956', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-39', 'samuel.canemolla@example.com', 'player', 1, 'Samuel', 'Canemolla', '6816075', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-40', 'yvan.meyer@example.com', 'player', 1, 'Yvan', 'Meyer', '6815960', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-41', 'nathan.moreau@example.com', 'player', 1, 'Nathan', 'Moreau', '6816100', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-42', 'sacha.pent@example.com', 'player', 1, 'Sacha', 'Pent', '6816097', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-38', 'quentin.broglin@example.com', 'player', 1, 'Quentin', 'Broglin', '6816118', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-43', 'leo.remetter@example.com', 'player', 1, 'Léo', 'Remetter', '6815965', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-44', 'matheo.scremin@example.com', 'player', 1, 'Mathéo', 'Scremin', '6816084', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-33', 'eric.cavasino@example.com', 'player', 1, 'Eric', 'Cavasino', '6815606', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-35', 'luc.guehl@example.com', 'player', 1, 'Luc', 'Guehl', '6816152', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-34', 'boris.fessler@example.com', 'player', 1, 'Boris', 'Fessler', '6816176', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-36', 'bruno.lafont@example.com', 'player', 1, 'Bruno', 'Lafont', '6816419', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-37', 'alain.schillinger@example.com', 'player', 1, 'Alain', 'Schillinger', '6816418', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-32', 'vincent.rambeau@example.com', 'player', 1, 'Vincent', 'Rambeau', '6815464', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-27', 'jacky.antony@example.com', 'player', 1, 'Jacky', 'Antony', '6815563', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-28', 'stephane.donditz@example.com', 'player', 1, 'Stéphane', 'Donditz', '6816101', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-30', 'jeanclaude.laffuge@example.com', 'player', 1, 'Jean-Claude', 'Laffuge', '68357', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-31', 'gilles.metz@example.com', 'player', 1, 'Gilles', 'Metz', '6816164', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-45', 'marieline.wertenschlag@example.com', 'player', 1, 'Marie-Line', 'Wertenschlag', '686416', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-25', 'jordan.pesenti@example.com', 'player', 1, 'Jordan', 'Pesenti', '6718937', '', NULL, NULL, 'active', 'club-fftt-06680011')
+INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, category, status, club_id) VALUES
+  ('user-1', 'admin@example.com', 'general_admin', 0, NULL, NULL, NULL, '', NULL, NULL, NULL, 'active', NULL),
+  ('user-2', 'club.admin@example.com', 'club_admin', 0, NULL, NULL, NULL, '', NULL, NULL, NULL, 'active', 'club-fftt-06680011'),
+  ('p2-player-5', 'joris.szulc@example.com', 'player', 1, 'Joris', 'Szulc', '686910', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-1', 'gregory.canaque@example.com', 'player', 1, 'Grégory', 'Canaque', '425881', '', NULL, NULL, 'V40', 'active', 'club-fftt-06680011'),
+  ('p2-player-2', 'quentin.colle@example.com', 'player', 1, 'Quentin', 'Colle', '8810008', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-3', 'stephane.lach@example.com', 'player', 1, 'Stéphane', 'Lach', '681364', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-4', 'enzo.lotz@example.com', 'player', 1, 'Enzo', 'Lotz', '6716966', '', NULL, NULL, 'J1', 'active', 'club-fftt-06680011'),
+  ('p2-player-6', 'christian.buchi@example.com', 'player', 1, 'Christian', 'Buchi', '6815117', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-10', 'olivier.philippe@example.com', 'player', 1, 'Olivier', 'Philippe', '683975', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-7', 'herve.ceroni@example.com', 'player', 1, 'Hervé', 'Ceroni', '684545', '', NULL, NULL, 'V55', 'active', 'club-fftt-06680011'),
+  ('p2-player-9', 'fabrice.dangelser@example.com', 'player', 1, 'Fabrice', 'Dangelser', '682480', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-8', 'cedric.cunin@example.com', 'player', 1, 'Cédric', 'Cunin', '6810711', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-12', 'sebastien.rentz@example.com', 'player', 1, 'Sébastien', 'Rentz', '687433', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-13', 'sebastien.schatt@example.com', 'player', 1, 'Sébastien', 'Schatt', '685143', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-14', 'yannick.schill@example.com', 'player', 1, 'Yannick', 'Schill', '6814304', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-11', 'nello.cristini@example.com', 'player', 1, 'Nello', 'Cristini', '683787', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-17', 'bastien.dangelser@example.com', 'player', 1, 'Bastien', 'Dangelser', '684113', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-16', 'didier.clement@example.com', 'player', 1, 'Didier', 'Clément', '392885', '', NULL, NULL, 'V45', 'active', 'club-fftt-06680011'),
+  ('p2-player-19', 'mathieu.mougey@example.com', 'player', 1, 'Mathieu', 'Mougey', '6810243', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-18', 'bertrand.decoatpont@example.com', 'player', 1, 'Bertrand', 'De Coatpont', '6813454', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-15', 'nicolas.broglin@example.com', 'player', 1, 'Nicolas', 'Broglin', '6815877', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-20', 'david.schmitt@example.com', 'player', 1, 'David', 'Schmitt', '6815675', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-22', 'patricia.depauli@example.com', 'player', 1, 'Patricia', 'De Pauli', '6812597', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-24', 'gilles.knobloch@example.com', 'player', 1, 'Gilles', 'Knobloch', '6814428', '', NULL, NULL, 'V50', 'active', 'club-fftt-06680011'),
+  ('p2-player-21', 'abdelaziz.arif@example.com', 'player', 1, 'Abdelaziz', 'Arif', '9131446', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-23', 'christophe.heurtin@example.com', 'player', 1, 'Christophe', 'Heurtin', '6816317', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-26', 'frederic.zilbermann@example.com', 'player', 1, 'Frédéric', 'Zilbermann', '689768', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-29', 'christophe.hueber@example.com', 'player', 1, 'Christophe', 'Hueber', '686956', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-39', 'samuel.canemolla@example.com', 'player', 1, 'Samuel', 'Canemolla', '6816075', '', NULL, NULL, 'C1', 'active', 'club-fftt-06680011'),
+  ('p2-player-40', 'yvan.meyer@example.com', 'player', 1, 'Yvan', 'Meyer', '6815960', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-41', 'nathan.moreau@example.com', 'player', 1, 'Nathan', 'Moreau', '6816100', '', NULL, NULL, 'B2', 'active', 'club-fftt-06680011'),
+  ('p2-player-42', 'sacha.pent@example.com', 'player', 1, 'Sacha', 'Pent', '6816097', '', NULL, NULL, 'B1', 'active', 'club-fftt-06680011'),
+  ('p2-player-38', 'quentin.broglin@example.com', 'player', 1, 'Quentin', 'Broglin', '6816118', '', NULL, NULL, 'J2', 'active', 'club-fftt-06680011'),
+  ('p2-player-43', 'leo.remetter@example.com', 'player', 1, 'Léo', 'Remetter', '6815965', '', NULL, NULL, 'M2', 'active', 'club-fftt-06680011'),
+  ('p2-player-44', 'matheo.scremin@example.com', 'player', 1, 'Mathéo', 'Scremin', '6816084', '', NULL, NULL, 'M1', 'active', 'club-fftt-06680011'),
+  ('p2-player-33', 'eric.cavasino@example.com', 'player', 1, 'Eric', 'Cavasino', '6815606', '', NULL, NULL, 'V50', 'active', 'club-fftt-06680011'),
+  ('p2-player-35', 'luc.guehl@example.com', 'player', 1, 'Luc', 'Guehl', '6816152', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-34', 'boris.fessler@example.com', 'player', 1, 'Boris', 'Fessler', '6816176', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-36', 'bruno.lafont@example.com', 'player', 1, 'Bruno', 'Lafont', '6816419', '', NULL, NULL, 'V50', 'active', 'club-fftt-06680011'),
+  ('p2-player-37', 'alain.schillinger@example.com', 'player', 1, 'Alain', 'Schillinger', '6816418', '', NULL, NULL, 'V60', 'active', 'club-fftt-06680011'),
+  ('p2-player-32', 'vincent.rambeau@example.com', 'player', 1, 'Vincent', 'Rambeau', '6815464', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-27', 'jacky.antony@example.com', 'player', 1, 'Jacky', 'Antony', '6815563', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-28', 'stephane.donditz@example.com', 'player', 1, 'Stéphane', 'Donditz', '6816101', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-30', 'jeanclaude.laffuge@example.com', 'player', 1, 'Jean-Claude', 'Laffuge', '68357', '', NULL, NULL, 'V70', 'active', 'club-fftt-06680011'),
+  ('p2-player-31', 'gilles.metz@example.com', 'player', 1, 'Gilles', 'Metz', '6816164', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-45', 'marieline.wertenschlag@example.com', 'player', 1, 'Marie-Line', 'Wertenschlag', '686416', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011'),
+  ('p2-player-25', 'jordan.pesenti@example.com', 'player', 1, 'Jordan', 'Pesenti', '6718937', '', NULL, NULL, 'S', 'active', 'club-fftt-06680011')
 ;
 
 -- user_avatars — a sample avatar so the authed-image round trip (GET/PUT

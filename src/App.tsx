@@ -10,6 +10,7 @@ import { ClubDetailPage } from '@/pages/admin/ClubDetailPage'
 import { SeasonsPage } from '@/pages/admin/SeasonsPage'
 import { PhasesPage } from '@/pages/admin/PhasesPage'
 import { DivisionsPage } from '@/pages/admin/DivisionsPage'
+import { CompetitionsPage } from '@/pages/admin/CompetitionsPage'
 import { GroupsPage } from '@/pages/admin/GroupsPage'
 import { TeamsPage } from '@/pages/admin/TeamsPage'
 import { PlayersPage } from '@/pages/admin/PlayersPage'
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="saisons" element={<SeasonsPage />} />
             <Route path="phases" element={<PhasesPage />} />
             <Route path="divisions" element={<DivisionsPage />} />
+            <Route path="competitions" element={<CompetitionsPage />} />
             <Route path="groupes" element={<GroupsPage />} />
             <Route path="equipes" element={<TeamsPage />} />
             <Route path="equipes/:id" element={<TeamDetailPage />} />

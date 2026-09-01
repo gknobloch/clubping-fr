@@ -2,11 +2,14 @@ import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
-import { jsonParseIds } from './rows'
+import { jsonParseCategories, jsonParseIds } from './rows'
 import type { Address, ClubChannel, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
+  CompetitionRow, CompetitionEligibilityRow,
 } from './rows'
+import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
+import { canClubAdd } from '../../src/lib/competitionEligibility'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
@@ -99,6 +102,7 @@ app.get('/data', async (c) => {
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
     groupsR, teamsR, phasePointsR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
+    competitionsR, eligibilitiesR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -118,6 +122,8 @@ app.get('/data', async (c) => {
     // bulk payload stays light.
     db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
+    db.prepare('SELECT * FROM competitions ORDER BY sort_order').all<CompetitionRow>(),
+    db.prepare('SELECT * FROM club_competition_eligibility').all<CompetitionEligibilityRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -175,6 +181,19 @@ app.get('/data', async (c) => {
       isArchived: bool(r.is_archived),
       ...(r.identifier ? { identifier: r.identifier } : {}),
       ...(r.parent_id ? { parentId: r.parent_id } : {}),
+      ...(r.competition_id ? { competitionId: r.competition_id } : {}),
+    })),
+    // Pre-sorted by sort_order in the query above (#482).
+    competitions: competitionsR.results.map(r => ({
+      id: r.id, displayName: r.display_name,
+      categories: jsonParseCategories(r.categories),
+      isCategoryLocked: bool(r.is_category_locked),
+      sortOrder: r.sort_order, isArchived: bool(r.is_archived),
+    })),
+    // (club_id, competition_id, player_id) is the primary key — no surrogate id.
+    competitionEligibilities: eligibilitiesR.results.map(r => ({
+      clubId: r.club_id, competitionId: r.competition_id,
+      playerId: r.player_id, effect: r.effect,
     })),
     clubs: clubsR.results.map(r => ({
       id: r.id, affiliationNumber: r.affiliation_number ?? '', displayName: r.display_name,
@@ -197,6 +216,7 @@ app.get('/data', async (c) => {
       ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
+      ...(r.category ? { category: r.category } : {}),
       status: r.status, clubId: r.club_id ?? '',
       ...lastSeenField(r, canSeeLastSeen),
       ...(avatarUpdatedAt.has(r.id as string)
@@ -250,6 +270,7 @@ app.get('/data', async (c) => {
       ...(r.phone ? { phone: r.phone } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
+      ...(r.category ? { category: r.category } : {}),
       ...(r.status ? { status: r.status } : {}),
       ...(r.club_id ? { clubId: r.club_id } : {}),
       ...lastSeenField(r, canSeeLastSeen),
@@ -2513,8 +2534,8 @@ app.delete('/phases/:id', async (c) => {
 app.post('/divisions', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null).run()
+    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null).run()
   return c.json({ ok: true })
 })
 
@@ -2529,6 +2550,8 @@ app.patch('/divisions/:id', async (c) => {
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
   if ('parentId' in p) { s.push('parent_id = ?'); v.push(p.parentId ?? null) }
   if ('identifier' in p) { s.push('identifier = ?'); v.push(p.identifier ?? null) }
+  // '' is how the form says "belongs to no competition" (#482).
+  if ('competitionId' in p) { s.push('competition_id = ?'); v.push(p.competitionId || null) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE divisions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
 })
@@ -2555,6 +2578,131 @@ app.post('/divisions/:id/move', async (c) => {
     db.prepare('UPDATE divisions SET rank = ? WHERE id = ?').bind(myNewRank, id),
     db.prepare('UPDATE divisions SET rank = ? WHERE id = ?').bind(otherNewRank, otherId),
   ])
+  return c.json({ ok: true })
+})
+
+// --- Competitions (#482) ---
+//
+// A competition is a general admin's decision, so these three routes refuse
+// anybody else — `isGeneralAdmin` is declared with the onboarding routes below,
+// and is called here at request time. Eligibility overrides, further down, are
+// the club's half of the same feature and are scoped to the club they name.
+
+/** Only category codes we know reach the column; anything else is dropped. */
+const categoriesJson = (v: unknown): string => {
+  const list = Array.isArray(v) ? v : []
+  return JSON.stringify(list.filter((x): x is PlayerCategory =>
+    typeof x === 'string' && (PLAYER_CATEGORIES as readonly string[]).includes(x)))
+}
+
+app.post('/competitions', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const d = await c.req.json()
+  await c.env.DB.prepare(
+    `INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    d.id, d.displayName, categoriesJson(d.categories),
+    d.isCategoryLocked ? 1 : 0, d.sortOrder ?? 0, d.isArchived ? 1 : 0,
+  ).run()
+  return c.json({ ok: true })
+})
+
+app.patch('/competitions/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const id = c.req.param('id')
+  const p = await c.req.json()
+  const s: string[] = [], v: unknown[] = []
+  if ('displayName' in p) { s.push('display_name = ?'); v.push(p.displayName) }
+  if ('categories' in p) { s.push('categories = ?'); v.push(categoriesJson(p.categories)) }
+  if ('isCategoryLocked' in p) { s.push('is_category_locked = ?'); v.push(p.isCategoryLocked ? 1 : 0) }
+  if ('sortOrder' in p) { s.push('sort_order = ?'); v.push(p.sortOrder) }
+  if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
+  if (s.length) {
+    v.push(id)
+    await c.env.DB.prepare(`UPDATE competitions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
+  }
+  return c.json({ ok: true })
+})
+
+/**
+ * Deleting a competition detaches its divisions rather than taking them with
+ * it: a division outlives the championship it was filed under, and a phase's
+ * calendar must not vanish because someone tidied a list. Its overrides go,
+ * though — they name a competition that no longer exists.
+ */
+app.delete('/competitions/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const db = c.env.DB
+  const id = c.req.param('id')
+  await db.batch([
+    db.prepare('UPDATE divisions SET competition_id = NULL WHERE competition_id = ?').bind(id),
+    db.prepare('DELETE FROM club_competition_eligibility WHERE competition_id = ?').bind(id),
+    db.prepare('DELETE FROM competitions WHERE id = ?').bind(id),
+  ])
+  return c.json({ ok: true })
+})
+
+/**
+ * A club's amendment to one competition, for one licensee.
+ *
+ * `effect: 'default'` deletes the row — "put this player back where the global
+ * mapping had them" is a third state, and it is the absence of a row rather
+ * than a value.
+ *
+ * Two guards, both server-side because the browser's are only a courtesy:
+ * the caller must administer the club named, and the player must belong to it;
+ * and an `included` on a locked competition is refused outright, which is the
+ * whole point of the lock — a youth championship does not admit a veteran
+ * because a club asked nicely.
+ */
+app.put('/clubs/:clubId/competitions/:competitionId/eligibility', async (c) => {
+  const db = c.env.DB
+  const clubId = c.req.param('clubId')
+  const competitionId = c.req.param('competitionId')
+  const viewer = managingViewer(c)
+  if (viewer.role !== 'general_admin' && !(viewer.role === 'club_admin' && viewer.clubId === clubId)) {
+    return c.json({ error: 'not_allowed' }, 403)
+  }
+  const { playerId, effect } = await c.req.json<{ playerId?: string; effect?: string }>()
+  if (!playerId || !['included', 'excluded', 'default'].includes(effect ?? '')) {
+    return c.json({ error: 'bad_request' }, 400)
+  }
+
+  const player = await db
+    .prepare('SELECT id, club_id, category FROM users WHERE id = ?')
+    .bind(playerId)
+    .first<Pick<UserRow, 'id' | 'club_id' | 'category'>>()
+  if (!player || player.club_id !== clubId) return c.json({ error: 'not_in_club' }, 404)
+
+  if (effect === 'default') {
+    await db.prepare(
+      'DELETE FROM club_competition_eligibility WHERE club_id = ? AND competition_id = ? AND player_id = ?',
+    ).bind(clubId, competitionId, playerId).run()
+    return c.json({ ok: true })
+  }
+
+  const competition = await db
+    .prepare('SELECT id, categories, is_category_locked FROM competitions WHERE id = ?')
+    .bind(competitionId)
+    .first<Pick<CompetitionRow, 'id' | 'categories' | 'is_category_locked'>>()
+  if (!competition) return c.json({ error: 'unknown_competition' }, 404)
+
+  if (effect === 'included' && !canClubAdd(
+    {
+      categories: jsonParseCategories(competition.categories),
+      isCategoryLocked: bool(competition.is_category_locked),
+    },
+    { id: player.id, category: player.category ?? undefined },
+  )) {
+    return c.json({ error: 'competition_locked' }, 409)
+  }
+
+  await db.prepare(
+    `INSERT INTO club_competition_eligibility (club_id, competition_id, player_id, effect)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (club_id, competition_id, player_id) DO UPDATE SET effect = excluded.effect`,
+  ).bind(clubId, competitionId, playerId, effect).run()
   return c.json({ ok: true })
 })
 
@@ -2913,9 +3061,9 @@ const emailOrNull = (email: unknown): string | null =>
 app.post('/players', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, category, status, club_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.category || null, d.status, d.clubId).run()
   return c.json({ ok: true })
 })
 
@@ -2930,6 +3078,8 @@ app.patch('/players/:id', async (c) => {
   if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
   if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
   if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
+  // The FFTT code, verbatim (#482); '' is how the form says "no category".
+  if ('category' in p) { s.push('category = ?'); v.push(p.category || null) }
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }

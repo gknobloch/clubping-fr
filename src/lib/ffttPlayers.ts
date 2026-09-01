@@ -9,8 +9,9 @@
 //   GET https://fftt.dafunker.com/v1/proxy/xml_licence_b.php?club=<numclub>
 //     <liste><licence><idlicence/><licence>425881</licence><nom>CANAQUE</nom>
 //       <prenom>Gregory</prenom><numclub>06680011</numclub>
-//       <nomclub>RIXHEIM PPA</nomclub><point>1731</point><pointm>1731</pointm>
-//       <apointm>1752.34</apointm><initm>1763</initm>…</licence>…</liste>
+//       <nomclub>RIXHEIM PPA</nomclub><point>1731</point><cat>V40</cat>
+//       <pointm>1731</pointm><apointm>1752.34</apointm><initm>1763</initm>…
+//     </licence>…</liste>
 //     Same record either way — one for a licence, the club's whole list for a
 //     club number — so one parser serves both. Note the two `licence` names:
 //     the <licence> ELEMENT inside each record is the licence number, while
@@ -28,6 +29,11 @@
 // Points come from `point` — the official ranking. `pointm` is the monthly
 // figure, `apointm` the running average, `initm` the season's starting value;
 // none of them is what the app shows.
+//
+// `cat` is the age category (#482), and it mixes two nomenclatures in one
+// column: a letter for the young and the seniors, a five-year band for the
+// veterans. It is stored exactly as sent and normalized on read — see
+// src/lib/playerCategories.ts.
 
 import type { Player, PlayerPhasePoints } from '../types'
 import { normalizeFfttName } from './ffttClub'
@@ -48,6 +54,12 @@ export interface FfttLicence {
   clubName: string
   /** Official points (`point`), as text; empty when FFTT states none. */
   points: string
+  /**
+   * Age category as FFTT writes it — "S", "V45", sometimes "B2" (#482). Kept
+   * verbatim: normalizing on the way in would throw away the only sign that
+   * their export has changed. Empty when FFTT states none.
+   */
+  category: string
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +169,7 @@ export function parseClubLicencesXml(xml: string): FfttLicence[] {
       clubNumber: text(node, 'numclub'),
       clubName: normalizeFfttName(text(node, 'nomclub')),
       points: formatPoints(text(node, 'point')),
+      category: text(node, 'cat').toUpperCase(),
     }]
   })
 }
@@ -198,7 +211,7 @@ export async function fetchClubLicencesFromBrowser(
 // Import preview (what would change)
 // ---------------------------------------------------------------------------
 
-export type PlayerSyncFieldKey = 'lastName' | 'firstName' | 'licenseNumber' | 'points'
+export type PlayerSyncFieldKey = 'lastName' | 'firstName' | 'licenseNumber' | 'points' | 'category'
 
 /** One reviewable field of a player import — same shape as the club one (#280). */
 export interface PlayerSyncField {
@@ -219,6 +232,8 @@ export interface CurrentPlayerValues {
   licenseNumber: string
   /** Points recorded for the target phase, if any. */
   points?: string
+  /** Category held today, as stored — the raw FFTT code (#482). */
+  category?: string
 }
 
 const FIELD_LABELS: Record<PlayerSyncFieldKey, string> = {
@@ -226,6 +241,7 @@ const FIELD_LABELS: Record<PlayerSyncFieldKey, string> = {
   firstName: 'Prénom',
   licenseNumber: 'N° licence',
   points: 'Points',
+  category: 'Catégorie',
 }
 
 /** Strip diacritics: "Hervé" → "Herve". */
@@ -274,6 +290,7 @@ export function playerSyncFields(
     field('firstName', incoming.firstName, current?.firstName ?? null),
     field('licenseNumber', incoming.licence, current?.licenseNumber ?? null),
     field('points', incoming.points, current ? current.points ?? null : null),
+    field('category', incoming.category, current ? current.category ?? null : null),
   ]
 }
 
@@ -394,6 +411,7 @@ export function buildImportRows(
       firstName: player.firstName,
       licenseNumber: player.licenseNumber,
       points: phasePoints.find((p) => p.phaseId === phaseId && p.playerId === player.id)?.points,
+      category: player.category,
     })
     return {
       licence,

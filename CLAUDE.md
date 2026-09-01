@@ -92,6 +92,28 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
 
+### Competitions and player categories (#482)
+- **A competition is global; a division belongs to one.** Never team →
+  competition: a team already declares a division, and a championship is what a
+  set of divisions is. `competitionOfDivision` is the only way to ask which
+  competition a team plays in.
+- **`Competition.categories` empty means EVERY category**, not none. It is what
+  makes the senior championship expressible and an unconfigured competition
+  harmless — read it through `categoryAdmitted`, never as a bare `.includes`.
+- A club's overrides are exceptions to the global mapping, not a second list.
+  `included` / `excluded`, and the third state is the **absence of a row**.
+  A locked competition (`isCategoryLocked`) may only ever be narrowed by a club;
+  the API refuses the widening, and `playerEligibility` refuses to honour a row
+  that predates the lock.
+- **Read a club's own overrides only** (`e.clubId === clubId`). `GET /api/data`
+  carries every club's, and one club's exception must not decide another's list.
+- The FFTT `<cat>` code is stored **verbatim** and normalised on read
+  (`src/lib/playerCategories.ts`): youth suffixes drop (`B2` → `B`), veteran
+  bands stay apart (`V50` ≠ `V60`).
+- It bites on what can be **added** — a team's roster picker, a line-up's
+  "autres joueurs" — never on availabilities already given or line-ups already
+  made. A competition edited after the fact must not empty a squad.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per
