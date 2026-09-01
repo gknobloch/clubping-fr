@@ -64,8 +64,10 @@ describe('wrangler.toml — server-side dev login gating (#313)', () => {
 })
 
 // #321 — the cleanup job ignored every API response and exited 0, so it
-// reported success whether or not it deleted anything. The script is shell
-// inside YAML, so nothing else can catch a regression here.
+// reported success whether or not it deleted anything. #474 — it then read
+// only the first page of a listing it believed was unpaginated, and its own
+// verification asked the same blind question, so it could not see itself fail.
+// The script is shell inside YAML, so nothing else can catch a regression here.
 describe('workflows — preview cleanup deletes every deployment (#321)', () => {
   const cleanup = read('preview.yml').split('preview:')[0]
   // Comments stripped: they discuss per_page precisely because it is banned,
@@ -75,12 +77,30 @@ describe('workflows — preview cleanup deletes every deployment (#321)', () => 
     .filter((line) => !/^\s*#/.test(line))
     .join('\n')
 
-  it('sends no paging parameters on the deployments listing', () => {
-    // The endpoint rejects them (8000024, "Invalid list options provided") and
-    // the whole job dies before deleting anything — which is how it shipped
-    // once already. Cloudflare's SDK types this listing as a SinglePage.
+  // The contract, measured against the live API rather than inferred (#474):
+  //
+  //   <no params>    → 25 results   (a cap, not "all of them")
+  //   ?page=2        → 25 results   (so paging works)
+  //   ?per_page=100  → 8000024, "Invalid list options provided"
+  //   ?env=preview   → previews only, production excluded
+  it('never sends per_page, which the endpoint rejects outright', () => {
+    // 8000024, and the job dies before deleting anything — which is how it
+    // shipped once already.
     expect(script).not.toMatch(/per_page/)
-    expect(script).not.toMatch(/[?&]page=/)
+  })
+
+  it('pages the listing rather than reading only the first 25', () => {
+    // Sending nothing does not mean "everything": it means the 25 most recent
+    // deployments across every branch. That is how pr-343 kept serving for
+    // three weeks after its PR closed, with this job reporting success.
+    expect(script).toMatch(/[?&]page=/)
+    expect(script).toMatch(/while .*page/)
+  })
+
+  it('asks only for previews, so production cannot crowd them out', () => {
+    // 25 deployments to main in a busy week is enough to push a closing PR's
+    // previews off the first page entirely.
+    expect(script).toMatch(/env=preview/)
   })
 
   it('fails on a delete the API rejected', () => {
