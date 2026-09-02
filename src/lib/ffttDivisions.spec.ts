@@ -4,6 +4,7 @@ import {
   canMoveDivisionUp,
   divisionDisplayName,
   ffttIdFromIri,
+  isFfttContestIdentifier,
   orderDivisions,
   playersPerGameFor,
   type FfttDivision,
@@ -157,5 +158,30 @@ describe('divisionDisplayName', () => {
   it('leaves names with no marker alone', () => {
     expect(divisionDisplayName('Division 234020')).toBe('Division 234020')
     expect(divisionDisplayName('')).toBe('')
+  })
+})
+
+// #482 — the contest identifier is the first value from a request that reaches
+// an FFTT GraphQL query as text, and it lands inside a string literal. Escaping
+// and hoping is not the plan: the shape is narrowed to what FFTT issues.
+describe('isFfttContestIdentifier', () => {
+  it('accepts the identifiers FFTT issues', () => {
+    expect(isFfttContestIdentifier('1')).toBe(true)
+    expect(isFfttContestIdentifier('CJ')).toBe(true)
+    expect(isFfttContestIdentifier('D1_M')).toBe(true)
+  })
+
+  it('refuses anything that could end the string literal it goes into', () => {
+    expect(isFfttContestIdentifier('1" name: "x')).toBe(false)
+    expect(isFfttContestIdentifier('1\\')).toBe(false)
+    expect(isFfttContestIdentifier('a b')).toBe(false)
+    expect(isFfttContestIdentifier('{')).toBe(false)
+  })
+
+  it('refuses what is empty, oversized, or not a string at all', () => {
+    expect(isFfttContestIdentifier('')).toBe(false)
+    expect(isFfttContestIdentifier('x'.repeat(21))).toBe(false)
+    expect(isFfttContestIdentifier(1)).toBe(false)
+    expect(isFfttContestIdentifier(undefined)).toBe(false)
   })
 })

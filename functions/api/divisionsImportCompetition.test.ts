@@ -31,7 +31,13 @@ function mockFftt(contestId = '18368') {
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
     const query = String(JSON.parse(String(init?.body ?? '{}')).query ?? '')
     const data = query.includes('contests(')
-      ? { contests: { edges: [{ node: { id: `/api/contests/${contestId}`, name: CONTEST_NAME } }] } }
+      ? {
+        contests: {
+          edges: [{
+            node: { id: `/api/contests/${contestId}`, identifier: '1', name: CONTEST_NAME },
+          }],
+        },
+      }
       : {
         divisions: {
           edges: [
@@ -104,15 +110,20 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
   } as unknown as D1Database
 }
 
-const runImport = (db: D1Database, organizationId = 14) =>
+const runImport = (db: D1Database, organizationId = 14, contestIdentifier?: string) =>
   app.fetch(
     new Request('http://localhost/api/divisions/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId, seasonId: 27, phase: 1 }),
+      body: JSON.stringify({ organizationId, seasonId: 27, phase: 1, contestIdentifier }),
     }),
     { DB: db, AUTH_GUARD_DISABLED: 'true' },
   )
+
+/** The GraphQL queries the import issued, in order. */
+const queriesOf = () =>
+  (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    .map((call) => String(JSON.parse(String((call[1] as RequestInit).body)).query))
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -175,5 +186,30 @@ describe('the divisions import files its divisions under a competition (#482)', 
     await runImport(fakeDb(divisions, competitions))
 
     expect(divisions.find((d) => d.id === '234322')?.competition_id).toBe('comp-jeunes')
+  })
+})
+
+describe('which championship the divisions import reads (#482)', () => {
+  it('defaults to the men\'s team championship, as it always did', async () => {
+    mockFftt()
+    await runImport(fakeDb([], []))
+    expect(queriesOf()[0]).toContain('identifier: "1"')
+  })
+
+  // Before this the identifier was hardcoded, so a youth championship's
+  // divisions were unreachable however many competitions were configured.
+  it('reads the championship it is told to', async () => {
+    mockFftt()
+    await runImport(fakeDb([], []), 14, 'CJ')
+    expect(queriesOf()[0]).toContain('identifier: "CJ"')
+  })
+
+  // The identifier is the one value from a request that reaches the query as
+  // text, inside a string literal. It is refused, never escaped.
+  it('refuses an identifier that could break out of the query', async () => {
+    mockFftt()
+    const res = await runImport(fakeDb([], []), 14, '1" name: "x')
+    expect(res.status).toBe(400)
+    expect(queriesOf()).toEqual([])
   })
 })

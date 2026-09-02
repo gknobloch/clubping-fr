@@ -3,8 +3,19 @@ import { loginAs } from './helpers'
 
 // The E2E dev server has no API; the FFTT proxy endpoints are mocked per test.
 const ORGS = '**/api/fftt/organizations'
+const CONTESTS = '**/api/fftt/competitions-preview*'
 const PREVIEW = '**/api/fftt/divisions-preview*'
 const IMPORT = '**/api/divisions/import'
+
+// The championships FFTT runs for the chosen organisation and season: the
+// divisions import picks one rather than being pinned to the men's team
+// championship (#482).
+const contests = {
+  competitions: [
+    { identifier: '1', name: 'FED_Championnat de France par Equipes Masculin', exists: true, localName: 'Championnat par équipes' },
+    { identifier: 'CJ', name: 'FED_Championnat Jeunes', exists: false },
+  ],
+}
 
 const organizations = [
   { id: '14', type: 'League', identifier: 'L06', name: 'GRAND-EST' },
@@ -48,6 +59,7 @@ test.describe('General admin — Divisions FFTT import', () => {
 
   test('previews and imports divisions, skipping existing ones', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) => route.fulfill({ json: preview }))
     await page.route(IMPORT, (route) => route.fulfill({ json: importResult }))
 
@@ -58,6 +70,8 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
     // Season defaults to the active one (2025/2026), phase to Phase 1.
     await expect(page.getByLabel('Saison')).toHaveValue('26')
+    // Which championship's divisions — several exist, so one must be chosen.
+    await page.getByLabel('Compétition').selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
 
     await expect(page.getByText('FED_Championnat de France par Equipes Masculin')).toBeVisible()
@@ -80,28 +94,33 @@ test.describe('General admin — Divisions FFTT import', () => {
 
   test('reports when no championship exists for the selection', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) => route.fulfill({ status: 404, json: { error: 'no_contest' } }))
 
     await page.goto('/divisions')
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('72')
+    await page.getByLabel('Compétition').selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText('Aucun championnat trouvé')).toBeVisible()
   })
 
   test('reports when the FFTT API is unreachable', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) => route.fulfill({ status: 502, json: { error: 'fftt_unavailable' } }))
 
     await page.goto('/divisions')
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
+    await page.getByLabel('Compétition').selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText(/Impossible de contacter l’API FFTT/)).toBeVisible()
   })
 
   test('warns when the phase will be created', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) =>
       route.fulfill({ json: { ...preview, phaseExists: false } }),
     )
@@ -110,6 +129,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
     await page.getByLabel('Phase', { exact: true }).selectOption('2')
+    await page.getByLabel('Compétition').selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText(/La phase « Phase 2 » n’existe pas encore/)).toBeVisible()
   })
@@ -134,6 +154,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
   test('narrows the division list to the selected organization', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) => route.fulfill({ json: localPreview }))
 
     await page.goto('/divisions')
@@ -151,6 +172,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
   test('preselects the import dialog’s organization from the page filter (#259)', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) => route.fulfill({ json: localPreview }))
 
     await page.goto('/divisions')
@@ -163,6 +185,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
   test('sets the page filter to the imported organization after a successful import (#259)', async ({ page }) => {
     await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
     await page.route(PREVIEW, (route) => route.fulfill({ json: preview }))
     await page.route(IMPORT, (route) => route.fulfill({ json: importResult }))
 
@@ -172,6 +195,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
+    await page.getByLabel('Compétition').selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await page.getByRole('button', { name: 'Importer 2 divisions' }).click()
     await expect(page.getByText('2 divisions importées.')).toBeVisible()

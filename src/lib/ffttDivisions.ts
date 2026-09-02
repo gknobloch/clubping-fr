@@ -37,6 +37,20 @@ export function ffttIdFromIri(iri: string): string {
  */
 export const FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER = '1'
 
+/**
+ * Whether a contest identifier may be interpolated into an FFTT GraphQL query.
+ *
+ * This matters more than it looks: every other value those queries carry is a
+ * number, and this is the first one that comes from a request. It goes inside
+ * a GraphQL **string literal**, so a quote or a backslash would end the literal
+ * and let the rest of the value be read as query syntax. Rather than escape and
+ * hope, the allowed shape is narrowed to what FFTT actually issues — short
+ * alphanumeric tokens like "1" — and anything else is refused outright.
+ */
+export function isFfttContestIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,20}$/.test(value)
+}
+
 /** Players per game when no override matches. */
 export const PLAYERS_PER_GAME_DEFAULT = 4
 

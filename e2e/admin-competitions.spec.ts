@@ -7,9 +7,69 @@ import { loginAs } from './helpers'
 // is the young squad, and three competitions exist — the senior championship
 // (no category listed, so open to everyone), a locked youth championship, and
 // an unlocked veterans one.
+const ORGS = '**/api/fftt/organizations'
+const CONTESTS = '**/api/fftt/competitions-preview*'
+const IMPORT = '**/api/competitions/import'
+
+const organizations = [{ id: '14', type: 'League', identifier: 'L06', name: 'GRAND-EST' }]
+
+// Every championship FFTT runs for the organisation and season chosen. The
+// men's team championship is the one the mock data already holds.
+const contests = {
+  competitions: [
+    { identifier: '1', name: 'FED_Championnat de France par Equipes Masculin', exists: true, localName: 'Championnat par équipes' },
+    { identifier: 'CJ', name: 'FED_Championnat Jeunes', exists: false },
+  ],
+}
+
+const importResult = {
+  created: [{
+    id: 'comp-cj', displayName: 'FED_Championnat Jeunes', categories: [],
+    isCategoryLocked: false, sortOrder: 4, isArchived: false, ffttContestIdentifier: 'CJ',
+  }],
+  skipped: [],
+}
+
 test.describe('General admin — Competitions (#482)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, 'admin')
+  })
+
+  // A competition is FFTT data like a club or a division: the import is the
+  // way in, and the manual add is the fallback for what FFTT does not run.
+  test('imports the championships FFTT runs, rather than asking for them to be typed', async ({ page }) => {
+    await page.route(ORGS, (route) => route.fulfill({ json: { organizations } }))
+    await page.route(CONTESTS, (route) => route.fulfill({ json: contests }))
+    await page.route(IMPORT, (route) => route.fulfill({ json: importResult }))
+
+    await page.goto('/competitions')
+    await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
+    await expect(page.getByRole('heading', { name: 'Importer les compétitions FFTT' })).toBeVisible()
+
+    await page.getByLabel('Organisation').selectOption('14')
+    await page.getByRole('button', { name: 'Rechercher les compétitions' }).click()
+
+    // One we hold already, shown under our own name and not tickable again.
+    const held = page.getByRole('checkbox', { name: 'Championnat par équipes' })
+    await expect(held).toBeDisabled()
+    await expect(page.getByText('Déjà présente')).toBeVisible()
+
+    // The other starts ticked: taking them all is the common move.
+    await expect(page.getByRole('checkbox', { name: 'FED_Championnat Jeunes' })).toBeChecked()
+    await page.getByRole('button', { name: 'Importer 1 compétition' }).click()
+    await expect(page.getByText(/1 compétition importée, ouverte à toutes les catégories/)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Fermer' }).click()
+    // Imported open to everyone: an import never starts restricting anyone.
+    const row = page.getByRole('row', { name: /FED_Championnat Jeunes/ })
+    await expect(row).toContainText('Toutes les catégories')
+    await expect(row).toContainText('FFTT')
+  })
+
+  test('still allows a competition FFTT does not run to be added by hand', async ({ page }) => {
+    await page.goto('/competitions')
+    await page.getByRole('button', { name: 'Ajouter une compétition' }).click()
+    await expect(page.getByRole('heading', { name: 'Ajouter une compétition' })).toBeVisible()
   })
 
   test('lists the competitions with their default mapping', async ({ page }) => {

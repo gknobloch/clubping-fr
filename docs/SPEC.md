@@ -142,10 +142,18 @@ The division will determine how many players per game are required.
 ## Competition
 
 A **competition** is a championship a division belongs to — the senior team
-championship, a youth one, a veterans one. Only a General Admin creates them,
-and the rattachement runs division → competition rather than team →
-competition: a team already declares a division, and a championship is what a
-set of divisions is.
+championship, a youth one, a veterans one. The rattachement runs division →
+competition rather than team → competition: a team already declares a division,
+and a championship is what a set of divisions is.
+
+Competitions are **imported from the FFTT**, like clubs, divisions and teams:
+the federation publishes the list of championships an organisation runs for a
+season, and a General Admin picks the ones the app should know about. Adding one
+by hand stays possible, for a competition the federation does not run. Either
+way only a General Admin creates them.
+
+An imported competition admits **every category** until a General Admin narrows
+it: importing must never start restricting who can be fielded.
 
 Each competition carries the **player categories it admits by default**.
 Listing none means it admits every category, which is how the senior
@@ -159,11 +167,11 @@ division created by hand, or read off a PDF calendar, is until a General Admin
 says otherwise.
 
 The **FFTT divisions import fills it in by itself**: it reads one championship
-and one only, so it already knows which competition its divisions belong to and
-files them under it, creating that competition on first sight with no category
-restriction at all. Re-importing also files divisions that predate this, but
-only where nothing is filed yet: it never moves a division a General Admin has
-put somewhere else.
+at a time — the General Admin picks which — so it already knows which
+competition its divisions belong to and files them under it, creating that
+competition on first sight if need be. Re-importing also files divisions that
+predate this, but only where nothing is filed yet: it never moves a division a
+General Admin has put somewhere else.
 
 ### Category
 

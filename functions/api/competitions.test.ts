@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { app } from './[[path]]'
 import type { UserRow } from './rows'
 
@@ -237,5 +237,172 @@ describe('a club amends the default mapping for its own licensees', () => {
     })
     expect(res.status).toBe(200)
     expect(writes.some((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The FFTT competitions import (#482)
+// ---------------------------------------------------------------------------
+//
+// A competition is federation data like a club or a division: the same
+// `contests` query the divisions import runs, minus its identifier filter,
+// lists every championship an organisation runs. These tests pin down that the
+// route asks FFTT rather than believing the caller, that it keys on the
+// identifier, and that it stays a general admin's to run.
+
+const CONTESTS = [
+  { id: '/api/contests/18368', identifier: '1', name: 'FED_Championnat de France par Equipes Masculin' },
+  { id: '/api/contests/18402', identifier: 'CJ', name: 'FED_Championnat Jeunes' },
+]
+
+function mockContests() {
+  vi.stubGlobal('fetch', vi.fn(async () =>
+    new Response(JSON.stringify({ data: { contests: { edges: CONTESTS.map((node) => ({ node })) } } }), { status: 200 }),
+  ))
+}
+
+/** A D1 holding `competitions`, enough for the preview and the import. */
+function competitionsDb(rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }>) {
+  const statement = (sql: string, params: unknown[]) => ({
+    async first() {
+      if (/FROM sessions/.test(sql)) return null
+      if (/WHERE fftt_contest_identifier = \?/.test(sql)) {
+        return rows.find((r) => r.fftt_contest_identifier === params[0]) ?? null
+      }
+      if (/MAX\(sort_order\)/.test(sql)) return { next: rows.length + 1 }
+      if (/FROM competitions WHERE id = \?/.test(sql)) {
+        const found = rows.find((r) => r.id === params[0])
+        return found ? { ...found, categories: '[]', is_category_locked: 0, sort_order: 1, is_archived: 0 } : null
+      }
+      return null
+    },
+    async all() {
+      return { results: /fftt_contest_identifier IS NOT NULL/.test(sql) ? rows.filter((r) => r.fftt_contest_identifier) : [] }
+    },
+    async run() {
+      if (/INSERT INTO competitions/.test(sql)) {
+        rows.push({
+          id: params[0] as string,
+          display_name: params[1] as string,
+          fftt_contest_identifier: params[3] as string,
+        })
+      }
+      return { success: true }
+    },
+  })
+  return {
+    prepare: (sql: string) => ({
+      bind: (...params: unknown[]) => statement(sql, params),
+      ...statement(sql, []),
+    }),
+  } as unknown as D1Database
+}
+
+const previewCompetitions = (db: D1Database) =>
+  app.fetch(
+    new Request('http://localhost/api/fftt/competitions-preview?organizationId=14&seasonId=27'),
+    { DB: db, AUTH_GUARD_DISABLED: 'true' },
+  )
+
+const importCompetitions = (db: D1Database, body: unknown, env: Record<string, unknown> = { AUTH_GUARD_DISABLED: 'true' }) =>
+  app.fetch(
+    new Request('http://localhost/api/competitions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(body),
+    }),
+    { DB: db, ...env },
+  )
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('GET /fftt/competitions-preview', () => {
+  it('lists every championship FFTT runs, flagging the ones we hold', async () => {
+    mockContests()
+    const res = await previewCompetitions(competitionsDb([
+      { id: 'comp-seniors', display_name: 'Championnat par équipes', fftt_contest_identifier: '1' },
+    ]))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { competitions: Array<Record<string, unknown>> }
+    expect(body.competitions).toEqual([
+      // Ours is shown under the name we gave it, not FFTT's — a general admin
+      // may well have renamed it.
+      { identifier: '1', name: CONTESTS[0].name, exists: true, localName: 'Championnat par équipes' },
+      { identifier: 'CJ', name: 'FED_Championnat Jeunes', exists: false },
+    ])
+  })
+
+  it('refuses a scope that is not two numbers', async () => {
+    const res = await app.fetch(
+      new Request('http://localhost/api/fftt/competitions-preview?organizationId=x&seasonId=27'),
+      { DB: competitionsDb([]), AUTH_GUARD_DISABLED: 'true' },
+    )
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('POST /competitions/import', () => {
+  it('creates the ticked championships, open to every category', async () => {
+    mockContests()
+    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    const res = await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27, identifiers: ['CJ'],
+    })
+    expect(res.status).toBe(200)
+
+    const body = (await res.json()) as { created: Array<{ displayName: string; categories: string[]; ffttContestIdentifier?: string }> }
+    expect(body.created).toHaveLength(1)
+    expect(body.created[0]).toMatchObject({
+      displayName: 'FED_Championnat Jeunes',
+      categories: [],
+      ffttContestIdentifier: 'CJ',
+    })
+  })
+
+  // The client says WHICH, never what they are called: the same rule the
+  // divisions import follows.
+  it('takes the name from FFTT, not from the caller', async () => {
+    mockContests()
+    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27,
+      identifiers: ['CJ'], names: { CJ: 'Ce que je veux' },
+    })
+    expect(rows[0].display_name).toBe('FED_Championnat Jeunes')
+  })
+
+  it('ignores an identifier FFTT does not run', async () => {
+    mockContests()
+    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    const res = await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27, identifiers: ['ZZZ'],
+    })
+    expect(res.status).toBe(200)
+    expect(rows).toEqual([])
+  })
+
+  it('skips one we already hold rather than creating a second', async () => {
+    mockContests()
+    const rows = [{ id: 'comp-seniors', display_name: 'Championnat par équipes', fftt_contest_identifier: '1' }]
+    const res = await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27, identifiers: ['1'],
+    })
+    const body = (await res.json()) as { created: unknown[]; skipped: Array<{ identifier: string }> }
+    expect(body.created).toEqual([])
+    expect(body.skipped).toEqual([{ identifier: '1', name: CONTESTS[0].name }])
+    expect(rows).toHaveLength(1)
+  })
+
+  it('refuses a club admin', async () => {
+    mockContests()
+    const { db } = fakeDb([clubAdmin], [], 'ca')
+    const res = await importCompetitions(db, { organizationId: 14, seasonId: 27, identifiers: ['1'] }, {})
+    expect(res.status).toBe(403)
+  })
+
+  it('refuses an empty or malformed selection', async () => {
+    mockContests()
+    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, identifiers: [] })).status).toBe(400)
+    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, identifiers: ['a"b'] })).status).toBe(400)
   })
 })

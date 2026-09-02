@@ -92,6 +92,24 @@ export interface FfttCurrentSeason {
   status?: SeasonStatus
 }
 
+/** One contest in the FFTT competitions preview (GET /api/fftt/competitions-preview, #482). */
+export interface FfttCompetitionPreview {
+  /** The stable FFTT identity — what a competition is keyed on. */
+  identifier: string
+  /** FFTT's own name for it. */
+  name: string
+  /** Already held locally: the import skips it. */
+  exists: boolean
+  /** Our name for it when we hold it — a general admin may have renamed it. */
+  localName?: string
+}
+
+/** Response of POST /api/competitions/import. */
+export interface FfttCompetitionsImportResult {
+  created: Competition[]
+  skipped: Array<{ identifier: string; name: string }>
+}
+
 /** One division in the FFTT import preview (GET /api/fftt/divisions-preview). */
 export interface FfttDivisionPreview {
   id: string
@@ -408,9 +426,12 @@ interface DataContextValue extends DataState {
   /** Locally cached FFTT organizations; refresh=true re-syncs from FFTT. Null on failure. */
   fetchOrganizations: (refresh?: boolean) => Promise<Organization[] | null>
   /** Preview the FFTT divisions for (organization, season, phase 1|2). */
-  fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number) => Promise<FfttDivisionsPreview | 'no_contest' | null>
+  /** The championships FFTT runs for an (organisation, season) (#482). */
+  fetchCompetitionsPreview: (organizationId: string, seasonId: string) => Promise<FfttCompetitionPreview[] | null>
+  importFfttCompetitions: (organizationId: string, seasonId: string, identifiers: string[]) => Promise<FfttCompetitionsImportResult | null>
+  fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsPreview | 'no_contest' | null>
   /** Import the FFTT divisions (creates the phase if missing, skips existing). */
-  importFfttDivisions: (organizationId: string, seasonId: string, phase: number) => Promise<FfttDivisionsImportResult | null>
+  importFfttDivisions: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsImportResult | null>
   /** Preview a club's FFTT teams (#229); 'club_not_found' or null on failure. */
   fetchTeamsPreview: (clubId: string) => Promise<FfttTeamsPreview | 'club_not_found' | null>
   /** Import a club's FFTT teams with the chosen defaults (venue / day / time). */
@@ -750,11 +771,46 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [])
 
+  const fetchCompetitionsPreview = useCallback(async (
+    organizationId: string, seasonId: string,
+  ): Promise<FfttCompetitionPreview[] | null> => {
+    try {
+      const params = new URLSearchParams({ organizationId, seasonId })
+      const r = await fetch(`/api/fftt/competitions-preview?${params}`, { headers: authHeaders() })
+      if (!r.ok) return null
+      const body = (await r.json()) as { competitions: FfttCompetitionPreview[] }
+      return body.competitions
+    } catch {
+      return null
+    }
+  }, [])
+
+  const importFfttCompetitions = useCallback(async (
+    organizationId: string, seasonId: string, identifiers: string[],
+  ): Promise<FfttCompetitionsImportResult | null> => {
+    try {
+      const r = await fetch('/api/competitions/import', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ organizationId, seasonId, identifiers }),
+      })
+      if (!r.ok) return null
+      const result = (await r.json()) as FfttCompetitionsImportResult
+      if (result.created.length) setCompetitions((prev) => [...prev, ...result.created])
+      return result
+    } catch {
+      return null
+    }
+  }, [])
+
   const fetchDivisionsPreview = useCallback(async (
-    organizationId: string, seasonId: string, phase: number,
+    organizationId: string, seasonId: string, phase: number, contestIdentifier?: string,
   ): Promise<FfttDivisionsPreview | 'no_contest' | null> => {
     try {
-      const params = new URLSearchParams({ organizationId, seasonId, phase: String(phase) })
+      const params = new URLSearchParams({
+        organizationId, seasonId, phase: String(phase),
+        ...(contestIdentifier ? { contestIdentifier } : {}),
+      })
       const r = await fetch(`/api/fftt/divisions-preview?${params}`, { headers: authHeaders() })
       if (r.status === 404) return 'no_contest'
       if (!r.ok) return null
@@ -765,13 +821,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   const importFfttDivisions = useCallback(async (
-    organizationId: string, seasonId: string, phase: number,
+    organizationId: string, seasonId: string, phase: number, contestIdentifier?: string,
   ): Promise<FfttDivisionsImportResult | null> => {
     try {
       const r = await fetch('/api/divisions/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ organizationId, seasonId, phase }),
+        body: JSON.stringify({ organizationId, seasonId, phase, contestIdentifier }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttDivisionsImportResult
@@ -1970,6 +2026,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       checkFfttSeason,
       importFfttSeason,
       fetchOrganizations,
+      fetchCompetitionsPreview,
+      importFfttCompetitions,
       fetchDivisionsPreview,
       importFfttDivisions,
       fetchTeamsPreview,
@@ -2028,7 +2086,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       users, updatePlayer, addPlayer, addClubAdmin, removeClubAdmin,

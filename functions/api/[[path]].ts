@@ -3,7 +3,7 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseCategories, jsonParseIds } from './rows'
-import type { Address, ClubChannel, DataState } from '../../src/types'
+import type { Address, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, CompetitionEligibilityRow,
@@ -11,7 +11,7 @@ import type {
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { canClubAdd } from '../../src/lib/competitionEligibility'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
-import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
+import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
@@ -494,16 +494,46 @@ interface FfttContest {
   name: string
 }
 
-// Fetch the championship contest then its divisions from FFTT. The contest is
+/**
+ * Every contest FFTT runs for an (organisation, season) — its competitions.
+ *
+ * The same query as the divisions import's first leg, minus the `identifier`
+ * filter: dropping it is what turns "the men's team championship" into "the
+ * list of championships", which is what a general admin picks from (#482).
+ */
+async function fetchFfttContests(
+  organizationId: number,
+  seasonId: number,
+): Promise<FfttContest[] | null> {
+  const data = await ffttGraphql<{
+    contests?: FfttEdges<{ id: string; identifier: string; name: string }>
+  }>(
+    `{ contests(divisions_organization_id: ${organizationId} season_id: ${seasonId}) { edges { node { id identifier name } } } }`,
+  )
+  if (data === null) return null
+  return (data.contests?.edges ?? []).flatMap((e) => e.node?.identifier ? [{
+    id: ffttIdFromIri(e.node.id),
+    identifier: e.node.identifier,
+    name: e.node.name,
+  }] : [])
+}
+
+// Fetch one championship contest then its divisions from FFTT. The contest is
 // pinned to one identifier (see FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER), which is
 // what lets the import file its divisions under a competition (#482).
 // null = FFTT unreachable; contest null = no championship for those params.
-async function fetchFfttDivisions(organizationId: number, seasonId: number, phase: number): Promise<{
+async function fetchFfttDivisions(
+  organizationId: number,
+  seasonId: number,
+  phase: number,
+  /** Already checked with `isFfttContestIdentifier` — it lands in a GraphQL literal. */
+  contestIdentifier: string,
+): Promise<{
   contest: FfttContest | null
   divisions: FfttDivision[]
 } | null> {
   const contestData = await ffttGraphql<{ contests?: FfttEdges<{ id: string; name: string }> }>(
-    `{ contests(divisions_organization_id: ${organizationId} season_id: ${seasonId} identifier: "${FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER}") { edges { node { id name } } } }`,
+    `{ contests(divisions_organization_id: ${organizationId} season_id: ${seasonId} identifier: "${contestIdentifier}") { edges { node { id name } } } }`,
   )
   if (contestData === null) return null
   const contestNode = contestData.contests?.edges?.[0]?.node
@@ -522,11 +552,7 @@ async function fetchFfttDivisions(organizationId: number, seasonId: number, phas
     parentId: e.node.parent ? ffttIdFromIri(e.node.parent.id) : null,
   }] : [])
   return {
-    contest: {
-      id: contestId,
-      identifier: FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER,
-      name: contestNode.name,
-    },
+    contest: { id: contestId, identifier: contestIdentifier, name: contestNode.name },
     divisions,
   }
 }
@@ -571,11 +597,32 @@ async function competitionForContest(
   return id
 }
 
-const importParams = (organizationId: unknown, seasonId: unknown, phase: unknown) => {
-  const org = Number(organizationId), season = Number(seasonId), ph = Number(phase)
-  const knownPhase = FFTT_PHASES.some((p) => Number(p.id) === ph)
-  if (!Number.isInteger(org) || org <= 0 || !Number.isInteger(season) || season <= 0 || !knownPhase) return null
-  return { org, season, ph }
+/**
+ * The (organisation, season) an FFTT read is scoped to.
+ *
+ * Both are numbers, so both are checked as such — nothing here reaches a query
+ * as text (see `isFfttContestIdentifier` for the one value that does).
+ */
+const orgSeasonParams = (organizationId: unknown, seasonId: unknown) => {
+  const org = Number(organizationId), season = Number(seasonId)
+  if (!Number.isInteger(org) || org <= 0 || !Number.isInteger(season) || season <= 0) return null
+  return { org, season }
+}
+
+const importParams = (
+  organizationId: unknown, seasonId: unknown, phase: unknown, contestIdentifier: unknown,
+) => {
+  const scope = orgSeasonParams(organizationId, seasonId)
+  const ph = Number(phase)
+  if (!scope || !FFTT_PHASES.some((p) => Number(p.id) === ph)) return null
+  // Absent means the championship, which is the only contest this import could
+  // read before #482 — so an older client keeps behaving exactly as it did.
+  // Present but malformed is refused rather than quietly falling back.
+  const contest = contestIdentifier === undefined || contestIdentifier === null || contestIdentifier === ''
+    ? FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER
+    : contestIdentifier
+  if (!isFfttContestIdentifier(contest)) return null
+  return { ...scope, ph, contest }
 }
 
 // Existing divisions of a phase, for skip-matching by FFTT id or name.
@@ -591,9 +638,12 @@ async function phaseDivisions(db: Env['Bindings']['DB'], phaseId: string) {
 // GET /fftt/divisions-preview — ordered division list for (organization, season, phase),
 // flagging the ones that already exist locally.
 app.get('/fftt/divisions-preview', async (c) => {
-  const p = importParams(c.req.query('organizationId'), c.req.query('seasonId'), c.req.query('phase'))
+  const p = importParams(
+    c.req.query('organizationId'), c.req.query('seasonId'), c.req.query('phase'),
+    c.req.query('contestIdentifier'),
+  )
   if (!p) return c.json({ error: 'invalid_params' }, 400)
-  const result = await fetchFfttDivisions(p.org, p.season, p.ph)
+  const result = await fetchFfttDivisions(p.org, p.season, p.ph, p.contest)
   if (!result) return c.json({ error: 'fftt_unavailable' }, 502)
   if (!result.contest) return c.json({ error: 'no_contest' }, 404)
   const phaseRow = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
@@ -621,6 +671,88 @@ app.get('/fftt/divisions-preview', async (c) => {
   })
 })
 
+// --- FFTT competitions import (#482) ---
+//
+// A competition is FFTT data, like clubs, divisions and teams are: the same
+// `contests` query the divisions import runs, with the identifier filter taken
+// off, lists every championship an organisation runs for a season. Typing one
+// in by hand to mirror a row the federation already publishes is the
+// duplication the rest of this app exists to avoid — so the import is the
+// primary way in, and /competitions' manual add is the fallback for what FFTT
+// does not run.
+
+/** GET /fftt/competitions-preview — the contests of an (organisation, season). */
+app.get('/fftt/competitions-preview', async (c) => {
+  const p = orgSeasonParams(c.req.query('organizationId'), c.req.query('seasonId'))
+  if (!p) return c.json({ error: 'invalid_params' }, 400)
+  const contests = await fetchFfttContests(p.org, p.season)
+  if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
+
+  const held = await c.env.DB
+    .prepare('SELECT id, display_name, fftt_contest_identifier FROM competitions WHERE fftt_contest_identifier IS NOT NULL')
+    .all<Pick<CompetitionRow, 'id' | 'display_name' | 'fftt_contest_identifier'>>()
+  const byIdentifier = new Map(held.results.map((r) => [r.fftt_contest_identifier as string, r]))
+  return c.json({
+    competitions: contests.map((contest) => {
+      const local = byIdentifier.get(contest.identifier)
+      return {
+        identifier: contest.identifier,
+        name: contest.name,
+        // Held already — the import will skip it, and the name we show is ours
+        // rather than FFTT's, since a general admin may have renamed it.
+        exists: !!local,
+        ...(local ? { localName: local.display_name } : {}),
+      }
+    }),
+  })
+})
+
+/**
+ * POST /competitions/import — create the competitions the caller ticked.
+ *
+ * Re-fetches from FFTT rather than trusting the posted list, the same rule the
+ * divisions import follows: the client says *which* identifiers, never what
+ * they are called. Each lands with no categories, so importing a competition
+ * restricts nobody until a general admin narrows it.
+ */
+app.post('/competitions/import', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const b = await c.req.json<{ organizationId?: unknown; seasonId?: unknown; identifiers?: unknown }>()
+  const p = orgSeasonParams(b.organizationId, b.seasonId)
+  const wanted = Array.isArray(b.identifiers) ? b.identifiers.filter(isFfttContestIdentifier) : []
+  if (!p || wanted.length === 0) return c.json({ error: 'invalid_params' }, 400)
+
+  const contests = await fetchFfttContests(p.org, p.season)
+  if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
+
+  const asked = new Set(wanted)
+  const created: Competition[] = []
+  const skipped: Array<{ identifier: string; name: string }> = []
+  for (const contest of contests) {
+    if (!asked.has(contest.identifier)) continue
+    const before = await c.env.DB
+      .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ?')
+      .bind(contest.identifier).first<{ id: string }>()
+    if (before) {
+      skipped.push({ identifier: contest.identifier, name: contest.name })
+      continue
+    }
+    const id = await competitionForContest(c.env.DB, contest)
+    const row = await c.env.DB
+      .prepare('SELECT * FROM competitions WHERE id = ?').bind(id).first<CompetitionRow>()
+    if (row) {
+      created.push({
+        id: row.id, displayName: row.display_name,
+        categories: jsonParseCategories(row.categories),
+        isCategoryLocked: bool(row.is_category_locked),
+        sortOrder: row.sort_order, isArchived: bool(row.is_archived),
+        ...(row.fftt_contest_identifier ? { ffttContestIdentifier: row.fftt_contest_identifier } : {}),
+      })
+    }
+  }
+  return c.json({ created, skipped })
+})
+
 type ImportedPhase = { id: string; seasonId: unknown; name: unknown; displayName: unknown; status: unknown }
 type ImportedDivision = {
   id: string; phaseId: string; displayName: string; rank: number; playersPerGame: number; isArchived: boolean
@@ -637,13 +769,13 @@ type ImportedDivision = {
 // already present, ranked after any existing ones. Shared by
 // POST /divisions/import and the teams import (#229), which auto-imports the
 // divisions of a phase when a team's division is unknown locally.
-async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; season: number; ph: number }): Promise<
+async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; season: number; ph: number; contest: string }): Promise<
   | { phase: ImportedPhase; createdPhase: boolean; created: ImportedDivision[]; skipped: Array<{ id: string; name: string }> }
   | 'season_not_found' | 'fftt_unavailable' | 'no_divisions'
 > {
   const season = await db.prepare('SELECT id, display_name FROM seasons WHERE id = ?').bind(String(p.season)).first()
   if (!season) return 'season_not_found'
-  const result = await fetchFfttDivisions(p.org, p.season, p.ph)
+  const result = await fetchFfttDivisions(p.org, p.season, p.ph, p.contest)
   if (!result) return 'fftt_unavailable'
   if (!result.contest || result.divisions.length === 0) return 'no_divisions'
 
@@ -715,7 +847,7 @@ async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; seas
 
 app.post('/divisions/import', async (c) => {
   const b = await c.req.json()
-  const p = importParams(b.organizationId, b.seasonId, b.phase)
+  const p = importParams(b.organizationId, b.seasonId, b.phase, b.contestIdentifier)
   if (!p) return c.json({ error: 'invalid_params' }, 400)
   const result = await importDivisions(c.env.DB, p)
   if (result === 'season_not_found') return c.json({ error: 'season_not_found' }, 404)

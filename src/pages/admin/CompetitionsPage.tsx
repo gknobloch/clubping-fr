@@ -5,7 +5,8 @@ import { ModalShell } from '@/components/ModalShell'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
-import { PlusIcon } from '@/components/icons'
+import { ImportIcon, PlusIcon } from '@/components/icons'
+import { ImportCompetitionsModal } from '@/components/ImportCompetitionsModal'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, type PlayerCategory } from '@/lib/playerCategories'
 
@@ -32,6 +33,7 @@ export function CompetitionsPage() {
   const [confirm, confirmDialog] = useConfirm()
 
   const [showArchived, setShowArchived] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<Competition | null>(null)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -119,9 +121,15 @@ export function CompetitionsPage() {
       <PageHeader
         title="Compétitions"
         actions={
-          <HeaderAction icon={<PlusIcon />} label="Ajouter une compétition" onClick={openCreate} />
+          <>
+            {/* Manual add is the fallback; the FFTT import is the default path,
+                same rule as /divisions (#219, #482). */}
+            <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une compétition" onClick={openCreate} />
+            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+          </>
         }
       />
+      {importOpen && <ImportCompetitionsModal onClose={() => setImportOpen(false)} />}
 
       <p className="text-sm text-slate-600">
         Une compétition regroupe des divisions et dit quelles catégories de joueurs
@@ -218,8 +226,9 @@ export function CompetitionsPage() {
             {shown.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
-                  Aucune compétition. Tant qu'il n'y en a pas, aucune division n'est
-                  restreinte et tous les licenciés restent proposés partout.
+                  Aucune compétition. Importez-les depuis la FFTT pour commencer —
+                  tant qu'il n'y en a pas, aucune division n'est restreinte et tous
+                  les licenciés restent proposés partout.
                 </td>
               </tr>
             )}

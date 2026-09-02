@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Organization } from '@/types'
-import { useAppData, type FfttDivisionsPreview } from '@/contexts/DataContext'
+import { useAppData, type FfttCompetitionPreview, type FfttDivisionsPreview } from '@/contexts/DataContext'
 import { FFTT_PHASES } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { ModalShell } from '@/components/ModalShell'
@@ -19,7 +19,10 @@ export function ImportDivisionsModal({
    *  page's filter can be set to match what was just imported (#259). */
   onImported?: (organizationId: string) => void
 }) {
-  const { seasons, fetchOrganizations, fetchDivisionsPreview, importFfttDivisions } = useAppData()
+  const {
+    seasons, fetchOrganizations, fetchCompetitionsPreview,
+    fetchDivisionsPreview, importFfttDivisions,
+  } = useAppData()
 
   const [orgs, setOrgs] = useState<Organization[] | null>(null)
   const [orgsError, setOrgsError] = useState(false)
@@ -31,6 +34,13 @@ export function ImportDivisionsModal({
     seasons.find((s) => s.status === 'active')?.id ?? selectableSeasons[0]?.id ?? '',
   )
   const [phase, setPhase] = useState(1)
+
+  // Which championship's divisions to import (#482). Before this the import
+  // could only ever read one — the men's team championship — so a youth
+  // championship's divisions were unreachable however many competitions were
+  // configured. The list is FFTT's own, for the organisation and season chosen.
+  const [contests, setContests] = useState<FfttCompetitionPreview[] | null>(null)
+  const [contestIdentifier, setContestIdentifier] = useState('')
 
   const [preview, setPreview] = useState<FfttDivisionsPreview | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>('idle')
@@ -62,12 +72,30 @@ export function ImportDivisionsModal({
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
 
+  // Reload the championship list whenever the scope changes, and drop any
+  // preview built for the previous one.
+  useEffect(() => {
+    setContests(null)
+    setContestIdentifier('')
+    setPreview(null)
+    setPreviewState('idle')
+    if (!organizationId || !seasonId) return
+    let cancelled = false
+    fetchCompetitionsPreview(organizationId, seasonId).then((list) => {
+      if (cancelled || !list) return
+      setContests(list)
+      // One championship needs no choosing; several do.
+      if (list.length === 1) setContestIdentifier(list[0].identifier)
+    })
+    return () => { cancelled = true }
+  }, [organizationId, seasonId, fetchCompetitionsPreview])
+
   const handleSearch = async () => {
     setPreviewState('loading')
     setPreview(null)
     setImportedCount(null)
     setImportError(false)
-    const result = await fetchDivisionsPreview(organizationId, seasonId, phase)
+    const result = await fetchDivisionsPreview(organizationId, seasonId, phase, contestIdentifier)
     if (result === 'no_contest') {
       setPreviewState('no_contest')
     } else if (result === null) {
@@ -84,7 +112,7 @@ export function ImportDivisionsModal({
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttDivisions(organizationId, seasonId, phase)
+    const result = await importFfttDivisions(organizationId, seasonId, phase, contestIdentifier)
     setImporting(false)
     if (result) {
       setImportedCount(result.created.length)
@@ -149,6 +177,28 @@ export function ImportDivisionsModal({
               </p>
             )}
           </div>
+          <div>
+            <label htmlFor="import-contest" className="block text-sm font-medium text-slate-700">
+              Compétition
+            </label>
+            <select
+              id="import-contest"
+              value={contestIdentifier}
+              onChange={(e) => setContestIdentifier(e.target.value)}
+              className={inputClass}
+              disabled={!contests}
+            >
+              <option value="">
+                {contests ? 'Choisir une compétition…' : 'Choisissez une organisation et une saison'}
+              </option>
+              {(contests ?? []).map((c) => (
+                <option key={c.identifier} value={c.identifier}>{c.localName ?? c.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Les divisions importées y seront rattachées. Elle sera créée si elle n’existe pas encore.
+            </p>
+          </div>
           <div className="flex gap-4">
             <div className="flex-1">
               <label htmlFor="import-season" className="block text-sm font-medium text-slate-700">
@@ -184,7 +234,7 @@ export function ImportDivisionsModal({
           <button
             type="button"
             onClick={handleSearch}
-            disabled={!organizationId || !seasonId || previewState === 'loading'}
+            disabled={!organizationId || !seasonId || !contestIdentifier || previewState === 'loading'}
             className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
           >
             {previewState === 'loading' ? 'Recherche…' : 'Rechercher les divisions'}
