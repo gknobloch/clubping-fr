@@ -104,6 +104,13 @@ export interface FfttCompetitionPreview {
   localName?: string
 }
 
+/** One championship the admin ticked, with the name they want it stored under. */
+export interface FfttCompetitionSelection {
+  identifier: string
+  /** Blank or absent falls back to FFTT's own name. */
+  name?: string
+}
+
 /** Response of POST /api/competitions/import. */
 export interface FfttCompetitionsImportResult {
   created: Competition[]
@@ -119,6 +126,12 @@ export interface FfttDivisionPreview {
   playersPerGame: number
   /** Already present locally for that phase — will be skipped on import. */
   exists: boolean
+  /**
+   * Present, but filed under no competition (#482): importing attaches it.
+   * This is why an import where everything already exists is still worth
+   * running — and why the button must not read "Rien à importer" then.
+   */
+  attachable?: boolean
 }
 
 export interface FfttDivisionsPreview {
@@ -428,7 +441,9 @@ interface DataContextValue extends DataState {
   /** Preview the FFTT divisions for (organization, season, phase 1|2). */
   /** The championships FFTT runs for an (organisation, season) (#482). */
   fetchCompetitionsPreview: (organizationId: string, seasonId: string) => Promise<FfttCompetitionPreview[] | null>
-  importFfttCompetitions: (organizationId: string, seasonId: string, identifiers: string[]) => Promise<FfttCompetitionsImportResult | null>
+  importFfttCompetitions: (
+    organizationId: string, seasonId: string, selections: FfttCompetitionSelection[],
+  ) => Promise<FfttCompetitionsImportResult | null>
   fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsPreview | 'no_contest' | null>
   /** Import the FFTT divisions (creates the phase if missing, skips existing). */
   importFfttDivisions: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsImportResult | null>
@@ -786,13 +801,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   const importFfttCompetitions = useCallback(async (
-    organizationId: string, seasonId: string, identifiers: string[],
+    organizationId: string, seasonId: string, selections: FfttCompetitionSelection[],
   ): Promise<FfttCompetitionsImportResult | null> => {
     try {
       const r = await fetch('/api/competitions/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ organizationId, seasonId, identifiers }),
+        body: JSON.stringify({ organizationId, seasonId, selections }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttCompetitionsImportResult

@@ -50,12 +50,18 @@ test.describe('General admin — Competitions (#482)', () => {
     await page.getByRole('button', { name: 'Rechercher les compétitions' }).click()
 
     // One we hold already, shown under our own name and not tickable again.
-    const held = page.getByRole('checkbox', { name: 'Championnat par équipes' })
-    await expect(held).toBeDisabled()
+    await expect(page.getByRole('checkbox', { name: 'FED_Championnat de France par Equipes Masculin' })).toBeDisabled()
     await expect(page.getByText('Déjà présente')).toBeVisible()
 
-    // The other starts ticked: taking them all is the common move.
-    await expect(page.getByRole('checkbox', { name: 'FED_Championnat Jeunes' })).toBeChecked()
+    // Nothing ticked by default: FFTT lists everything an organisation runs,
+    // most of it individual tournaments, so importing is opt-in.
+    const youth = page.getByRole('checkbox', { name: 'FED_Championnat Jeunes' })
+    await expect(youth).not.toBeChecked()
+    await expect(page.getByRole('button', { name: 'Aucune sélection' })).toBeDisabled()
+    await youth.check()
+
+    // And the name is the admin's to choose — FFTT's are export labels.
+    await page.getByLabel('Nom de « FED_Championnat Jeunes »').fill('Championnat jeunes')
     await page.getByRole('button', { name: 'Importer 1 compétition' }).click()
     await expect(page.getByText(/1 compétition importée, ouverte à toutes les catégories/)).toBeVisible()
 

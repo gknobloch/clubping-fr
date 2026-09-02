@@ -41,6 +41,8 @@ export function ImportCompetitionsModal({
   const [preview, setPreview] = useState<FfttCompetitionPreview[] | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>('idle')
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  /** Per-identifier name, prefilled from FFTT and editable before importing. */
+  const [names, setNames] = useState<Record<string, string>>({})
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState(false)
   const [importedCount, setImportedCount] = useState<number | null>(null)
@@ -69,9 +71,11 @@ export function ImportCompetitionsModal({
       return
     }
     setPreview(result)
-    // Everything we do not already hold starts ticked: the common move is
-    // "take them all", and unticking one is easier than hunting for the rest.
-    setPicked(new Set(result.filter((c) => !c.exists).map((c) => c.identifier)))
+    // Nothing ticked. FFTT lists everything an organisation runs — some twenty
+    // entries for a league, most of them individual tournaments this app has no
+    // use for — so importing is opt-in, one championship at a time.
+    setPicked(new Set())
+    setNames(Object.fromEntries(result.map((c) => [c.identifier, c.localName ?? c.name])))
     setPreviewState('done')
   }
 
@@ -86,7 +90,10 @@ export function ImportCompetitionsModal({
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttCompetitions(organizationId, seasonId, [...picked])
+    const result = await importFfttCompetitions(
+      organizationId, seasonId,
+      [...picked].map((identifier) => ({ identifier, name: names[identifier] })),
+    )
     setImporting(false)
     if (result) {
       setImportedCount(result.created.length)
@@ -102,7 +109,12 @@ export function ImportCompetitionsModal({
 
   return (
     <ModalShell onClose={onClose} labelledBy="import-competitions-title">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
+      {/* Wider than the other import dialogs on purpose: FFTT names run long
+          ("FED_Championnat de France par Equipes Masculin"), each row carries an
+          editable field, and this is a desktop job — nobody sets a season's
+          competitions up from a phone. It still becomes a bottom sheet below
+          sm:, like every ModalShell. */}
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
         <h2 id="import-competitions-title" className="font-display text-lg font-semibold text-slate-800">
           Importer les compétitions FFTT
         </h2>
@@ -181,10 +193,15 @@ export function ImportCompetitionsModal({
 
           {preview && preview.length > 0 && (
             <div className="space-y-3">
-              <p className="text-sm text-slate-600">
-                Les compétitions importées admettent toutes les catégories. Restreignez-les
-                ensuite depuis la liste.
-              </p>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm text-slate-600">
+                  Cochez les compétitions à importer. Elles admettront toutes les
+                  catégories : restreignez-les ensuite depuis la liste.
+                </p>
+                <span className="text-sm text-slate-500">
+                  {picked.size} sélectionnée{picked.size > 1 ? 's' : ''} sur {preview.filter((c) => !c.exists).length}
+                </span>
+              </div>
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                 {preview.map((c) => (
                   <li key={c.identifier} className="flex items-center gap-3 px-3 py-2 text-sm">
@@ -194,14 +211,28 @@ export function ImportCompetitionsModal({
                       checked={picked.has(c.identifier)}
                       disabled={c.exists}
                       onChange={() => toggle(c.identifier)}
+                      aria-label={c.name}
                       className="h-5 w-5 shrink-0 rounded border-slate-300 disabled:opacity-40 md:h-4 md:w-4"
                     />
-                    <label
-                      htmlFor={`import-comp-${c.identifier}`}
-                      className={`min-w-0 flex-1 ${c.exists ? 'text-slate-400' : 'text-slate-800'}`}
-                    >
-                      {c.localName ?? c.name}
-                    </label>
+                    {c.exists ? (
+                      <label
+                        htmlFor={`import-comp-${c.identifier}`}
+                        className="min-w-0 flex-1 truncate text-slate-400"
+                      >
+                        {c.localName ?? c.name}
+                      </label>
+                    ) : (
+                      // FFTT's own names are export labels, not titles — "FED_"
+                      // prefixes and all — so the name is editable here rather
+                      // than only after the fact on /competitions.
+                      <input
+                        type="text"
+                        value={names[c.identifier] ?? c.name}
+                        onChange={(e) => setNames((prev) => ({ ...prev, [c.identifier]: e.target.value }))}
+                        aria-label={`Nom de « ${c.name} »`}
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                      />
+                    )}
                     {c.exists && (
                       <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
                         Déjà présente
@@ -225,12 +256,14 @@ export function ImportCompetitionsModal({
             <button
               type="button"
               onClick={handleImport}
-              disabled={importing || picked.size === 0}
+              disabled={importing || picked.size === 0 || [...picked].some((i) => !(names[i] ?? '').trim())}
               className={`disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
             >
               {importing
                 ? 'Import…'
-                : `Importer ${picked.size} compétition${picked.size > 1 ? 's' : ''}`}
+                : picked.size === 0
+                  ? 'Aucune sélection'
+                  : `Importer ${picked.size} compétition${picked.size > 1 ? 's' : ''}`}
             </button>
           )}
         </div>

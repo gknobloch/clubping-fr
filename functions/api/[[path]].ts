@@ -627,10 +627,19 @@ const importParams = (
 
 // Existing divisions of a phase, for skip-matching by FFTT id or name.
 async function phaseDivisions(db: Env['Bindings']['DB'], phaseId: string) {
-  const r = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?').bind(phaseId).all()
+  const r = await db.prepare('SELECT id, display_name, rank, competition_id FROM divisions WHERE phase_id = ?')
+    .bind(phaseId).all()
+  // Which of them are filed under no competition yet (#482): a re-import fills
+  // those in, and the preview has to be able to say so — otherwise an import
+  // where every division already exists looks like it would do nothing at all.
+  const unfiled = new Set(
+    r.results.filter((x) => !x.competition_id)
+      .flatMap((x) => [x.id as string, (x.display_name as string).toLowerCase()]),
+  )
   return {
     ids: new Set(r.results.map((x) => x.id as string)),
     names: new Set(r.results.map((x) => (x.display_name as string).toLowerCase())),
+    unfiled,
     maxRank: r.results.reduce((m, x) => Math.max(m, x.rank as number), 0),
   }
 }
@@ -650,24 +659,31 @@ app.get('/fftt/divisions-preview', async (c) => {
     .bind(String(p.season), `Phase ${p.ph}`).first()
   const existing = phaseRow
     ? await phaseDivisions(c.env.DB, phaseRow.id as string)
-    : { ids: new Set<string>(), names: new Set<string>(), maxRank: 0 }
+    : { ids: new Set<string>(), names: new Set<string>(), unfiled: new Set<string>(), maxRank: 0 }
   // Which competition the import would file these under — looked up, never
   // created: a preview writes nothing (#482).
   const competitionRow = await c.env.DB
     .prepare('SELECT id, display_name FROM competitions WHERE fftt_contest_identifier = ?')
     .bind(result.contest.identifier)
     .first<{ id: string; display_name: string }>()
+  const divisions = orderDivisions(result.divisions).map((d, i) => {
+    const displayName = divisionDisplayName(d.name)
+    const exists = existing.ids.has(d.id) || existing.names.has(displayName.toLowerCase())
+    return {
+      id: d.id, identifier: d.identifier, name: displayName, rank: i + 1,
+      playersPerGame: playersPerGameFor(d.identifier),
+      exists,
+      // Present, but filed under nothing: importing would attach it (#482).
+      attachable: exists && (existing.unfiled.has(d.id) || existing.unfiled.has(displayName.toLowerCase())),
+    }
+  })
   return c.json({
     contest: result.contest,
     competition: competitionRow
       ? { id: competitionRow.id, displayName: competitionRow.display_name, exists: true }
       : { displayName: result.contest.name, exists: false },
     phaseExists: !!phaseRow,
-    divisions: orderDivisions(result.divisions).map((d, i) => ({
-      id: d.id, identifier: d.identifier, name: divisionDisplayName(d.name), rank: i + 1,
-      playersPerGame: playersPerGameFor(d.identifier),
-      exists: existing.ids.has(d.id) || existing.names.has(divisionDisplayName(d.name).toLowerCase()),
-    })),
+    divisions,
   })
 })
 
@@ -707,25 +723,42 @@ app.get('/fftt/competitions-preview', async (c) => {
   })
 })
 
+/** A display name the caller chose, or nothing when it is blank or absurd. */
+const chosenName = (v: unknown): string | undefined => {
+  const name = typeof v === 'string' ? v.trim() : ''
+  return name && name.length <= 120 ? name : undefined
+}
+
 /**
  * POST /competitions/import — create the competitions the caller ticked.
  *
  * Re-fetches from FFTT rather than trusting the posted list, the same rule the
- * divisions import follows: the client says *which* identifiers, never what
- * they are called. Each lands with no categories, so importing a competition
- * restricts nobody until a general admin narrows it.
+ * divisions import follows: the client says *which* identifiers exist, and an
+ * identifier FFTT does not run is ignored. The NAME is the caller's to choose,
+ * though — FFTT's are export labels ("FED_Championnat de France par Equipes
+ * Masculin"), and renaming one on /competitions the moment after importing it
+ * is a step worth saving. Blank falls back to FFTT's.
+ *
+ * Each lands with no categories, so importing a competition restricts nobody
+ * until a general admin narrows it.
  */
 app.post('/competitions/import', async (c) => {
   if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
-  const b = await c.req.json<{ organizationId?: unknown; seasonId?: unknown; identifiers?: unknown }>()
+  const b = await c.req.json<{ organizationId?: unknown; seasonId?: unknown; selections?: unknown }>()
   const p = orgSeasonParams(b.organizationId, b.seasonId)
-  const wanted = Array.isArray(b.identifiers) ? b.identifiers.filter(isFfttContestIdentifier) : []
-  if (!p || wanted.length === 0) return c.json({ error: 'invalid_params' }, 400)
+  const selections = (Array.isArray(b.selections) ? b.selections : [])
+    .flatMap((raw) => {
+      const sel = raw as { identifier?: unknown; name?: unknown }
+      return isFfttContestIdentifier(sel?.identifier)
+        ? [{ identifier: sel.identifier, name: chosenName(sel.name) }]
+        : []
+    })
+  if (!p || selections.length === 0) return c.json({ error: 'invalid_params' }, 400)
 
   const contests = await fetchFfttContests(p.org, p.season)
   if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
 
-  const asked = new Set(wanted)
+  const asked = new Map(selections.map((sel) => [sel.identifier, sel.name]))
   const created: Competition[] = []
   const skipped: Array<{ identifier: string; name: string }> = []
   for (const contest of contests) {
@@ -737,7 +770,10 @@ app.post('/competitions/import', async (c) => {
       skipped.push({ identifier: contest.identifier, name: contest.name })
       continue
     }
-    const id = await competitionForContest(c.env.DB, contest)
+    const id = await competitionForContest(
+      c.env.DB,
+      { ...contest, name: asked.get(contest.identifier) ?? contest.name },
+    )
     const row = await c.env.DB
       .prepare('SELECT * FROM competitions WHERE id = ?').bind(id).first<CompetitionRow>()
     if (row) {

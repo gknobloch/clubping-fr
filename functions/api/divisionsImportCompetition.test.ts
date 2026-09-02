@@ -94,7 +94,9 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
     run: () => run(sql, params),
     all: async () => ({
       results: /FROM divisions WHERE phase_id/.test(sql)
-        ? divisions.map((d) => ({ id: d.id, display_name: d.display_name, rank: d.rank }))
+        ? divisions.map((d) => ({
+          id: d.id, display_name: d.display_name, rank: d.rank, competition_id: d.competition_id,
+        }))
         : [],
     }),
   })
@@ -124,6 +126,12 @@ const runImport = (db: D1Database, organizationId = 14, contestIdentifier?: stri
 const queriesOf = () =>
   (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
     .map((call) => String(JSON.parse(String((call[1] as RequestInit).body)).query))
+
+const runPreview = (db: D1Database, contestIdentifier = '1') =>
+  app.fetch(
+    new Request(`http://localhost/api/fftt/divisions-preview?organizationId=14&seasonId=27&phase=1&contestIdentifier=${contestIdentifier}`),
+    { DB: db, AUTH_GUARD_DISABLED: 'true' },
+  )
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -211,5 +219,46 @@ describe('which championship the divisions import reads (#482)', () => {
     const res = await runImport(fakeDb([], []), 14, '1" name: "x')
     expect(res.status).toBe(400)
     expect(queriesOf()).toEqual([])
+  })
+})
+
+// The case seen in production once #482 landed: every division of the phase was
+// imported before competitions existed, so the preview had nothing to CREATE —
+// and the dialog offered a disabled "Rien à importer", which made the filing
+// unreachable. The preview has to say a re-import would still do something.
+describe('an import that creates nothing can still file (#482)', () => {
+  const unfiled = (): DivisionRow[] => [
+    { id: '234322', phase_id: 'phase-27-1', display_name: 'GE 1', rank: 1, competition_id: null },
+    { id: '234612', phase_id: 'phase-27-1', display_name: 'GE 7', rank: 2, competition_id: null },
+  ]
+
+  it('marks divisions that exist but are filed under nothing as attachable', async () => {
+    mockFftt()
+    const res = await runPreview(fakeDb(unfiled(), []))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { divisions: Array<{ exists: boolean; attachable: boolean }> }
+    expect(body.divisions.every((d) => d.exists && d.attachable)).toBe(true)
+  })
+
+  it('does not mark one already filed', async () => {
+    mockFftt()
+    const rows = unfiled()
+    rows[0].competition_id = 'comp-seniors'
+    const body = (await (await runPreview(fakeDb(rows, []))).json()) as {
+      divisions: Array<{ name: string; attachable: boolean }>
+    }
+    expect(body.divisions.find((d) => d.name === 'GE 1')?.attachable).toBe(false)
+    expect(body.divisions.find((d) => d.name === 'GE 7')?.attachable).toBe(true)
+  })
+
+  it('and running it does file them, creating no division at all', async () => {
+    mockFftt()
+    const divisions = unfiled()
+    const competitions: CompetitionRow[] = []
+    const res = await runImport(fakeDb(divisions, competitions))
+
+    const body = (await res.json()) as { created: unknown[] }
+    expect(body.created).toEqual([])
+    expect(divisions.map((d) => d.competition_id)).toEqual([competitions[0].id, competitions[0].id])
   })
 })

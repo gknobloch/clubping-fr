@@ -346,7 +346,7 @@ describe('POST /competitions/import', () => {
     mockContests()
     const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
     const res = await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, identifiers: ['CJ'],
+      organizationId: 14, seasonId: 27, selections: [{ identifier: 'CJ' }],
     })
     expect(res.status).toBe(200)
 
@@ -359,14 +359,26 @@ describe('POST /competitions/import', () => {
     })
   })
 
-  // The client says WHICH, never what they are called: the same rule the
-  // divisions import follows.
-  it('takes the name from FFTT, not from the caller', async () => {
+  // FFTT's names are export labels ("FED_…"), so the admin renames at import
+  // time rather than immediately afterwards. The identifier stays FFTT's.
+  it('stores the name the caller chose', async () => {
     mockContests()
     const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
     await importCompetitions(competitionsDb(rows), {
       organizationId: 14, seasonId: 27,
-      identifiers: ['CJ'], names: { CJ: 'Ce que je veux' },
+      selections: [{ identifier: 'CJ', name: 'Championnat jeunes' }],
+    })
+    expect(rows[0]).toMatchObject({
+      display_name: 'Championnat jeunes',
+      fftt_contest_identifier: 'CJ',
+    })
+  })
+
+  it('falls back to FFTT’s name when the caller sends a blank one', async () => {
+    mockContests()
+    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27, selections: [{ identifier: 'CJ', name: '   ' }],
     })
     expect(rows[0].display_name).toBe('FED_Championnat Jeunes')
   })
@@ -375,7 +387,7 @@ describe('POST /competitions/import', () => {
     mockContests()
     const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
     const res = await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, identifiers: ['ZZZ'],
+      organizationId: 14, seasonId: 27, selections: [{ identifier: 'ZZZ' }],
     })
     expect(res.status).toBe(200)
     expect(rows).toEqual([])
@@ -385,7 +397,7 @@ describe('POST /competitions/import', () => {
     mockContests()
     const rows = [{ id: 'comp-seniors', display_name: 'Championnat par équipes', fftt_contest_identifier: '1' }]
     const res = await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, identifiers: ['1'],
+      organizationId: 14, seasonId: 27, selections: [{ identifier: '1' }],
     })
     const body = (await res.json()) as { created: unknown[]; skipped: Array<{ identifier: string }> }
     expect(body.created).toEqual([])
@@ -396,13 +408,13 @@ describe('POST /competitions/import', () => {
   it('refuses a club admin', async () => {
     mockContests()
     const { db } = fakeDb([clubAdmin], [], 'ca')
-    const res = await importCompetitions(db, { organizationId: 14, seasonId: 27, identifiers: ['1'] }, {})
+    const res = await importCompetitions(db, { organizationId: 14, seasonId: 27, selections: [{ identifier: '1' }] }, {})
     expect(res.status).toBe(403)
   })
 
   it('refuses an empty or malformed selection', async () => {
     mockContests()
-    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, identifiers: [] })).status).toBe(400)
-    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, identifiers: ['a"b'] })).status).toBe(400)
+    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, selections: [] })).status).toBe(400)
+    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, selections: [{ identifier: 'a"b' }] })).status).toBe(400)
   })
 })

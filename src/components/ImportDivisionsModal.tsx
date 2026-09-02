@@ -107,6 +107,10 @@ export function ImportDivisionsModal({
   }
 
   const toImportCount = preview?.divisions.filter((d) => !d.exists).length ?? 0
+  // Divisions already present that the import would file under the competition
+  // (#482). Without counting these, a phase whose divisions all pre-date the
+  // feature offered a disabled "Rien à importer" and the filing was unreachable.
+  const toAttachCount = preview?.divisions.filter((d) => d.attachable).length ?? 0
   const seasonName = seasons.find((s) => s.id === seasonId)?.displayName ?? seasonId
 
   const handleImport = async () => {
@@ -254,7 +258,7 @@ export function ImportDivisionsModal({
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
               <p className="text-sm text-green-800">
                 {importedCount === 0
-                  ? 'Aucune division à importer : elles sont toutes déjà présentes.'
+                  ? 'Aucune division créée : elles étaient toutes déjà présentes. Celles qui n’étaient rattachées à aucune compétition le sont désormais.'
                   : `${importedCount} division${importedCount > 1 ? 's' : ''} importée${importedCount > 1 ? 's' : ''}.`}
               </p>
             </div>
@@ -290,7 +294,7 @@ export function ImportDivisionsModal({
                     </span>
                     {d.exists && (
                       <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
-                        Déjà présente
+                        {d.attachable ? 'Présente, à rattacher' : 'Déjà présente'}
                       </span>
                     )}
                   </li>
@@ -302,13 +306,15 @@ export function ImportDivisionsModal({
               <button
                 type="button"
                 onClick={handleImport}
-                disabled={importing || toImportCount === 0}
+                disabled={importing || (toImportCount === 0 && toAttachCount === 0)}
                 className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
               >
                 {importing
                   ? 'Import…'
                   : toImportCount === 0
-                    ? 'Rien à importer'
+                    ? toAttachCount === 0
+                      ? 'Rien à importer'
+                      : `Rattacher ${toAttachCount} division${toAttachCount > 1 ? 's' : ''}`
                     : `Importer ${toImportCount} division${toImportCount > 1 ? 's' : ''}`}
               </button>
             </div>
