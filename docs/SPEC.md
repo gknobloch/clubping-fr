@@ -154,9 +154,16 @@ A competition may additionally be **reserved to its categories**: a club can
 then take a licensee out of it but never put one in — a youth championship does
 not admit a veteran because a club asked.
 
-A division that belongs to no competition restricts nobody. That is what every
-division is until a General Admin says otherwise, so nothing changes anywhere
-in the app until the first competition exists.
+A division that belongs to no competition restricts nobody — that is what a
+division created by hand, or read off a PDF calendar, is until a General Admin
+says otherwise.
+
+The **FFTT divisions import fills it in by itself**: it reads one championship
+and one only, so it already knows which competition its divisions belong to and
+files them under it, creating that competition on first sight with no category
+restriction at all. Re-importing also files divisions that predate this, but
+only where nothing is filed yet: it never moves a division a General Admin has
+put somewhere else.
 
 ### Category
 

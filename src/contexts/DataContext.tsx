@@ -104,7 +104,13 @@ export interface FfttDivisionPreview {
 }
 
 export interface FfttDivisionsPreview {
-  contest: { id: string; name: string }
+  contest: { id: string; identifier: string; name: string }
+  /**
+   * The competition the import will file these divisions under (#482). The
+   * import is pinned to one FFTT contest, so it already knows; `exists: false`
+   * means the competition does not exist yet and the import will create it.
+   */
+  competition: { id?: string; displayName: string; exists: boolean }
   phaseExists: boolean
   divisions: FfttDivisionPreview[]
 }

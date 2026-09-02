@@ -13,10 +13,13 @@ INSERT INTO phases (id, season_id, name, display_name, status) VALUES
 -- everyone, so the existing fixtures behave exactly as they did. The other two
 -- are what the feature is for — one reserved to the young, one left to the
 -- club's judgement.
-INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived) VALUES
-  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0),
-  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0),
-  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0);
+-- comp-seniors carries the FFTT contest identifier the divisions import pins
+-- itself to ("1", the men's team championship): re-importing divisions finds
+-- this row rather than creating a second one.
+INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier) VALUES
+  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0, '1'),
+  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0, NULL),
+  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0, NULL);
 
 -- club_competition_eligibility — one of each amendment, so both halves of the
 -- club screen have a row: a V45 the club fields with its veterans anyway, and

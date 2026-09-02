@@ -21,6 +21,22 @@ export function ffttIdFromIri(iri: string): string {
 // Import configuration
 // ---------------------------------------------------------------------------
 
+/**
+ * The FFTT contest the divisions import reads — and, today, the only one it
+ * can read (#482).
+ *
+ * `contests(… identifier: "1")` is what the import asks for, so every division
+ * it has ever created belongs to one competition: the men's team championship
+ * ("FED_Championnat de France par Equipes Masculin"). That is not an accident
+ * to be tidied away but the fact that lets the import file its divisions under
+ * a competition without asking anyone — see `competitionForContest`.
+ *
+ * The day FFTT's youth or women's championships are imported, this stops being
+ * a constant and becomes a parameter of the import; naming it is what makes
+ * that one edit rather than a hunt through a template literal.
+ */
+export const FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER = '1'
+
 /** Players per game when no override matches. */
 export const PLAYERS_PER_GAME_DEFAULT = 4
 

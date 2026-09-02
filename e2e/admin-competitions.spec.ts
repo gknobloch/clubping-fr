@@ -16,6 +16,8 @@ test.describe('General admin — Competitions (#482)', () => {
     await page.goto('/competitions')
     const seniors = page.getByRole('row', { name: /Championnat par équipes/ })
     await expect(seniors).toContainText('Toutes les catégories')
+    // Created by the divisions import, which reads one FFTT contest (#482).
+    await expect(seniors).toContainText('FFTT')
     // Every mock division is filed under it.
     await expect(seniors).toContainText('7')
 

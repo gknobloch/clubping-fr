@@ -110,6 +110,13 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - The FFTT `<cat>` code is stored **verbatim** and normalised on read
   (`src/lib/playerCategories.ts`): youth suffixes drop (`B2` → `B`), veteran
   bands stay apart (`V50` ≠ `V60`).
+- **The divisions import already knows its competition** and files them itself:
+  it asks FFTT for one contest (`FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER`, "1" =
+  the men's team championship). Keyed on the contest's *identifier*, never its
+  id — FFTT issues a fresh id per (organisation, season), so the id would mint a
+  new competition every August and orphan every category and derogation set
+  against the old one. Re-importing fills a blank `competition_id`; it never
+  overwrites a filing a general admin has made.
 - It bites on what can be **added** — a team's roster picker, a line-up's
   "autres joueurs" — never on availabilities already given or line-ups already
   made. A competition edited after the fact must not empty a squad.

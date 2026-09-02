@@ -166,6 +166,14 @@ export function CompetitionsPage() {
               <tr key={competition.id} className={`hover:bg-slate-50/50 ${competition.isArchived ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {competition.displayName}
+                  {competition.ffttContestIdentifier && (
+                    <span
+                      className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
+                      title="Créée par l'import des divisions FFTT"
+                    >
+                      FFTT
+                    </span>
+                  )}
                   {competition.isCategoryLocked && (
                     <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
                       Verrouillée

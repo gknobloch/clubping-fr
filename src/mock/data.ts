@@ -188,8 +188,11 @@ export const mockPlayers: Player[] = basePlayers.map((p) => ({
 // open to a club's judgement.
 export const mockCompetitions: Competition[] = [
   {
+    // As the divisions import creates it: pinned to FFTT contest "1", with no
+    // categories, so nothing is restricted until a general admin says so.
     id: 'comp-seniors', displayName: 'Championnat par équipes',
     categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+    ffttContestIdentifier: '1',
   },
   {
     id: 'comp-jeunes', displayName: 'Championnat jeunes',

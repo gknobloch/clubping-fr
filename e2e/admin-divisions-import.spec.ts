@@ -13,7 +13,9 @@ const organizations = [
 
 // Matches the mock data: season '26' with phase 'phase-26-1' (Phase 1, active).
 const preview = {
-  contest: { id: '18368', name: 'FED_Championnat de France par Equipes Masculin' },
+  contest: { id: '18368', identifier: '1', name: 'FED_Championnat de France par Equipes Masculin' },
+  // The import reads one contest, so it knows the competition (#482).
+  competition: { id: 'comp-seniors', displayName: 'Championnat par équipes', exists: true },
   phaseExists: true,
   divisions: [
     { id: '234142', identifier: 'GEEP1', name: 'GE Elite P1', rank: 1, playersPerGame: 4, exists: false },
@@ -120,7 +122,8 @@ test.describe('General admin — Divisions organization filter', () => {
 
   // Matches the mock data: 198609..198907 (GE 1..GE 7) all exist in phase-26-1.
   const localPreview = {
-    contest: { id: '18368', name: 'FED_Championnat de France par Equipes Masculin' },
+    contest: { id: '18368', identifier: '1', name: 'FED_Championnat de France par Equipes Masculin' },
+    competition: { id: 'comp-seniors', displayName: 'Championnat par équipes', exists: true },
     phaseExists: true,
     divisions: [
       { id: '198609', identifier: 'GE1P1', name: 'GE 1', rank: 1, playersPerGame: 4, exists: true },

@@ -215,6 +215,17 @@ export function ImportDivisionsModal({
               <p className="text-sm text-slate-600">
                 Championnat : <span className="font-medium text-slate-800">{preview.contest.name}</span>
               </p>
+              {/* The import reads one FFTT contest and one only, so it knows
+                  which competition these divisions belong to and files them
+                  itself (#482). Saying so here is what makes the competition
+                  appearing on /competitions afterwards unsurprising. */}
+              <p className="text-sm text-slate-600">
+                Compétition :{' '}
+                <span className="font-medium text-slate-800">{preview.competition.displayName}</span>
+                {!preview.competition.exists && (
+                  <span className="text-slate-500"> — elle sera créée, ouverte à toutes les catégories</span>
+                )}
+              </p>
               {!preview.phaseExists && (
                 <p className="text-sm text-amber-700">
                   La phase « Phase {phase} » n’existe pas encore pour {seasonName} : elle sera créée (inactive).

@@ -116,6 +116,8 @@ export interface CompetitionRow {
   is_category_locked: number
   sort_order: number
   is_archived: number
+  /** FFTT contest identifier (#482); NULL for a competition created by hand. */
+  fftt_contest_identifier: string | null
 }
 
 export interface CompetitionEligibilityRow {

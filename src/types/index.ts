@@ -115,6 +115,17 @@ export interface Competition {
   isCategoryLocked: boolean
   sortOrder: number
   isArchived: boolean
+  /**
+   * The FFTT contest this competition is, when it came from the divisions
+   * import — "1" is the men's team championship. Absent for a competition
+   * created by hand.
+   *
+   * The contest's *identifier*, never its id: FFTT issues a fresh id per
+   * (organisation, season), so the id would make this a different competition
+   * every August. Set by the import alone; renaming the competition does not
+   * change what it is.
+   */
+  ffttContestIdentifier?: string
 }
 
 /** A club's amendment to a competition's default mapping (#482). */
