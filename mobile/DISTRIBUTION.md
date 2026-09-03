@@ -79,6 +79,79 @@ remotely by EAS. On the first `npm run submit:ios`, EAS prompts for the App Stor
 Connect credentials / API key and stores them for reuse. The App Store Connect app id
 is pinned in `eas.json` under `submit.production.ios.ascAppId`.
 
+## The version record in App Store Connect is not the version in the repo
+
+App Store Connect holds a *version record* — the "1.0" or "1.2.0" at the top of the
+Distribution tab — and it is created by hand there, not by the upload. A build can only
+be attached to a record whose number matches its `CFBundleShortVersionString`, which is
+`expo.version` from `app.json`. When the store page and this repo disagree about the
+number, it is the record that is wrong or that was never created for the new version:
+check which build the live record actually carries before concluding a release shipped.
+
+## The store page's language comes from the binary, not from App Store Connect
+
+**Langue principale / Primary Language** in App Store Connect only decides which
+localisation of the *listing* you are editing. The **LANGUE** line on the product page
+is read from the binary's declared localisations, and the Expo template declares none —
+`CFBundleDevelopmentRegion` is left as `$(DEVELOPMENT_LANGUAGE)`, which compiles to
+`en`. An app whose every screen is French was listed as *EN — Anglais* for exactly that
+reason (#484).
+
+Two keys in `ios.infoPlist` fix it, and the product page follows from the next reviewed
+build:
+
+```json
+"CFBundleDevelopmentRegion": "fr",
+"CFBundleLocalizations": ["fr"]
+```
+
+Do not delete them because "the app has no translation files" — no declared
+localisation *is* the state Apple reads as English. Nothing else moves: every date in
+the app passes `'fr-FR'` to `toLocaleDateString` explicitly, so declaring the
+localisation changes no formatting.
+
+The same commit gave `expo-secure-store` a `faceIDPermission`, because its default is
+the English `Allow $(PRODUCT_NAME) to access your Face ID biometric data.` — the one
+English sentence the app could put in front of a member.
+
+All three ship in a native build. `eas update` does not carry `Info.plist`.
+
+## TestFlight is not a separate build
+
+There is no "TestFlight build". Every `production` build submitted with `--auto-submit`
+lands in App Store Connect, and App Store Connect puts that same artifact in TestFlight
+on its own — the one review looks at is the one testers install. So testers stay useful
+after a release without anything being rebuilt for them.
+
+Who sees what:
+
+- **Internal testers** — App Store Connect users with a role on the app, up to 100. They
+  see *every* build automatically, minutes after processing, with no review.
+- **External testers** — up to 10 000, invited by email or by a public link, organised in
+  groups. A group only receives the builds explicitly given to it, unless *Automatically
+  distribute builds* is on. The first build of each new version number waits for a short
+  **Beta App Review**; later builds of the same version usually go straight out.
+
+That asymmetry is what makes keeping testers free: an external group that is never given
+a build never notifies anybody.
+
+## What to do with the testers now the app is public
+
+Keep the group — removing testers is not tidying up, it is throwing away invitations
+that then cost the same dance to send again. What changes is what you ask of them:
+
+- **Ask them to install from the App Store**, and expect to explain how. It is the same
+  bundle id, so iOS considers the app installed: the store page shows **Ouvrir**, not
+  **Obtenir**, and nothing prompts the switch. The reliable path is delete the app, then
+  install it from the App Store — they sign in again afterwards.
+- **Say it before the build expires.** A TestFlight build stops opening **90 days after
+  it was uploaded**. A tester who never switches ends up with an app that refuses to
+  launch and no visible reason why.
+- **Leave them in the group** for the next release. Handing a build to the group is one
+  click, and it gets them the update before review sees it.
+
+Only remove a tester who has left the club.
+
 ---
 
 # Android
@@ -184,6 +257,32 @@ it. `--auto-submit` submits the artifact it just produced.
 
 Builds land on the `internal` track. Promote to `closed`, `open` or `production` from
 the Play Console, or change `track` in `eas.json`.
+
+---
+
+# Release notes
+
+`eas submit` uploads a binary and nothing else. No store text is generated from this
+repo, so a release where nobody writes the notes ships "Corrections de bugs" or, worse,
+the previous version's text.
+
+`mobile/CHANGELOG.md` is the source. It is written in French, from the member's side,
+in the version-bump PR — which is what gets it reviewed rather than improvised at
+submission time. The same text then goes into three fields, by hand:
+
+| Where | Scope | Notes |
+| ----- | ----- | ----- |
+| App Store — **Nouveautés de cette version** | per version | Required for every update after the first. Per listing language; only French exists here. 4 000 characters. |
+| TestFlight — **Éléments à tester** | per build | Optional, and the only one addressed to testers: say what to try, not what changed. |
+| Play Console — **Notes de version** | per release | Filled when promoting off the `internal` track, in `fr-FR`. 500 characters — the shortest of the three, so write the App Store text first and cut. |
+
+Write them **before** submitting. On the App Store the text belongs to the version:
+changing it once the version is released means submitting another one, and another
+review.
+
+An `eas update` (OTA) has no notes anywhere — nothing tells a member the app changed
+under them. That is a reason to prefer a real release for anything a member would
+notice.
 
 ---
 

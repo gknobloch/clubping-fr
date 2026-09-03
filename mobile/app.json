@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "fr.clubping.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "fr",
+        "CFBundleLocalizations": ["fr"]
       }
     },
     "androidStatusBar": {
@@ -37,7 +39,12 @@
     "plugins": [
       "expo-router",
       "expo-splash-screen",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Autorisez Face ID pour déverrouiller votre session Club Ping."
+        }
+      ],
       "expo-web-browser",
       [
         "expo-image-picker",
