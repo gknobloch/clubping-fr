@@ -87,6 +87,13 @@ npm version <new-version> --no-git-tag-version
 That covers `mobile/package.json` and `mobile/package-lock.json`. Then set
 `expo.version` in `mobile/app.json` to the same string.
 
+**And give the version its notes.** `mobile/CHANGELOG.md` opens with `## À
+paraître`; retitle that section `## <version> — <date>` and open a fresh empty one
+above it. The text is French, from the member's side — what they can now do, not
+which module changed. It belongs in this PR: written here it gets reviewed with
+the bump; written at submission time it gets improvised, which is how a release
+ships "Corrections de bugs". Step 5 copies it into the stores.
+
 **Leave `versionCode` and `buildNumber` alone.** `eas.json` sets
 `appVersionSource: "remote"`, so EAS owns them and increments each on its own at
 build time. Writing them by hand puts the repo and EAS out of step, and the
@@ -149,6 +156,17 @@ Neither goes straight to the public. iOS arrives in App Store Connect for
 TestFlight and review; Android lands on the Play `internal` track, set by
 `eas.json`. **Promotion to production is manual, from each console** — say this
 plainly when reporting, so nobody thinks the release is live when it is not.
+
+### The three fields EAS does not fill
+
+`eas submit` uploads the binary and no text at all. The version's section of
+`mobile/CHANGELOG.md` has to be pasted by hand into **Nouveautés de cette
+version** (App Store, per version, required for every update after the first),
+**Éléments à tester** (TestFlight, per build, addressed to testers) and **Notes de
+version** (Play Console, when promoting off the `internal` track, 500 characters —
+so cut, do not rewrite). Neither field can be changed after release without
+another submission, so list them as work the user still has to do, with the text
+ready to paste. `mobile/DISTRIBUTION.md` has the details.
 
 ## Reporting
 
