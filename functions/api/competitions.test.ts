@@ -287,9 +287,17 @@ function competitionsDb(rows: HeldRow[]) {
       return null
     },
     async all() {
+      // The resolver reads every row carrying an identifier, then decides.
+      if (/SELECT id, fftt_contest_name FROM competitions WHERE fftt_contest_identifier = \?/.test(sql)) {
+        return { results: rows.filter((r) => r.fftt_contest_identifier === params[0]) }
+      }
       return { results: /fftt_contest_identifier IS NOT NULL/.test(sql) ? rows.filter((r) => r.fftt_contest_identifier) : [] }
     },
     async run() {
+      if (/UPDATE competitions SET fftt_contest_name/.test(sql)) {
+        const found = rows.find((r) => r.id === params[1])
+        if (found) found.fftt_contest_name = params[0] as string
+      }
       if (/INSERT INTO competitions/.test(sql)) {
         rows.push({
           id: params[0] as string,
@@ -463,5 +471,73 @@ describe('two contests sharing one identifier are two competitions', () => {
       organizationId: 14, seasonId: 27, selections: [{ contestId: '19023' }],
     })
     expect(rows[0].fftt_contest_name).toBe('Inscription aux Championnats du Grand Est Vétérans')
+  })
+})
+
+// #482 — the name disambiguates, it does not identify. Migration 0048 proved
+// why that distinction matters: it backfilled `display_name` into the FFTT-name
+// column, so every renamed competition stopped matching itself and the next
+// import made a duplicate.
+describe('a stored FFTT name that has gone stale', () => {
+  const renamed = (): Rows => [{
+    id: 'comp-seniors',
+    display_name: 'Championnat de France par Equipes Masculin',
+    fftt_contest_identifier: '1',
+    // What 0048's backfill wrote: the admin's name, not FFTT's.
+    fftt_contest_name: 'Championnat de France par Equipes Masculin',
+  }]
+
+  it('adopts the one row carrying that identifier instead of duplicating it', async () => {
+    mockContests()
+    const rows = renamed()
+    const res = await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27, selections: [{ contestId: '18368' }],
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { created: unknown[]; skipped: unknown[] }
+    expect(body.created).toEqual([])
+    expect(body.skipped).toHaveLength(1)
+    expect(rows).toHaveLength(1)
+  })
+
+  // Adopting corrects the stored name so the next import matches exactly —
+  // without touching what the competition is called on screen.
+  it('corrects the stored FFTT name, leaving the display name alone', async () => {
+    mockContests()
+    const rows = renamed()
+    const db = competitionsDb(rows)
+    await app.fetch(
+      new Request('http://localhost/api/fftt/divisions-preview?organizationId=14&seasonId=27&phase=1&contestId=18368'),
+      { DB: db, AUTH_GUARD_DISABLED: 'true' },
+    )
+    // A preview writes nothing.
+    expect(rows[0].fftt_contest_name).toBe('Championnat de France par Equipes Masculin')
+  })
+
+  // Both halves of the guard. Without this one, importing FFTT's two "TO"
+  // contests in one go would adopt the row just made for the first.
+  it('does not adopt when FFTT itself lists the identifier twice', async () => {
+    mockContests()
+    const rows: Rows = []
+    await importCompetitions(competitionsDb(rows), {
+      organizationId: 15, seasonId: 27,
+      selections: [{ contestId: '18647' }, { contestId: '18742' }],
+    })
+    expect(rows.map((r) => r.fftt_contest_name)).toEqual(['TOP DE ZONE 06', 'TOP DE QUALIFICATION'])
+  })
+
+  // And where we already hold several rows under one identifier, the name is
+  // the only thing that can decide, so a miss is a new competition, not a guess.
+  it('does not adopt when the identifier names more than one competition', async () => {
+    mockContests()
+    const rows: Rows = [
+      { id: 'zone', display_name: 'Top de zone', fftt_contest_identifier: 'TO', fftt_contest_name: 'TOP DE ZONE 06' },
+      { id: 'autre', display_name: 'Autre', fftt_contest_identifier: 'TO', fftt_contest_name: 'AUTRE CHOSE' },
+    ]
+    await importCompetitions(competitionsDb(rows), {
+      organizationId: 15, seasonId: 27, selections: [{ contestId: '18742' }],
+    })
+    expect(rows).toHaveLength(3)
+    expect(rows[2].fftt_contest_name).toBe('TOP DE QUALIFICATION')
   })
 })

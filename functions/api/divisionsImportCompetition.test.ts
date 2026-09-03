@@ -75,6 +75,10 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
         competition_id: params[7] as string | null,
       })
     }
+    if (/UPDATE competitions SET fftt_contest_name/.test(sql)) {
+      const found = competitions.find((c) => c.id === params[1])
+      if (found) found.fftt_contest_name = params[0] as string
+    }
     if (/UPDATE divisions SET competition_id/.test(sql)) {
       const [competitionId, phaseId, id, loweredName] = params as string[]
       for (const d of divisions) {
@@ -99,7 +103,9 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
     first: () => first(sql, params),
     run: () => run(sql, params),
     all: async () => ({
-      results: /FROM divisions WHERE phase_id/.test(sql)
+      results: /FROM competitions WHERE fftt_contest_identifier = \?/.test(sql)
+        ? competitions.filter((c) => c.fftt_contest_identifier === params[0])
+        : /FROM divisions WHERE phase_id/.test(sql)
         ? divisions.map((d) => ({
           id: d.id, display_name: d.display_name, rank: d.rank, competition_id: d.competition_id,
         }))

@@ -192,6 +192,16 @@ export function CompetitionsPage() {
                       Archivée
                     </span>
                   )}
+                  {/* Under a renamed competition, what the FFTT calls it. Two
+                      rows for the same championship are otherwise impossible to
+                      tell apart, which is exactly the confusion that surfaced
+                      migration 0048's backfill bug (#482). */}
+                  {competition.ffttContestName
+                    && competition.ffttContestName !== competition.displayName && (
+                    <span className="block text-xs font-normal text-slate-400">
+                      FFTT : {competition.ffttContestName}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {categoriesSummary(competition.categories)}

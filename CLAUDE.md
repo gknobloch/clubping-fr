@@ -121,13 +121,20 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   query without its `identifier` filter lists an organisation's championships;
   `/competitions` imports from that, and the manual add is the fallback for what
   FFTT does not run. Never make typing one in the primary path.
-- **Competitions are keyed on (contest identifier, FFTT's contest name)** —
-  verified against three live listings. The id is per-season (18368 vs 15954 for
-  the same championship), so keying on it would mint a new competition every
-  August and orphan every category and derogation. The identifier alone is NOT
-  unique: org 15 lists `TO` twice in one season, and `TO` is a different
-  championship in another league. `fftt_contest_name` is kept apart from
-  `display_name` so a rename cannot break the match.
+- **A competition is matched on its contest identifier; the FFTT name only
+  disambiguates.** `findCompetitionForContest` is the one place: exact
+  (identifier, name) wins; failing that, a single stored row under that
+  identifier is *adopted and its stale name corrected*, but only when FFTT's
+  listing also shows one contest under it. Both halves of that guard are
+  load-bearing — without the first a renamed competition duplicates itself
+  (migration 0049), without the second importing FFTT's two `TO` contests in one
+  batch fuses them.
+- The id is per-season (18368 vs 15954 for the same championship), so keying on
+  it would mint a new competition every August and orphan every category and
+  derogation. The identifier alone is not unique either: org 15 lists `TO` twice
+  in one season. `fftt_contest_name` is kept apart from `display_name` so a
+  rename cannot break the match — **never backfill one from the other**, which
+  is exactly what 0048 got wrong.
 - **A request names a contest by its FFTT id**, resolved out of the listing in
   JavaScript. Never re-add an `identifier:` filter to the `contests` query: it
   would silently return whichever of two contests came first. Nothing from a

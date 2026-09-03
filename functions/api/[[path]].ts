@@ -596,17 +596,77 @@ async function fetchFfttDivisions(
  * (`divisionDisplayName`). It is a starting point, not a verdict: /competitions
  * renames it.
  */
+/**
+ * The competition row an FFTT contest belongs to, if we hold one.
+ *
+ * The name **disambiguates, it does not identify**. That distinction is the
+ * whole of this function, and it was learnt the hard way:
+ *
+ *   1. An exact (identifier, FFTT name) match is the competition.
+ *   2. No exact match, exactly ONE row carries that identifier, AND FFTT lists
+ *      only one contest under it — that is the same competition, with a stored
+ *      FFTT name that has gone stale. Nothing else could be meant, so it is
+ *      adopted and the stored name corrected.
+ *   3. Otherwise the name is the only thing that can decide, and a miss means a
+ *      new competition.
+ *
+ * Both halves of step 2's guard are needed. Without the first, a renamed
+ * competition duplicates itself; without the second, importing FFTT's two "TO"
+ * contests in one go would see the row just created for the first and adopt it
+ * for the second, quietly fusing two unrelated championships.
+ *
+ * Step 2 is what a strict pair key lacked, and its absence duplicated a
+ * competition the moment its stored name drifted — which migration 0048 caused
+ * for every renamed competition by backfilling `display_name` into it, and
+ * which FFTT will cause on its own the first time it fixes a typo or moves a
+ * tournament's year out of its title ("…BEAUVAIS 2425").
+ */
+async function findCompetitionForContest(
+  db: Env['Bindings']['DB'],
+  contest: FfttContest,
+  /** Everything FFTT lists for this scope — how we know the identifier is ours alone. */
+  listing: FfttContest[],
+): Promise<{ id: string; staleName: boolean } | null> {
+  const byIdentifier = await db
+    .prepare('SELECT id, fftt_contest_name FROM competitions WHERE fftt_contest_identifier = ?')
+    .bind(contest.identifier)
+    .all<{ id: string; fftt_contest_name: string | null }>()
+  const rows = byIdentifier.results
+  const exact = rows.find((r) => r.fftt_contest_name === contest.name)
+  if (exact) return { id: exact.id, staleName: false }
+
+  const sharedInListing = listing.filter((c) => c.identifier === contest.identifier).length
+  return rows.length === 1 && sharedInListing === 1 ? { id: rows[0].id, staleName: true } : null
+}
+
+/**
+ * The competition an FFTT contest is, created the first time one is seen.
+ *
+ * Created with NO categories, which admits every one of them. An import must
+ * never start restricting who may be fielded — narrowing the competition is a
+ * general admin's move, on /competitions, and until they make it this row only
+ * records what the divisions belong to.
+ *
+ * The display name is the general admin's; `fftt_contest_name` is FFTT's and is
+ * never touched by a rename, which is what lets the two live side by side.
+ */
 async function competitionForContest(
   db: Env['Bindings']['DB'],
   contest: FfttContest,
+  listing: FfttContest[],
   /** The name a general admin chose at import; FFTT's is the fallback. */
   displayName?: string,
 ): Promise<string> {
-  const existing = await db
-    .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ? AND fftt_contest_name = ?')
-    .bind(contest.identifier, contest.name)
-    .first<{ id: string }>()
-  if (existing) return existing.id
+  const found = await findCompetitionForContest(db, contest, listing)
+  if (found) {
+    // Adopting: correct the stored FFTT name so the next import matches
+    // exactly, without touching what the competition is called on screen.
+    if (found.staleName) {
+      await db.prepare('UPDATE competitions SET fftt_contest_name = ? WHERE id = ?')
+        .bind(contest.name, found.id).run()
+    }
+    return found.id
+  }
 
   const id = newId('comp')
   const nextOrder = await db
@@ -618,6 +678,7 @@ async function competitionForContest(
   ).bind(id, displayName ?? contest.name, nextOrder?.next ?? 1, contest.identifier, contest.name).run()
   return id
 }
+
 
 /**
  * The (organisation, season) an FFTT read is scoped to.
@@ -691,10 +752,11 @@ app.get('/fftt/divisions-preview', async (c) => {
     : { ids: new Set<string>(), names: new Set<string>(), unfiled: new Set<string>(), maxRank: 0 }
   // Which competition the import would file these under — looked up, never
   // created: a preview writes nothing (#482).
-  const competitionRow = await c.env.DB
-    .prepare('SELECT id, display_name FROM competitions WHERE fftt_contest_identifier = ? AND fftt_contest_name = ?')
-    .bind(resolved.contest.identifier, resolved.contest.name)
-    .first<{ id: string; display_name: string }>()
+  const found = await findCompetitionForContest(c.env.DB, resolved.contest, resolved.contests)
+  const competitionRow = found
+    ? await c.env.DB.prepare('SELECT id, display_name FROM competitions WHERE id = ?')
+      .bind(found.id).first<{ id: string; display_name: string }>()
+    : null
   const divisions = orderDivisions(result.divisions).map((d, i) => {
     const displayName = divisionDisplayName(d.name)
     const exists = existing.ids.has(d.id) || existing.names.has(displayName.toLowerCase())
@@ -800,14 +862,16 @@ app.post('/competitions/import', async (c) => {
   const skipped: Array<{ identifier: string; name: string }> = []
   for (const contest of contests) {
     if (!asked.has(contest.id)) continue
-    const before = await c.env.DB
-      .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ? AND fftt_contest_name = ?')
-      .bind(contest.identifier, contest.name).first<{ id: string }>()
+    // Asked before creating, and through the same resolver the import uses, so
+    // a competition whose stored FFTT name has gone stale reads as held rather
+    // than as missing. Creating runs either way: on an adopted row it only
+    // corrects that stale name, and never touches the display name.
+    const before = await findCompetitionForContest(c.env.DB, contest, contests)
+    const id = await competitionForContest(c.env.DB, contest, contests, asked.get(contest.id))
     if (before) {
       skipped.push({ identifier: contest.identifier, name: contest.name })
       continue
     }
-    const id = await competitionForContest(c.env.DB, contest, asked.get(contest.id))
     const row = await c.env.DB
       .prepare('SELECT * FROM competitions WHERE id = ?').bind(id).first<CompetitionRow>()
     if (row) {
@@ -884,7 +948,7 @@ async function importDivisions(
   // these divisions belong to — the modal has been printing its name all along
   // (#482). Resolving it here is what stops a general admin re-stating it by
   // hand, division by division, on /divisions.
-  const competitionId = await competitionForContest(db, resolved.contest)
+  const competitionId = await competitionForContest(db, resolved.contest, resolved.contests)
 
   const existing = await phaseDivisions(db, phaseId)
   let rank = existing.maxRank
