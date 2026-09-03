@@ -107,3 +107,8 @@ export function categoriesSummary(categories: PlayerCategory[]): string {
 export function orderedCategories(): Array<{ code: PlayerCategory; label: string }> {
   return PLAYER_CATEGORIES.map((code) => ({ code, label: LABELS[code] }))
 }
+
+/** The picked categories in canonical order, whatever order they were ticked in. */
+export function orderedCategoryPicks(picked: PlayerCategory[]): PlayerCategory[] {
+  return PLAYER_CATEGORIES.filter((code) => picked.includes(code))
+}

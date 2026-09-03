@@ -89,6 +89,15 @@ export interface Division {
    * is until a general admin says otherwise.
    */
   competitionId?: string
+  /**
+   * Categories this division admits, narrowing its competition's (#482).
+   * **Absent means inherit**; an empty array means every category. More
+   * specific wins, so where this is set the competition's list is not read.
+   *
+   * Only has an effect inside a competition: a division belonging to none
+   * restricts nobody, since there is no place for a club's derogations to hang.
+   */
+  categories?: PlayerCategory[]
 }
 
 /**

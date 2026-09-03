@@ -182,6 +182,9 @@ app.get('/data', async (c) => {
       ...(r.identifier ? { identifier: r.identifier } : {}),
       ...(r.parent_id ? { parentId: r.parent_id } : {}),
       ...(r.competition_id ? { competitionId: r.competition_id } : {}),
+      // Explicit null check: jsonParseCategories(null) is [], which would turn
+      // "inherit the competition" into "admit everyone" (#482).
+      ...(r.categories !== null ? { categories: jsonParseCategories(r.categories) } : {}),
     })),
     // Pre-sorted by sort_order in the query above (#482).
     competitions: competitionsR.results.map(r => ({
@@ -805,7 +808,18 @@ type ImportedDivision = {
 // already present, ranked after any existing ones. Shared by
 // POST /divisions/import and the teams import (#229), which auto-imports the
 // divisions of a phase when a team's division is unknown locally.
-async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; season: number; ph: number; contest: string }): Promise<
+async function importDivisions(
+  db: Env['Bindings']['DB'],
+  p: {
+    org: number; season: number; ph: number; contest: string
+    /**
+     * FFTT ids of the divisions to act on. Undefined imports every one FFTT
+     * lists, which is what an older client sends and what the import always
+     * did; an empty list is a caller who ticked nothing, and does nothing.
+     */
+    only?: Set<string>
+  },
+): Promise<
   | { phase: ImportedPhase; createdPhase: boolean; created: ImportedDivision[]; skipped: Array<{ id: string; name: string }> }
   | 'season_not_found' | 'fftt_unavailable' | 'no_divisions'
 > {
@@ -842,6 +856,7 @@ async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; seas
   const skipped: Array<{ id: string; name: string }> = []
   for (const d of orderDivisions(result.divisions)) {
     const displayName = divisionDisplayName(d.name)
+    if (p.only && !p.only.has(d.id)) continue
     if (existing.ids.has(d.id) || existing.names.has(displayName.toLowerCase())) {
       skipped.push({ id: d.id, name: displayName })
       continue
@@ -885,7 +900,10 @@ app.post('/divisions/import', async (c) => {
   const b = await c.req.json()
   const p = importParams(b.organizationId, b.seasonId, b.phase, b.contestIdentifier)
   if (!p) return c.json({ error: 'invalid_params' }, 400)
-  const result = await importDivisions(c.env.DB, p)
+  const only: Set<string> | undefined = Array.isArray(b.divisionIds)
+    ? new Set<string>(b.divisionIds.filter((id: unknown): id is string => typeof id === 'string'))
+    : undefined
+  const result = await importDivisions(c.env.DB, { ...p, only })
   if (result === 'season_not_found') return c.json({ error: 'season_not_found' }, 404)
   if (result === 'fftt_unavailable') return c.json({ error: 'fftt_unavailable' }, 502)
   if (result === 'no_divisions') return c.json({ error: 'no_divisions' }, 404)
@@ -2788,8 +2806,8 @@ app.delete('/phases/:id', async (c) => {
 app.post('/divisions', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null).run()
+    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null).run()
   return c.json({ ok: true })
 })
 
@@ -2806,6 +2824,12 @@ app.patch('/divisions/:id', async (c) => {
   if ('identifier' in p) { s.push('identifier = ?'); v.push(p.identifier ?? null) }
   // '' is how the form says "belongs to no competition" (#482).
   if ('competitionId' in p) { s.push('competition_id = ?'); v.push(p.competitionId || null) }
+  // null is how it says "inherit the competition's categories"; an array — even
+  // an empty one, meaning every category — is a statement of its own.
+  if ('categories' in p) {
+    s.push('categories = ?')
+    v.push(Array.isArray(p.categories) ? categoriesJson(p.categories) : null)
+  }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE divisions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
 })

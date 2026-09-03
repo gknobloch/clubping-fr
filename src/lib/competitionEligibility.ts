@@ -154,19 +154,29 @@ export function eligiblePlayers<T extends EligiblePlayer>(
 }
 
 /**
- * The competition a division plays in, if any.
+ * The rule a division's teams play under: its competition, narrowed by whatever
+ * the division says for itself.
  *
  * Undefined covers three cases that are all the same answer — the division is
  * unknown, it belongs to no competition, or the competition is archived — and
  * every caller treats it identically: nothing is restricted.
+ *
+ * When the division carries its own categories they REPLACE the competition's,
+ * because the more specific statement wins: a youth championship whose lowest
+ * division is reserved to benjamins and minimes says so on the division, and
+ * the competition's wider list is not consulted. The identity returned is still
+ * the competition's — `id`, and the lock — so a club's derogations keep hanging
+ * off the championship rather than fragmenting per division, and so the lock
+ * stays a policy of the championship rather than of one of its levels.
  */
 export function competitionOfDivision(
   divisionId: string | undefined,
-  divisions: Array<{ id: string; competitionId?: string }>,
+  divisions: Array<{ id: string; competitionId?: string; categories?: PlayerCategory[] }>,
   competitions: Competition[],
 ): Competition | undefined {
-  const competitionId = divisions.find((d) => d.id === divisionId)?.competitionId
-  if (!competitionId) return undefined
-  const competition = competitions.find((c) => c.id === competitionId)
-  return competition && !competition.isArchived ? competition : undefined
+  const division = divisions.find((d) => d.id === divisionId)
+  if (!division?.competitionId) return undefined
+  const competition = competitions.find((c) => c.id === division.competitionId)
+  if (!competition || competition.isArchived) return undefined
+  return division.categories ? { ...competition, categories: division.categories } : competition
 }

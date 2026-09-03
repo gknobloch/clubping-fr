@@ -446,7 +446,12 @@ interface DataContextValue extends DataState {
   ) => Promise<FfttCompetitionsImportResult | null>
   fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsPreview | 'no_contest' | null>
   /** Import the FFTT divisions (creates the phase if missing, skips existing). */
-  importFfttDivisions: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsImportResult | null>
+  importFfttDivisions: (
+    organizationId: string, seasonId: string, phase: number,
+    contestIdentifier?: string,
+    /** Which divisions to act on; omitted means every one the preview offered. */
+    divisionIds?: string[],
+  ) => Promise<FfttDivisionsImportResult | null>
   /** Preview a club's FFTT teams (#229); 'club_not_found' or null on failure. */
   fetchTeamsPreview: (clubId: string) => Promise<FfttTeamsPreview | 'club_not_found' | null>
   /** Import a club's FFTT teams with the chosen defaults (venue / day / time). */
@@ -836,13 +841,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   const importFfttDivisions = useCallback(async (
-    organizationId: string, seasonId: string, phase: number, contestIdentifier?: string,
+    organizationId: string, seasonId: string, phase: number,
+    contestIdentifier?: string, divisionIds?: string[],
   ): Promise<FfttDivisionsImportResult | null> => {
     try {
       const r = await fetch('/api/divisions/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ organizationId, seasonId, phase, contestIdentifier }),
+        body: JSON.stringify({ organizationId, seasonId, phase, contestIdentifier, divisionIds }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttDivisionsImportResult

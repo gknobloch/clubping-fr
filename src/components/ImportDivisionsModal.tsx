@@ -41,6 +41,8 @@ export function ImportDivisionsModal({
   // configured. The list is FFTT's own, for the organisation and season chosen.
   const [contests, setContests] = useState<FfttCompetitionPreview[] | null>(null)
   const [contestIdentifier, setContestIdentifier] = useState('')
+  /** Which divisions of the preview to actually import (#482). */
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   const [preview, setPreview] = useState<FfttDivisionsPreview | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>('idle')
@@ -71,6 +73,8 @@ export function ImportDivisionsModal({
   }
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
+  const heldContests = useMemo(() => (contests ?? []).filter((c) => c.exists), [contests])
+  const newContests = useMemo(() => (contests ?? []).filter((c) => !c.exists), [contests])
 
   // Reload the championship list whenever the scope changes, and drop any
   // preview built for the previous one.
@@ -102,21 +106,36 @@ export function ImportDivisionsModal({
       setPreviewState('error')
     } else {
       setPreview(result)
+      // Everything the import would act on starts ticked. Unlike the
+      // competitions list — twenty entries, mostly tournaments — this is
+      // exactly the divisions of the championship just chosen, so taking them
+      // all is the normal move and unticking one is the exception.
+      setPicked(new Set(result.divisions.filter((d) => !d.exists || d.attachable).map((d) => d.id)))
       setPreviewState('done')
     }
   }
 
-  const toImportCount = preview?.divisions.filter((d) => !d.exists).length ?? 0
+  const togglePicked = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toImportCount = preview?.divisions.filter((d) => !d.exists && picked.has(d.id)).length ?? 0
   // Divisions already present that the import would file under the competition
   // (#482). Without counting these, a phase whose divisions all pre-date the
   // feature offered a disabled "Rien à importer" and the filing was unreachable.
-  const toAttachCount = preview?.divisions.filter((d) => d.attachable).length ?? 0
+  const toAttachCount = preview?.divisions.filter((d) => d.attachable && picked.has(d.id)).length ?? 0
   const seasonName = seasons.find((s) => s.id === seasonId)?.displayName ?? seasonId
 
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttDivisions(organizationId, seasonId, phase, contestIdentifier)
+    const result = await importFfttDivisions(
+      organizationId, seasonId, phase, contestIdentifier, [...picked],
+    )
     setImporting(false)
     if (result) {
       setImportedCount(result.created.length)
@@ -195,9 +214,24 @@ export function ImportDivisionsModal({
               <option value="">
                 {contests ? 'Choisir une compétition…' : 'Choisissez une organisation et une saison'}
               </option>
-              {(contests ?? []).map((c) => (
-                <option key={c.identifier} value={c.identifier}>{c.localName ?? c.name}</option>
-              ))}
+              {/* Split rather than flagged inline: which championships are
+                  already known is the thing being asked, and a suffix on twenty
+                  options is a list nobody reads. Picking one not yet imported
+                  still works — it is created on import. */}
+              {heldContests.length > 0 && (
+                <optgroup label="Déjà importées">
+                  {heldContests.map((c) => (
+                    <option key={c.identifier} value={c.identifier}>{c.localName ?? c.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {newContests.length > 0 && (
+                <optgroup label="Pas encore importées">
+                  {newContests.map((c) => (
+                    <option key={c.identifier} value={c.identifier}>{c.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <p className="mt-1 text-xs text-slate-500">
               Les divisions importées y seront rattachées. Elle sera créée si elle n’existe pas encore.
@@ -286,19 +320,38 @@ export function ImportDivisionsModal({
                 </p>
               )}
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                {preview.divisions.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className={d.exists ? 'text-slate-400' : 'text-slate-800'}>
+                {preview.divisions.map((d) => {
+                  // A division already present AND already filed is the one row
+                  // there is nothing to do to: no box, since ticking it would
+                  // promise an action that would not happen.
+                  const actionable = !d.exists || !!d.attachable
+                  return (
+                  <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      id={`import-division-${d.id}`}
+                      checked={picked.has(d.id)}
+                      disabled={!actionable}
+                      onChange={() => togglePicked(d.id)}
+                      aria-label={d.name}
+                      className="h-5 w-5 shrink-0 rounded border-slate-300 disabled:opacity-40 md:h-4 md:w-4"
+                    />
+                    <label
+                      htmlFor={`import-division-${d.id}`}
+                      className={`min-w-0 flex-1 ${actionable ? 'text-slate-800' : 'text-slate-400'}`}
+                    >
                       {d.rank}. {d.name}
                       <span className="ml-2 text-xs text-slate-400">{d.playersPerGame} j/match</span>
-                    </span>
+                    </label>
                     {d.exists && (
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
                         {d.attachable ? 'Présente, à rattacher' : 'Déjà présente'}
                       </span>
                     )}
                   </li>
-                ))}
+                  )
+                })
+                }
               </ul>
               {importError && (
                 <p className="text-sm text-red-600">Échec de l’import, réessayez.</p>

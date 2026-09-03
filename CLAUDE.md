@@ -100,6 +100,13 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - **`Competition.categories` empty means EVERY category**, not none. It is what
   makes the senior championship expressible and an unconfigured competition
   harmless — read it through `categoryAdmitted`, never as a bare `.includes`.
+- **A division may narrow its competition; the more specific wins.**
+  `Division.categories` absent = inherit, `[]` = every category — three states,
+  which is why the column is nullable and is read with an explicit null check
+  (`jsonParseCategories(null)` is `[]`, i.e. "everyone", not "inherit"). Never
+  read `competition.categories` for a team: `competitionOfDivision` returns the
+  competition already narrowed, keeping its id and lock so club derogations
+  still hang off the championship.
 - A club's overrides are exceptions to the global mapping, not a second list.
   `included` / `excluded`, and the third state is the **absence of a row**.
   A locked competition (`isCategoryLocked`) may only ever be narrowed by a club;

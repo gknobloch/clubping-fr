@@ -71,13 +71,29 @@ test.describe('General admin — Divisions FFTT import', () => {
     // Season defaults to the active one (2025/2026), phase to Phase 1.
     await expect(page.getByLabel('Saison')).toHaveValue('26')
     // Which championship's divisions — several exist, so one must be chosen.
-    await page.getByLabel('Compétition').selectOption('1')
+    // The picker separates the ones we already hold from the rest (#482).
+    const contest = page.getByLabel('Compétition', { exact: true })
+    await expect(contest.locator('optgroup[label="Déjà importées"] option'))
+      .toHaveText(['Championnat par équipes'])
+    await expect(contest.locator('optgroup[label="Pas encore importées"] option'))
+      .toHaveText(['FED_Championnat Jeunes'])
+    await contest.selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
 
     await expect(page.getByText('FED_Championnat de France par Equipes Masculin')).toBeVisible()
     await expect(page.getByText('1. GE Elite P1')).toBeVisible()
     await expect(page.getByText('Déjà présente')).toBeVisible()
     await expect(page.getByText('3 j/match')).toBeVisible()
+
+    // Each division is tickable, and the ones that would be acted on start
+    // ticked — unlike the competitions list, this IS the championship chosen.
+    await expect(page.getByRole('checkbox', { name: 'GE Elite P1' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'GE 1 Phase 1' })).toBeDisabled()
+
+    // Unticking one takes it out of the count.
+    await page.getByRole('checkbox', { name: 'GE 7 Phase 1' }).uncheck()
+    await expect(page.getByRole('button', { name: 'Importer 1 division' })).toBeVisible()
+    await page.getByRole('checkbox', { name: 'GE 7 Phase 1' }).check()
 
     await page.getByRole('button', { name: 'Importer 2 divisions' }).click()
     await expect(page.getByText('2 divisions importées.')).toBeVisible()
@@ -100,7 +116,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.goto('/divisions')
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('72')
-    await page.getByLabel('Compétition').selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText('Aucun championnat trouvé')).toBeVisible()
   })
@@ -113,7 +129,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.goto('/divisions')
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
-    await page.getByLabel('Compétition').selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText(/Impossible de contacter l’API FFTT/)).toBeVisible()
   })
@@ -129,7 +145,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
     await page.getByLabel('Phase', { exact: true }).selectOption('2')
-    await page.getByLabel('Compétition').selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText(/La phase « Phase 2 » n’existe pas encore/)).toBeVisible()
   })
@@ -195,7 +211,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
-    await page.getByLabel('Compétition').selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await page.getByRole('button', { name: 'Importer 2 divisions' }).click()
     await expect(page.getByText('2 divisions importées.')).toBeVisible()

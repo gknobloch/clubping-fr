@@ -106,6 +106,13 @@ export interface DivisionRow {
   identifier: string | null
   /** Competition this division belongs to (#482); null = restricts nobody. */
   competition_id: string | null
+  /**
+   * Categories this division admits, narrowing its competition's (#482).
+   * NULL inherits; '[]' admits every category. The three states are why this
+   * is read with an explicit null check rather than through jsonParseCategories
+   * alone — that would turn "inherit" into "everyone".
+   */
+  categories: string | null
 }
 
 export interface CompetitionRow {

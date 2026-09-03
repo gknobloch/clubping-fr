@@ -112,12 +112,14 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
   } as unknown as D1Database
 }
 
-const runImport = (db: D1Database, organizationId = 14, contestIdentifier?: string) =>
+const runImport = (
+  db: D1Database, organizationId = 14, contestIdentifier?: string, divisionIds?: string[],
+) =>
   app.fetch(
     new Request('http://localhost/api/divisions/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId, seasonId: 27, phase: 1, contestIdentifier }),
+      body: JSON.stringify({ organizationId, seasonId: 27, phase: 1, contestIdentifier, divisionIds }),
     }),
     { DB: db, AUTH_GUARD_DISABLED: 'true' },
   )
@@ -260,5 +262,37 @@ describe('an import that creates nothing can still file (#482)', () => {
     const body = (await res.json()) as { created: unknown[] }
     expect(body.created).toEqual([])
     expect(divisions.map((d) => d.competition_id)).toEqual([competitions[0].id, competitions[0].id])
+  })
+})
+
+// #482 — the admin ticks which divisions to take, so the import acts on those
+// and leaves the rest entirely alone: neither created nor filed.
+describe('importing only the divisions that were ticked', () => {
+  it('creates only the ones named', async () => {
+    mockFftt()
+    const divisions: DivisionRow[] = []
+    await runImport(fakeDb(divisions, []), 14, '1', ['234612'])
+    expect(divisions.map((d) => d.id)).toEqual(['234612'])
+  })
+
+  it('leaves an unticked division unfiled rather than attaching it anyway', async () => {
+    mockFftt()
+    const divisions: DivisionRow[] = [
+      { id: '234322', phase_id: 'phase-27-1', display_name: 'GE 1', rank: 1, competition_id: null },
+      { id: '234612', phase_id: 'phase-27-1', display_name: 'GE 7', rank: 2, competition_id: null },
+    ]
+    const competitions: CompetitionRow[] = []
+    await runImport(fakeDb(divisions, competitions), 14, '1', ['234322'])
+
+    expect(divisions.find((d) => d.id === '234322')?.competition_id).toBe(competitions[0].id)
+    expect(divisions.find((d) => d.id === '234612')?.competition_id).toBeNull()
+  })
+
+  // An older client sends no list at all, and gets what the import always did.
+  it('acts on everything when no list is sent', async () => {
+    mockFftt()
+    const divisions: DivisionRow[] = []
+    await runImport(fakeDb(divisions, []))
+    expect(divisions).toHaveLength(2)
   })
 })

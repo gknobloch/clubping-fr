@@ -155,6 +155,14 @@ way only a General Admin creates them.
 An imported competition admits **every category** until a General Admin narrows
 it: importing must never start restricting who can be fielded.
 
+A **division may narrow its competition's categories** — a youth championship
+whose lowest division is reserved to benjamins and minimes says so on the
+division. The more specific statement wins: where a division states its own
+categories, the competition's list is not read. Saying nothing inherits, which
+is what every division does until told otherwise. Whether a club may add someone
+outside the admitted set stays the competition's to decide: that is a policy of
+the championship, not of one of its levels.
+
 Each competition carries the **player categories it admits by default**.
 Listing none means it admits every category, which is how the senior
 championship is expressed and what makes an unconfigured competition harmless.

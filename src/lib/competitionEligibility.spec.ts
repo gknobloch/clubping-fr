@@ -8,6 +8,7 @@ import {
   playerEligibility,
 } from './competitionEligibility'
 import type { Competition, CompetitionEligibility } from '../types'
+import type { PlayerCategory } from './playerCategories'
 
 const competition = (over: Partial<Competition> = {}): Competition => ({
   id: 'comp-seniors',
@@ -141,11 +142,38 @@ describe('competitionOfDivision', () => {
     { id: 'd-2' },
     { id: 'd-3', competitionId: 'comp-gone' },
     { id: 'd-4', competitionId: 'comp-archived' },
+    // Narrows its competition: benjamins and minimes only (#482).
+    { id: 'd-5', competitionId: 'comp-jeunes', categories: ['B', 'M'] as PlayerCategory[] },
+    // Widens it back to everyone, which an empty list is allowed to say.
+    { id: 'd-6', competitionId: 'comp-jeunes', categories: [] as PlayerCategory[] },
   ]
   const competitions = [youth, competition({ id: 'comp-archived', isArchived: true })]
 
   it('finds it', () => {
     expect(competitionOfDivision('d-1', divisions, competitions)?.id).toBe('comp-jeunes')
+  })
+
+  // The more specific statement wins.
+  it('lets a division narrow its competition, keeping the competition\'s identity', () => {
+    const rule = competitionOfDivision('d-5', divisions, competitions)!
+    expect(rule.categories).toEqual(['B', 'M'])
+    // Still the championship's id and lock: derogations hang off the
+    // competition, and the lock is the championship's policy.
+    expect(rule.id).toBe('comp-jeunes')
+    expect(rule.isCategoryLocked).toBe(true)
+
+    expect(isPlayerEligible(cadet, rule, [])).toBe(false)
+    expect(isPlayerEligible({ id: 'p-benjamin', category: 'B2' }, rule, [])).toBe(true)
+  })
+
+  it('lets a division admit everyone where its competition would not', () => {
+    const rule = competitionOfDivision('d-6', divisions, competitions)!
+    expect(isPlayerEligible(senior, rule, [])).toBe(true)
+  })
+
+  it('inherits when the division says nothing', () => {
+    expect(competitionOfDivision('d-1', divisions, competitions)?.categories)
+      .toEqual(youth.categories)
   })
 
   it('is undefined for a division attached to none, to one that is gone, or to an archived one', () => {

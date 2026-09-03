@@ -113,15 +113,41 @@ test.describe('General admin — Competitions (#482)', () => {
     await page.getByRole('link', { name: 'Divisions' }).click()
     await expect(page).toHaveURL('/divisions')
     await page.getByRole('row', { name: /GE 7/ }).getByRole('button', { name: 'Modifier' }).click()
-    await page.getByLabel('Compétition').selectOption({ label: 'Championnat féminin' })
+    await page.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Championnat féminin' })
     await page.getByRole('button', { name: 'Enregistrer' }).click()
     await expect(page.getByRole('row', { name: /GE 7/ })).toContainText('Championnat féminin')
+  })
+
+  // More specific wins: a division may narrow its competition's categories.
+  test('a division can narrow the categories its competition admits', async ({ page }) => {
+    await page.goto('/divisions')
+    await page.getByRole('row', { name: /GE 7/ }).getByRole('button', { name: 'Modifier' }).click()
+
+    // The option only appears once the division belongs to a competition.
+    await page.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Championnat jeunes' })
+    const narrow = page.getByRole('checkbox', { name: /Restreindre les catégories/ })
+    await expect(narrow).not.toBeChecked()
+    await narrow.check()
+    await page.getByRole('checkbox', { name: 'Benjamin', exact: true }).check()
+    await page.getByRole('checkbox', { name: 'Minime', exact: true }).check()
+    await page.getByRole('button', { name: 'Enregistrer' }).click()
+
+    const row = page.getByRole('row', { name: /GE 7/ })
+    await expect(row).toContainText('Championnat jeunes')
+    await expect(row).toContainText('B, M')
+  })
+
+  test('a division with no competition is not offered category restrictions', async ({ page }) => {
+    await page.goto('/divisions')
+    await page.getByRole('row', { name: /GE 6/ }).getByRole('button', { name: 'Modifier' }).click()
+    await page.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Aucune (aucune restriction de catégorie)' })
+    await expect(page.getByRole('checkbox', { name: /Restreindre les catégories/ })).toHaveCount(0)
   })
 
   test('a division can belong to no competition, which restricts nobody', async ({ page }) => {
     await page.goto('/divisions')
     await page.getByRole('row', { name: /GE 6/ }).getByRole('button', { name: 'Modifier' }).click()
-    await page.getByLabel('Compétition').selectOption({ label: 'Aucune (aucune restriction de catégorie)' })
+    await page.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Aucune (aucune restriction de catégorie)' })
     await page.getByRole('button', { name: 'Enregistrer' }).click()
     await expect(page.getByRole('row', { name: /GE 6/ })).toContainText('—')
   })
@@ -165,7 +191,7 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
 
   test('offers no way into a competition reserved to its categories', async ({ page }) => {
     const club = section(page)
-    await club.getByLabel('Compétition').selectOption({ label: 'Championnat jeunes' })
+    await club.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Championnat jeunes' })
     await expect(club).toContainText('Réservée à ces catégories')
     await expect(club.getByRole('button', { name: 'Ajouter' })).toHaveCount(0)
     // Excluding one of its own stays possible.
@@ -174,7 +200,7 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
 
   test('adds a licensee the default turns away, then puts them back', async ({ page }) => {
     const club = section(page)
-    await club.getByLabel('Compétition').selectOption({ label: 'Championnat vétérans' })
+    await club.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Championnat vétérans' })
 
     // Joris Szulc is a senior: out of category, but the competition is open.
     const before = club.locator('li').filter({ hasText: 'Joris Szulc' })
