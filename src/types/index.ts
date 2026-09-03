@@ -135,6 +135,16 @@ export interface Competition {
    * change what it is.
    */
   ffttContestIdentifier?: string
+  /**
+   * FFTT's own name for that contest, kept beside the identifier because the
+   * identifier alone does NOT identify one: org 15 lists "TO" twice in a single
+   * season ("TOP DE ZONE 06" and "TOP DE QUALIFICATION"), and "TO" in another
+   * league is "Tournoi par Equipes". The pair is what is unique and stable.
+   *
+   * Distinct from `displayName` on purpose: renaming a competition — which the
+   * import invites — must not break the match on the next import.
+   */
+  ffttContestName?: string
 }
 
 /** A club's amendment to a competition's default mapping (#482). */

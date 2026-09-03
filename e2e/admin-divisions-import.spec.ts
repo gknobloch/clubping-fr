@@ -12,8 +12,8 @@ const IMPORT = '**/api/divisions/import'
 // championship (#482).
 const contests = {
   competitions: [
-    { identifier: '1', name: 'FED_Championnat de France par Equipes Masculin', exists: true, localName: 'Championnat par équipes' },
-    { identifier: 'CJ', name: 'FED_Championnat Jeunes', exists: false },
+    { id: '18368', identifier: '1', name: 'FED_Championnat de France par Equipes Masculin', exists: true, localName: 'Championnat par équipes' },
+    { id: '18721', identifier: '4', name: 'FED_Championnat par Equipes Jeunes', exists: false },
   ],
 }
 
@@ -76,8 +76,8 @@ test.describe('General admin — Divisions FFTT import', () => {
     await expect(contest.locator('optgroup[label="Déjà importées"] option'))
       .toHaveText(['Championnat par équipes'])
     await expect(contest.locator('optgroup[label="Pas encore importées"] option'))
-      .toHaveText(['FED_Championnat Jeunes'])
-    await contest.selectOption('1')
+      .toHaveText(['FED_Championnat par Equipes Jeunes'])
+    await contest.selectOption('18368')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
 
     await expect(page.getByText('FED_Championnat de France par Equipes Masculin')).toBeVisible()
@@ -116,7 +116,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.goto('/divisions')
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('72')
-    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('18368')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText('Aucun championnat trouvé')).toBeVisible()
   })
@@ -129,7 +129,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.goto('/divisions')
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
-    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('18368')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText(/Impossible de contacter l’API FFTT/)).toBeVisible()
   })
@@ -145,7 +145,7 @@ test.describe('General admin — Divisions FFTT import', () => {
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
     await page.getByLabel('Phase', { exact: true }).selectOption('2')
-    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('18368')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await expect(page.getByText(/La phase « Phase 2 » n’existe pas encore/)).toBeVisible()
   })
@@ -211,7 +211,7 @@ test.describe('General admin — Divisions organization filter', () => {
 
     await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
     await page.getByLabel('Organisation', { exact: true }).selectOption('14')
-    await page.getByLabel('Compétition', { exact: true }).selectOption('1')
+    await page.getByLabel('Compétition', { exact: true }).selectOption('18368')
     await page.getByRole('button', { name: 'Rechercher les divisions' }).click()
     await page.getByRole('button', { name: 'Importer 2 divisions' }).click()
     await expect(page.getByText('2 divisions importées.')).toBeVisible()

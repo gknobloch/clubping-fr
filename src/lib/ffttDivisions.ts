@@ -38,14 +38,36 @@ export function ffttIdFromIri(iri: string): string {
 export const FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER = '1'
 
 /**
- * Whether a contest identifier may be interpolated into an FFTT GraphQL query.
+ * The federation's own contest identifiers, from three live listings. Unlike
+ * the regional ones these are stable, unique, and mean the same thing in every
+ * organisation — the same identifier carries the same FFTT id everywhere,
+ * which is what shows a contest is one global entity and not one per league.
  *
- * This matters more than it looks: every other value those queries carry is a
- * number, and this is the first one that comes from a request. It goes inside
- * a GraphQL **string literal**, so a quote or a backslash would end the literal
- * and let the rest of the value be read as query syntax. Rather than escape and
- * hope, the allowed shape is narrowed to what FFTT actually issues — short
- * alphanumeric tokens like "1" — and anything else is refused outright.
+ * Kept as documentation rather than as a filter: nothing in the code treats a
+ * regional contest differently, and a hard-coded list of what is "real" would
+ * be wrong the first time a league runs something this misses.
+ *
+ *   1  Championnat de France par Equipes Masculin
+ *   2  Championnat de France par Equipes Féminin
+ *   3  Championnat par Equipes Corporatif
+ *   4  Championnat par Equipes Jeunes
+ *   N  Interclubs Jeunes        K  Coupe Nationale Vétérans
+ *   V  Championnat de France Vétérans   E  Championnat de France Corporatifs
+ *   I  Critérium Fédéral        H  Finales par classement   A  Finales Individuelles
+ */
+
+/**
+ * Whether a string has the shape of an FFTT contest identifier.
+ *
+ * It used to guard a GraphQL string literal, and that is no longer true of
+ * anything: the contest is now picked out of the listing in JavaScript, by id,
+ * so no value from a request reaches a query as text at all. Two reasons for
+ * that change, and this is the lesser one — the greater is that an identifier
+ * does not identify a contest ("TO" names two in one listing), so a filtered
+ * query could not have said which was meant.
+ *
+ * What remains is a cheap sanity check on the identifier an older client may
+ * still send. Real ones look like "1", "4", "TO", "L06-V", "FRC-Q", "OPR21".
  */
 export function isFfttContestIdentifier(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,20}$/.test(value)

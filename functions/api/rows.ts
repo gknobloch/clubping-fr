@@ -125,6 +125,8 @@ export interface CompetitionRow {
   is_archived: number
   /** FFTT contest identifier (#482); NULL for a competition created by hand. */
   fftt_contest_identifier: string | null
+  /** FFTT's own name for it — the identifier alone is not unique (0048). */
+  fftt_contest_name: string | null
 }
 
 export interface CompetitionEligibilityRow {

@@ -250,9 +250,16 @@ describe('a club amends the default mapping for its own licensees', () => {
 // route asks FFTT rather than believing the caller, that it keys on the
 // identifier, and that it stays a general admin's to run.
 
+// The live listing, near enough: the federation's clean identifiers, plus the
+// pair that proves an identifier does not identify a contest — org 15 season 27
+// really does list "TO" twice, for two unrelated tournaments.
 const CONTESTS = [
   { id: '/api/contests/18368', identifier: '1', name: 'FED_Championnat de France par Equipes Masculin' },
-  { id: '/api/contests/18402', identifier: 'CJ', name: 'FED_Championnat Jeunes' },
+  { id: '/api/contests/18721', identifier: '4', name: 'FED_Championnat par Equipes Jeunes' },
+  { id: '/api/contests/18647', identifier: 'TO', name: 'TOP DE ZONE 06' },
+  { id: '/api/contests/18742', identifier: 'TO', name: 'TOP DE QUALIFICATION' },
+  // FFTT's listing carries trailing spaces on several names.
+  { id: '/api/contests/19023', identifier: 'L06-V', name: 'Inscription aux Championnats du Grand Est Vétérans ' },
 ]
 
 function mockContests() {
@@ -262,12 +269,15 @@ function mockContests() {
 }
 
 /** A D1 holding `competitions`, enough for the preview and the import. */
-function competitionsDb(rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }>) {
+interface HeldRow { id: string; display_name: string; fftt_contest_identifier: string | null; fftt_contest_name?: string | null }
+
+function competitionsDb(rows: HeldRow[]) {
   const statement = (sql: string, params: unknown[]) => ({
     async first() {
       if (/FROM sessions/.test(sql)) return null
-      if (/WHERE fftt_contest_identifier = \?/.test(sql)) {
-        return rows.find((r) => r.fftt_contest_identifier === params[0]) ?? null
+      if (/WHERE fftt_contest_identifier = \? AND fftt_contest_name = \?/.test(sql)) {
+        return rows.find((r) => r.fftt_contest_identifier === params[0]
+          && (r.fftt_contest_name ?? null) === params[1]) ?? null
       }
       if (/MAX\(sort_order\)/.test(sql)) return { next: rows.length + 1 }
       if (/FROM competitions WHERE id = \?/.test(sql)) {
@@ -285,6 +295,7 @@ function competitionsDb(rows: Array<{ id: string; display_name: string; fftt_con
           id: params[0] as string,
           display_name: params[1] as string,
           fftt_contest_identifier: params[3] as string,
+          fftt_contest_name: params[4] as string,
         })
       }
       return { success: true }
@@ -297,6 +308,8 @@ function competitionsDb(rows: Array<{ id: string; display_name: string; fftt_con
     }),
   } as unknown as D1Database
 }
+
+type Rows = HeldRow[]
 
 const previewCompetitions = (db: D1Database) =>
   app.fetch(
@@ -319,16 +332,21 @@ afterEach(() => vi.unstubAllGlobals())
 describe('GET /fftt/competitions-preview', () => {
   it('lists every championship FFTT runs, flagging the ones we hold', async () => {
     mockContests()
-    const res = await previewCompetitions(competitionsDb([
-      { id: 'comp-seniors', display_name: 'Championnat par équipes', fftt_contest_identifier: '1' },
-    ]))
+    const res = await previewCompetitions(competitionsDb([{
+      id: 'comp-seniors', display_name: 'Championnat par équipes',
+      fftt_contest_identifier: '1', fftt_contest_name: CONTESTS[0].name,
+    }]))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { competitions: Array<Record<string, unknown>> }
     expect(body.competitions).toEqual([
       // Ours is shown under the name we gave it, not FFTT's — a general admin
       // may well have renamed it.
-      { identifier: '1', name: CONTESTS[0].name, exists: true, localName: 'Championnat par équipes' },
-      { identifier: 'CJ', name: 'FED_Championnat Jeunes', exists: false },
+      { id: '18368', identifier: '1', name: CONTESTS[0].name, exists: true, localName: 'Championnat par équipes' },
+      { id: '18721', identifier: '4', name: 'FED_Championnat par Equipes Jeunes', exists: false },
+      // Both "TO" contests are listed, separately: neither is the other.
+      { id: '18647', identifier: 'TO', name: 'TOP DE ZONE 06', exists: false },
+      { id: '18742', identifier: 'TO', name: 'TOP DE QUALIFICATION', exists: false },
+      { id: '19023', identifier: 'L06-V', name: 'Inscription aux Championnats du Grand Est Vétérans', exists: false },
     ])
   })
 
@@ -344,18 +362,18 @@ describe('GET /fftt/competitions-preview', () => {
 describe('POST /competitions/import', () => {
   it('creates the ticked championships, open to every category', async () => {
     mockContests()
-    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    const rows: Rows = []
     const res = await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, selections: [{ identifier: 'CJ' }],
+      organizationId: 14, seasonId: 27, selections: [{ contestId: '18721' }],
     })
     expect(res.status).toBe(200)
 
     const body = (await res.json()) as { created: Array<{ displayName: string; categories: string[]; ffttContestIdentifier?: string }> }
     expect(body.created).toHaveLength(1)
     expect(body.created[0]).toMatchObject({
-      displayName: 'FED_Championnat Jeunes',
+      displayName: 'FED_Championnat par Equipes Jeunes',
       categories: [],
-      ffttContestIdentifier: 'CJ',
+      ffttContestIdentifier: '4',
     })
   })
 
@@ -363,31 +381,31 @@ describe('POST /competitions/import', () => {
   // time rather than immediately afterwards. The identifier stays FFTT's.
   it('stores the name the caller chose', async () => {
     mockContests()
-    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    const rows: Rows = []
     await importCompetitions(competitionsDb(rows), {
       organizationId: 14, seasonId: 27,
-      selections: [{ identifier: 'CJ', name: 'Championnat jeunes' }],
+      selections: [{ contestId: '18721', name: 'Championnat jeunes' }],
     })
     expect(rows[0]).toMatchObject({
       display_name: 'Championnat jeunes',
-      fftt_contest_identifier: 'CJ',
+      fftt_contest_identifier: '4',
     })
   })
 
   it('falls back to FFTT’s name when the caller sends a blank one', async () => {
     mockContests()
-    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    const rows: Rows = []
     await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, selections: [{ identifier: 'CJ', name: '   ' }],
+      organizationId: 14, seasonId: 27, selections: [{ contestId: '18721', name: '   ' }],
     })
-    expect(rows[0].display_name).toBe('FED_Championnat Jeunes')
+    expect(rows[0].display_name).toBe('FED_Championnat par Equipes Jeunes')
   })
 
   it('ignores an identifier FFTT does not run', async () => {
     mockContests()
-    const rows: Array<{ id: string; display_name: string; fftt_contest_identifier: string | null }> = []
+    const rows: Rows = []
     const res = await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, selections: [{ identifier: 'ZZZ' }],
+      organizationId: 14, seasonId: 27, selections: [{ contestId: '99999' }],
     })
     expect(res.status).toBe(200)
     expect(rows).toEqual([])
@@ -395,9 +413,12 @@ describe('POST /competitions/import', () => {
 
   it('skips one we already hold rather than creating a second', async () => {
     mockContests()
-    const rows = [{ id: 'comp-seniors', display_name: 'Championnat par équipes', fftt_contest_identifier: '1' }]
+    const rows: Rows = [{
+      id: 'comp-seniors', display_name: 'Championnat par équipes',
+      fftt_contest_identifier: '1', fftt_contest_name: CONTESTS[0].name,
+    }]
     const res = await importCompetitions(competitionsDb(rows), {
-      organizationId: 14, seasonId: 27, selections: [{ identifier: '1' }],
+      organizationId: 14, seasonId: 27, selections: [{ contestId: '18368' }],
     })
     const body = (await res.json()) as { created: unknown[]; skipped: Array<{ identifier: string }> }
     expect(body.created).toEqual([])
@@ -408,13 +429,39 @@ describe('POST /competitions/import', () => {
   it('refuses a club admin', async () => {
     mockContests()
     const { db } = fakeDb([clubAdmin], [], 'ca')
-    const res = await importCompetitions(db, { organizationId: 14, seasonId: 27, selections: [{ identifier: '1' }] }, {})
+    const res = await importCompetitions(db, { organizationId: 14, seasonId: 27, selections: [{ contestId: '18368' }] }, {})
     expect(res.status).toBe(403)
   })
 
   it('refuses an empty or malformed selection', async () => {
     mockContests()
     expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, selections: [] })).status).toBe(400)
-    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, selections: [{ identifier: 'a"b' }] })).status).toBe(400)
+    expect((await importCompetitions(competitionsDb([]), { organizationId: 14, seasonId: 27, selections: [{ contestId: 'nope' }] })).status).toBe(400)
+  })
+})
+
+// The counter-example that drove migration 0048.
+describe('two contests sharing one identifier are two competitions', () => {
+  it('creates a separate row for each, rather than merging them', async () => {
+    mockContests()
+    const rows: Rows = []
+    const res = await importCompetitions(competitionsDb(rows), {
+      organizationId: 15, seasonId: 27,
+      selections: [{ contestId: '18647' }, { contestId: '18742' }],
+    })
+    expect(res.status).toBe(200)
+    expect(rows.map((r) => [r.fftt_contest_identifier, r.fftt_contest_name])).toEqual([
+      ['TO', 'TOP DE ZONE 06'],
+      ['TO', 'TOP DE QUALIFICATION'],
+    ])
+  })
+
+  it('trims the trailing space FFTT leaves on some names', async () => {
+    mockContests()
+    const rows: Rows = []
+    await importCompetitions(competitionsDb(rows), {
+      organizationId: 14, seasonId: 27, selections: [{ contestId: '19023' }],
+    })
+    expect(rows[0].fftt_contest_name).toBe('Inscription aux Championnats du Grand Est Vétérans')
   })
 })

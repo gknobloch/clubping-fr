@@ -75,15 +75,18 @@ export function ImportCompetitionsModal({
     // entries for a league, most of them individual tournaments this app has no
     // use for — so importing is opt-in, one championship at a time.
     setPicked(new Set())
-    setNames(Object.fromEntries(result.map((c) => [c.identifier, c.localName ?? c.name])))
+    setNames(Object.fromEntries(result.map((c) => [c.id, c.localName ?? c.name])))
     setPreviewState('done')
   }
 
-  const toggle = (identifier: string) =>
+  // Keyed on the FFTT contest id, never the identifier: one identifier can name
+  // two contests in a single listing, which as a React key merged them into one
+  // checkbox (migration 0048).
+  const toggle = (contestId: string) =>
     setPicked((prev) => {
       const next = new Set(prev)
-      if (next.has(identifier)) next.delete(identifier)
-      else next.add(identifier)
+      if (next.has(contestId)) next.delete(contestId)
+      else next.add(contestId)
       return next
     })
 
@@ -92,7 +95,7 @@ export function ImportCompetitionsModal({
     setImportError(false)
     const result = await importFfttCompetitions(
       organizationId, seasonId,
-      [...picked].map((identifier) => ({ identifier, name: names[identifier] })),
+      [...picked].map((contestId) => ({ contestId, name: names[contestId] })),
     )
     setImporting(false)
     if (result) {
@@ -204,19 +207,19 @@ export function ImportCompetitionsModal({
               </div>
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                 {preview.map((c) => (
-                  <li key={c.identifier} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <li key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <input
                       type="checkbox"
-                      id={`import-comp-${c.identifier}`}
-                      checked={picked.has(c.identifier)}
+                      id={`import-comp-${c.id}`}
+                      checked={picked.has(c.id)}
                       disabled={c.exists}
-                      onChange={() => toggle(c.identifier)}
+                      onChange={() => toggle(c.id)}
                       aria-label={c.name}
                       className="h-5 w-5 shrink-0 rounded border-slate-300 disabled:opacity-40 md:h-4 md:w-4"
                     />
                     {c.exists ? (
                       <label
-                        htmlFor={`import-comp-${c.identifier}`}
+                        htmlFor={`import-comp-${c.id}`}
                         className="min-w-0 flex-1 truncate text-slate-400"
                       >
                         {c.localName ?? c.name}
@@ -227,8 +230,8 @@ export function ImportCompetitionsModal({
                       // than only after the fact on /competitions.
                       <input
                         type="text"
-                        value={names[c.identifier] ?? c.name}
-                        onChange={(e) => setNames((prev) => ({ ...prev, [c.identifier]: e.target.value }))}
+                        value={names[c.id] ?? c.name}
+                        onChange={(e) => setNames((prev) => ({ ...prev, [c.id]: e.target.value }))}
                         aria-label={`Nom de « ${c.name} »`}
                         className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                       />

@@ -15,17 +15,22 @@ const organizations = [{ id: '14', type: 'League', identifier: 'L06', name: 'GRA
 
 // Every championship FFTT runs for the organisation and season chosen. The
 // men's team championship is the one the mock data already holds.
+// Two contests sharing the identifier "TO", as org 15 really lists them: the
+// dialog must show two rows with two independent checkboxes (#482).
 const contests = {
   competitions: [
-    { identifier: '1', name: 'FED_Championnat de France par Equipes Masculin', exists: true, localName: 'Championnat par équipes' },
-    { identifier: 'CJ', name: 'FED_Championnat Jeunes', exists: false },
+    { id: '18368', identifier: '1', name: 'FED_Championnat de France par Equipes Masculin', exists: true, localName: 'Championnat par équipes' },
+    { id: '18721', identifier: '4', name: 'FED_Championnat par Equipes Jeunes', exists: false },
+    { id: '18647', identifier: 'TO', name: 'TOP DE ZONE 06', exists: false },
+    { id: '18742', identifier: 'TO', name: 'TOP DE QUALIFICATION', exists: false },
   ],
 }
 
 const importResult = {
   created: [{
-    id: 'comp-cj', displayName: 'FED_Championnat Jeunes', categories: [],
-    isCategoryLocked: false, sortOrder: 4, isArchived: false, ffttContestIdentifier: 'CJ',
+    id: 'comp-zone', displayName: 'Top de zone', categories: [],
+    isCategoryLocked: false, sortOrder: 4, isArchived: false,
+    ffttContestIdentifier: 'TO', ffttContestName: 'TOP DE ZONE 06',
   }],
   skipped: [],
 }
@@ -55,19 +60,26 @@ test.describe('General admin — Competitions (#482)', () => {
 
     // Nothing ticked by default: FFTT lists everything an organisation runs,
     // most of it individual tournaments, so importing is opt-in.
-    const youth = page.getByRole('checkbox', { name: 'FED_Championnat Jeunes' })
-    await expect(youth).not.toBeChecked()
+    // Nothing ticked by default — the list is everything a league runs.
+    await expect(page.getByRole('checkbox', { name: 'FED_Championnat par Equipes Jeunes' }))
+      .not.toBeChecked()
     await expect(page.getByRole('button', { name: 'Aucune sélection' })).toBeDisabled()
-    await youth.check()
+
+    // Two contests share the identifier "TO"; they are two independent rows,
+    // not one control that ticks both (#482).
+    const zone = page.getByRole('checkbox', { name: 'TOP DE ZONE 06' })
+    const qualif = page.getByRole('checkbox', { name: 'TOP DE QUALIFICATION' })
+    await zone.check()
+    await expect(qualif).not.toBeChecked()
 
     // And the name is the admin's to choose — FFTT's are export labels.
-    await page.getByLabel('Nom de « FED_Championnat Jeunes »').fill('Championnat jeunes')
+    await page.getByLabel('Nom de « TOP DE ZONE 06 »').fill('Top de zone')
     await page.getByRole('button', { name: 'Importer 1 compétition' }).click()
     await expect(page.getByText(/1 compétition importée, ouverte à toutes les catégories/)).toBeVisible()
 
     await page.getByRole('button', { name: 'Fermer' }).click()
     // Imported open to everyone: an import never starts restricting anyone.
-    const row = page.getByRole('row', { name: /FED_Championnat Jeunes/ })
+    const row = page.getByRole('row', { name: /Top de zone/ })
     await expect(row).toContainText('Toutes les catégories')
     await expect(row).toContainText('FFTT')
   })

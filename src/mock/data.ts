@@ -189,15 +189,20 @@ export const mockPlayers: Player[] = basePlayers.map((p) => ({
 export const mockCompetitions: Competition[] = [
   {
     // As the divisions import creates it: pinned to FFTT contest "1", with no
-    // categories, so nothing is restricted until a general admin says so.
+    // categories, so nothing is restricted until a general admin says so. The
+    // contest's name is stored beside its identifier because the identifier
+    // alone is not unique (see migration 0048).
     id: 'comp-seniors', displayName: 'Championnat par équipes',
     categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
     ffttContestIdentifier: '1',
+    ffttContestName: 'FED_Championnat de France par Equipes Masculin',
   },
   {
     id: 'comp-jeunes', displayName: 'Championnat jeunes',
     categories: ['P', 'B', 'M', 'C', 'J'], isCategoryLocked: true,
     sortOrder: 2, isArchived: false,
+    ffttContestIdentifier: '4',
+    ffttContestName: 'FED_Championnat par Equipes Jeunes',
   },
   {
     id: 'comp-veterans', displayName: 'Championnat vétérans',

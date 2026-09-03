@@ -148,7 +148,10 @@ and a championship is what a set of divisions is.
 
 Competitions are **imported from the FFTT**, like clubs, divisions and teams:
 the federation publishes the list of championships an organisation runs for a
-season, and a General Admin picks the ones the app should know about. Adding one
+season, and a General Admin picks the ones the app should know about. A
+competition is recognised across seasons by what the federation calls it — its
+identifier together with its name — since the federation renumbers everything
+each season and reuses identifiers between championships. Adding one
 by hand stays possible, for a competition the federation does not run. Either
 way only a General Admin creates them.
 

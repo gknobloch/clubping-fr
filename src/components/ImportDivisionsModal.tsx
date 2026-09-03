@@ -40,7 +40,8 @@ export function ImportDivisionsModal({
   // championship's divisions were unreachable however many competitions were
   // configured. The list is FFTT's own, for the organisation and season chosen.
   const [contests, setContests] = useState<FfttCompetitionPreview[] | null>(null)
-  const [contestIdentifier, setContestIdentifier] = useState('')
+  /** FFTT's contest id — exact, where an identifier names more than one. */
+  const [contestId, setContestId] = useState('')
   /** Which divisions of the preview to actually import (#482). */
   const [picked, setPicked] = useState<Set<string>>(new Set())
 
@@ -80,7 +81,7 @@ export function ImportDivisionsModal({
   // preview built for the previous one.
   useEffect(() => {
     setContests(null)
-    setContestIdentifier('')
+    setContestId('')
     setPreview(null)
     setPreviewState('idle')
     if (!organizationId || !seasonId) return
@@ -89,7 +90,7 @@ export function ImportDivisionsModal({
       if (cancelled || !list) return
       setContests(list)
       // One championship needs no choosing; several do.
-      if (list.length === 1) setContestIdentifier(list[0].identifier)
+      if (list.length === 1) setContestId(list[0].id)
     })
     return () => { cancelled = true }
   }, [organizationId, seasonId, fetchCompetitionsPreview])
@@ -99,7 +100,7 @@ export function ImportDivisionsModal({
     setPreview(null)
     setImportedCount(null)
     setImportError(false)
-    const result = await fetchDivisionsPreview(organizationId, seasonId, phase, contestIdentifier)
+    const result = await fetchDivisionsPreview(organizationId, seasonId, phase, contestId)
     if (result === 'no_contest') {
       setPreviewState('no_contest')
     } else if (result === null) {
@@ -134,7 +135,7 @@ export function ImportDivisionsModal({
     setImporting(true)
     setImportError(false)
     const result = await importFfttDivisions(
-      organizationId, seasonId, phase, contestIdentifier, [...picked],
+      organizationId, seasonId, phase, contestId, [...picked],
     )
     setImporting(false)
     if (result) {
@@ -206,8 +207,8 @@ export function ImportDivisionsModal({
             </label>
             <select
               id="import-contest"
-              value={contestIdentifier}
-              onChange={(e) => setContestIdentifier(e.target.value)}
+              value={contestId}
+              onChange={(e) => setContestId(e.target.value)}
               className={inputClass}
               disabled={!contests}
             >
@@ -221,14 +222,14 @@ export function ImportDivisionsModal({
               {heldContests.length > 0 && (
                 <optgroup label="Déjà importées">
                   {heldContests.map((c) => (
-                    <option key={c.identifier} value={c.identifier}>{c.localName ?? c.name}</option>
+                    <option key={c.id} value={c.id}>{c.localName ?? c.name}</option>
                   ))}
                 </optgroup>
               )}
               {newContests.length > 0 && (
                 <optgroup label="Pas encore importées">
                   {newContests.map((c) => (
-                    <option key={c.identifier} value={c.identifier}>{c.name}</option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </optgroup>
               )}
@@ -272,7 +273,7 @@ export function ImportDivisionsModal({
           <button
             type="button"
             onClick={handleSearch}
-            disabled={!organizationId || !seasonId || !contestIdentifier || previewState === 'loading'}
+            disabled={!organizationId || !seasonId || !contestId || previewState === 'loading'}
             className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
           >
             {previewState === 'loading' ? 'Recherche…' : 'Rechercher les divisions'}

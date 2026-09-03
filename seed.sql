@@ -16,10 +16,15 @@ INSERT INTO phases (id, season_id, name, display_name, status) VALUES
 -- comp-seniors carries the FFTT contest identifier the divisions import pins
 -- itself to ("1", the men's team championship): re-importing divisions finds
 -- this row rather than creating a second one.
-INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier) VALUES
-  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0, '1'),
-  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0, NULL),
-  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0, NULL);
+-- comp-seniors carries the FFTT contest the divisions import pins itself to,
+-- as the pair that identifies one: identifier "1" AND the name FFTT gives it.
+-- The identifier alone is not unique — org 15 lists "TO" twice in one season
+-- (see migration 0048) — which is why the name is stored beside it, apart from
+-- display_name so a rename cannot break the match.
+INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name) VALUES
+  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0, '1', 'FED_Championnat de France par Equipes Masculin'),
+  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0, '4', 'FED_Championnat par Equipes Jeunes'),
+  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0, NULL, NULL);
 
 -- club_competition_eligibility — one of each amendment, so both halves of the
 -- club screen have a row: a V45 the club fields with its veterans anyway, and

@@ -193,6 +193,7 @@ app.get('/data', async (c) => {
       isCategoryLocked: bool(r.is_category_locked),
       sortOrder: r.sort_order, isArchived: bool(r.is_archived),
       ...(r.fftt_contest_identifier ? { ffttContestIdentifier: r.fftt_contest_identifier } : {}),
+      ...(r.fftt_contest_name ? { ffttContestName: r.fftt_contest_name } : {}),
     })),
     // (club_id, competition_id, player_id) is the primary key — no surrogate id.
     competitionEligibilities: eligibilitiesR.results.map(r => ({
@@ -516,9 +517,38 @@ async function fetchFfttContests(
   if (data === null) return null
   return (data.contests?.edges ?? []).flatMap((e) => e.node?.identifier ? [{
     id: ffttIdFromIri(e.node.id),
-    identifier: e.node.identifier,
-    name: e.node.name,
+    identifier: e.node.identifier.trim(),
+    // Trimmed: the live listing has trailing spaces on several names
+    // ("Inscription aux Championnats du Grand Est Vétérans "), and the name is
+    // half of a competition's key.
+    name: e.node.name.trim(),
   }] : [])
+}
+
+/**
+ * The contest a request means, out of everything FFTT runs for that scope.
+ *
+ * Picked from the listing rather than asked for with an `identifier:` filter,
+ * for two reasons. An identifier does not identify one contest — org 15 lists
+ * "TO" twice in a single season — so a filtered query would return two nodes
+ * and the caller would silently get whichever came first. And picking in
+ * JavaScript means no value from a request ever reaches a GraphQL string
+ * literal, which removes the escaping question rather than answering it.
+ *
+ * `contestId` is exact. `contestIdentifier` is the older client's way of asking
+ * and takes the first match, which is what that client already got.
+ */
+async function resolveFfttContest(
+  organizationId: number,
+  seasonId: number,
+  want: { contestId?: string; contestIdentifier?: string },
+): Promise<{ contests: FfttContest[]; contest: FfttContest | null } | null> {
+  const contests = await fetchFfttContests(organizationId, seasonId)
+  if (!contests) return null
+  const contest = want.contestId
+    ? contests.find((c) => c.id === want.contestId) ?? null
+    : contests.find((c) => c.identifier === want.contestIdentifier) ?? null
+  return { contests, contest }
 }
 
 // Fetch one championship contest then its divisions from FFTT. The contest is
@@ -527,21 +557,11 @@ async function fetchFfttContests(
 // null = FFTT unreachable; contest null = no championship for those params.
 async function fetchFfttDivisions(
   organizationId: number,
-  seasonId: number,
   phase: number,
-  /** Already checked with `isFfttContestIdentifier` — it lands in a GraphQL literal. */
-  contestIdentifier: string,
-): Promise<{
-  contest: FfttContest | null
-  divisions: FfttDivision[]
-} | null> {
-  const contestData = await ffttGraphql<{ contests?: FfttEdges<{ id: string; name: string }> }>(
-    `{ contests(divisions_organization_id: ${organizationId} season_id: ${seasonId} identifier: "${contestIdentifier}") { edges { node { id name } } } }`,
-  )
-  if (contestData === null) return null
-  const contestNode = contestData.contests?.edges?.[0]?.node
-  if (!contestNode) return { contest: null, divisions: [] }
-  const contestId = ffttIdFromIri(contestNode.id)
+  /** Resolved from the contest listing by `resolveFfttContest` — never a filter. */
+  contest: FfttContest,
+): Promise<{ divisions: FfttDivision[] } | null> {
+  const contestId = contest.id
   const divData = await ffttGraphql<{
     divisions?: FfttEdges<{ id: string; identifier: string; name: string; parent: { id: string } | null }>
   }>(
@@ -554,10 +574,7 @@ async function fetchFfttDivisions(
     name: e.node.name,
     parentId: e.node.parent ? ffttIdFromIri(e.node.parent.id) : null,
   }] : [])
-  return {
-    contest: { id: contestId, identifier: contestIdentifier, name: contestNode.name },
-    divisions,
-  }
+  return { divisions }
 }
 
 /**
@@ -582,10 +599,12 @@ async function fetchFfttDivisions(
 async function competitionForContest(
   db: Env['Bindings']['DB'],
   contest: FfttContest,
+  /** The name a general admin chose at import; FFTT's is the fallback. */
+  displayName?: string,
 ): Promise<string> {
   const existing = await db
-    .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ?')
-    .bind(contest.identifier)
+    .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ? AND fftt_contest_name = ?')
+    .bind(contest.identifier, contest.name)
     .first<{ id: string }>()
   if (existing) return existing.id
 
@@ -594,9 +613,9 @@ async function competitionForContest(
     .prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM competitions')
     .first<{ next: number }>()
   await db.prepare(
-    `INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier)
-     VALUES (?, ?, '[]', 0, ?, 0, ?)`,
-  ).bind(id, contest.name, nextOrder?.next ?? 1, contest.identifier).run()
+    `INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name)
+     VALUES (?, ?, '[]', 0, ?, 0, ?, ?)`,
+  ).bind(id, displayName ?? contest.name, nextOrder?.next ?? 1, contest.identifier, contest.name).run()
   return id
 }
 
@@ -613,19 +632,24 @@ const orgSeasonParams = (organizationId: unknown, seasonId: unknown) => {
 }
 
 const importParams = (
-  organizationId: unknown, seasonId: unknown, phase: unknown, contestIdentifier: unknown,
+  organizationId: unknown, seasonId: unknown, phase: unknown,
+  contestId: unknown, contestIdentifier: unknown,
 ) => {
   const scope = orgSeasonParams(organizationId, seasonId)
   const ph = Number(phase)
   if (!scope || !FFTT_PHASES.some((p) => Number(p.id) === ph)) return null
-  // Absent means the championship, which is the only contest this import could
-  // read before #482 — so an older client keeps behaving exactly as it did.
-  // Present but malformed is refused rather than quietly falling back.
-  const contest = contestIdentifier === undefined || contestIdentifier === null || contestIdentifier === ''
-    ? FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER
-    : contestIdentifier
-  if (!isFfttContestIdentifier(contest)) return null
-  return { ...scope, ph, contest }
+  // The contest is named by its FFTT id, which is exact. An older client sends
+  // an identifier instead, or nothing at all — and nothing meant the men's team
+  // championship, the only contest this import could read before #482, so that
+  // client keeps behaving exactly as it did.
+  const wantId = typeof contestId === 'string' && /^\d{1,10}$/.test(contestId) ? contestId : undefined
+  const wantIdentifier = isFfttContestIdentifier(contestIdentifier)
+    ? contestIdentifier
+    : FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER
+  return {
+    ...scope, ph,
+    want: wantId ? { contestId: wantId } : { contestIdentifier: wantIdentifier },
+  }
 }
 
 // Existing divisions of a phase, for skip-matching by FFTT id or name.
@@ -652,12 +676,14 @@ async function phaseDivisions(db: Env['Bindings']['DB'], phaseId: string) {
 app.get('/fftt/divisions-preview', async (c) => {
   const p = importParams(
     c.req.query('organizationId'), c.req.query('seasonId'), c.req.query('phase'),
-    c.req.query('contestIdentifier'),
+    c.req.query('contestId'), c.req.query('contestIdentifier'),
   )
   if (!p) return c.json({ error: 'invalid_params' }, 400)
-  const result = await fetchFfttDivisions(p.org, p.season, p.ph, p.contest)
+  const resolved = await resolveFfttContest(p.org, p.season, p.want)
+  if (!resolved) return c.json({ error: 'fftt_unavailable' }, 502)
+  if (!resolved.contest) return c.json({ error: 'no_contest' }, 404)
+  const result = await fetchFfttDivisions(p.org, p.ph, resolved.contest)
   if (!result) return c.json({ error: 'fftt_unavailable' }, 502)
-  if (!result.contest) return c.json({ error: 'no_contest' }, 404)
   const phaseRow = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
     .bind(String(p.season), `Phase ${p.ph}`).first()
   const existing = phaseRow
@@ -666,8 +692,8 @@ app.get('/fftt/divisions-preview', async (c) => {
   // Which competition the import would file these under — looked up, never
   // created: a preview writes nothing (#482).
   const competitionRow = await c.env.DB
-    .prepare('SELECT id, display_name FROM competitions WHERE fftt_contest_identifier = ?')
-    .bind(result.contest.identifier)
+    .prepare('SELECT id, display_name FROM competitions WHERE fftt_contest_identifier = ? AND fftt_contest_name = ?')
+    .bind(resolved.contest.identifier, resolved.contest.name)
     .first<{ id: string; display_name: string }>()
   const divisions = orderDivisions(result.divisions).map((d, i) => {
     const displayName = divisionDisplayName(d.name)
@@ -681,10 +707,10 @@ app.get('/fftt/divisions-preview', async (c) => {
     }
   })
   return c.json({
-    contest: result.contest,
+    contest: resolved.contest,
     competition: competitionRow
       ? { id: competitionRow.id, displayName: competitionRow.display_name, exists: true }
-      : { displayName: result.contest.name, exists: false },
+      : { displayName: resolved.contest.name, exists: false },
     phaseExists: !!phaseRow,
     divisions,
   })
@@ -708,13 +734,19 @@ app.get('/fftt/competitions-preview', async (c) => {
   if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
 
   const held = await c.env.DB
-    .prepare('SELECT id, display_name, fftt_contest_identifier FROM competitions WHERE fftt_contest_identifier IS NOT NULL')
-    .all<Pick<CompetitionRow, 'id' | 'display_name' | 'fftt_contest_identifier'>>()
-  const byIdentifier = new Map(held.results.map((r) => [r.fftt_contest_identifier as string, r]))
+    .prepare('SELECT id, display_name, fftt_contest_identifier, fftt_contest_name FROM competitions WHERE fftt_contest_identifier IS NOT NULL')
+    .all<Pick<CompetitionRow, 'id' | 'display_name' | 'fftt_contest_identifier' | 'fftt_contest_name'>>()
+  // Keyed on the pair, because an identifier alone names more than one contest
+  // — org 15 lists "TO" twice in a single season (migration 0048).
+  const key = (identifier: string, name: string | null) => `${identifier}\u0000${name ?? ''}`
+  const heldBy = new Map(held.results.map((r) => [key(r.fftt_contest_identifier as string, r.fftt_contest_name), r]))
   return c.json({
     competitions: contests.map((contest) => {
-      const local = byIdentifier.get(contest.identifier)
+      const local = heldBy.get(key(contest.identifier, contest.name))
       return {
+        // The FFTT id: exact, and how a later request names this contest
+        // without an identifier having to identify anything.
+        id: contest.id,
         identifier: contest.identifier,
         name: contest.name,
         // Held already — the import will skip it, and the name we show is ours
@@ -749,11 +781,13 @@ app.post('/competitions/import', async (c) => {
   if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
   const b = await c.req.json<{ organizationId?: unknown; seasonId?: unknown; selections?: unknown }>()
   const p = orgSeasonParams(b.organizationId, b.seasonId)
+  // Selected by FFTT id: the identifier does not identify one contest, so a
+  // list of identifiers could not say which "TO" was meant (migration 0048).
   const selections = (Array.isArray(b.selections) ? b.selections : [])
     .flatMap((raw) => {
-      const sel = raw as { identifier?: unknown; name?: unknown }
-      return isFfttContestIdentifier(sel?.identifier)
-        ? [{ identifier: sel.identifier, name: chosenName(sel.name) }]
+      const sel = raw as { contestId?: unknown; name?: unknown }
+      return typeof sel?.contestId === 'string' && /^\d{1,10}$/.test(sel.contestId)
+        ? [{ contestId: sel.contestId, name: chosenName(sel.name) }]
         : []
     })
   if (!p || selections.length === 0) return c.json({ error: 'invalid_params' }, 400)
@@ -761,22 +795,19 @@ app.post('/competitions/import', async (c) => {
   const contests = await fetchFfttContests(p.org, p.season)
   if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
 
-  const asked = new Map(selections.map((sel) => [sel.identifier, sel.name]))
+  const asked = new Map(selections.map((sel) => [sel.contestId, sel.name]))
   const created: Competition[] = []
   const skipped: Array<{ identifier: string; name: string }> = []
   for (const contest of contests) {
-    if (!asked.has(contest.identifier)) continue
+    if (!asked.has(contest.id)) continue
     const before = await c.env.DB
-      .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ?')
-      .bind(contest.identifier).first<{ id: string }>()
+      .prepare('SELECT id FROM competitions WHERE fftt_contest_identifier = ? AND fftt_contest_name = ?')
+      .bind(contest.identifier, contest.name).first<{ id: string }>()
     if (before) {
       skipped.push({ identifier: contest.identifier, name: contest.name })
       continue
     }
-    const id = await competitionForContest(
-      c.env.DB,
-      { ...contest, name: asked.get(contest.identifier) ?? contest.name },
-    )
+    const id = await competitionForContest(c.env.DB, contest, asked.get(contest.id))
     const row = await c.env.DB
       .prepare('SELECT * FROM competitions WHERE id = ?').bind(id).first<CompetitionRow>()
     if (row) {
@@ -786,6 +817,7 @@ app.post('/competitions/import', async (c) => {
         isCategoryLocked: bool(row.is_category_locked),
         sortOrder: row.sort_order, isArchived: bool(row.is_archived),
         ...(row.fftt_contest_identifier ? { ffttContestIdentifier: row.fftt_contest_identifier } : {}),
+        ...(row.fftt_contest_name ? { ffttContestName: row.fftt_contest_name } : {}),
       })
     }
   }
@@ -811,7 +843,8 @@ type ImportedDivision = {
 async function importDivisions(
   db: Env['Bindings']['DB'],
   p: {
-    org: number; season: number; ph: number; contest: string
+    org: number; season: number; ph: number
+    want: { contestId?: string; contestIdentifier?: string }
     /**
      * FFTT ids of the divisions to act on. Undefined imports every one FFTT
      * lists, which is what an older client sends and what the import always
@@ -825,9 +858,12 @@ async function importDivisions(
 > {
   const season = await db.prepare('SELECT id, display_name FROM seasons WHERE id = ?').bind(String(p.season)).first()
   if (!season) return 'season_not_found'
-  const result = await fetchFfttDivisions(p.org, p.season, p.ph, p.contest)
+  const resolved = await resolveFfttContest(p.org, p.season, p.want)
+  if (!resolved) return 'fftt_unavailable'
+  if (!resolved.contest) return 'no_divisions'
+  const result = await fetchFfttDivisions(p.org, p.ph, resolved.contest)
   if (!result) return 'fftt_unavailable'
-  if (!result.contest || result.divisions.length === 0) return 'no_divisions'
+  if (result.divisions.length === 0) return 'no_divisions'
 
   const phaseName = `Phase ${p.ph}`
   let phaseRow = await db.prepare(
@@ -848,7 +884,7 @@ async function importDivisions(
   // these divisions belong to — the modal has been printing its name all along
   // (#482). Resolving it here is what stops a general admin re-stating it by
   // hand, division by division, on /divisions.
-  const competitionId = await competitionForContest(db, result.contest)
+  const competitionId = await competitionForContest(db, resolved.contest)
 
   const existing = await phaseDivisions(db, phaseId)
   let rank = existing.maxRank
@@ -898,7 +934,7 @@ async function importDivisions(
 
 app.post('/divisions/import', async (c) => {
   const b = await c.req.json()
-  const p = importParams(b.organizationId, b.seasonId, b.phase, b.contestIdentifier)
+  const p = importParams(b.organizationId, b.seasonId, b.phase, b.contestId, b.contestIdentifier)
   if (!p) return c.json({ error: 'invalid_params' }, 400)
   const only: Set<string> | undefined = Array.isArray(b.divisionIds)
     ? new Set<string>(b.divisionIds.filter((id: unknown): id is string => typeof id === 'string'))

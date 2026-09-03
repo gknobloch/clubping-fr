@@ -121,13 +121,17 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   query without its `identifier` filter lists an organisation's championships;
   `/competitions` imports from that, and the manual add is the fallback for what
   FFTT does not run. Never make typing one in the primary path.
-- **Competitions are keyed on the contest's *identifier*, never its id.** FFTT
-  issues a fresh id per (organisation, season), so the id would mint a new
-  competition every August and orphan every category and derogation set against
-  the old one. `FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER` ("1") is only the default
-  when a caller names none.
-- The identifier is the one value a request puts into an FFTT GraphQL **string
-  literal** — validate with `isFfttContestIdentifier`, never escape-and-hope.
+- **Competitions are keyed on (contest identifier, FFTT's contest name)** —
+  verified against three live listings. The id is per-season (18368 vs 15954 for
+  the same championship), so keying on it would mint a new competition every
+  August and orphan every category and derogation. The identifier alone is NOT
+  unique: org 15 lists `TO` twice in one season, and `TO` is a different
+  championship in another league. `fftt_contest_name` is kept apart from
+  `display_name` so a rename cannot break the match.
+- **A request names a contest by its FFTT id**, resolved out of the listing in
+  JavaScript. Never re-add an `identifier:` filter to the `contests` query: it
+  would silently return whichever of two contests came first. Nothing from a
+  request reaches a GraphQL string literal any more.
 - **The divisions import knows its competition** and files its divisions itself.
   Re-importing fills a blank `competition_id`; it never overwrites a filing a
   general admin has made.

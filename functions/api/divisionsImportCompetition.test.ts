@@ -21,6 +21,7 @@ interface CompetitionRow {
   id: string
   display_name: string
   fftt_contest_identifier: string | null
+  fftt_contest_name: string | null
 }
 
 /**
@@ -33,9 +34,13 @@ function mockFftt(contestId = '18368') {
     const data = query.includes('contests(')
       ? {
         contests: {
-          edges: [{
-            node: { id: `/api/contests/${contestId}`, identifier: '1', name: CONTEST_NAME },
-          }],
+          edges: [
+            { node: { id: `/api/contests/${contestId}`, identifier: '1', name: CONTEST_NAME } },
+            // Two contests sharing one identifier, as org 15 really lists them:
+            // proof that a filtered query could not have said which was meant.
+            { node: { id: '/api/contests/18647', identifier: 'TO', name: 'TOP DE ZONE 06' } },
+            { node: { id: '/api/contests/18742', identifier: 'TO', name: 'TOP DE QUALIFICATION' } },
+          ],
         },
       }
       : {
@@ -58,6 +63,7 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
         id: params[0] as string,
         display_name: params[1] as string,
         fftt_contest_identifier: params[3] as string | null,
+        fftt_contest_name: params[4] as string | null,
       })
     }
     if (/INSERT INTO divisions/.test(sql)) {
@@ -113,13 +119,13 @@ function fakeDb(divisions: DivisionRow[], competitions: CompetitionRow[]) {
 }
 
 const runImport = (
-  db: D1Database, organizationId = 14, contestIdentifier?: string, divisionIds?: string[],
+  db: D1Database, organizationId = 14, contestId?: string, divisionIds?: string[],
 ) =>
   app.fetch(
     new Request('http://localhost/api/divisions/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId, seasonId: 27, phase: 1, contestIdentifier, divisionIds }),
+      body: JSON.stringify({ organizationId, seasonId: 27, phase: 1, contestId, divisionIds }),
     }),
     { DB: db, AUTH_GUARD_DISABLED: 'true' },
   )
@@ -129,9 +135,9 @@ const queriesOf = () =>
   (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
     .map((call) => String(JSON.parse(String((call[1] as RequestInit).body)).query))
 
-const runPreview = (db: D1Database, contestIdentifier = '1') =>
+const runPreview = (db: D1Database, contestId = '18368') =>
   app.fetch(
-    new Request(`http://localhost/api/fftt/divisions-preview?organizationId=14&seasonId=27&phase=1&contestIdentifier=${contestIdentifier}`),
+    new Request(`http://localhost/api/fftt/divisions-preview?organizationId=14&seasonId=27&phase=1&contestId=${contestId}`),
     { DB: db, AUTH_GUARD_DISABLED: 'true' },
   )
 
@@ -203,24 +209,29 @@ describe('which championship the divisions import reads (#482)', () => {
   it('defaults to the men\'s team championship, as it always did', async () => {
     mockFftt()
     await runImport(fakeDb([], []))
-    expect(queriesOf()[0]).toContain('identifier: "1"')
+    // The divisions query names the contest by id — resolved from the listing,
+    // never asked for with an identifier filter that could match two contests.
+    expect(queriesOf().some((q) => q.includes('contest_id: 18368'))).toBe(true)
   })
 
-  // Before this the identifier was hardcoded, so a youth championship's
-  // divisions were unreachable however many competitions were configured.
-  it('reads the championship it is told to', async () => {
+  it('reads the contest it is told to, by id', async () => {
     mockFftt()
-    await runImport(fakeDb([], []), 14, 'CJ')
-    expect(queriesOf()[0]).toContain('identifier: "CJ"')
+    await runImport(fakeDb([], []), 14, '18742')
+    expect(queriesOf().some((q) => q.includes('contest_id: 18742'))).toBe(true)
   })
 
-  // The identifier is the one value from a request that reaches the query as
-  // text, inside a string literal. It is refused, never escaped.
-  it('refuses an identifier that could break out of the query', async () => {
+  // No value from a request reaches a GraphQL string literal any more: the
+  // contest is picked out of the listing in JavaScript.
+  it('puts nothing from the request into a query literal', async () => {
     mockFftt()
-    const res = await runImport(fakeDb([], []), 14, '1" name: "x')
-    expect(res.status).toBe(400)
-    expect(queriesOf()).toEqual([])
+    await runImport(fakeDb([], []), 14, '18742')
+    for (const q of queriesOf()) expect(q).not.toMatch(/identifier:\s*"/)
+  })
+
+  it('finds nothing to import when the id names no contest', async () => {
+    mockFftt()
+    const res = await runImport(fakeDb([], []), 14, '99999')
+    expect(res.status).toBe(404)
   })
 })
 
@@ -271,7 +282,7 @@ describe('importing only the divisions that were ticked', () => {
   it('creates only the ones named', async () => {
     mockFftt()
     const divisions: DivisionRow[] = []
-    await runImport(fakeDb(divisions, []), 14, '1', ['234612'])
+    await runImport(fakeDb(divisions, []), 14, '18368', ['234612'])
     expect(divisions.map((d) => d.id)).toEqual(['234612'])
   })
 
@@ -282,7 +293,7 @@ describe('importing only the divisions that were ticked', () => {
       { id: '234612', phase_id: 'phase-27-1', display_name: 'GE 7', rank: 2, competition_id: null },
     ]
     const competitions: CompetitionRow[] = []
-    await runImport(fakeDb(divisions, competitions), 14, '1', ['234322'])
+    await runImport(fakeDb(divisions, competitions), 14, '18368', ['234322'])
 
     expect(divisions.find((d) => d.id === '234322')?.competition_id).toBe(competitions[0].id)
     expect(divisions.find((d) => d.id === '234612')?.competition_id).toBeNull()

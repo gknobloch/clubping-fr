@@ -94,7 +94,13 @@ export interface FfttCurrentSeason {
 
 /** One contest in the FFTT competitions preview (GET /api/fftt/competitions-preview, #482). */
 export interface FfttCompetitionPreview {
-  /** The stable FFTT identity — what a competition is keyed on. */
+  /** FFTT's id for this contest — exact, and how a request names it. */
+  id: string
+  /**
+   * FFTT's identifier. Half of a competition's identity, not the whole of it:
+   * one identifier can name several contests (org 15 lists "TO" twice), so the
+   * pair (identifier, name) is what is unique.
+   */
   identifier: string
   /** FFTT's own name for it. */
   name: string
@@ -106,7 +112,8 @@ export interface FfttCompetitionPreview {
 
 /** One championship the admin ticked, with the name they want it stored under. */
 export interface FfttCompetitionSelection {
-  identifier: string
+  /** FFTT's contest id — exact, where an identifier would be ambiguous. */
+  contestId: string
   /** Blank or absent falls back to FFTT's own name. */
   name?: string
 }
@@ -444,11 +451,11 @@ interface DataContextValue extends DataState {
   importFfttCompetitions: (
     organizationId: string, seasonId: string, selections: FfttCompetitionSelection[],
   ) => Promise<FfttCompetitionsImportResult | null>
-  fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number, contestIdentifier?: string) => Promise<FfttDivisionsPreview | 'no_contest' | null>
+  fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number, contestId?: string) => Promise<FfttDivisionsPreview | 'no_contest' | null>
   /** Import the FFTT divisions (creates the phase if missing, skips existing). */
   importFfttDivisions: (
     organizationId: string, seasonId: string, phase: number,
-    contestIdentifier?: string,
+    contestId?: string,
     /** Which divisions to act on; omitted means every one the preview offered. */
     divisionIds?: string[],
   ) => Promise<FfttDivisionsImportResult | null>
@@ -824,12 +831,12 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [])
 
   const fetchDivisionsPreview = useCallback(async (
-    organizationId: string, seasonId: string, phase: number, contestIdentifier?: string,
+    organizationId: string, seasonId: string, phase: number, contestId?: string,
   ): Promise<FfttDivisionsPreview | 'no_contest' | null> => {
     try {
       const params = new URLSearchParams({
         organizationId, seasonId, phase: String(phase),
-        ...(contestIdentifier ? { contestIdentifier } : {}),
+        ...(contestId ? { contestId } : {}),
       })
       const r = await fetch(`/api/fftt/divisions-preview?${params}`, { headers: authHeaders() })
       if (r.status === 404) return 'no_contest'
@@ -842,13 +849,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   const importFfttDivisions = useCallback(async (
     organizationId: string, seasonId: string, phase: number,
-    contestIdentifier?: string, divisionIds?: string[],
+    contestId?: string, divisionIds?: string[],
   ): Promise<FfttDivisionsImportResult | null> => {
     try {
       const r = await fetch('/api/divisions/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ organizationId, seasonId, phase, contestIdentifier, divisionIds }),
+        body: JSON.stringify({ organizationId, seasonId, phase, contestId, divisionIds }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttDivisionsImportResult
