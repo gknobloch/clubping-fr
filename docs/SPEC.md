@@ -139,6 +139,118 @@ A division has a display name, for instance "GE1".
 
 The division will determine how many players per game are required.
 
+## Competition
+
+A **competition** is a championship a division belongs to — the senior team
+championship, a youth one, a veterans one. The rattachement runs division →
+competition rather than team → competition: a team already declares a division,
+and a championship is what a set of divisions is.
+
+Competitions are **imported from the FFTT**, like clubs, divisions and teams:
+the federation publishes the list of championships an organisation runs for a
+season, and a General Admin picks the ones the app should know about. A
+competition is recognised across seasons by what the federation calls it — its
+identifier together with its name — since the federation renumbers everything
+each season and reuses identifiers between championships. Adding one
+by hand stays possible, for a competition the federation does not run. Either
+way only a General Admin creates them.
+
+An imported competition admits **every category** until a General Admin narrows
+it: importing must never start restricting who can be fielded.
+
+A **division may narrow its competition's categories** — a youth championship
+whose lowest division is reserved to benjamins and minimes says so on the
+division. The more specific statement wins: where a division states its own
+categories, the competition's list is not read. Saying nothing inherits, which
+is what every division does until told otherwise. Whether a club may add someone
+outside the admitted set stays the competition's to decide: that is a policy of
+the championship, not of one of its levels.
+
+Each competition carries the **player categories it admits by default**.
+Listing none means it admits every category, which is how the senior
+championship is expressed and what makes an unconfigured competition harmless.
+A competition may additionally be **reserved to its categories**: a club can
+then take a licensee out of it but never put one in — a youth championship does
+not admit a veteran because a club asked.
+
+A division that belongs to no competition restricts nobody — that is what a
+division created by hand, or read off a PDF calendar, is until a General Admin
+says otherwise.
+
+The **FFTT divisions import fills it in by itself**: it reads one championship
+at a time — the General Admin picks which — so it already knows which
+competition its divisions belong to and files them under it, creating that
+competition on first sight if need be. Re-importing also files divisions that
+predate this, but only where nothing is filed yet: it never moves a division a
+General Admin has put somewhere else.
+
+### Category
+
+Every licensee has an age category, as the FFTT states it in the licence record
+the player import already reads: a letter for the young and the seniors (P, B,
+M, C, J, S — sometimes suffixed, "B2") and a five-year band for the veterans
+(V40 … V90). It is stored exactly as the FFTT sent it and normalised on read:
+the youth suffixes are dropped, since nothing is organised that separates them,
+while the veteran bands are kept apart, since "vétérans 50 ans et plus" is a
+real competition. A code we do not recognise leaves the licensee without a
+category, and someone without one is eligible only to competitions that admit
+every category — or by their club's explicit say-so.
+
+### Eligibility
+
+A licensee is eligible to **as many competitions as the mapping allows**: a
+cadet plays in their own category and with the adults, so eligibility is a list
+and never a field on the player. A club amends the global default for its own
+licensees, as exceptions rather than as a second list:
+
+- **Excluding** someone the default admits — always allowed.
+- **Adding** someone the default turns away — allowed unless the competition is
+  reserved to its categories.
+
+Both are refused server-side, not merely hidden: a club administers its own
+club's licensees and no others.
+
+Where this bites is what can be *added*: a team's roster only offers licensees
+its competition admits, and so does the "autres joueurs" list of a line-up.
+Availabilities already given and line-ups already made are never filtered — the
+rule restricts what can be added, it does not erase what exists.
+
+Which is exactly why an exclusion has to be **stated rather than assumed**. A
+licensee already on a team's roster, or named in a line-up, stays there: the
+club has excluded them from what comes next, not from what is already arranged.
+So wherever a competition calls someone ineligible while one of the club's teams
+still fields them, the screens mark it, and excluding such a licensee asks for
+confirmation first — naming the équipes and the rencontres concerned, and saying
+plainly that the exclusion undoes none of them. Reconciling the two is the
+club's decision, and it is one the app makes visible rather than one it takes.
+
+A club works through this in bulk as often as one licensee at a time — a whole
+category joins a new championship, an age group moves up. So both views filter by
+category, and the grid additionally lets a club select what the filter shows and
+apply one amendment to all of it, on one competition at a time. A bulk amendment
+only ever touches the selected licensees it would actually change, and it can no
+more widen a reserved competition than a single one can.
+
+In the grid every filter sits in the header of the column it narrows: the name,
+the category — which has a column of its own — and, per competition, the set of
+states to keep. That last one answers the questions a club actually arrives
+with: who is excluded here, who is admitted by category, who holds no category
+at all, and who is not eligible yet is already engaged. Filters on two
+competitions compound, so "out of the seniors and in for the youth" is one
+query. Each competition also carries an information button: what it admits by
+default, whether it can be widened at all, what this club has already amended,
+and what it has left to reconcile.
+
+Both places a club sees eligibility answer the same question at a different
+scale. **Compétitions** is a screen of its own in a Club Admin's navigation: on
+a wide screen it is a grid of the whole club against every competition, since
+the question is comparative — who is missing from the youth championship, who
+did we add to the veterans — and on a narrow one it becomes one competition at a
+time. The **player's own screen** lists every competition beside them, eligible
+or not, with the reason; a Club Admin of that club amends it from there, adding
+or excluding a single licensee without leaving the player they were looking at.
+Anyone else reads the same verdicts without the controls.
+
 ## Group
 
 A group is made of multiple teams, which might even be from the same club.
@@ -184,6 +296,7 @@ A player has
 - A phone number
 - A birth date (optional)
 - A birth place (optional)
+- An age category, from the FFTT licence record (see [Competition](#competition))
 
 For each new phase, a player will have a locked amount of points, that will be valid for the entire season.
 
@@ -216,6 +329,9 @@ Each club has one or more admins that are able:
 - To register teams in a phase / division / group - in case a global admin didn't create them
 - To define the list of players of a team, which includes defining how many points that player has at the beginning of the phase, once assigned to that team
 - To perform the actions of any captain of his club on any team of the club
+- To amend, for their own club's licensees only, the categories a competition
+  admits by default — excluding one it admits, adding one it turns away, except
+  where the competition is reserved to its categories
 
 ### Global Admin
 
@@ -224,3 +340,5 @@ Global admin is able
 - To designate and stand down the admins of any club, under the same limit of 5
 - To create divisions, phases, groups
 - To create teams
+- To create competitions, to say which categories each admits by default, and
+  to reserve one to its categories

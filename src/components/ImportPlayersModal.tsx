@@ -157,6 +157,10 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
           phone: '',
           status: 'active',
           clubId,
+          // The category comes with the licence (#482) — it is stated on the
+          // same record, and a licensee created without one is eligible for
+          // nothing until somebody notices.
+          ...(has('category') && row.licence.category ? { category: row.licence.category } : {}),
         })
         playerId = player.id
         created += 1
@@ -164,6 +168,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
         const patch: Partial<Player> = {}
         if (has('lastName')) patch.lastName = row.licence.lastName
         if (has('firstName')) patch.firstName = row.licence.firstName
+        if (has('category')) patch.category = row.licence.category
         if (Object.keys(patch).length) updatePlayer(playerId, patch)
         if (Object.keys(patch).length || has('points')) updated += 1
       }

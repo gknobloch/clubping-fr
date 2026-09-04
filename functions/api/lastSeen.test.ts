@@ -28,6 +28,7 @@ function member(over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow {
     phone: '',
     birth_date: null,
     birth_place: null,
+    category: null,
     status: 'active',
     club_id: null,
     first_login_at: null,

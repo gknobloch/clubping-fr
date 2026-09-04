@@ -38,7 +38,7 @@ const CLUB_XML =
 
 const player = (over: Partial<Player>): Player => ({
   id: 'p-1', firstName: 'Bertrand', lastName: 'De Coatpont', licenseNumber: '6813454',
-  phone: '', status: 'active', clubId: 'club-fftt-06680011', ...over,
+  phone: '', status: 'active', clubId: 'club-fftt-06680011', category: 'S', ...over,
 })
 
 describe('normalizePersonName', () => {
@@ -124,6 +124,7 @@ describe('parseClubLicencesXml', () => {
     expect(parseClubLicencesXml(ONE_LICENCE_XML)).toEqual([{
       licence: '684545', lastName: 'Ceroni', firstName: 'Herve',
       clubNumber: '06680011', clubName: 'Rixheim PPA', points: '1416',
+      category: 'V55',
     }])
   })
 
@@ -132,10 +133,12 @@ describe('parseClubLicencesXml', () => {
       {
         licence: '425881', lastName: 'Canaque', firstName: 'Gregory',
         clubNumber: '06680011', clubName: 'Rixheim PPA', points: '1731',
+        category: 'V40',
       },
       {
         licence: '392885', lastName: 'Clement', firstName: 'Didier',
         clubNumber: '06680011', clubName: 'Rixheim PPA', points: '772',
+        category: 'V45',
       },
     ])
   })
@@ -148,21 +151,22 @@ describe('parseClubLicencesXml', () => {
 
 const LICENCE = {
   licence: '6813454', lastName: 'De Coatpont', firstName: 'Bertrand',
-  clubNumber: '06680011', clubName: 'Rixheim PPA', points: '803',
+  clubNumber: '06680011', clubName: 'Rixheim PPA', points: '803', category: 'S',
 }
 
 describe('playerSyncFields', () => {
   it('marks everything as new when there is no current player', () => {
     const fields = playerSyncFields(LICENCE)
-    expect(fields.map((f) => f.current)).toEqual([null, null, null, null])
+    expect(fields.map((f) => f.current)).toEqual([null, null, null, null, null])
     expect(writableFields(fields).map((f) => f.key)).toEqual([
-      'lastName', 'firstName', 'licenseNumber', 'points',
+      'lastName', 'firstName', 'licenseNumber', 'points', 'category',
     ])
   })
 
   it('only offers what actually differs', () => {
     const fields = playerSyncFields(LICENCE, {
-      lastName: 'DE COATPONT', firstName: 'Bertrand', licenseNumber: '6813454', points: '803',
+      lastName: 'DE COATPONT', firstName: 'Bertrand', licenseNumber: '6813454',
+      points: '803', category: 'S',
     })
     expect(writableFields(fields).map((f) => f.key)).toEqual(['lastName'])
     expect(fields.find((f) => f.key === 'lastName')).toMatchObject({
@@ -176,7 +180,10 @@ describe('playerSyncFields', () => {
   it('does not "correct" an accented name into FFTT’s unaccented one', () => {
     const fields = playerSyncFields(
       { ...LICENCE, lastName: 'Ceroni', firstName: 'Herve' },
-      { lastName: 'Ceroni', firstName: 'Hervé', licenseNumber: '6813454', points: '803' },
+      {
+        lastName: 'Ceroni', firstName: 'Hervé', licenseNumber: '6813454',
+        points: '803', category: 'S',
+      },
     )
     expect(fields.find((f) => f.key === 'firstName')?.unchanged).toBe(true)
     expect(writableFields(fields)).toEqual([])
@@ -184,14 +191,16 @@ describe('playerSyncFields', () => {
 
   it('still offers a name that differs by more than accents', () => {
     const fields = playerSyncFields(LICENCE, {
-      lastName: 'DE COATPONT', firstName: 'Bertrand', licenseNumber: '6813454', points: '803',
+      lastName: 'DE COATPONT', firstName: 'Bertrand', licenseNumber: '6813454',
+      points: '803', category: 'S',
     })
     expect(writableFields(fields).map((f) => f.key)).toEqual(['lastName'])
   })
 
   it('offers nothing for a field FFTT left empty', () => {
     const fields = playerSyncFields({ ...LICENCE, points: '' }, {
-      lastName: 'De Coatpont', firstName: 'Bertrand', licenseNumber: '6813454', points: '803',
+      lastName: 'De Coatpont', firstName: 'Bertrand', licenseNumber: '6813454',
+      points: '803', category: 'S',
     })
     expect(fields.find((f) => f.key === 'points')).toMatchObject({ unavailable: true })
     expect(writableFields(fields)).toEqual([])
@@ -208,6 +217,29 @@ describe('buildImportRows', () => {
     expect(rows[0].playerId).toBe('p-1')
     expect(rows[0].status).toBe('changed')
     expect(writableFields(rows[0].fields).map((f) => f.key)).toEqual(['lastName', 'points'])
+  })
+
+  // #482 — the category is reviewable like every other field, so an import
+  // that only changes it still shows up as something to accept.
+  it('offers the category when FFTT has moved a licensee into another one', () => {
+    const rows = buildImportRows(
+      [{ ...LICENCE, category: 'V40' }],
+      [player({})],
+      [{ phaseId: 'phase-27-1', playerId: 'p-1', points: '803' }],
+      'phase-27-1',
+    )
+    expect(rows[0].status).toBe('changed')
+    expect(writableFields(rows[0].fields).map((f) => f.key)).toEqual(['category'])
+    expect(rows[0].fields.find((f) => f.key === 'category')).toMatchObject({
+      label: 'Catégorie', current: 'S', incoming: 'V40',
+    })
+  })
+
+  it('offers the category of a licensee we hold without one', () => {
+    const rows = buildImportRows([LICENCE], [player({ category: undefined })], points, 'phase-27-1')
+    expect(rows[0].fields.find((f) => f.key === 'category')).toMatchObject({
+      current: null, incoming: 'S', unchanged: false,
+    })
   })
 
   it('reports a licence we do not hold as new', () => {
@@ -284,7 +316,7 @@ describe('findImportCandidate (#474)', () => {
 describe('buildImportRows — linking rather than duplicating (#474)', () => {
   const licence = {
     licence: '425881', lastName: 'Barlinge', firstName: 'Virginie',
-    clubNumber: '06680105', clubName: 'Mulhouse TT', points: '1200',
+    clubNumber: '06680105', clubName: 'Mulhouse TT', points: '1200', category: 'S',
   }
   const admin = { id: 'u1', firstName: 'Virginie', lastName: 'Barlinge' }
 

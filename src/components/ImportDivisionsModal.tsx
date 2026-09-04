@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Organization } from '@/types'
-import { useAppData, type FfttDivisionsPreview } from '@/contexts/DataContext'
+import { useAppData, type FfttCompetitionPreview, type FfttDivisionsPreview } from '@/contexts/DataContext'
 import { FFTT_PHASES } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { ModalShell } from '@/components/ModalShell'
@@ -19,7 +19,10 @@ export function ImportDivisionsModal({
    *  page's filter can be set to match what was just imported (#259). */
   onImported?: (organizationId: string) => void
 }) {
-  const { seasons, fetchOrganizations, fetchDivisionsPreview, importFfttDivisions } = useAppData()
+  const {
+    seasons, fetchOrganizations, fetchCompetitionsPreview,
+    fetchDivisionsPreview, importFfttDivisions,
+  } = useAppData()
 
   const [orgs, setOrgs] = useState<Organization[] | null>(null)
   const [orgsError, setOrgsError] = useState(false)
@@ -31,6 +34,16 @@ export function ImportDivisionsModal({
     seasons.find((s) => s.status === 'active')?.id ?? selectableSeasons[0]?.id ?? '',
   )
   const [phase, setPhase] = useState(1)
+
+  // Which championship's divisions to import (#482). Before this the import
+  // could only ever read one — the men's team championship — so a youth
+  // championship's divisions were unreachable however many competitions were
+  // configured. The list is FFTT's own, for the organisation and season chosen.
+  const [contests, setContests] = useState<FfttCompetitionPreview[] | null>(null)
+  /** FFTT's contest id — exact, where an identifier names more than one. */
+  const [contestId, setContestId] = useState('')
+  /** Which divisions of the preview to actually import (#482). */
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   const [preview, setPreview] = useState<FfttDivisionsPreview | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>('idle')
@@ -61,30 +74,69 @@ export function ImportDivisionsModal({
   }
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
+  const heldContests = useMemo(() => (contests ?? []).filter((c) => c.exists), [contests])
+  const newContests = useMemo(() => (contests ?? []).filter((c) => !c.exists), [contests])
+
+  // Reload the championship list whenever the scope changes, and drop any
+  // preview built for the previous one.
+  useEffect(() => {
+    setContests(null)
+    setContestId('')
+    setPreview(null)
+    setPreviewState('idle')
+    if (!organizationId || !seasonId) return
+    let cancelled = false
+    fetchCompetitionsPreview(organizationId, seasonId).then((list) => {
+      if (cancelled || !list) return
+      setContests(list)
+      // One championship needs no choosing; several do.
+      if (list.length === 1) setContestId(list[0].id)
+    })
+    return () => { cancelled = true }
+  }, [organizationId, seasonId, fetchCompetitionsPreview])
 
   const handleSearch = async () => {
     setPreviewState('loading')
     setPreview(null)
     setImportedCount(null)
     setImportError(false)
-    const result = await fetchDivisionsPreview(organizationId, seasonId, phase)
+    const result = await fetchDivisionsPreview(organizationId, seasonId, phase, contestId)
     if (result === 'no_contest') {
       setPreviewState('no_contest')
     } else if (result === null) {
       setPreviewState('error')
     } else {
       setPreview(result)
+      // Everything the import would act on starts ticked. Unlike the
+      // competitions list — twenty entries, mostly tournaments — this is
+      // exactly the divisions of the championship just chosen, so taking them
+      // all is the normal move and unticking one is the exception.
+      setPicked(new Set(result.divisions.filter((d) => !d.exists || d.attachable).map((d) => d.id)))
       setPreviewState('done')
     }
   }
 
-  const toImportCount = preview?.divisions.filter((d) => !d.exists).length ?? 0
+  const togglePicked = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toImportCount = preview?.divisions.filter((d) => !d.exists && picked.has(d.id)).length ?? 0
+  // Divisions already present that the import would file under the competition
+  // (#482). Without counting these, a phase whose divisions all pre-date the
+  // feature offered a disabled "Rien à importer" and the filing was unreachable.
+  const toAttachCount = preview?.divisions.filter((d) => d.attachable && picked.has(d.id)).length ?? 0
   const seasonName = seasons.find((s) => s.id === seasonId)?.displayName ?? seasonId
 
   const handleImport = async () => {
     setImporting(true)
     setImportError(false)
-    const result = await importFfttDivisions(organizationId, seasonId, phase)
+    const result = await importFfttDivisions(
+      organizationId, seasonId, phase, contestId, [...picked],
+    )
     setImporting(false)
     if (result) {
       setImportedCount(result.created.length)
@@ -149,6 +201,43 @@ export function ImportDivisionsModal({
               </p>
             )}
           </div>
+          <div>
+            <label htmlFor="import-contest" className="block text-sm font-medium text-slate-700">
+              Compétition
+            </label>
+            <select
+              id="import-contest"
+              value={contestId}
+              onChange={(e) => setContestId(e.target.value)}
+              className={inputClass}
+              disabled={!contests}
+            >
+              <option value="">
+                {contests ? 'Choisir une compétition…' : 'Choisissez une organisation et une saison'}
+              </option>
+              {/* Split rather than flagged inline: which championships are
+                  already known is the thing being asked, and a suffix on twenty
+                  options is a list nobody reads. Picking one not yet imported
+                  still works — it is created on import. */}
+              {heldContests.length > 0 && (
+                <optgroup label="Déjà importées">
+                  {heldContests.map((c) => (
+                    <option key={c.id} value={c.id}>{c.localName ?? c.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {newContests.length > 0 && (
+                <optgroup label="Pas encore importées">
+                  {newContests.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Les divisions importées y seront rattachées. Elle sera créée si elle n’existe pas encore.
+            </p>
+          </div>
           <div className="flex gap-4">
             <div className="flex-1">
               <label htmlFor="import-season" className="block text-sm font-medium text-slate-700">
@@ -184,7 +273,7 @@ export function ImportDivisionsModal({
           <button
             type="button"
             onClick={handleSearch}
-            disabled={!organizationId || !seasonId || previewState === 'loading'}
+            disabled={!organizationId || !seasonId || !contestId || previewState === 'loading'}
             className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
           >
             {previewState === 'loading' ? 'Recherche…' : 'Rechercher les divisions'}
@@ -204,7 +293,7 @@ export function ImportDivisionsModal({
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
               <p className="text-sm text-green-800">
                 {importedCount === 0
-                  ? 'Aucune division à importer : elles sont toutes déjà présentes.'
+                  ? 'Aucune division créée : elles étaient toutes déjà présentes. Celles qui n’étaient rattachées à aucune compétition le sont désormais.'
                   : `${importedCount} division${importedCount > 1 ? 's' : ''} importée${importedCount > 1 ? 's' : ''}.`}
               </p>
             </div>
@@ -215,25 +304,55 @@ export function ImportDivisionsModal({
               <p className="text-sm text-slate-600">
                 Championnat : <span className="font-medium text-slate-800">{preview.contest.name}</span>
               </p>
+              {/* The import reads one FFTT contest and one only, so it knows
+                  which competition these divisions belong to and files them
+                  itself (#482). Saying so here is what makes the competition
+                  appearing on /competitions afterwards unsurprising. */}
+              <p className="text-sm text-slate-600">
+                Compétition :{' '}
+                <span className="font-medium text-slate-800">{preview.competition.displayName}</span>
+                {!preview.competition.exists && (
+                  <span className="text-slate-500"> — elle sera créée, ouverte à toutes les catégories</span>
+                )}
+              </p>
               {!preview.phaseExists && (
                 <p className="text-sm text-amber-700">
                   La phase « Phase {phase} » n’existe pas encore pour {seasonName} : elle sera créée (inactive).
                 </p>
               )}
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                {preview.divisions.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className={d.exists ? 'text-slate-400' : 'text-slate-800'}>
+                {preview.divisions.map((d) => {
+                  // A division already present AND already filed is the one row
+                  // there is nothing to do to: no box, since ticking it would
+                  // promise an action that would not happen.
+                  const actionable = !d.exists || !!d.attachable
+                  return (
+                  <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      id={`import-division-${d.id}`}
+                      checked={picked.has(d.id)}
+                      disabled={!actionable}
+                      onChange={() => togglePicked(d.id)}
+                      aria-label={d.name}
+                      className="h-5 w-5 shrink-0 rounded border-slate-300 disabled:opacity-40 md:h-4 md:w-4"
+                    />
+                    <label
+                      htmlFor={`import-division-${d.id}`}
+                      className={`min-w-0 flex-1 ${actionable ? 'text-slate-800' : 'text-slate-400'}`}
+                    >
                       {d.rank}. {d.name}
                       <span className="ml-2 text-xs text-slate-400">{d.playersPerGame} j/match</span>
-                    </span>
+                    </label>
                     {d.exists && (
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
-                        Déjà présente
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+                        {d.attachable ? 'Présente, à rattacher' : 'Déjà présente'}
                       </span>
                     )}
                   </li>
-                ))}
+                  )
+                })
+                }
               </ul>
               {importError && (
                 <p className="text-sm text-red-600">Échec de l’import, réessayez.</p>
@@ -241,13 +360,15 @@ export function ImportDivisionsModal({
               <button
                 type="button"
                 onClick={handleImport}
-                disabled={importing || toImportCount === 0}
+                disabled={importing || (toImportCount === 0 && toAttachCount === 0)}
                 className={`w-full disabled:opacity-50 ${PRIMARY_BUTTON_CLASS}`}
               >
                 {importing
                   ? 'Import…'
                   : toImportCount === 0
-                    ? 'Rien à importer'
+                    ? toAttachCount === 0
+                      ? 'Rien à importer'
+                      : `Rattacher ${toAttachCount} division${toAttachCount > 1 ? 's' : ''}`
                     : `Importer ${toImportCount} division${toImportCount > 1 ? 's' : ''}`}
               </button>
             </div>

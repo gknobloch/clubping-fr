@@ -2,13 +2,16 @@ import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
-import { jsonParseIds } from './rows'
-import type { Address, ClubChannel, DataState } from '../../src/types'
+import { jsonParseCategories, jsonParseIds } from './rows'
+import type { Address, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
+  CompetitionRow, CompetitionEligibilityRow,
 } from './rows'
+import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
+import { canClubAdd } from '../../src/lib/competitionEligibility'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
-import { divisionDisplayName, ffttIdFromIri, orderDivisions, playersPerGameFor, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
+import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
@@ -99,6 +102,7 @@ app.get('/data', async (c) => {
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
     groupsR, teamsR, phasePointsR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
+    competitionsR, eligibilitiesR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -118,6 +122,8 @@ app.get('/data', async (c) => {
     // bulk payload stays light.
     db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
+    db.prepare('SELECT * FROM competitions ORDER BY sort_order').all<CompetitionRow>(),
+    db.prepare('SELECT * FROM club_competition_eligibility').all<CompetitionEligibilityRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -175,6 +181,24 @@ app.get('/data', async (c) => {
       isArchived: bool(r.is_archived),
       ...(r.identifier ? { identifier: r.identifier } : {}),
       ...(r.parent_id ? { parentId: r.parent_id } : {}),
+      ...(r.competition_id ? { competitionId: r.competition_id } : {}),
+      // Explicit null check: jsonParseCategories(null) is [], which would turn
+      // "inherit the competition" into "admit everyone" (#482).
+      ...(r.categories !== null ? { categories: jsonParseCategories(r.categories) } : {}),
+    })),
+    // Pre-sorted by sort_order in the query above (#482).
+    competitions: competitionsR.results.map(r => ({
+      id: r.id, displayName: r.display_name,
+      categories: jsonParseCategories(r.categories),
+      isCategoryLocked: bool(r.is_category_locked),
+      sortOrder: r.sort_order, isArchived: bool(r.is_archived),
+      ...(r.fftt_contest_identifier ? { ffttContestIdentifier: r.fftt_contest_identifier } : {}),
+      ...(r.fftt_contest_name ? { ffttContestName: r.fftt_contest_name } : {}),
+    })),
+    // (club_id, competition_id, player_id) is the primary key — no surrogate id.
+    competitionEligibilities: eligibilitiesR.results.map(r => ({
+      clubId: r.club_id, competitionId: r.competition_id,
+      playerId: r.player_id, effect: r.effect,
     })),
     clubs: clubsR.results.map(r => ({
       id: r.id, affiliationNumber: r.affiliation_number ?? '', displayName: r.display_name,
@@ -197,6 +221,7 @@ app.get('/data', async (c) => {
       ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
+      ...(r.category ? { category: r.category } : {}),
       status: r.status, clubId: r.club_id ?? '',
       ...lastSeenField(r, canSeeLastSeen),
       ...(avatarUpdatedAt.has(r.id as string)
@@ -250,6 +275,7 @@ app.get('/data', async (c) => {
       ...(r.phone ? { phone: r.phone } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
+      ...(r.category ? { category: r.category } : {}),
       ...(r.status ? { status: r.status } : {}),
       ...(r.club_id ? { clubId: r.club_id } : {}),
       ...lastSeenField(r, canSeeLastSeen),
@@ -463,19 +489,79 @@ app.post('/fftt/organizations/refresh', async (c) => {
   return c.json({ organizations: r.results })
 })
 
-// Fetch the championship contest (identifier "1") then its divisions from FFTT.
-// null = FFTT unreachable; contest null = no championship for those params.
-async function fetchFfttDivisions(organizationId: number, seasonId: number, phase: number): Promise<{
-  contest: { id: string; name: string } | null
-  divisions: FfttDivision[]
-} | null> {
-  const contestData = await ffttGraphql<{ contests?: FfttEdges<{ id: string; name: string }> }>(
-    `{ contests(divisions_organization_id: ${organizationId} season_id: ${seasonId} identifier: "1") { edges { node { id name } } } }`,
+/** The FFTT contest a divisions import runs against — one competition (#482). */
+interface FfttContest {
+  /** FFTT's own id, fresh per (organisation, season) — never a key of ours. */
+  id: string
+  /** The stable identity: "1" is the men's team championship. */
+  identifier: string
+  name: string
+}
+
+/**
+ * Every contest FFTT runs for an (organisation, season) — its competitions.
+ *
+ * The same query as the divisions import's first leg, minus the `identifier`
+ * filter: dropping it is what turns "the men's team championship" into "the
+ * list of championships", which is what a general admin picks from (#482).
+ */
+async function fetchFfttContests(
+  organizationId: number,
+  seasonId: number,
+): Promise<FfttContest[] | null> {
+  const data = await ffttGraphql<{
+    contests?: FfttEdges<{ id: string; identifier: string; name: string }>
+  }>(
+    `{ contests(divisions_organization_id: ${organizationId} season_id: ${seasonId}) { edges { node { id identifier name } } } }`,
   )
-  if (contestData === null) return null
-  const contestNode = contestData.contests?.edges?.[0]?.node
-  if (!contestNode) return { contest: null, divisions: [] }
-  const contestId = ffttIdFromIri(contestNode.id)
+  if (data === null) return null
+  return (data.contests?.edges ?? []).flatMap((e) => e.node?.identifier ? [{
+    id: ffttIdFromIri(e.node.id),
+    identifier: e.node.identifier.trim(),
+    // Trimmed: the live listing has trailing spaces on several names
+    // ("Inscription aux Championnats du Grand Est Vétérans "), and the name is
+    // half of a competition's key.
+    name: e.node.name.trim(),
+  }] : [])
+}
+
+/**
+ * The contest a request means, out of everything FFTT runs for that scope.
+ *
+ * Picked from the listing rather than asked for with an `identifier:` filter,
+ * for two reasons. An identifier does not identify one contest — org 15 lists
+ * "TO" twice in a single season — so a filtered query would return two nodes
+ * and the caller would silently get whichever came first. And picking in
+ * JavaScript means no value from a request ever reaches a GraphQL string
+ * literal, which removes the escaping question rather than answering it.
+ *
+ * `contestId` is exact. `contestIdentifier` is the older client's way of asking
+ * and takes the first match, which is what that client already got.
+ */
+async function resolveFfttContest(
+  organizationId: number,
+  seasonId: number,
+  want: { contestId?: string; contestIdentifier?: string },
+): Promise<{ contests: FfttContest[]; contest: FfttContest | null } | null> {
+  const contests = await fetchFfttContests(organizationId, seasonId)
+  if (!contests) return null
+  const contest = want.contestId
+    ? contests.find((c) => c.id === want.contestId) ?? null
+    : contests.find((c) => c.identifier === want.contestIdentifier) ?? null
+  return { contests, contest }
+}
+
+// Fetch one championship contest then its divisions from FFTT. The contest is
+// pinned to one identifier (see FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER), which is
+// what lets the import file its divisions under a competition (#482).
+// null = FFTT unreachable; contest null = no championship for those params.
+async function fetchFfttDivisions(
+  organizationId: number,
+  phase: number,
+  /** Resolved from the contest listing by `resolveFfttContest` — never a filter. */
+  contest: FfttContest,
+): Promise<{ divisions: FfttDivision[] } | null> {
+  const contestId = contest.id
   const divData = await ffttGraphql<{
     divisions?: FfttEdges<{ id: string; identifier: string; name: string; parent: { id: string } | null }>
   }>(
@@ -488,22 +574,160 @@ async function fetchFfttDivisions(organizationId: number, seasonId: number, phas
     name: e.node.name,
     parentId: e.node.parent ? ffttIdFromIri(e.node.parent.id) : null,
   }] : [])
-  return { contest: { id: contestId, name: contestNode.name }, divisions }
+  return { divisions }
 }
 
-const importParams = (organizationId: unknown, seasonId: unknown, phase: unknown) => {
-  const org = Number(organizationId), season = Number(seasonId), ph = Number(phase)
-  const knownPhase = FFTT_PHASES.some((p) => Number(p.id) === ph)
-  if (!Number.isInteger(org) || org <= 0 || !Number.isInteger(season) || season <= 0 || !knownPhase) return null
-  return { org, season, ph }
+/**
+ * The competition an FFTT contest is, created the first time one is seen.
+ *
+ * Keyed on the contest IDENTIFIER rather than its id, because FFTT issues a
+ * fresh id per (organisation, season): keying on that would mint a new
+ * competition every August and orphan the categories and club derogations
+ * configured against the old one, while the app quietly stopped restricting
+ * anything. See migration 0046.
+ *
+ * Created with NO categories, which admits every one of them. An import must
+ * never start restricting who may be fielded — narrowing the competition is a
+ * general admin's move, on /competitions, and until they make it this row only
+ * records what the divisions belong to.
+ *
+ * The name is FFTT's, verbatim ("FED_Championnat de France par Equipes
+ * Masculin"), the same way division names keep their own prefixes
+ * (`divisionDisplayName`). It is a starting point, not a verdict: /competitions
+ * renames it.
+ */
+/**
+ * The competition row an FFTT contest belongs to, if we hold one.
+ *
+ * The name **disambiguates, it does not identify**. That distinction is the
+ * whole of this function, and it was learnt the hard way:
+ *
+ *   1. An exact (identifier, FFTT name) match is the competition.
+ *   2. No exact match, exactly ONE row carries that identifier, AND FFTT lists
+ *      only one contest under it — that is the same competition, with a stored
+ *      FFTT name that has gone stale. Nothing else could be meant, so it is
+ *      adopted and the stored name corrected.
+ *   3. Otherwise the name is the only thing that can decide, and a miss means a
+ *      new competition.
+ *
+ * Both halves of step 2's guard are needed. Without the first, a renamed
+ * competition duplicates itself; without the second, importing FFTT's two "TO"
+ * contests in one go would see the row just created for the first and adopt it
+ * for the second, quietly fusing two unrelated championships.
+ *
+ * Step 2 is what a strict pair key lacked, and its absence duplicated a
+ * competition the moment its stored name drifted — which migration 0048 caused
+ * for every renamed competition by backfilling `display_name` into it, and
+ * which FFTT will cause on its own the first time it fixes a typo or moves a
+ * tournament's year out of its title ("…BEAUVAIS 2425").
+ */
+async function findCompetitionForContest(
+  db: Env['Bindings']['DB'],
+  contest: FfttContest,
+  /** Everything FFTT lists for this scope — how we know the identifier is ours alone. */
+  listing: FfttContest[],
+): Promise<{ id: string; staleName: boolean } | null> {
+  const byIdentifier = await db
+    .prepare('SELECT id, fftt_contest_name FROM competitions WHERE fftt_contest_identifier = ?')
+    .bind(contest.identifier)
+    .all<{ id: string; fftt_contest_name: string | null }>()
+  const rows = byIdentifier.results
+  const exact = rows.find((r) => r.fftt_contest_name === contest.name)
+  if (exact) return { id: exact.id, staleName: false }
+
+  const sharedInListing = listing.filter((c) => c.identifier === contest.identifier).length
+  return rows.length === 1 && sharedInListing === 1 ? { id: rows[0].id, staleName: true } : null
+}
+
+/**
+ * The competition an FFTT contest is, created the first time one is seen.
+ *
+ * Created with NO categories, which admits every one of them. An import must
+ * never start restricting who may be fielded — narrowing the competition is a
+ * general admin's move, on /competitions, and until they make it this row only
+ * records what the divisions belong to.
+ *
+ * The display name is the general admin's; `fftt_contest_name` is FFTT's and is
+ * never touched by a rename, which is what lets the two live side by side.
+ */
+async function competitionForContest(
+  db: Env['Bindings']['DB'],
+  contest: FfttContest,
+  listing: FfttContest[],
+  /** The name a general admin chose at import; FFTT's is the fallback. */
+  displayName?: string,
+): Promise<string> {
+  const found = await findCompetitionForContest(db, contest, listing)
+  if (found) {
+    // Adopting: correct the stored FFTT name so the next import matches
+    // exactly, without touching what the competition is called on screen.
+    if (found.staleName) {
+      await db.prepare('UPDATE competitions SET fftt_contest_name = ? WHERE id = ?')
+        .bind(contest.name, found.id).run()
+    }
+    return found.id
+  }
+
+  const id = newId('comp')
+  const nextOrder = await db
+    .prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM competitions')
+    .first<{ next: number }>()
+  await db.prepare(
+    `INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name)
+     VALUES (?, ?, '[]', 0, ?, 0, ?, ?)`,
+  ).bind(id, displayName ?? contest.name, nextOrder?.next ?? 1, contest.identifier, contest.name).run()
+  return id
+}
+
+
+/**
+ * The (organisation, season) an FFTT read is scoped to.
+ *
+ * Both are numbers, so both are checked as such — nothing here reaches a query
+ * as text (see `isFfttContestIdentifier` for the one value that does).
+ */
+const orgSeasonParams = (organizationId: unknown, seasonId: unknown) => {
+  const org = Number(organizationId), season = Number(seasonId)
+  if (!Number.isInteger(org) || org <= 0 || !Number.isInteger(season) || season <= 0) return null
+  return { org, season }
+}
+
+const importParams = (
+  organizationId: unknown, seasonId: unknown, phase: unknown,
+  contestId: unknown, contestIdentifier: unknown,
+) => {
+  const scope = orgSeasonParams(organizationId, seasonId)
+  const ph = Number(phase)
+  if (!scope || !FFTT_PHASES.some((p) => Number(p.id) === ph)) return null
+  // The contest is named by its FFTT id, which is exact. An older client sends
+  // an identifier instead, or nothing at all — and nothing meant the men's team
+  // championship, the only contest this import could read before #482, so that
+  // client keeps behaving exactly as it did.
+  const wantId = typeof contestId === 'string' && /^\d{1,10}$/.test(contestId) ? contestId : undefined
+  const wantIdentifier = isFfttContestIdentifier(contestIdentifier)
+    ? contestIdentifier
+    : FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER
+  return {
+    ...scope, ph,
+    want: wantId ? { contestId: wantId } : { contestIdentifier: wantIdentifier },
+  }
 }
 
 // Existing divisions of a phase, for skip-matching by FFTT id or name.
 async function phaseDivisions(db: Env['Bindings']['DB'], phaseId: string) {
-  const r = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?').bind(phaseId).all()
+  const r = await db.prepare('SELECT id, display_name, rank, competition_id FROM divisions WHERE phase_id = ?')
+    .bind(phaseId).all()
+  // Which of them are filed under no competition yet (#482): a re-import fills
+  // those in, and the preview has to be able to say so — otherwise an import
+  // where every division already exists looks like it would do nothing at all.
+  const unfiled = new Set(
+    r.results.filter((x) => !x.competition_id)
+      .flatMap((x) => [x.id as string, (x.display_name as string).toLowerCase()]),
+  )
   return {
     ids: new Set(r.results.map((x) => x.id as string)),
     names: new Set(r.results.map((x) => (x.display_name as string).toLowerCase())),
+    unfiled,
     maxRank: r.results.reduce((m, x) => Math.max(m, x.rank as number), 0),
   }
 }
@@ -511,25 +735,157 @@ async function phaseDivisions(db: Env['Bindings']['DB'], phaseId: string) {
 // GET /fftt/divisions-preview — ordered division list for (organization, season, phase),
 // flagging the ones that already exist locally.
 app.get('/fftt/divisions-preview', async (c) => {
-  const p = importParams(c.req.query('organizationId'), c.req.query('seasonId'), c.req.query('phase'))
+  const p = importParams(
+    c.req.query('organizationId'), c.req.query('seasonId'), c.req.query('phase'),
+    c.req.query('contestId'), c.req.query('contestIdentifier'),
+  )
   if (!p) return c.json({ error: 'invalid_params' }, 400)
-  const result = await fetchFfttDivisions(p.org, p.season, p.ph)
+  const resolved = await resolveFfttContest(p.org, p.season, p.want)
+  if (!resolved) return c.json({ error: 'fftt_unavailable' }, 502)
+  if (!resolved.contest) return c.json({ error: 'no_contest' }, 404)
+  const result = await fetchFfttDivisions(p.org, p.ph, resolved.contest)
   if (!result) return c.json({ error: 'fftt_unavailable' }, 502)
-  if (!result.contest) return c.json({ error: 'no_contest' }, 404)
   const phaseRow = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
     .bind(String(p.season), `Phase ${p.ph}`).first()
   const existing = phaseRow
     ? await phaseDivisions(c.env.DB, phaseRow.id as string)
-    : { ids: new Set<string>(), names: new Set<string>(), maxRank: 0 }
-  return c.json({
-    contest: result.contest,
-    phaseExists: !!phaseRow,
-    divisions: orderDivisions(result.divisions).map((d, i) => ({
-      id: d.id, identifier: d.identifier, name: divisionDisplayName(d.name), rank: i + 1,
+    : { ids: new Set<string>(), names: new Set<string>(), unfiled: new Set<string>(), maxRank: 0 }
+  // Which competition the import would file these under — looked up, never
+  // created: a preview writes nothing (#482).
+  const found = await findCompetitionForContest(c.env.DB, resolved.contest, resolved.contests)
+  const competitionRow = found
+    ? await c.env.DB.prepare('SELECT id, display_name FROM competitions WHERE id = ?')
+      .bind(found.id).first<{ id: string; display_name: string }>()
+    : null
+  const divisions = orderDivisions(result.divisions).map((d, i) => {
+    const displayName = divisionDisplayName(d.name)
+    const exists = existing.ids.has(d.id) || existing.names.has(displayName.toLowerCase())
+    return {
+      id: d.id, identifier: d.identifier, name: displayName, rank: i + 1,
       playersPerGame: playersPerGameFor(d.identifier),
-      exists: existing.ids.has(d.id) || existing.names.has(divisionDisplayName(d.name).toLowerCase()),
-    })),
+      exists,
+      // Present, but filed under nothing: importing would attach it (#482).
+      attachable: exists && (existing.unfiled.has(d.id) || existing.unfiled.has(displayName.toLowerCase())),
+    }
   })
+  return c.json({
+    contest: resolved.contest,
+    competition: competitionRow
+      ? { id: competitionRow.id, displayName: competitionRow.display_name, exists: true }
+      : { displayName: resolved.contest.name, exists: false },
+    phaseExists: !!phaseRow,
+    divisions,
+  })
+})
+
+// --- FFTT competitions import (#482) ---
+//
+// A competition is FFTT data, like clubs, divisions and teams are: the same
+// `contests` query the divisions import runs, with the identifier filter taken
+// off, lists every championship an organisation runs for a season. Typing one
+// in by hand to mirror a row the federation already publishes is the
+// duplication the rest of this app exists to avoid — so the import is the
+// primary way in, and /competitions' manual add is the fallback for what FFTT
+// does not run.
+
+/** GET /fftt/competitions-preview — the contests of an (organisation, season). */
+app.get('/fftt/competitions-preview', async (c) => {
+  const p = orgSeasonParams(c.req.query('organizationId'), c.req.query('seasonId'))
+  if (!p) return c.json({ error: 'invalid_params' }, 400)
+  const contests = await fetchFfttContests(p.org, p.season)
+  if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
+
+  const held = await c.env.DB
+    .prepare('SELECT id, display_name, fftt_contest_identifier, fftt_contest_name FROM competitions WHERE fftt_contest_identifier IS NOT NULL')
+    .all<Pick<CompetitionRow, 'id' | 'display_name' | 'fftt_contest_identifier' | 'fftt_contest_name'>>()
+  // Keyed on the pair, because an identifier alone names more than one contest
+  // — org 15 lists "TO" twice in a single season (migration 0048).
+  const key = (identifier: string, name: string | null) => `${identifier}\u0000${name ?? ''}`
+  const heldBy = new Map(held.results.map((r) => [key(r.fftt_contest_identifier as string, r.fftt_contest_name), r]))
+  return c.json({
+    competitions: contests.map((contest) => {
+      const local = heldBy.get(key(contest.identifier, contest.name))
+      return {
+        // The FFTT id: exact, and how a later request names this contest
+        // without an identifier having to identify anything.
+        id: contest.id,
+        identifier: contest.identifier,
+        name: contest.name,
+        // Held already — the import will skip it, and the name we show is ours
+        // rather than FFTT's, since a general admin may have renamed it.
+        exists: !!local,
+        ...(local ? { localName: local.display_name } : {}),
+      }
+    }),
+  })
+})
+
+/** A display name the caller chose, or nothing when it is blank or absurd. */
+const chosenName = (v: unknown): string | undefined => {
+  const name = typeof v === 'string' ? v.trim() : ''
+  return name && name.length <= 120 ? name : undefined
+}
+
+/**
+ * POST /competitions/import — create the competitions the caller ticked.
+ *
+ * Re-fetches from FFTT rather than trusting the posted list, the same rule the
+ * divisions import follows: the client says *which* identifiers exist, and an
+ * identifier FFTT does not run is ignored. The NAME is the caller's to choose,
+ * though — FFTT's are export labels ("FED_Championnat de France par Equipes
+ * Masculin"), and renaming one on /competitions the moment after importing it
+ * is a step worth saving. Blank falls back to FFTT's.
+ *
+ * Each lands with no categories, so importing a competition restricts nobody
+ * until a general admin narrows it.
+ */
+app.post('/competitions/import', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const b = await c.req.json<{ organizationId?: unknown; seasonId?: unknown; selections?: unknown }>()
+  const p = orgSeasonParams(b.organizationId, b.seasonId)
+  // Selected by FFTT id: the identifier does not identify one contest, so a
+  // list of identifiers could not say which "TO" was meant (migration 0048).
+  const selections = (Array.isArray(b.selections) ? b.selections : [])
+    .flatMap((raw) => {
+      const sel = raw as { contestId?: unknown; name?: unknown }
+      return typeof sel?.contestId === 'string' && /^\d{1,10}$/.test(sel.contestId)
+        ? [{ contestId: sel.contestId, name: chosenName(sel.name) }]
+        : []
+    })
+  if (!p || selections.length === 0) return c.json({ error: 'invalid_params' }, 400)
+
+  const contests = await fetchFfttContests(p.org, p.season)
+  if (!contests) return c.json({ error: 'fftt_unavailable' }, 502)
+
+  const asked = new Map(selections.map((sel) => [sel.contestId, sel.name]))
+  const created: Competition[] = []
+  const skipped: Array<{ identifier: string; name: string }> = []
+  for (const contest of contests) {
+    if (!asked.has(contest.id)) continue
+    // Asked before creating, and through the same resolver the import uses, so
+    // a competition whose stored FFTT name has gone stale reads as held rather
+    // than as missing. Creating runs either way: on an adopted row it only
+    // corrects that stale name, and never touches the display name.
+    const before = await findCompetitionForContest(c.env.DB, contest, contests)
+    const id = await competitionForContest(c.env.DB, contest, contests, asked.get(contest.id))
+    if (before) {
+      skipped.push({ identifier: contest.identifier, name: contest.name })
+      continue
+    }
+    const row = await c.env.DB
+      .prepare('SELECT * FROM competitions WHERE id = ?').bind(id).first<CompetitionRow>()
+    if (row) {
+      created.push({
+        id: row.id, displayName: row.display_name,
+        categories: jsonParseCategories(row.categories),
+        isCategoryLocked: bool(row.is_category_locked),
+        sortOrder: row.sort_order, isArchived: bool(row.is_archived),
+        ...(row.fftt_contest_identifier ? { ffttContestIdentifier: row.fftt_contest_identifier } : {}),
+        ...(row.fftt_contest_name ? { ffttContestName: row.fftt_contest_name } : {}),
+      })
+    }
+  }
+  return c.json({ created, skipped })
 })
 
 type ImportedPhase = { id: string; seasonId: unknown; name: unknown; displayName: unknown; status: unknown }
@@ -539,6 +895,8 @@ type ImportedDivision = {
   identifier?: string
   /** FFTT id of the parent division (#236); the local match may not exist yet — see importDivisions. */
   parentId?: string
+  /** The competition this division was filed under (#482). */
+  competitionId?: string
 }
 
 // Core of the divisions import: re-fetches from FFTT (never trusts a client
@@ -546,15 +904,30 @@ type ImportedDivision = {
 // already present, ranked after any existing ones. Shared by
 // POST /divisions/import and the teams import (#229), which auto-imports the
 // divisions of a phase when a team's division is unknown locally.
-async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; season: number; ph: number }): Promise<
+async function importDivisions(
+  db: Env['Bindings']['DB'],
+  p: {
+    org: number; season: number; ph: number
+    want: { contestId?: string; contestIdentifier?: string }
+    /**
+     * FFTT ids of the divisions to act on. Undefined imports every one FFTT
+     * lists, which is what an older client sends and what the import always
+     * did; an empty list is a caller who ticked nothing, and does nothing.
+     */
+    only?: Set<string>
+  },
+): Promise<
   | { phase: ImportedPhase; createdPhase: boolean; created: ImportedDivision[]; skipped: Array<{ id: string; name: string }> }
   | 'season_not_found' | 'fftt_unavailable' | 'no_divisions'
 > {
   const season = await db.prepare('SELECT id, display_name FROM seasons WHERE id = ?').bind(String(p.season)).first()
   if (!season) return 'season_not_found'
-  const result = await fetchFfttDivisions(p.org, p.season, p.ph)
+  const resolved = await resolveFfttContest(p.org, p.season, p.want)
+  if (!resolved) return 'fftt_unavailable'
+  if (!resolved.contest) return 'no_divisions'
+  const result = await fetchFfttDivisions(p.org, p.ph, resolved.contest)
   if (!result) return 'fftt_unavailable'
-  if (!result.contest || result.divisions.length === 0) return 'no_divisions'
+  if (result.divisions.length === 0) return 'no_divisions'
 
   const phaseName = `Phase ${p.ph}`
   let phaseRow = await db.prepare(
@@ -571,12 +944,19 @@ async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; seas
   }
   const phaseId = phaseRow.id as string
 
+  // The import is pinned to one contest, so it already knows which competition
+  // these divisions belong to — the modal has been printing its name all along
+  // (#482). Resolving it here is what stops a general admin re-stating it by
+  // hand, division by division, on /divisions.
+  const competitionId = await competitionForContest(db, resolved.contest, resolved.contests)
+
   const existing = await phaseDivisions(db, phaseId)
   let rank = existing.maxRank
   const created: ImportedDivision[] = []
   const skipped: Array<{ id: string; name: string }> = []
   for (const d of orderDivisions(result.divisions)) {
     const displayName = divisionDisplayName(d.name)
+    if (p.only && !p.only.has(d.id)) continue
     if (existing.ids.has(d.id) || existing.names.has(displayName.toLowerCase())) {
       skipped.push({ id: d.id, name: displayName })
       continue
@@ -585,14 +965,24 @@ async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; seas
     created.push({
       id: d.id, phaseId, displayName, rank,
       playersPerGame: playersPerGameFor(d.identifier), isArchived: false,
-      identifier: d.identifier,
+      identifier: d.identifier, competitionId,
       ...(d.parentId ? { parentId: d.parentId } : {}),
     })
   }
   if (created.length) {
     await db.batch(created.map((d) =>
-      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
-        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier),
+      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
+        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier, d.competitionId ?? null),
+    ))
+  }
+  // Divisions already present — imported before this existed, or created by
+  // hand and matched by name — are filed too, but only where nothing is filed
+  // yet. Re-importing must never move a division a general admin has since
+  // filed somewhere else: this fills a blank, it does not overwrite a decision.
+  if (skipped.length) {
+    await db.batch(skipped.map((d) =>
+      db.prepare('UPDATE divisions SET competition_id = ? WHERE phase_id = ? AND (id = ? OR lower(display_name) = ?) AND competition_id IS NULL')
+        .bind(competitionId, phaseId, d.id, d.name.toLowerCase()),
     ))
   }
   return {
@@ -608,9 +998,12 @@ async function importDivisions(db: Env['Bindings']['DB'], p: { org: number; seas
 
 app.post('/divisions/import', async (c) => {
   const b = await c.req.json()
-  const p = importParams(b.organizationId, b.seasonId, b.phase)
+  const p = importParams(b.organizationId, b.seasonId, b.phase, b.contestId, b.contestIdentifier)
   if (!p) return c.json({ error: 'invalid_params' }, 400)
-  const result = await importDivisions(c.env.DB, p)
+  const only: Set<string> | undefined = Array.isArray(b.divisionIds)
+    ? new Set<string>(b.divisionIds.filter((id: unknown): id is string => typeof id === 'string'))
+    : undefined
+  const result = await importDivisions(c.env.DB, { ...p, only })
   if (result === 'season_not_found') return c.json({ error: 'season_not_found' }, 404)
   if (result === 'fftt_unavailable') return c.json({ error: 'fftt_unavailable' }, 502)
   if (result === 'no_divisions') return c.json({ error: 'no_divisions' }, 404)
@@ -2513,8 +2906,8 @@ app.delete('/phases/:id', async (c) => {
 app.post('/divisions', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null).run()
+    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null).run()
   return c.json({ ok: true })
 })
 
@@ -2529,6 +2922,14 @@ app.patch('/divisions/:id', async (c) => {
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
   if ('parentId' in p) { s.push('parent_id = ?'); v.push(p.parentId ?? null) }
   if ('identifier' in p) { s.push('identifier = ?'); v.push(p.identifier ?? null) }
+  // '' is how the form says "belongs to no competition" (#482).
+  if ('competitionId' in p) { s.push('competition_id = ?'); v.push(p.competitionId || null) }
+  // null is how it says "inherit the competition's categories"; an array — even
+  // an empty one, meaning every category — is a statement of its own.
+  if ('categories' in p) {
+    s.push('categories = ?')
+    v.push(Array.isArray(p.categories) ? categoriesJson(p.categories) : null)
+  }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE divisions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
 })
@@ -2555,6 +2956,131 @@ app.post('/divisions/:id/move', async (c) => {
     db.prepare('UPDATE divisions SET rank = ? WHERE id = ?').bind(myNewRank, id),
     db.prepare('UPDATE divisions SET rank = ? WHERE id = ?').bind(otherNewRank, otherId),
   ])
+  return c.json({ ok: true })
+})
+
+// --- Competitions (#482) ---
+//
+// A competition is a general admin's decision, so these three routes refuse
+// anybody else — `isGeneralAdmin` is declared with the onboarding routes below,
+// and is called here at request time. Eligibility overrides, further down, are
+// the club's half of the same feature and are scoped to the club they name.
+
+/** Only category codes we know reach the column; anything else is dropped. */
+const categoriesJson = (v: unknown): string => {
+  const list = Array.isArray(v) ? v : []
+  return JSON.stringify(list.filter((x): x is PlayerCategory =>
+    typeof x === 'string' && (PLAYER_CATEGORIES as readonly string[]).includes(x)))
+}
+
+app.post('/competitions', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const d = await c.req.json()
+  await c.env.DB.prepare(
+    `INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    d.id, d.displayName, categoriesJson(d.categories),
+    d.isCategoryLocked ? 1 : 0, d.sortOrder ?? 0, d.isArchived ? 1 : 0,
+  ).run()
+  return c.json({ ok: true })
+})
+
+app.patch('/competitions/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const id = c.req.param('id')
+  const p = await c.req.json()
+  const s: string[] = [], v: unknown[] = []
+  if ('displayName' in p) { s.push('display_name = ?'); v.push(p.displayName) }
+  if ('categories' in p) { s.push('categories = ?'); v.push(categoriesJson(p.categories)) }
+  if ('isCategoryLocked' in p) { s.push('is_category_locked = ?'); v.push(p.isCategoryLocked ? 1 : 0) }
+  if ('sortOrder' in p) { s.push('sort_order = ?'); v.push(p.sortOrder) }
+  if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
+  if (s.length) {
+    v.push(id)
+    await c.env.DB.prepare(`UPDATE competitions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
+  }
+  return c.json({ ok: true })
+})
+
+/**
+ * Deleting a competition detaches its divisions rather than taking them with
+ * it: a division outlives the championship it was filed under, and a phase's
+ * calendar must not vanish because someone tidied a list. Its overrides go,
+ * though — they name a competition that no longer exists.
+ */
+app.delete('/competitions/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
+  const db = c.env.DB
+  const id = c.req.param('id')
+  await db.batch([
+    db.prepare('UPDATE divisions SET competition_id = NULL WHERE competition_id = ?').bind(id),
+    db.prepare('DELETE FROM club_competition_eligibility WHERE competition_id = ?').bind(id),
+    db.prepare('DELETE FROM competitions WHERE id = ?').bind(id),
+  ])
+  return c.json({ ok: true })
+})
+
+/**
+ * A club's amendment to one competition, for one licensee.
+ *
+ * `effect: 'default'` deletes the row — "put this player back where the global
+ * mapping had them" is a third state, and it is the absence of a row rather
+ * than a value.
+ *
+ * Two guards, both server-side because the browser's are only a courtesy:
+ * the caller must administer the club named, and the player must belong to it;
+ * and an `included` on a locked competition is refused outright, which is the
+ * whole point of the lock — a youth championship does not admit a veteran
+ * because a club asked nicely.
+ */
+app.put('/clubs/:clubId/competitions/:competitionId/eligibility', async (c) => {
+  const db = c.env.DB
+  const clubId = c.req.param('clubId')
+  const competitionId = c.req.param('competitionId')
+  const viewer = managingViewer(c)
+  if (viewer.role !== 'general_admin' && !(viewer.role === 'club_admin' && viewer.clubId === clubId)) {
+    return c.json({ error: 'not_allowed' }, 403)
+  }
+  const { playerId, effect } = await c.req.json<{ playerId?: string; effect?: string }>()
+  if (!playerId || !['included', 'excluded', 'default'].includes(effect ?? '')) {
+    return c.json({ error: 'bad_request' }, 400)
+  }
+
+  const player = await db
+    .prepare('SELECT id, club_id, category FROM users WHERE id = ?')
+    .bind(playerId)
+    .first<Pick<UserRow, 'id' | 'club_id' | 'category'>>()
+  if (!player || player.club_id !== clubId) return c.json({ error: 'not_in_club' }, 404)
+
+  if (effect === 'default') {
+    await db.prepare(
+      'DELETE FROM club_competition_eligibility WHERE club_id = ? AND competition_id = ? AND player_id = ?',
+    ).bind(clubId, competitionId, playerId).run()
+    return c.json({ ok: true })
+  }
+
+  const competition = await db
+    .prepare('SELECT id, categories, is_category_locked FROM competitions WHERE id = ?')
+    .bind(competitionId)
+    .first<Pick<CompetitionRow, 'id' | 'categories' | 'is_category_locked'>>()
+  if (!competition) return c.json({ error: 'unknown_competition' }, 404)
+
+  if (effect === 'included' && !canClubAdd(
+    {
+      categories: jsonParseCategories(competition.categories),
+      isCategoryLocked: bool(competition.is_category_locked),
+    },
+    { id: player.id, category: player.category ?? undefined },
+  )) {
+    return c.json({ error: 'competition_locked' }, 409)
+  }
+
+  await db.prepare(
+    `INSERT INTO club_competition_eligibility (club_id, competition_id, player_id, effect)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT (club_id, competition_id, player_id) DO UPDATE SET effect = excluded.effect`,
+  ).bind(clubId, competitionId, playerId, effect).run()
   return c.json({ ok: true })
 })
 
@@ -2913,9 +3439,9 @@ const emailOrNull = (email: unknown): string | null =>
 app.post('/players', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, category, status, club_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.category || null, d.status, d.clubId).run()
   return c.json({ ok: true })
 })
 
@@ -2930,6 +3456,8 @@ app.patch('/players/:id', async (c) => {
   if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
   if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
   if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
+  // The FFTT code, verbatim (#482); '' is how the form says "no category".
+  if ('category' in p) { s.push('category = ?'); v.push(p.category || null) }
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }

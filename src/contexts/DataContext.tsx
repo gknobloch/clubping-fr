@@ -13,6 +13,9 @@ import type {
   Address,
   Club,
   ClubChannel,
+  Competition,
+  CompetitionEligibility,
+  EligibilityEffect,
   DataState,
   Organization,
   Season,
@@ -44,6 +47,8 @@ import {
   mockGameAvailabilities,
   mockGameSelections,
   mockUsers,
+  mockCompetitions,
+  mockCompetitionEligibilities,
 } from '@/mock/data'
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { seasonIdFromName } from '@/lib/season'
@@ -87,6 +92,38 @@ export interface FfttCurrentSeason {
   status?: SeasonStatus
 }
 
+/** One contest in the FFTT competitions preview (GET /api/fftt/competitions-preview, #482). */
+export interface FfttCompetitionPreview {
+  /** FFTT's id for this contest — exact, and how a request names it. */
+  id: string
+  /**
+   * FFTT's identifier. Half of a competition's identity, not the whole of it:
+   * one identifier can name several contests (org 15 lists "TO" twice), so the
+   * pair (identifier, name) is what is unique.
+   */
+  identifier: string
+  /** FFTT's own name for it. */
+  name: string
+  /** Already held locally: the import skips it. */
+  exists: boolean
+  /** Our name for it when we hold it — a general admin may have renamed it. */
+  localName?: string
+}
+
+/** One championship the admin ticked, with the name they want it stored under. */
+export interface FfttCompetitionSelection {
+  /** FFTT's contest id — exact, where an identifier would be ambiguous. */
+  contestId: string
+  /** Blank or absent falls back to FFTT's own name. */
+  name?: string
+}
+
+/** Response of POST /api/competitions/import. */
+export interface FfttCompetitionsImportResult {
+  created: Competition[]
+  skipped: Array<{ identifier: string; name: string }>
+}
+
 /** One division in the FFTT import preview (GET /api/fftt/divisions-preview). */
 export interface FfttDivisionPreview {
   id: string
@@ -96,10 +133,22 @@ export interface FfttDivisionPreview {
   playersPerGame: number
   /** Already present locally for that phase — will be skipped on import. */
   exists: boolean
+  /**
+   * Present, but filed under no competition (#482): importing attaches it.
+   * This is why an import where everything already exists is still worth
+   * running — and why the button must not read "Rien à importer" then.
+   */
+  attachable?: boolean
 }
 
 export interface FfttDivisionsPreview {
-  contest: { id: string; name: string }
+  contest: { id: string; identifier: string; name: string }
+  /**
+   * The competition the import will file these divisions under (#482). The
+   * import is pinned to one FFTT contest, so it already knows; `exists: false`
+   * means the competition does not exist yet and the import will create it.
+   */
+  competition: { id?: string; displayName: string; exists: boolean }
   phaseExists: boolean
   divisions: FfttDivisionPreview[]
 }
@@ -357,6 +406,22 @@ export type ClubAdminTarget =
 
 interface DataContextValue extends DataState {
   updateDivision: (id: string, patch: Partial<Division>) => void
+  /** Create a competition — general admin only, enforced by the API (#482). */
+  addCompetition: (data: Omit<Competition, 'id'>) => Competition
+  updateCompetition: (id: string, patch: Partial<Competition>) => void
+  /** Deleting one detaches its divisions rather than taking them with it. */
+  deleteCompetition: (id: string) => void
+  /**
+   * A club's amendment for one licensee, or 'default' to drop it. Refused by
+   * the API when the competition is locked and the player is out of category,
+   * which is why this answers rather than returning void.
+   */
+  setCompetitionEligibility: (
+    clubId: string,
+    competitionId: string,
+    playerId: string,
+    effect: EligibilityEffect | 'default',
+  ) => Promise<boolean>
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
   updateClub: (id: string, patch: Partial<Club>) => void
@@ -381,9 +446,19 @@ interface DataContextValue extends DataState {
   /** Locally cached FFTT organizations; refresh=true re-syncs from FFTT. Null on failure. */
   fetchOrganizations: (refresh?: boolean) => Promise<Organization[] | null>
   /** Preview the FFTT divisions for (organization, season, phase 1|2). */
-  fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number) => Promise<FfttDivisionsPreview | 'no_contest' | null>
+  /** The championships FFTT runs for an (organisation, season) (#482). */
+  fetchCompetitionsPreview: (organizationId: string, seasonId: string) => Promise<FfttCompetitionPreview[] | null>
+  importFfttCompetitions: (
+    organizationId: string, seasonId: string, selections: FfttCompetitionSelection[],
+  ) => Promise<FfttCompetitionsImportResult | null>
+  fetchDivisionsPreview: (organizationId: string, seasonId: string, phase: number, contestId?: string) => Promise<FfttDivisionsPreview | 'no_contest' | null>
   /** Import the FFTT divisions (creates the phase if missing, skips existing). */
-  importFfttDivisions: (organizationId: string, seasonId: string, phase: number) => Promise<FfttDivisionsImportResult | null>
+  importFfttDivisions: (
+    organizationId: string, seasonId: string, phase: number,
+    contestId?: string,
+    /** Which divisions to act on; omitted means every one the preview offered. */
+    divisionIds?: string[],
+  ) => Promise<FfttDivisionsImportResult | null>
   /** Preview a club's FFTT teams (#229); 'club_not_found' or null on failure. */
   fetchTeamsPreview: (clubId: string) => Promise<FfttTeamsPreview | 'club_not_found' | null>
   /** Import a club's FFTT teams with the chosen defaults (venue / day / time). */
@@ -468,6 +543,10 @@ interface DataProviderProps {
 export function DataProvider({ children, initialData }: DataProviderProps) {
   const { token, logout, user, loading: authLoading } = useAuth()
   const [divisions, setDivisions] = useState<Division[]>(initialData?.divisions ?? [])
+  const [competitions, setCompetitions] = useState<Competition[]>(initialData?.competitions ?? [])
+  const [competitionEligibilities, setCompetitionEligibilities] = useState<CompetitionEligibility[]>(
+    initialData?.competitionEligibilities ?? [],
+  )
   const [clubs, setClubs] = useState<Club[]>(initialData?.clubs ?? [])
   const [seasons, setSeasons] = useState<Season[]>(initialData?.seasons ?? [])
   const [phases, setPhases] = useState<Phase[]>(initialData?.phases ?? [])
@@ -519,6 +598,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setSeasons(data.seasons)
       setPhases(data.phases)
       setDivisions(data.divisions)
+      setCompetitions(data.competitions ?? [])
+      setCompetitionEligibilities(data.competitionEligibilities ?? [])
       setClubs(data.clubs)
       setGroups(data.groups)
       setTeams(data.teams)
@@ -536,6 +617,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPersist(false)
       applyData({
         seasons: mockSeasons, phases: mockPhases, divisions: mockDivisions,
+        competitions: mockCompetitions,
+        competitionEligibilities: mockCompetitionEligibilities,
         clubs: mockClubs, groups: mockGroups, teams: mockTeams, players: mockPlayers,
         playerPhasePoints: mockPlayerPhasePoints,
         matchDays: mockMatchDays, games: mockGames,
@@ -715,11 +798,46 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [])
 
+  const fetchCompetitionsPreview = useCallback(async (
+    organizationId: string, seasonId: string,
+  ): Promise<FfttCompetitionPreview[] | null> => {
+    try {
+      const params = new URLSearchParams({ organizationId, seasonId })
+      const r = await fetch(`/api/fftt/competitions-preview?${params}`, { headers: authHeaders() })
+      if (!r.ok) return null
+      const body = (await r.json()) as { competitions: FfttCompetitionPreview[] }
+      return body.competitions
+    } catch {
+      return null
+    }
+  }, [])
+
+  const importFfttCompetitions = useCallback(async (
+    organizationId: string, seasonId: string, selections: FfttCompetitionSelection[],
+  ): Promise<FfttCompetitionsImportResult | null> => {
+    try {
+      const r = await fetch('/api/competitions/import', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ organizationId, seasonId, selections }),
+      })
+      if (!r.ok) return null
+      const result = (await r.json()) as FfttCompetitionsImportResult
+      if (result.created.length) setCompetitions((prev) => [...prev, ...result.created])
+      return result
+    } catch {
+      return null
+    }
+  }, [])
+
   const fetchDivisionsPreview = useCallback(async (
-    organizationId: string, seasonId: string, phase: number,
+    organizationId: string, seasonId: string, phase: number, contestId?: string,
   ): Promise<FfttDivisionsPreview | 'no_contest' | null> => {
     try {
-      const params = new URLSearchParams({ organizationId, seasonId, phase: String(phase) })
+      const params = new URLSearchParams({
+        organizationId, seasonId, phase: String(phase),
+        ...(contestId ? { contestId } : {}),
+      })
       const r = await fetch(`/api/fftt/divisions-preview?${params}`, { headers: authHeaders() })
       if (r.status === 404) return 'no_contest'
       if (!r.ok) return null
@@ -731,12 +849,13 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
 
   const importFfttDivisions = useCallback(async (
     organizationId: string, seasonId: string, phase: number,
+    contestId?: string, divisionIds?: string[],
   ): Promise<FfttDivisionsImportResult | null> => {
     try {
       const r = await fetch('/api/divisions/import', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ organizationId, seasonId, phase }),
+        body: JSON.stringify({ organizationId, seasonId, phase, contestId, divisionIds }),
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttDivisionsImportResult
@@ -1183,6 +1302,56 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     setDivisions((prev) => [...prev, division])
     if (persist) api('/divisions', { method: 'POST', body: JSON.stringify(division) })
     return division
+  }, [persist])
+
+  // --- Competitions (#482) ---
+  const addCompetition = useCallback((data: Omit<Competition, 'id'>) => {
+    const id = nextId('comp')
+    const competition: Competition = { ...data, id }
+    setCompetitions((prev) => [...prev, competition])
+    if (persist) api('/competitions', { method: 'POST', body: JSON.stringify(competition) })
+    return competition
+  }, [persist])
+
+  const updateCompetition = useCallback((id: string, patch: Partial<Competition>) => {
+    setCompetitions((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    if (persist) api(`/competitions/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+  }, [persist])
+
+  // Mirrors the API's cascade: the divisions survive, detached; the club
+  // amendments do not, since they name a competition that is gone.
+  const deleteCompetition = useCallback((id: string) => {
+    setCompetitions((prev) => prev.filter((c) => c.id !== id))
+    setDivisions((prev) => prev.map((d) => (d.competitionId === id ? { ...d, competitionId: undefined } : d)))
+    setCompetitionEligibilities((prev) => prev.filter((e) => e.competitionId !== id))
+    if (persist) api(`/competitions/${id}`, { method: 'DELETE' })
+  }, [persist])
+
+  /**
+   * Not optimistic, unlike everything around it: the API refuses an addition to
+   * a locked competition, and a screen that showed the player as added and then
+   * silently disagreed with the next reload would be worse than a short wait.
+   */
+  const setCompetitionEligibility = useCallback(async (
+    clubId: string,
+    competitionId: string,
+    playerId: string,
+    effect: EligibilityEffect | 'default',
+  ): Promise<boolean> => {
+    const apply = () => setCompetitionEligibilities((prev) => {
+      const others = prev.filter(
+        (e) => !(e.competitionId === competitionId && e.playerId === playerId),
+      )
+      return effect === 'default' ? others : [...others, { clubId, competitionId, playerId, effect }]
+    })
+    if (!persist) { apply(); return true }
+    const res = await fetch(
+      `/api/clubs/${clubId}/competitions/${competitionId}/eligibility`,
+      { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ playerId, effect }) },
+    ).catch(() => null)
+    if (!res?.ok) return false
+    apply()
+    return true
   }, [persist])
 
   const moveDivisionUp = useCallback((divisionId: string) => {
@@ -1849,6 +2018,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     () => ({
       staleSince,
       divisions,
+      competitions,
+      competitionEligibilities,
       clubs,
       seasons,
       phases,
@@ -1861,6 +2032,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateDivision,
       archiveDivision,
       deleteDivision,
+      addCompetition,
+      updateCompetition,
+      deleteCompetition,
+      setCompetitionEligibility,
       updateClub,
       archiveClub,
       deleteClub,
@@ -1879,6 +2054,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       checkFfttSeason,
       importFfttSeason,
       fetchOrganizations,
+      fetchCompetitionsPreview,
+      importFfttCompetitions,
       fetchDivisionsPreview,
       importFfttDivisions,
       fetchTeamsPreview,
@@ -1929,13 +2106,15 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }),
     [
       staleSince,
-      divisions, clubs, seasons, phases, groups, teams, players, playerPhasePoints,
+      divisions, competitions, competitionEligibilities,
+      clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
+      addCompetition, updateCompetition, deleteCompetition, setCompetitionEligibility,
       updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       users, updatePlayer, addPlayer, addClubAdmin, removeClubAdmin,

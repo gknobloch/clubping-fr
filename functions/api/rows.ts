@@ -27,11 +27,13 @@ import type {
   AvailabilityOverriddenBy,
   AvailabilityStatus,
   ClubChannelType,
+  EligibilityEffect,
   Game,
   LifecycleStatus,
   PlayerStatus,
   Role,
 } from '../../src/types'
+import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 
 // ---------------------------------------------------------------------------
 // Reading JSON-encoded columns
@@ -55,6 +57,20 @@ const jsonParse = (v: unknown): unknown => {
 export const jsonParseIds = (v: unknown): string[] => {
   const parsed = jsonParse(v)
   return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+}
+
+/**
+ * A competition's `categories` column as the list of codes it should be.
+ *
+ * Same contract as `jsonParseIds`, and narrowed the same way: anything that is
+ * not a category code we know is dropped rather than asserted through. A code
+ * the schema never had cannot make a competition admit someone by accident.
+ */
+export const jsonParseCategories = (v: unknown): PlayerCategory[] => {
+  const parsed = jsonParse(v)
+  if (!Array.isArray(parsed)) return []
+  return parsed.filter((x): x is PlayerCategory =>
+    typeof x === 'string' && (PLAYER_CATEGORIES as readonly string[]).includes(x))
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +104,37 @@ export interface DivisionRow {
   parent_id: string | null
   /** FFTT identifier, e.g. "GE3P1" (#275); null for hand-made divisions. */
   identifier: string | null
+  /** Competition this division belongs to (#482); null = restricts nobody. */
+  competition_id: string | null
+  /**
+   * Categories this division admits, narrowing its competition's (#482).
+   * NULL inherits; '[]' admits every category. The three states are why this
+   * is read with an explicit null check rather than through jsonParseCategories
+   * alone — that would turn "inherit" into "everyone".
+   */
+  categories: string | null
+}
+
+export interface CompetitionRow {
+  id: string
+  display_name: string
+  /** JSON array of category codes; '[]' admits every category (#482). */
+  categories: string
+  is_category_locked: number
+  sort_order: number
+  is_archived: number
+  /** FFTT contest identifier (#482); NULL for a competition created by hand. */
+  fftt_contest_identifier: string | null
+  /** FFTT's own name for it — the identifier alone is not unique (0048). */
+  fftt_contest_name: string | null
+}
+
+export interface CompetitionEligibilityRow {
+  club_id: string
+  competition_id: string
+  player_id: string
+  /** included | excluded. */
+  effect: EligibilityEffect
 }
 
 export interface ClubRow {
@@ -204,6 +251,8 @@ export interface UserRow {
   phone: string
   birth_date: string | null
   birth_place: string | null
+  /** FFTT age category, verbatim — "S", "V45", "B2" (#482); NULL when unknown. */
+  category: string | null
   status: PlayerStatus
   club_id: string | null
   /** Unix epoch ms of the member's first ever sign-in; NULL = never (#406). */

@@ -10,6 +10,9 @@ import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
 import { ACTIVE_ONLY_LABEL, canSeeArchivedPlayers, visiblePlayers } from '@/lib/playerVisibility'
+import {
+  PLAYER_CATEGORIES, categoryDisplay, orderedCategories, type PlayerCategory,
+} from '@/lib/playerCategories'
 import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
@@ -31,6 +34,7 @@ export function PlayersPage() {
     firstName: '',
     lastName: '',
     licenseNumber: '',
+    category: '',
     email: '',
     phone: '',
     birthDate: '',
@@ -108,6 +112,7 @@ export function PlayersPage() {
       firstName: player.firstName,
       lastName: player.lastName,
       licenseNumber: player.licenseNumber,
+      category: player.category ?? '',
       email: player.email ?? '',
       phone: player.phone ?? '',
       birthDate: player.birthDate ?? '',
@@ -124,6 +129,7 @@ export function PlayersPage() {
       firstName: '',
       lastName: '',
       licenseNumber: '',
+      category: '',
       email: '',
       phone: '',
       birthDate: '',
@@ -147,6 +153,7 @@ export function PlayersPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
+        category: form.category,
         email,
         phone: form.phone || undefined,
         birthDate: form.birthDate || undefined,
@@ -161,6 +168,7 @@ export function PlayersPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
+        category: form.category,
         email,
         phone: form.phone,
         birthDate: form.birthDate || undefined,
@@ -277,6 +285,7 @@ export function PlayersPage() {
                       e2e/mobile-touch-targets-detail.spec.ts. */}
                   <p className="text-xs text-slate-500">
                     <span className="font-mono">{player.licenseNumber}</span>
+                    {categoryDisplay(player.category) && ` · ${categoryDisplay(player.category)}`}
                     {!hasClubScope && ` · ${getClubName(player.clubId)}`}
                     {showLastSeen && (
                       <span className={hasVisited(player.lastSeenAt) ? undefined : 'text-amber-700'}>
@@ -319,6 +328,9 @@ export function PlayersPage() {
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 N° licence
+              </th>
+              <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
+                Catégorie
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Email
@@ -368,6 +380,9 @@ export function PlayersPage() {
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600 font-mono">
                   {player.licenseNumber}
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  {categoryDisplay(player.category) || '—'}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{player.email}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{player.phone || '—'}</td>
@@ -447,6 +462,28 @@ export function PlayersPage() {
                   onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
+              </div>
+              <div>
+                <label htmlFor="player-category" className="block text-sm font-medium text-slate-700">
+                  Catégorie
+                </label>
+                <select
+                  id="player-category"
+                  value={form.category}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                >
+                  {/* The import fills this in from the licence; the picker is
+                      for a licensee created by hand, and for the rare code FFTT
+                      sends that we do not recognise (#482). */}
+                  <option value="">Inconnue</option>
+                  {orderedCategories().map(({ code, label }) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                  {form.category && !PLAYER_CATEGORIES.includes(form.category as PlayerCategory) && (
+                    <option value={form.category}>{form.category} (code FFTT)</option>
+                  )}
+                </select>
               </div>
               <div>
                 <label htmlFor="player-email" className="block text-sm font-medium text-slate-700">Email (optionnel)</label>

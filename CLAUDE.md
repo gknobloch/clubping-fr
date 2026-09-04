@@ -92,6 +92,101 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
 
+### Competitions and player categories (#482)
+- **A competition is global; a division belongs to one.** Never team →
+  competition: a team already declares a division, and a championship is what a
+  set of divisions is. `competitionOfDivision` is the only way to ask which
+  competition a team plays in.
+- **`Competition.categories` empty means EVERY category**, not none. It is what
+  makes the senior championship expressible and an unconfigured competition
+  harmless — read it through `categoryAdmitted`, never as a bare `.includes`.
+- **A division may narrow its competition; the more specific wins.**
+  `Division.categories` absent = inherit, `[]` = every category — three states,
+  which is why the column is nullable and is read with an explicit null check
+  (`jsonParseCategories(null)` is `[]`, i.e. "everyone", not "inherit"). Never
+  read `competition.categories` for a team: `competitionOfDivision` returns the
+  competition already narrowed, keeping its id and lock so club derogations
+  still hang off the championship.
+- A club's overrides are exceptions to the global mapping, not a second list.
+  `included` / `excluded`, and the third state is the **absence of a row**.
+  A locked competition (`isCategoryLocked`) may only ever be narrowed by a club;
+  the API refuses the widening, and `playerEligibility` refuses to honour a row
+  that predates the lock.
+- **Read a club's own overrides only** (`e.clubId === clubId`). `GET /api/data`
+  carries every club's, and one club's exception must not decide another's list.
+- The FFTT `<cat>` code is stored **verbatim** and normalised on read
+  (`src/lib/playerCategories.ts`): youth suffixes drop (`B2` → `B`), veteran
+  bands stay apart (`V50` ≠ `V60`).
+- **A competition is FFTT data, imported like everything else.** The `contests`
+  query without its `identifier` filter lists an organisation's championships;
+  `/competitions` imports from that, and the manual add is the fallback for what
+  FFTT does not run. Never make typing one in the primary path.
+- **A competition is matched on its contest identifier; the FFTT name only
+  disambiguates.** `findCompetitionForContest` is the one place: exact
+  (identifier, name) wins; failing that, a single stored row under that
+  identifier is *adopted and its stale name corrected*, but only when FFTT's
+  listing also shows one contest under it. Both halves of that guard are
+  load-bearing — without the first a renamed competition duplicates itself
+  (migration 0049), without the second importing FFTT's two `TO` contests in one
+  batch fuses them.
+- The id is per-season (18368 vs 15954 for the same championship), so keying on
+  it would mint a new competition every August and orphan every category and
+  derogation. The identifier alone is not unique either: org 15 lists `TO` twice
+  in one season. `fftt_contest_name` is kept apart from `display_name` so a
+  rename cannot break the match — **never backfill one from the other**, which
+  is exactly what 0048 got wrong.
+- **A request names a contest by its FFTT id**, resolved out of the listing in
+  JavaScript. Never re-add an `identifier:` filter to the `contests` query: it
+  would silently return whichever of two contests came first. Nothing from a
+  request reaches a GraphQL string literal any more.
+- **The divisions import knows its competition** and files its divisions itself.
+  Re-importing fills a blank `competition_id`; it never overwrites a filing a
+  general admin has made.
+- It bites on what can be **added** — a team's roster picker, a line-up's
+  "autres joueurs" — never on availabilities already given or line-ups already
+  made. A competition edited after the fact must not empty a squad.
+- That rule is what makes editing safe and also what makes it quiet, so the
+  contradiction has to be **visible**: `src/lib/competitionAssignments.ts`
+  answers "who does this competition already field?", the screens flag a ⚠ on
+  any *ineligible* licensee an équipe still holds, and every exclusion of one
+  goes through `useConfirm` first. The wording states the fact, never a
+  consequence — nothing is undone, so "sera retiré" would be a lie.
+- A team belongs to a competition **through its division**, so the assignment
+  scan reads `competitionOfDivision`, and it is computed once per competition,
+  not once per cell.
+- The grid's selection only ever means **what is on screen**: narrowing the
+  category filter drops the rows it hides out of the selection, or a bulk
+  action reaches players the club is no longer looking at.
+- **Every filter lives in the header of the column it narrows** — the name, the
+  category (its own column since the grid grew), and each competition's status
+  multi-select. They compound: two columns filtered is an AND, the statuses
+  within one column an OR.
+- `CellStatus` is the five verdicts **plus `conflict`**, which is not a verdict
+  at all — it is the ⚠ pairing, and "show me the contradictions" is a question
+  no reason answers on its own.
+- The status popover is `position: fixed` off its trigger's rect. The grid
+  scrolls sideways and `overflow-x-auto` clips both axes, so an absolutely
+  positioned panel is cut off at the first row.
+- The rule behind a column goes behind an **ⓘ**, never into the header: a club
+  admin reads it once, and `CompetitionInfo` spells the categories out in full
+  rather than reusing the admin table's compact codes.
+- A bulk action applies only to the selected players it would actually change
+  (`eligibilityCell(...).action` decides), which is why each button carries its
+  own count and why "Ajouter" reads 0 on a locked competition.
+- **`/competitions` is two screens behind one route.** A general admin gets the
+  global configuration (import, categories, the lock); anyone else gets their
+  own club's amendments. A club's eligibility is not part of its identity card,
+  so it is no longer a section at the bottom of `/club`.
+- **The club's screen is the journées trade**: the grid above `md:`, where the
+  question is comparative ("who is missing from the youth championship?"), and
+  `ClubCompetitions` — one competition at a time — below it. Forty rows by five
+  columns is not a phone screen.
+- One computation feeds the grid, the list and the player page:
+  `eligibilityCell` returns the verdict *and* the action offered
+  (`exclude` / `include` / `reset` / `none`). Never re-derive "can this be
+  clicked?" at a call site — `none` is exactly the locked competition a club may
+  not widen, and it must read the same everywhere.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per

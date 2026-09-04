@@ -11,11 +11,13 @@ import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
+import { categoriesSummary, orderedCategories, orderedCategoryPicks, type PlayerCategory } from '@/lib/playerCategories'
 
 export function DivisionsPage() {
   const {
     divisions: allDivisions,
     phases,
+    competitions,
     updateDivision,
     addDivision,
     moveDivisionUp,
@@ -71,11 +73,27 @@ export function DivisionsPage() {
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
 
+  const activeCompetitions = useMemo(
+    () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
+    [competitions],
+  )
+  const competitionName = (id: string | undefined) =>
+    competitions.find((c) => c.id === id)?.displayName ?? '—'
+  const competitionCategories = (id: string) => {
+    const found = competitions.find((c) => c.id === id)
+    return found ? categoriesSummary(found.categories).toLocaleLowerCase('fr-FR') : ''
+  }
+
   const [showArchived, setShowArchived] = useState(false)
   const [editing, setEditing] = useState<Division | null>(null)
   const [creating, setCreating] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [form, setForm] = useState({ phaseId: '', displayName: '', parentId: '', playersPerGame: 4 })
+  const [form, setForm] = useState({
+    phaseId: '', displayName: '', parentId: '', playersPerGame: 4, competitionId: '',
+    /** Off = inherit the competition's categories; on = this division decides. */
+    restrictCategories: false,
+    categories: [] as PlayerCategory[],
+  })
 
   const activeDivisions = useMemo(() => allDivisions.filter((d) => !d.isArchived), [allDivisions])
   const archivedDivisions = useMemo(() => allDivisions.filter((d) => d.isArchived), [allDivisions])
@@ -111,6 +129,9 @@ export function DivisionsPage() {
       displayName: div.displayName,
       parentId: div.parentId ?? '',
       playersPerGame: div.playersPerGame,
+      competitionId: div.competitionId ?? '',
+      restrictCategories: div.categories !== undefined,
+      categories: div.categories ?? [],
     })
   }
 
@@ -123,6 +144,9 @@ export function DivisionsPage() {
       displayName: '',
       parentId: '',
       playersPerGame: 4,
+      competitionId: '',
+      restrictCategories: false,
+      categories: [],
     })
   }
 
@@ -136,6 +160,14 @@ export function DivisionsPage() {
       updateDivision(editing.id, {
         displayName: form.displayName,
         playersPerGame: form.playersPerGame,
+        // Sent as '' rather than undefined when detaching: JSON.stringify drops
+        // an undefined value, so the PATCH would carry no field at all and the
+        // column would keep its old id. '' is what the API turns into NULL, and
+        // every reader treats it as "no competition" (#482).
+        competitionId: form.competitionId,
+        // null is "inherit"; an array — even empty, meaning every category — is
+        // the division speaking for itself (#482).
+        categories: form.restrictCategories ? orderedCategoryPicks(form.categories) : undefined,
       })
       closeModal()
     } else if (creating && form.phaseId) {
@@ -155,6 +187,8 @@ export function DivisionsPage() {
         playersPerGame: form.playersPerGame,
         isArchived: false,
         ...(parent ? { parentId: parent.id } : {}),
+        ...(form.competitionId ? { competitionId: form.competitionId } : {}),
+        ...(form.restrictCategories ? { categories: orderedCategoryPicks(form.categories) } : {}),
       })
       closeModal()
     }
@@ -252,6 +286,9 @@ export function DivisionsPage() {
                 Ordre
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
+                Compétition
+              </th>
+              <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Joueurs / match
               </th>
               <th scope="col" className={`px-4 py-3 text-right text-sm font-medium text-slate-700 ${ACTIONS_HEADER}`}>
@@ -299,6 +336,14 @@ export function DivisionsPage() {
                       </svg>
                     </button>
                   </div>
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  {competitionName(div.competitionId)}
+                  {div.categories && (
+                    <span className="block text-xs text-slate-400">
+                      {categoriesSummary(div.categories)}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{div.playersPerGame}</td>
                 <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
@@ -383,6 +428,66 @@ export function DivisionsPage() {
                         <option key={d.id} value={d.id}>{d.displayName}</option>
                       ))}
                   </select>
+                </div>
+              )}
+              <div>
+                <label htmlFor="edit-competitionId" className="block text-sm font-medium text-slate-700">
+                  Compétition
+                </label>
+                <select
+                  id="edit-competitionId"
+                  value={form.competitionId}
+                  onChange={(e) => setForm((f) => ({ ...f, competitionId: e.target.value }))}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                >
+                  <option value="">Aucune (aucune restriction de catégorie)</option>
+                  {activeCompetitions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.displayName}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Only inside a competition: a division belonging to none has
+                  nothing to narrow, and nowhere for a club's derogations to
+                  hang (#482). */}
+              {form.competitionId && (
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.restrictCategories}
+                      onChange={(e) => setForm((f) => ({ ...f, restrictCategories: e.target.checked }))}
+                      className="mt-0.5 h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
+                    />
+                    <span className="text-sm text-slate-700">
+                      Restreindre les catégories pour cette division
+                      <span className="block text-xs text-slate-500">
+                        Sans cela, elle admet les catégories de la compétition
+                        {competitionCategories(form.competitionId) && (
+                          <> ({competitionCategories(form.competitionId)})</>
+                        )}.
+                      </span>
+                    </span>
+                  </label>
+                  {form.restrictCategories && (
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+                      {orderedCategories().map(({ code, label }) => (
+                        <label key={code} className="flex min-h-[36px] items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={form.categories.includes(code)}
+                            onChange={() => setForm((f) => ({
+                              ...f,
+                              categories: f.categories.includes(code)
+                                ? f.categories.filter((x) => x !== code)
+                                : [...f.categories, code],
+                            }))}
+                            className="h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
+                          />
+                          <span className="text-sm text-slate-700">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <div>

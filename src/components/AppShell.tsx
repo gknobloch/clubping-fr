@@ -60,6 +60,7 @@ export function AppShell() {
       { to: '/demandes', label: 'Demandes' },
       { to: '/saisons', label: 'Saisons' },
       { to: '/phases', label: 'Phases' },
+      { to: '/competitions', label: 'Compétitions' },
       { to: '/divisions', label: 'Divisions' },
       { to: '/groupes', label: 'Groupes' },
       { to: '/equipes', label: 'Équipes' },
@@ -68,6 +69,10 @@ export function AppShell() {
     )
   } else if (isClubAdmin || user?.role === 'player') {
     if (user?.clubId) links.push({ to: '/club', label: 'Club' })
+    // Eligibility is something a club admin comes to manage, not part of the
+    // club's identity card — so it gets its own entry rather than a section
+    // buried under the addresses (#482).
+    if (isClubAdmin) links.push({ to: '/competitions', label: 'Compétitions' })
     links.push(
       { to: '/equipes', label: 'Équipes' },
       { to: '/journees', label: 'Journées' },

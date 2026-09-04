@@ -4,7 +4,7 @@ import { DataProvider } from '@/contexts/DataContext'
 import {
   mockDivisions, mockClubs, mockSeasons, mockPhases, mockGroups, mockTeams,
   mockPlayers, mockPlayerPhasePoints, mockMatchDays, mockGames, mockGameAvailabilities,
-  mockGameSelections, mockUsers,
+  mockGameSelections, mockUsers, mockCompetitions, mockCompetitionEligibilities,
 } from '@/mock/data'
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -15,6 +15,7 @@ const { AddToCalendarButton } = await import('./AddToCalendarButton')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
+  competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
   playerPhasePoints: mockPlayerPhasePoints, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
