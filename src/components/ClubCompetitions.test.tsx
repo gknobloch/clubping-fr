@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render as rtlRender, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type { Competition, CompetitionEligibility, Player } from '@/types'
 import { ClubCompetitions } from './ClubCompetitions'
+
+// Each name links to the player behind it, so the tree needs a router.
+const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>)
 
 // #482 — the club's half of the feature. The rule itself lives in
 // src/lib/competitionEligibility.spec.ts and the writes in the API's own suite;

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
@@ -103,14 +104,14 @@ export function ClubCompetitions({
         key={player.id}
         className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 py-2 last:border-0"
       >
-        <div className="min-w-0">
+        <Link to={`/joueurs/${player.id}`} className="min-w-0 rounded hover:text-accent-600">
           <p className="truncate text-sm font-medium text-slate-800">
             {player.firstName} {player.lastName}
           </p>
           <p className="text-xs text-slate-500">
             {category || 'Catégorie inconnue'} · {ELIGIBILITY_REASON_LABELS[reason]}
           </p>
-        </div>
+        </Link>
         {canManage && (
           overridden ? (
             <button

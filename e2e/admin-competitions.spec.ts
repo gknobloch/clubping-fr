@@ -256,6 +256,14 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
     await expect(veterans()).toHaveAccessibleName(/Hors catégorie — Ajouter/)
   })
 
+  // The grid answers "who", and the next question is always about one of them.
+  test('leads from a row to the player behind it', async ({ page }) => {
+    await page.goto('/competitions')
+    await page.getByRole('link', { name: /Samuel Canemolla/ }).click()
+    await expect(page).toHaveURL('/joueurs/p2-player-39')
+    await expect(page.getByRole('heading', { name: 'Samuel Canemolla' })).toBeVisible()
+  })
+
   test('falls back to the per-competition list on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/competitions')
@@ -265,6 +273,7 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
     await club.getByLabel('Compétition', { exact: true }).selectOption({ label: 'Championnat vétérans' })
     const row = club.locator('li').filter({ hasText: 'Joris Szulc' })
     await expect(row).toContainText('Hors catégorie')
+    await expect(row.getByRole('link')).toHaveAttribute('href', '/joueurs/p2-player-5')
     await row.getByRole('button', { name: 'Ajouter' }).click()
     await expect(club.locator('li').filter({ hasText: 'Joris Szulc' }))
       .toContainText('Ajouté par le club')

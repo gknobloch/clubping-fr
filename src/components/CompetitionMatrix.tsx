@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { Competition, CompetitionEligibility, Player } from '@/types'
 import { sortByName } from '@/lib/sortByName'
 import {
@@ -133,12 +134,19 @@ export function CompetitionMatrix({
             {shown.map((player) => (
               <tr key={player.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                 <td className="px-3 py-1.5 text-slate-800">
-                  <span className="block font-medium">
-                    {player.firstName} {player.lastName}
-                  </span>
-                  <span className="block text-xs text-slate-400">
-                    {categoryDisplay(player.category) || 'Catégorie inconnue'}
-                  </span>
+                  {/* The name is the way out of the grid: a club admin reading a
+                      row usually wants the player behind it. */}
+                  <Link
+                    to={`/joueurs/${player.id}`}
+                    className="block rounded hover:text-accent-600"
+                  >
+                    <span className="block font-medium">
+                      {player.firstName} {player.lastName}
+                    </span>
+                    <span className="block text-xs text-slate-400">
+                      {categoryDisplay(player.category) || 'Catégorie inconnue'}
+                    </span>
+                  </Link>
                 </td>
                 {competitions.map((competition) => {
                   const cell = eligibilityCell(player, competition, overrides)

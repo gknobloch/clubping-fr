@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type { Competition, CompetitionEligibility, Player } from '@/types'
 import { CompetitionMatrix } from './CompetitionMatrix'
@@ -33,13 +34,15 @@ const onSet = vi.fn()
 
 function setup(overrides: CompetitionEligibility[] = [], canManage = true, players = [CADET, SENIOR, UNKNOWN]) {
   return render(
+    <MemoryRouter>
     <CompetitionMatrix
       players={players}
       competitions={[youth, seniors]}
       overrides={overrides}
       canManage={canManage}
       onSet={onSet}
-    />,
+    />
+    </MemoryRouter>,
   )
 }
 
@@ -148,6 +151,12 @@ describe('CompetitionMatrix', () => {
     await user.clear(search)
     await user.type(search, 'zzz')
     expect(screen.getByText(/Aucun joueur ne correspond/)).toBeInTheDocument()
+  })
+
+  it('leads to the player behind each row', () => {
+    setup()
+    expect(screen.getByRole('link', { name: /Joris Szulc/ }))
+      .toHaveAttribute('href', '/joueurs/p-senior')
   })
 
   it('says so when the club has no active licensee', () => {
