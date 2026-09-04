@@ -215,6 +215,16 @@ its competition admits, and so does the "autres joueurs" list of a line-up.
 Availabilities already given and line-ups already made are never filtered — the
 rule restricts what can be added, it does not erase what exists.
 
+Both places a club sees eligibility answer the same question at a different
+scale. **Compétitions** is a screen of its own in a Club Admin's navigation: on
+a wide screen it is a grid of the whole club against every competition, since
+the question is comparative — who is missing from the youth championship, who
+did we add to the veterans — and on a narrow one it becomes one competition at a
+time. The **player's own screen** lists every competition beside them, eligible
+or not, with the reason; a Club Admin of that club amends it from there, adding
+or excluding a single licensee without leaving the player they were looking at.
+Anyone else reads the same verdicts without the controls.
+
 ## Group
 
 A group is made of multiple teams, which might even be from the same club.

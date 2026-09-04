@@ -7,13 +7,23 @@ import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
 import { PlayerPhaseHistory, InfoRow } from '@/components/PlayerPhaseHistory'
 import { ModalShell } from '@/components/ModalShell'
+import { useAuth } from '@/contexts/AuthContext'
 import { categoryDisplay } from '@/lib/playerCategories'
-import { eligibleCompetitions } from '@/lib/competitionEligibility'
+import {
+  ELIGIBILITY_ACTION_LABELS,
+  ELIGIBILITY_REASON_LABELS,
+  eligibilityCell,
+} from '@/lib/competitionEligibility'
 
 export function PlayerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { players, clubs, competitions, competitionEligibilities } = useAppData()
+  const { user } = useAuth()
+  const {
+    players, clubs, competitions, competitionEligibilities, setCompetitionEligibility,
+  } = useAppData()
   const [zoom, setZoom] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
@@ -21,14 +31,40 @@ export function PlayerDetailPage() {
   // "What is this licensee eligible for?" — the answer is a list, since a
   // cadet plays in their own category and with the adults (#482). Overrides
   // are read for their own club only: another club's exception is not theirs.
-  const ordered = [...competitions].sort((a, b) => a.sortOrder - b.sortOrder)
-  const eligible = player
-    ? eligibleCompetitions(
-        player,
-        ordered,
-        competitionEligibilities.filter((e) => e.clubId === player.clubId),
-      )
+  const ordered = competitions
+    .filter((c) => !c.isArchived)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+  const overrides = competitionEligibilities.filter((e) => e.clubId === player?.clubId)
+  // Every competition with its verdict, not only the ones that admit them: the
+  // point of this section for a club admin is the ones that do NOT, since those
+  // are what they might amend.
+  const rows = player
+    ? ordered.map((competition) => ({
+      competition,
+      ...eligibilityCell(player, competition, overrides),
+    }))
     : []
+
+  // Only the club's own admins amend, and only their own club's licensees; a
+  // general admin does it from the club's page, where the whole list is.
+  const canManage = !!player
+    && user?.role === 'club_admin'
+    && user.clubId === player.clubId
+
+  const amend = async (competitionId: string, effect: 'included' | 'excluded' | 'default') => {
+    if (!player) return
+    setBusy(true)
+    setError(null)
+    const ok = await setCompetitionEligibility(player.clubId, competitionId, player.id, effect)
+    setBusy(false)
+    if (!ok) {
+      setError(
+        effect === 'included'
+          ? "Cette compétition est réservée à certaines catégories : ce licencié ne peut pas y être ajouté."
+          : "La modification n'a pas pu être enregistrée. Réessayez.",
+      )
+    }
+  }
 
   if (!player) {
     return (
@@ -90,27 +126,53 @@ export function PlayerDetailPage() {
 
       {/* Competitions (#482) — only once a general admin has defined any;
           before that nothing is restricted and the section would say nothing. */}
-      {competitions.some((c) => !c.isArchived) && (
+      {ordered.length > 0 && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Compétitions
           </h2>
-          {eligible.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              Ce joueur n'est éligible à aucune compétition.
+          {error && (
+            <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
             </p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
-              {eligible.map((c) => (
-                <li
-                  key={c.id}
-                  className="rounded-full bg-accent-50 px-3 py-1 text-sm font-medium text-accent-700"
-                >
-                  {c.displayName}
-                </li>
-              ))}
-            </ul>
           )}
+          <ul className="divide-y divide-slate-100">
+            {rows.map(({ competition, eligible, reason, action }) => (
+              <li
+                key={competition.id}
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className={`truncate text-sm ${eligible ? 'font-medium text-slate-800' : 'text-slate-500'}`}>
+                    {competition.displayName}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {eligible ? 'Éligible' : 'Non éligible'} · {ELIGIBILITY_REASON_LABELS[reason]}
+                  </p>
+                </div>
+                {canManage && action !== 'none' && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => amend(
+                      competition.id,
+                      action === 'exclude' ? 'excluded' : action === 'include' ? 'included' : 'default',
+                    )}
+                    className={`text-sm font-medium disabled:opacity-50 ${TEXT_TARGET_CLASS} ${
+                      action === 'exclude' ? 'text-red-600 hover:text-red-800' : 'text-accent-600 hover:text-accent-800'
+                    }`}
+                  >
+                    {ELIGIBILITY_ACTION_LABELS[action]}
+                  </button>
+                )}
+                {canManage && action === 'none' && (
+                  <span className="text-xs text-slate-400">
+                    {ELIGIBILITY_ACTION_LABELS.none}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

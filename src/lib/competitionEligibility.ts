@@ -113,6 +113,52 @@ export function playerEligibility(
   }
 }
 
+/**
+ * What a club admin may do next about one licensee and one competition.
+ *
+ * 'exclude' and 'include' are the two amendments; 'reset' drops an amendment
+ * already made; 'none' is a locked competition they may only ever narrow.
+ */
+export type EligibilityAction = 'exclude' | 'include' | 'reset' | 'none'
+
+export interface EligibilityCell extends EligibilityVerdict {
+  /** A club row exists for this pair — the amendment is theirs to undo. */
+  overridden: boolean
+  action: EligibilityAction
+}
+
+/**
+ * One licensee against one competition: the verdict, and the single control a
+ * club admin gets for it.
+ *
+ * Lives here rather than in a screen because three of them now show it — the
+ * per-competition list, the matrix and the player's own page — and a screen
+ * that computed the action itself would be a fourth place for the lock to be
+ * forgotten.
+ */
+export function eligibilityCell(
+  player: EligiblePlayer,
+  competition: Pick<Competition, 'id' | 'categories' | 'isCategoryLocked'>,
+  overrides: CompetitionEligibility[],
+): EligibilityCell {
+  const verdict = playerEligibility(player, competition, overrides)
+  const overridden = overrideFor(overrides, competition.id, player.id) !== undefined
+  const action: EligibilityAction = overridden
+    ? 'reset'
+    : verdict.eligible
+      ? 'exclude'
+      : canClubAdd(competition, player) ? 'include' : 'none'
+  return { ...verdict, overridden, action }
+}
+
+/** French wording of each control, so every screen offers the same words. */
+export const ELIGIBILITY_ACTION_LABELS: Record<EligibilityAction, string> = {
+  exclude: 'Exclure',
+  include: 'Ajouter',
+  reset: 'Rétablir le défaut',
+  none: 'Compétition réservée',
+}
+
 /** Shorthand for the many callers that only want the yes or the no. */
 export function isPlayerEligible(
   player: EligiblePlayer,

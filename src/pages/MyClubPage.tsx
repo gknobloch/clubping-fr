@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView, ChannelIcon, channelTypeLabel } from '@/components/ClubDetailView'
 import { ClubAdmins } from '@/components/ClubAdmins'
-import { ClubCompetitions } from '@/components/ClubCompetitions'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
 import { HeaderAction, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -128,10 +127,6 @@ export function MyClubPage() {
       {/* Who to ask, for everyone; the controls appear only for those who may
           use them (#474). */}
       <ClubAdmins clubId={currentClub.id} idPrefix="my-club" variant="section" />
-
-      {/* Same rule for the competitions: everyone reads who is eligible, only
-          the club's admins amend it (#482). */}
-      <ClubCompetitions clubId={currentClub.id} idPrefix="my-club" variant="section" />
     </div>
   )
 }

@@ -145,6 +145,19 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - It bites on what can be **added** — a team's roster picker, a line-up's
   "autres joueurs" — never on availabilities already given or line-ups already
   made. A competition edited after the fact must not empty a squad.
+- **`/competitions` is two screens behind one route.** A general admin gets the
+  global configuration (import, categories, the lock); anyone else gets their
+  own club's amendments. A club's eligibility is not part of its identity card,
+  so it is no longer a section at the bottom of `/club`.
+- **The club's screen is the journées trade**: the grid above `md:`, where the
+  question is comparative ("who is missing from the youth championship?"), and
+  `ClubCompetitions` — one competition at a time — below it. Forty rows by five
+  columns is not a phone screen.
+- One computation feeds the grid, the list and the player page:
+  `eligibilityCell` returns the verdict *and* the action offered
+  (`exclude` / `include` / `reset` / `none`). Never re-derive "can this be
+  clicked?" at a call site — `none` is exactly the locked competition a club may
+  not widen, and it must read the same everywhere.
 
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove

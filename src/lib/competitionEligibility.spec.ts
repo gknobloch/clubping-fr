@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canClubAdd,
+  eligibilityCell,
   competitionOfDivision,
   eligibleCompetitions,
   eligiblePlayers,
@@ -181,5 +182,40 @@ describe('competitionOfDivision', () => {
     expect(competitionOfDivision('d-3', divisions, competitions)).toBeUndefined()
     expect(competitionOfDivision('d-4', divisions, competitions)).toBeUndefined()
     expect(competitionOfDivision(undefined, divisions, competitions)).toBeUndefined()
+  })
+})
+
+// #482 — the one control a club admin gets, computed once so the list, the
+// matrix and the player page cannot offer three different things.
+describe('eligibilityCell', () => {
+  it('offers to exclude someone the default admits', () => {
+    expect(eligibilityCell(veteran, veterans, [])).toMatchObject({
+      eligible: true, reason: 'category', overridden: false, action: 'exclude',
+    })
+  })
+
+  it('offers to add someone the default turns away', () => {
+    expect(eligibilityCell(senior, veterans, [])).toMatchObject({
+      eligible: false, reason: 'category_mismatch', action: 'include',
+    })
+  })
+
+  it('offers nothing but the reason on a locked competition', () => {
+    expect(eligibilityCell(senior, youth, [])).toMatchObject({
+      eligible: false, action: 'none',
+    })
+  })
+
+  it('offers to undo an amendment rather than to make a second', () => {
+    expect(eligibilityCell(veteran, veterans, [override('comp-veterans', 'p-veteran', 'excluded')]))
+      .toMatchObject({ eligible: false, reason: 'club_excluded', overridden: true, action: 'reset' })
+    expect(eligibilityCell(senior, veterans, [override('comp-veterans', 'p-senior', 'included')]))
+      .toMatchObject({ eligible: true, reason: 'club_added', overridden: true, action: 'reset' })
+  })
+
+  // Undoing beats the lock: a club may always take back its own exclusion.
+  it('lets a locked competition be reset once amended', () => {
+    expect(eligibilityCell(cadet, youth, [override('comp-jeunes', 'p-cadet', 'excluded')]))
+      .toMatchObject({ action: 'reset' })
   })
 })
