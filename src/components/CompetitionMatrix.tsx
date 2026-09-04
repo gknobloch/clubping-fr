@@ -12,13 +12,19 @@ import {
   ELIGIBILITY_ACTION_LABELS,
   ELIGIBILITY_REASON_LABELS,
   eligibilityCell,
+  type CellStatus,
   type EligibilityAction,
 } from '@/lib/competitionEligibility'
 import { assignmentSummary, type CompetitionAssignment } from '@/lib/competitionAssignments'
 import { useConfirm } from '@/components/useConfirm'
+import { CompetitionStatusFilter } from '@/components/CompetitionStatusFilter'
+import { CompetitionInfo } from '@/components/CompetitionInfo'
 
 /** Fixed widths so a long club and a long championship name stay readable. */
-const COL = { select: 40, joueur: 220, competition: 132 } as const
+const COL = { select: 40, joueur: 200, categorie: 150, competition: 176 } as const
+
+/** Shared so an unfiltered column does not get a new Set on every render. */
+const EMPTY_STATUSES: Set<CellStatus> = new Set()
 
 /** The category filter's "everyone" and "nobody knows" entries. */
 const ALL = ''
@@ -71,6 +77,8 @@ export function CompetitionMatrix({
 }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<string>(ALL)
+  const [statuses, setStatuses] = useState<Record<string, Set<CellStatus>>>({})
+  const [infoFor, setInfoFor] = useState<Competition | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkCompetitionId, setBulkCompetitionId] = useState(competitions[0]?.id ?? '')
   const [busy, setBusy] = useState(false)
@@ -88,6 +96,14 @@ export function CompetitionMatrix({
     return { options, hasUnknown: sorted.some((p) => !normalizeCategory(p.category)) }
   }, [sorted])
 
+  const cellOf = (player: Player, competition: Competition) => {
+    const verdict = eligibilityCell(player, competition, overrides)
+    const summary = assignmentSummary(assignments.get(competition.id)?.get(player.id))
+    // An ineligible player who is nonetheless in a squad is the contradiction
+    // this screen must not hide — see src/lib/competitionAssignments.
+    return { ...verdict, summary, conflict: !verdict.eligible && summary !== null }
+  }
+
   const shown = useMemo(() => {
     const byCategory = category === ALL
       ? sorted
@@ -95,8 +111,22 @@ export function CompetitionMatrix({
         const code = normalizeCategory(p.category)
         return category === NONE ? !code : code === category
       })
-    return searchable ? filterPlayersBySearch(byCategory, query) : byCategory
-  }, [sorted, searchable, query, category])
+    const byName = searchable ? filterPlayersBySearch(byCategory, query) : byCategory
+    // Each column may narrow on its own state, and they compound: asking for
+    // "exclus" on one championship and "hors catégorie" on another is asking
+    // for the players who are both, which is the question worth asking.
+    const active = competitions.filter((c) => (statuses[c.id]?.size ?? 0) > 0)
+    if (active.length === 0) return byName
+    return byName.filter((player) => active.every((competition) => {
+      const cell = cellOf(player, competition)
+      const wanted = statuses[competition.id]
+      return wanted.has(cell.reason) || (cell.conflict && wanted.has('conflict'))
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sorted, searchable, query, category, competitions, statuses, overrides, assignments])
+
+  const filtering = category !== ALL || query.trim() !== ''
+    || competitions.some((c) => (statuses[c.id]?.size ?? 0) > 0)
 
   // A selection only ever means what is on screen: narrowing the filter must
   // not leave rows selected that nobody can see any more, or a bulk action
@@ -116,14 +146,6 @@ export function CompetitionMatrix({
       selectAllRef.current.indeterminate = selected.size > 0 && !allShownSelected
     }
   }, [selected, allShownSelected])
-
-  const cellOf = (player: Player, competition: Competition) => {
-    const verdict = eligibilityCell(player, competition, overrides)
-    const summary = assignmentSummary(assignments.get(competition.id)?.get(player.id))
-    // An ineligible player who is nonetheless in a squad is the contradiction
-    // this screen must not hide — see src/lib/competitionAssignments.
-    return { ...verdict, summary, conflict: !verdict.eligible && summary !== null }
-  }
 
   const act = async (action: EligibilityAction, competition: Competition, player: Player) => {
     if (action === 'none' || !canManage) return
@@ -189,51 +211,30 @@ export function CompetitionMatrix({
     )
   }
 
-  const minWidth = (canManage ? COL.select : 0) + COL.joueur + competitions.length * COL.competition
+  const infoCounts = (competition: Competition) => {
+    const cells = sorted.map((p) => cellOf(p, competition))
+    return {
+      total: sorted.length,
+      eligible: cells.filter((c) => c.eligible).length,
+      added: cells.filter((c) => c.reason === 'club_added').length,
+      excluded: cells.filter((c) => c.reason === 'club_excluded').length,
+      conflicts: cells.filter((c) => c.conflict).length,
+    }
+  }
+
+  const minWidth = (canManage ? COL.select : 0) + COL.joueur + COL.categorie
+    + competitions.length * COL.competition
   const bulkCounts = canManage && selected.size > 0 && bulkCompetition
     ? { exclude: targetsFor('exclude').length, include: targetsFor('include').length, reset: targetsFor('reset').length }
     : null
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        {searchable && (
-          <div>
-            <label htmlFor="competition-matrix-search" className="sr-only">
-              {PLAYER_SEARCH_LABEL}
-            </label>
-            <input
-              id="competition-matrix-search"
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={PLAYER_SEARCH_LABEL}
-              autoComplete="off"
-              className="min-h-11 w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:min-h-0"
-            />
-          </div>
-        )}
-        <div>
-          <label htmlFor="competition-matrix-category" className="sr-only">Catégorie</label>
-          <select
-            id="competition-matrix-category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:min-h-0"
-          >
-            <option value={ALL}>Toutes les catégories</option>
-            {categoryOptions.options.map((c) => (
-              <option key={c.code} value={c.code}>{c.label}</option>
-            ))}
-            {categoryOptions.hasUnknown && <option value={NONE}>Sans catégorie</option>}
-          </select>
-        </div>
-        {(category !== ALL || query.trim()) && (
-          <p className="text-sm text-slate-500">
-            {shown.length} licencié{shown.length > 1 ? 's' : ''} sur {sorted.length}
-          </p>
-        )}
-      </div>
+      {filtering && (
+        <p className="text-sm text-slate-500">
+          {shown.length} licencié{shown.length > 1 ? 's' : ''} sur {sorted.length}
+        </p>
+      )}
 
       {bulkCounts && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-accent-200 bg-accent-50/60 px-3 py-2">
@@ -294,6 +295,7 @@ export function CompetitionMatrix({
           <colgroup>
             {canManage && <col style={{ width: COL.select }} />}
             <col style={{ width: COL.joueur }} />
+            <col style={{ width: COL.categorie }} />
             {competitions.map((c) => <col key={c.id} style={{ width: COL.competition }} />)}
           </colgroup>
           <thead>
@@ -311,16 +313,68 @@ export function CompetitionMatrix({
                   />
                 </th>
               )}
-              <th className="px-3 py-2 text-left font-medium text-slate-700">Joueur</th>
+              <th className="px-3 py-2 text-left align-top font-medium text-slate-700">
+                Joueur
+                {searchable && (
+                  <>
+                    <label htmlFor="competition-matrix-search" className="sr-only">
+                      {PLAYER_SEARCH_LABEL}
+                    </label>
+                    <input
+                      id="competition-matrix-search"
+                      type="search"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={PLAYER_SEARCH_LABEL}
+                      autoComplete="off"
+                      className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs font-normal text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500/20"
+                    />
+                  </>
+                )}
+              </th>
+              <th className="px-3 py-2 text-left align-top font-medium text-slate-700">
+                Catégorie
+                <label htmlFor="competition-matrix-category" className="sr-only">Catégorie</label>
+                <select
+                  id="competition-matrix-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs font-normal text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500/20"
+                >
+                  <option value={ALL}>Toutes</option>
+                  {categoryOptions.options.map((c) => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                  {categoryOptions.hasUnknown && <option value={NONE}>Sans catégorie</option>}
+                </select>
+              </th>
               {competitions.map((c) => (
                 <th
                   key={c.id}
-                  className="border-l border-slate-200 px-2 py-2 text-center font-medium text-slate-700"
+                  className="border-l border-slate-200 px-2 py-2 text-center align-top font-medium text-slate-700"
                 >
-                  {c.displayName}
-                  <span className="block text-xs font-normal text-slate-500">
-                    {c.isCategoryLocked ? 'Réservée' : 'Ouverte'}
+                  <span className="flex items-start justify-center gap-1">
+                    <span className="min-w-0">
+                      {c.displayName}
+                      <span className="block text-xs font-normal text-slate-500">
+                        {c.isCategoryLocked ? 'Réservée' : 'Ouverte'}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInfoFor(c)}
+                      aria-label={`Règles de « ${c.displayName} »`}
+                      title="Règles d'éligibilité"
+                      className="shrink-0 rounded-full px-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                    >
+                      ⓘ
+                    </button>
                   </span>
+                  <CompetitionStatusFilter
+                    competitionName={c.displayName}
+                    selected={statuses[c.id] ?? EMPTY_STATUSES}
+                    onChange={(next) => setStatuses((prev) => ({ ...prev, [c.id]: next }))}
+                  />
                 </th>
               ))}
             </tr>
@@ -329,10 +383,10 @@ export function CompetitionMatrix({
             {shown.length === 0 && (
               <tr>
                 <td
-                  colSpan={competitions.length + (canManage ? 2 : 1)}
+                  colSpan={competitions.length + (canManage ? 3 : 2)}
                   className="px-3 py-8 text-center text-sm text-slate-500"
                 >
-                  {query.trim() || category !== ALL
+                  {filtering
                     ? 'Aucun joueur ne correspond à ce filtre.'
                     : 'Aucun licencié actif dans ce club.'}
                 </td>
@@ -356,20 +410,17 @@ export function CompetitionMatrix({
                     />
                   </td>
                 )}
-                <td className="px-3 py-1.5 text-slate-800">
+                <td className="px-3 py-1.5 font-medium text-slate-800">
                   {/* The name is the way out of the grid: a club admin reading a
                       row usually wants the player behind it. */}
-                  <Link
-                    to={`/joueurs/${player.id}`}
-                    className="block rounded hover:text-accent-600"
-                  >
-                    <span className="block font-medium">
-                      {player.firstName} {player.lastName}
-                    </span>
-                    <span className="block text-xs text-slate-400">
-                      {categoryDisplay(player.category) || 'Catégorie inconnue'}
-                    </span>
+                  <Link to={`/joueurs/${player.id}`} className="block rounded hover:text-accent-600">
+                    {player.firstName} {player.lastName}
                   </Link>
+                </td>
+                <td className="px-3 py-1.5 text-slate-500">
+                  {categoryDisplay(player.category) || (
+                    <span className="text-slate-400">Catégorie inconnue</span>
+                  )}
                 </td>
                 {competitions.map((competition) => {
                   const cell = cellOf(player, competition)
@@ -412,6 +463,13 @@ export function CompetitionMatrix({
         <li><span className="text-amber-500">⚠</span> Non éligible mais déjà engagé</li>
       </ul>
 
+      {infoFor && (
+        <CompetitionInfo
+          competition={infoFor}
+          counts={infoCounts(infoFor)}
+          onClose={() => setInfoFor(null)}
+        />
+      )}
       {confirmDialog}
     </div>
   )

@@ -225,11 +225,21 @@ plainly that the exclusion undoes none of them. Reconciling the two is the
 club's decision, and it is one the app makes visible rather than one it takes.
 
 A club works through this in bulk as often as one licensee at a time — a whole
-category joins a new championship, a age group moves up. So both views filter by
+category joins a new championship, an age group moves up. So both views filter by
 category, and the grid additionally lets a club select what the filter shows and
 apply one amendment to all of it, on one competition at a time. A bulk amendment
 only ever touches the selected licensees it would actually change, and it can no
 more widen a reserved competition than a single one can.
+
+In the grid every filter sits in the header of the column it narrows: the name,
+the category — which has a column of its own — and, per competition, the set of
+states to keep. That last one answers the questions a club actually arrives
+with: who is excluded here, who is admitted by category, who holds no category
+at all, and who is not eligible yet is already engaged. Filters on two
+competitions compound, so "out of the seniors and in for the youth" is one
+query. Each competition also carries an information button: what it admits by
+default, whether it can be widened at all, what this club has already amended,
+and what it has left to reconcile.
 
 Both places a club sees eligibility answer the same question at a different
 scale. **Compétitions** is a screen of its own in a Club Admin's navigation: on

@@ -157,6 +157,19 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - The grid's selection only ever means **what is on screen**: narrowing the
   category filter drops the rows it hides out of the selection, or a bulk
   action reaches players the club is no longer looking at.
+- **Every filter lives in the header of the column it narrows** — the name, the
+  category (its own column since the grid grew), and each competition's status
+  multi-select. They compound: two columns filtered is an AND, the statuses
+  within one column an OR.
+- `CellStatus` is the five verdicts **plus `conflict`**, which is not a verdict
+  at all — it is the ⚠ pairing, and "show me the contradictions" is a question
+  no reason answers on its own.
+- The status popover is `position: fixed` off its trigger's rect. The grid
+  scrolls sideways and `overflow-x-auto` clips both axes, so an absolutely
+  positioned panel is cut off at the first row.
+- The rule behind a column goes behind an **ⓘ**, never into the header: a club
+  admin reads it once, and `CompetitionInfo` spells the categories out in full
+  rather than reusing the admin table's compact codes.
 - A bulk action applies only to the selected players it would actually change
   (`eligibilityCell(...).action` decides), which is why each button carries its
   own count and why "Ajouter" reads 0 on a locked competition.

@@ -216,7 +216,7 @@ describe('CompetitionMatrix', () => {
       setup()
       const filter = screen.getByLabelText('Catégorie')
       const options = within(filter).getAllByRole('option').map((o) => o.textContent)
-      expect(options).toEqual(['Toutes les catégories', 'Cadet', 'Senior', 'Sans catégorie'])
+      expect(options).toEqual(['Toutes', 'Cadet', 'Senior', 'Sans catégorie'])
     })
 
     it('narrows the rows, and says how many of how many', async () => {
@@ -297,5 +297,136 @@ describe('CompetitionMatrix', () => {
   it('says so when the club has no active licensee', () => {
     setup([], true, [])
     expect(screen.getByText('Aucun licencié actif dans ce club.')).toBeInTheDocument()
+  })
+
+  // #482 — the header carries the filters, so each column narrows on its own
+  // terms: a name, a category, or the state of one championship.
+  describe('the header row', () => {
+    it('gives the category a column of its own, beside the name', () => {
+      setup()
+      const row = screen.getByText('Samuel Canemolla').closest('tr')!
+      const cells = within(row).getAllByRole('cell').map((c) => c.textContent)
+      // checkbox, name, category, then one per competition.
+      expect(cells[1]).toBe('Samuel Canemolla')
+      expect(cells[2]).toBe('Cadet (C1)')
+      expect(screen.getByRole('columnheader', { name: /Catégorie/ })).toBeInTheDocument()
+    })
+
+    it('puts the name search and the category filter in their own headers', () => {
+      const many = Array.from({ length: 12 }, (_, i) => player(`p-${i}`, `Prenom${i}`, `Nom${i}`, 'S'))
+      setup([], true, many)
+      const nameHeader = screen.getByRole('columnheader', { name: /Joueur/ })
+      expect(within(nameHeader).getByLabelText('Rechercher un joueur')).toBeInTheDocument()
+      const categoryHeader = screen.getByRole('columnheader', { name: /Catégorie/ })
+      expect(within(categoryHeader).getByLabelText('Catégorie')).toBeInTheDocument()
+    })
+  })
+
+  describe('per-competition status filter', () => {
+    const open = async (user: ReturnType<typeof userEvent.setup>, competition: string) => {
+      await user.click(screen.getByRole('button', { name: `Filtrer ${competition} par statut` }))
+    }
+
+    it('keeps only the rows whose cell holds one of the statuses ticked', async () => {
+      const user = userEvent.setup()
+      setup()
+      await open(user, 'Championnat seniors')
+      await user.click(screen.getByRole('checkbox', { name: 'Hors catégorie' }))
+
+      // The cadet is out of the seniors' categories; the senior is not.
+      expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
+      expect(screen.queryByText('Joris Szulc')).not.toBeInTheDocument()
+      expect(screen.getByText('1 licencié sur 3')).toBeInTheDocument()
+    })
+
+    it('takes several statuses at once, as a union', async () => {
+      const user = userEvent.setup()
+      setup()
+      await open(user, 'Championnat seniors')
+      await user.click(screen.getByRole('checkbox', { name: 'Hors catégorie' }))
+      await user.click(screen.getByRole('checkbox', { name: 'Sans catégorie' }))
+      expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
+      expect(screen.getByText('Alex Nemo')).toBeInTheDocument()
+      expect(screen.queryByText('Joris Szulc')).not.toBeInTheDocument()
+    })
+
+    it('compounds across columns — the players who are both', async () => {
+      const user = userEvent.setup()
+      setup()
+      await open(user, 'Championnat seniors')
+      await user.click(screen.getByRole('checkbox', { name: 'Hors catégorie' }))
+      await user.keyboard('{Escape}')
+      await open(user, 'Championnat jeunes')
+      await user.click(screen.getByRole('checkbox', { name: 'Par sa catégorie' }))
+      // Only the cadet: out of the seniors, in by category for the youth.
+      expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
+      expect(screen.queryByText('Alex Nemo')).not.toBeInTheDocument()
+    })
+
+    it('singles out the contradictions, which no verdict names on its own', async () => {
+      const user = userEvent.setup()
+      setup([], true, undefined, engagedIn('comp-seniors', 'p-cadet'))
+      await open(user, 'Championnat seniors')
+      await user.click(screen.getByRole('checkbox', { name: 'Non éligible mais déjà engagé' }))
+      expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
+      expect(screen.queryByText('Alex Nemo')).not.toBeInTheDocument()
+    })
+
+    it('says how many statuses are on, and clears them', async () => {
+      const user = userEvent.setup()
+      setup()
+      await open(user, 'Championnat seniors')
+      await user.click(screen.getByRole('checkbox', { name: 'Hors catégorie' }))
+      expect(screen.getByRole('button', { name: /Filtrer Championnat seniors/ }))
+        .toHaveTextContent('1 statut')
+      await user.click(screen.getByRole('button', { name: 'Effacer le filtre' }))
+      expect(screen.getByText('Joris Szulc')).toBeInTheDocument()
+    })
+
+    it('closes on Escape without losing what was ticked', async () => {
+      const user = userEvent.setup()
+      setup()
+      await open(user, 'Championnat seniors')
+      await user.click(screen.getByRole('checkbox', { name: 'Hors catégorie' }))
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('checkbox', { name: 'Hors catégorie' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Joris Szulc')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('the rules behind a column', () => {
+    it('states what the competition admits and what the club may do', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(screen.getByRole('button', { name: 'Règles de « Championnat jeunes »' }))
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent('Compétition réservée')
+      expect(dialog).toHaveTextContent('Benjamin, Minime, Cadet, Junior')
+      expect(dialog).toHaveTextContent(/aucun autre licencié ne peut y être ajouté/)
+      // One of three is a cadet.
+      expect(dialog).toHaveTextContent('1 licencié éligible sur 3')
+    })
+
+    it('counts what the club has amended, and what it has left to settle', async () => {
+      const user = userEvent.setup()
+      setup(
+        [{ clubId: CLUB, competitionId: 'comp-seniors', playerId: 'p-senior', effect: 'excluded' }],
+        true,
+        undefined,
+        engagedIn('comp-seniors', 'p-senior'),
+      )
+      await user.click(screen.getByRole('button', { name: 'Règles de « Championnat seniors »' }))
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent('0 ajouté et 1 exclu par le club')
+      expect(dialog).toHaveTextContent(/1 licencié non éligible est pourtant engagé/)
+    })
+
+    it('says nothing about contradictions when there are none', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(screen.getByRole('button', { name: 'Règles de « Championnat seniors »' }))
+      expect(screen.getByRole('dialog')).not.toHaveTextContent('À régler')
+    })
   })
 })

@@ -159,6 +159,25 @@ export const ELIGIBILITY_ACTION_LABELS: Record<EligibilityAction, string> = {
   none: 'Compétition réservée',
 }
 
+/**
+ * A cell's state, as the club's grid lets you filter on it (#482).
+ *
+ * The five verdicts, plus the one thing that is not a verdict but is the whole
+ * reason the grid exists: a licensee the competition refuses whom an équipe
+ * fields anyway. "Show me the contradictions" is the question a club admin
+ * comes here with, and no reason on its own answers it.
+ */
+export type CellStatus = EligibilityReason | 'conflict'
+
+export const CELL_STATUS_LABELS: Record<CellStatus, string> = {
+  ...ELIGIBILITY_REASON_LABELS,
+  conflict: 'Non éligible mais déjà engagé',
+}
+
+export const CELL_STATUSES: CellStatus[] = [
+  'category', 'club_added', 'club_excluded', 'category_mismatch', 'no_category', 'conflict',
+]
+
 /** Shorthand for the many callers that only want the yes or the no. */
 export function isPlayerEligible(
   player: EligiblePlayer,

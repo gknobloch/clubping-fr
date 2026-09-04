@@ -277,17 +277,56 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
       .toHaveAccessibleName(/Exclu par le club — Déjà dans l'équipe/)
   })
 
-  test('filters the club by category', async ({ page }) => {
+  test('filters the club by category, from the column header', async ({ page }) => {
     await page.goto('/competitions')
-    await page.getByRole('combobox', { name: 'Catégorie' }).selectOption({ label: 'Cadet' })
+    // The filters live in the headers, each above the column it narrows.
+    const header = page.getByRole('columnheader', { name: /Catégorie/ })
+    await header.getByRole('combobox').selectOption({ label: 'Cadet' })
     await expect(page.getByRole('link', { name: /Samuel Canemolla/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /Joris Szulc/ })).toHaveCount(0)
+  })
+
+  test('gives the category its own column', async ({ page }) => {
+    await page.goto('/competitions')
+    const row = page.getByRole('row').filter({ hasText: 'Samuel Canemolla' })
+    await expect(row.getByRole('cell').nth(2)).toHaveText('Cadet (C1)')
+  })
+
+  // Filtering one championship on its own states is the question a club admin
+  // arrives with: "who is excluded here?", "who is engaged but not eligible?".
+  test('filters one competition on the statuses chosen', async ({ page }) => {
+    await page.goto('/competitions')
+    await page.getByRole('button', { name: 'Filtrer Championnat jeunes par statut' }).click()
+    await page.getByRole('checkbox', { name: 'Par sa catégorie' }).check()
+
+    // Only the young squad is admitted by the youth championship.
+    await expect(page.getByRole('link', { name: /Samuel Canemolla/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Joris Szulc/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Filtrer Championnat jeunes par statut' }))
+      .toContainText('1 statut')
+
+    await page.getByRole('button', { name: 'Effacer le filtre' }).click()
+    await expect(page.getByRole('link', { name: /Joris Szulc/ })).toBeVisible()
+  })
+
+  test('explains a competition rather than leaving the rule in a glyph', async ({ page }) => {
+    await page.goto('/competitions')
+    await page.getByRole('button', { name: 'Règles de « Championnat jeunes »' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('Compétition réservée')
+    await expect(dialog).toContainText('Benjamin, Minime, Cadet, Junior')
+    await expect(dialog).toContainText('aucun autre licencié ne peut y être ajouté')
+    await expect(dialog).toContainText('Dans ce club')
+    await dialog.getByRole('button', { name: 'Fermer' }).click()
+    await expect(dialog).toBeHidden()
   })
 
   test('selects what the filter shows and applies one action to all of it', async ({ page }) => {
     await page.goto('/competitions')
     // The young squad: benjamins, minimes, cadets and juniors.
-    await page.getByRole('combobox', { name: 'Catégorie' }).selectOption({ label: 'Minime' })
+    await page.getByRole('columnheader', { name: /Catégorie/ }).getByRole('combobox')
+      .selectOption({ label: 'Minime' })
     await page.getByRole('checkbox', { name: 'Tout sélectionner' }).check()
     await expect(page.getByText(/^\d+ sélectionnés?$/)).toBeVisible()
 
@@ -299,14 +338,16 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Appliquer' }).click()
 
     await expect(page.getByRole('status')).toContainText('modifiés')
-    // And the grid now says the club put them there.
-    await expect(page.getByRole('button', { name: /Championnat vétérans/ }).first())
+    // And the grid now says the club put them there. Named by its cell, since
+    // the column's ⓘ carries the competition name too.
+    await expect(cell(page, 'Léo Remetter', 'Championnat vétérans'))
       .toHaveAccessibleName(/Ajouté par le club/)
   })
 
   test('never bulk-adds into a competition reserved to its categories', async ({ page }) => {
     await page.goto('/competitions')
-    await page.getByRole('combobox', { name: 'Catégorie' }).selectOption({ label: 'Senior' })
+    await page.getByRole('columnheader', { name: /Catégorie/ }).getByRole('combobox')
+      .selectOption({ label: 'Senior' })
     await page.getByRole('checkbox', { name: 'Tout sélectionner' }).check()
     await page.getByRole('combobox', { name: 'Compétition à modifier' }).selectOption({ label: 'Championnat jeunes' })
     await expect(page.getByRole('button', { name: 'Ajouter (0)' })).toBeDisabled()
