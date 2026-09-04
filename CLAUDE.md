@@ -145,6 +145,21 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - It bites on what can be **added** — a team's roster picker, a line-up's
   "autres joueurs" — never on availabilities already given or line-ups already
   made. A competition edited after the fact must not empty a squad.
+- That rule is what makes editing safe and also what makes it quiet, so the
+  contradiction has to be **visible**: `src/lib/competitionAssignments.ts`
+  answers "who does this competition already field?", the screens flag a ⚠ on
+  any *ineligible* licensee an équipe still holds, and every exclusion of one
+  goes through `useConfirm` first. The wording states the fact, never a
+  consequence — nothing is undone, so "sera retiré" would be a lie.
+- A team belongs to a competition **through its division**, so the assignment
+  scan reads `competitionOfDivision`, and it is computed once per competition,
+  not once per cell.
+- The grid's selection only ever means **what is on screen**: narrowing the
+  category filter drops the rows it hides out of the selection, or a bulk
+  action reaches players the club is no longer looking at.
+- A bulk action applies only to the selected players it would actually change
+  (`eligibilityCell(...).action` decides), which is why each button carries its
+  own count and why "Ajouter" reads 0 on a locked competition.
 - **`/competitions` is two screens behind one route.** A general admin gets the
   global configuration (import, categories, the lock); anyone else gets their
   own club's amendments. A club's eligibility is not part of its identity card,

@@ -4,12 +4,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { sortByName } from '@/lib/sortByName'
-import { categoriesSummary, categoryDisplay } from '@/lib/playerCategories'
+import { categoriesSummary, categoryDisplay, normalizeCategory, orderedCategories } from '@/lib/playerCategories'
 import {
   ELIGIBILITY_REASON_LABELS,
   canClubAdd,
   playerEligibility,
 } from '@/lib/competitionEligibility'
+import { assignmentSummary, assignmentsByPlayer } from '@/lib/competitionAssignments'
+import { useConfirm } from '@/components/useConfirm'
+
+/** The category filter's "everyone" and "nobody knows" entries. */
+const ALL = ''
+const NONE = 'none'
 
 /**
  * What a club amends, competition by competition (#482).
@@ -38,10 +44,15 @@ export function ClubCompetitions({
   variant?: 'panel' | 'section'
 }) {
   const { user } = useAuth()
-  const { competitions, players, competitionEligibilities, setCompetitionEligibility } = useAppData()
+  const {
+    competitions, players, competitionEligibilities, setCompetitionEligibility,
+    teams, divisions, gameSelections,
+  } = useAppData()
   const [selectedId, setSelectedId] = useState('')
+  const [category, setCategory] = useState<string>(ALL)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirm, confirmDialog] = useConfirm()
 
   const canManage =
     user?.role === 'general_admin' || (user?.role === 'club_admin' && user.clubId === clubId)
@@ -65,22 +76,61 @@ export function ClubCompetitions({
     [competitionEligibilities, clubId],
   )
 
+  /** Only the categories the club actually holds — a filter of empty buckets. */
+  const categoryOptions = useMemo(() => {
+    const held = new Set(clubPlayers.map((p) => normalizeCategory(p.category)).filter(Boolean))
+    return {
+      options: orderedCategories().filter((c) => held.has(c.code)),
+      hasUnknown: clubPlayers.some((p) => !normalizeCategory(p.category)),
+    }
+  }, [clubPlayers])
+
+  // Who this competition already fields, so an exclusion cannot be made in
+  // silence — see src/lib/competitionAssignments.
+  const engaged = useMemo(
+    () => (competition
+      ? assignmentsByPlayer(competition.id, {
+        teams: teams.filter((t) => t.clubId === clubId),
+        divisions,
+        competitions,
+        gameSelections,
+      })
+      : new Map()),
+    [competition, teams, clubId, divisions, competitions, gameSelections],
+  )
+
   const rows = useMemo(() => {
     if (!competition) return []
-    return clubPlayers.map((player) => ({
+    const shown = category === ALL
+      ? clubPlayers
+      : clubPlayers.filter((p) => {
+        const code = normalizeCategory(p.category)
+        return category === NONE ? !code : code === category
+      })
+    return shown.map((player) => ({
       player,
       ...playerEligibility(player, competition, overrides),
       overridden: overrides.some(
         (o) => o.competitionId === competition.id && o.playerId === player.id,
       ),
+      summary: assignmentSummary(engaged.get(player.id)),
     }))
-  }, [clubPlayers, competition, overrides])
+  }, [clubPlayers, competition, overrides, category, engaged])
 
   const eligible = rows.filter((r) => r.eligible)
   const rest = rows.filter((r) => !r.eligible)
 
   const apply = async (playerId: string, effect: 'included' | 'excluded' | 'default') => {
     if (!competition) return
+    if (effect === 'excluded') {
+      const summary = assignmentSummary(engaged.get(playerId))
+      const player = clubPlayers.find((p) => p.id === playerId)
+      if (summary && !(await confirm({
+        title: `Exclure ${player?.firstName} ${player?.lastName} de « ${competition.displayName} » ?`,
+        message: `${summary}. L'exclusion ne le retire d'aucune équipe ni d'aucune composition — elle l'empêche seulement d'être ajouté ailleurs. À vous de régler le reste.`,
+        confirmLabel: 'Exclure',
+      }))) return
+    }
     setBusy(true)
     setError(null)
     const ok = await setCompetitionEligibility(clubId, competition.id, playerId, effect)
@@ -96,8 +146,8 @@ export function ClubCompetitions({
 
   const isSection = variant === 'section'
 
-  const row = ({ player, reason, overridden }: (typeof rows)[number]) => {
-    const category = categoryDisplay(player.category)
+  const row = ({ player, reason, overridden, eligible: ok, summary }: (typeof rows)[number]) => {
+    const playerCategory = categoryDisplay(player.category)
     const addable = competition ? canClubAdd(competition, player) : false
     return (
       <li
@@ -109,8 +159,11 @@ export function ClubCompetitions({
             {player.firstName} {player.lastName}
           </p>
           <p className="text-xs text-slate-500">
-            {category || 'Catégorie inconnue'} · {ELIGIBILITY_REASON_LABELS[reason]}
+            {playerCategory || 'Catégorie inconnue'} · {ELIGIBILITY_REASON_LABELS[reason]}
           </p>
+          {!ok && summary && (
+            <p className="text-xs font-medium text-amber-600">⚠ {summary}</p>
+          )}
         </Link>
         {canManage && (
           overridden ? (
@@ -195,6 +248,22 @@ export function ClubCompetitions({
             </select>
           </div>
 
+          <div className="mt-2">
+            <label htmlFor={`${idPrefix}-category-filter`} className="sr-only">Catégorie</label>
+            <select
+              id={`${idPrefix}-category-filter`}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:min-h-0"
+            >
+              <option value={ALL}>Toutes les catégories</option>
+              {categoryOptions.options.map((c) => (
+                <option key={c.code} value={c.code}>{c.label}</option>
+              ))}
+              {categoryOptions.hasUnknown && <option value={NONE}>Sans catégorie</option>}
+            </select>
+          </div>
+
           {competition && (
             <p className="mt-2 text-xs text-slate-500">
               Par défaut : {categoriesSummary(competition.categories)}.
@@ -229,6 +298,7 @@ export function ClubCompetitions({
           )}
         </>
       )}
+      {confirmDialog}
     </section>
   )
 }

@@ -256,6 +256,62 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
     await expect(veterans()).toHaveAccessibleName(/Hors catégorie — Ajouter/)
   })
 
+  // Eligibility never empties a squad (#482), so an exclusion can contradict a
+  // team sheet in silence. The grid says so, and asks before making it.
+  test('warns before excluding someone an équipe already fields', async ({ page }) => {
+    await page.goto('/competitions')
+    // Joris Szulc is on the roster of a team playing the senior championship.
+    await cell(page, 'Joris Szulc', 'Championnat par équipes').click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText("Déjà dans l'équipe")
+    await expect(dialog).toContainText("ne le retire d'aucune équipe ni d'aucune composition")
+    await dialog.getByRole('button', { name: 'Annuler' }).click()
+    await expect(cell(page, 'Joris Szulc', 'Championnat par équipes'))
+      .toHaveAccessibleName(/Par sa catégorie/)
+
+    await cell(page, 'Joris Szulc', 'Championnat par équipes').click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Exclure' }).click()
+    // Excluded, and the contradiction is now flagged rather than hidden.
+    await expect(cell(page, 'Joris Szulc', 'Championnat par équipes'))
+      .toHaveAccessibleName(/Exclu par le club — Déjà dans l'équipe/)
+  })
+
+  test('filters the club by category', async ({ page }) => {
+    await page.goto('/competitions')
+    await page.getByRole('combobox', { name: 'Catégorie' }).selectOption({ label: 'Cadet' })
+    await expect(page.getByRole('link', { name: /Samuel Canemolla/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Joris Szulc/ })).toHaveCount(0)
+  })
+
+  test('selects what the filter shows and applies one action to all of it', async ({ page }) => {
+    await page.goto('/competitions')
+    // The young squad: benjamins, minimes, cadets and juniors.
+    await page.getByRole('combobox', { name: 'Catégorie' }).selectOption({ label: 'Minime' })
+    await page.getByRole('checkbox', { name: 'Tout sélectionner' }).check()
+    await expect(page.getByText(/^\d+ sélectionnés?$/)).toBeVisible()
+
+    await page.getByRole('combobox', { name: 'Compétition à modifier' }).selectOption({ label: 'Championnat vétérans' })
+    // Minimes are out of the veterans' categories, and it is not locked.
+    const add = page.getByRole('button', { name: /^Ajouter \(\d+\)$/ })
+    await expect(add).toBeEnabled()
+    await add.click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Appliquer' }).click()
+
+    await expect(page.getByRole('status')).toContainText('modifiés')
+    // And the grid now says the club put them there.
+    await expect(page.getByRole('button', { name: /Championnat vétérans/ }).first())
+      .toHaveAccessibleName(/Ajouté par le club/)
+  })
+
+  test('never bulk-adds into a competition reserved to its categories', async ({ page }) => {
+    await page.goto('/competitions')
+    await page.getByRole('combobox', { name: 'Catégorie' }).selectOption({ label: 'Senior' })
+    await page.getByRole('checkbox', { name: 'Tout sélectionner' }).check()
+    await page.getByRole('combobox', { name: 'Compétition à modifier' }).selectOption({ label: 'Championnat jeunes' })
+    await expect(page.getByRole('button', { name: 'Ajouter (0)' })).toBeDisabled()
+  })
+
   // The grid answers "who", and the next question is always about one of them.
   test('leads from a row to the player behind it', async ({ page }) => {
     await page.goto('/competitions')
@@ -300,10 +356,16 @@ test.describe('Club admin — amending from the player screen (#482)', () => {
     await veterans.getByRole('button', { name: 'Rétablir le défaut' }).click()
     await expect(veterans).toContainText('Non éligible · Hors catégorie')
 
-    // And the other way round, on one the default admits.
+    // And the other way round, on one the default admits — where the player is
+    // already on a roster, so the exclusion has to be confirmed first (#482).
     const seniors = competitions.locator('li').filter({ hasText: 'Championnat par équipes' })
     await seniors.getByRole('button', { name: 'Exclure' }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText("Déjà dans l'équipe")
+    await dialog.getByRole('button', { name: 'Exclure' }).click()
     await expect(seniors).toContainText('Non éligible · Exclu par le club')
+    // The contradiction is stated rather than silently created.
+    await expect(seniors).toContainText("Déjà dans l'équipe")
   })
 
   test('says a reserved competition cannot be joined, rather than offering it', async ({ page }) => {

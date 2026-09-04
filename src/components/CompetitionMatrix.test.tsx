@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type { Competition, CompetitionEligibility, Player } from '@/types'
-import { CompetitionMatrix } from './CompetitionMatrix'
+import { CompetitionMatrix, type AssignmentIndex } from './CompetitionMatrix'
 
 // #482 — the desktop grid. The rule itself is tested in
 // src/lib/competitionEligibility.spec.ts; what matters here is that the grid
@@ -32,19 +32,29 @@ const UNKNOWN = player('p-unknown', 'Alex', 'Nemo')
 
 const onSet = vi.fn()
 
-function setup(overrides: CompetitionEligibility[] = [], canManage = true, players = [CADET, SENIOR, UNKNOWN]) {
+function setup(
+  overrides: CompetitionEligibility[] = [],
+  canManage = true,
+  players = [CADET, SENIOR, UNKNOWN],
+  assignments: AssignmentIndex = new Map(),
+) {
   return render(
     <MemoryRouter>
     <CompetitionMatrix
       players={players}
       competitions={[youth, seniors]}
       overrides={overrides}
+      assignments={assignments}
       canManage={canManage}
       onSet={onSet}
     />
     </MemoryRouter>,
   )
 }
+
+/** An assignment index holding one engagement. */
+const engagedIn = (competitionId: string, playerId: string, teamNumbers = [6], lineups = 0) =>
+  new Map([[competitionId, new Map([[playerId, { teamNumbers, lineups }]])]]) as AssignmentIndex
 
 /** The cell button for one (player, competition) pair, found by its row. */
 function cell(playerName: string, competition: string) {
@@ -157,6 +167,131 @@ describe('CompetitionMatrix', () => {
     setup()
     expect(screen.getByRole('link', { name: /Joris Szulc/ }))
       .toHaveAttribute('href', '/joueurs/p-senior')
+  })
+
+  // #482 — eligibility never empties a squad, so an exclusion can contradict a
+  // team sheet in silence. The grid has to say so, and ask before making it.
+  describe('already engaged', () => {
+    it('marks a licensee the competition refuses but an équipe still fields', () => {
+      setup([], true, undefined, engagedIn('comp-seniors', 'p-cadet', [6], 2))
+      expect(cell('Samuel Canemolla', 'Championnat seniors'))
+        .toHaveAccessibleName(/Hors catégorie — Déjà dans l'équipe 6 et aligné sur 2 rencontres/)
+      // An eligible player is no contradiction, so nothing is flagged.
+      expect(cell('Joris Szulc', 'Championnat seniors')).not.toHaveAccessibleName(/Déjà/)
+    })
+
+    it('asks before excluding one, and says the exclusion undoes nothing', async () => {
+      const user = userEvent.setup()
+      setup([], true, undefined, engagedIn('comp-seniors', 'p-senior'))
+      await user.click(cell('Joris Szulc', 'Championnat seniors'))
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent("Déjà dans l'équipe 6")
+      expect(dialog).toHaveTextContent(/ne le retire d'aucune équipe ni d'aucune composition/)
+      expect(onSet).not.toHaveBeenCalled()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Exclure' }))
+      expect(onSet).toHaveBeenCalledWith('comp-seniors', 'p-senior', 'excluded')
+    })
+
+    it('writes nothing when the club backs out', async () => {
+      const user = userEvent.setup()
+      setup([], true, undefined, engagedIn('comp-seniors', 'p-senior'))
+      await user.click(cell('Joris Szulc', 'Championnat seniors'))
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annuler' }))
+      expect(onSet).not.toHaveBeenCalled()
+    })
+
+    it('does not ask when there is nothing to contradict', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(cell('Joris Szulc', 'Championnat seniors'))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(onSet).toHaveBeenCalledWith('comp-seniors', 'p-senior', 'excluded')
+    })
+  })
+
+  describe('filtering by category', () => {
+    it('offers only the categories the club holds, plus the ones without', () => {
+      setup()
+      const filter = screen.getByLabelText('Catégorie')
+      const options = within(filter).getAllByRole('option').map((o) => o.textContent)
+      expect(options).toEqual(['Toutes les catégories', 'Cadet', 'Senior', 'Sans catégorie'])
+    })
+
+    it('narrows the rows, and says how many of how many', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.selectOptions(screen.getByLabelText('Catégorie'), 'C')
+      expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
+      expect(screen.queryByText('Joris Szulc')).not.toBeInTheDocument()
+      expect(screen.getByText('1 licencié sur 3')).toBeInTheDocument()
+    })
+
+    it('picks out the licensees no category is known for', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.selectOptions(screen.getByLabelText('Catégorie'), 'none')
+      expect(screen.getByText('Alex Nemo')).toBeInTheDocument()
+      expect(screen.queryByText('Samuel Canemolla')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('bulk actions', () => {
+    it('selects everything the filter shows, and nothing it hides', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.selectOptions(screen.getByLabelText('Catégorie'), 'C')
+      await user.click(screen.getByLabelText('Tout sélectionner'))
+      expect(screen.getByText('1 sélectionné')).toBeInTheDocument()
+    })
+
+    it('drops from the selection whoever the filter stops showing', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(screen.getByLabelText('Tout sélectionner'))
+      expect(screen.getByText('3 sélectionnés')).toBeInTheDocument()
+      await user.selectOptions(screen.getByLabelText('Catégorie'), 'C')
+      expect(screen.getByText('1 sélectionné')).toBeInTheDocument()
+    })
+
+    it('applies one action to the selection, on the competition chosen', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(screen.getByLabelText('Tout sélectionner'))
+      await user.selectOptions(screen.getByLabelText('Compétition à modifier'), 'comp-seniors')
+
+      // Only the senior is eligible by default, so only he can be excluded.
+      await user.click(screen.getByRole('button', { name: 'Exclure (1)' }))
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Exclure' }))
+
+      expect(onSet).toHaveBeenCalledTimes(1)
+      expect(onSet).toHaveBeenCalledWith('comp-seniors', 'p-senior', 'excluded')
+      expect(screen.getByRole('status')).toHaveTextContent('1 licencié modifié, 2 inchangés.')
+    })
+
+    it('counts each action separately, and offers no way into a locked competition', async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(screen.getByLabelText('Tout sélectionner'))
+      // Youth is locked: the cadet is already in, the other two cannot be added.
+      expect(screen.getByRole('button', { name: 'Ajouter (0)' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Exclure (1)' })).toBeEnabled()
+    })
+
+    it('warns in the confirmation when the selection is already engaged', async () => {
+      const user = userEvent.setup()
+      setup([], true, undefined, engagedIn('comp-seniors', 'p-senior'))
+      await user.click(screen.getByLabelText('Tout sélectionner'))
+      await user.selectOptions(screen.getByLabelText('Compétition à modifier'), 'comp-seniors')
+      await user.click(screen.getByRole('button', { name: 'Exclure (1)' }))
+      expect(screen.getByRole('dialog')).toHaveTextContent(/1 est déjà engagé dans cette compétition/)
+    })
+
+    it('has no selection column at all for a member who cannot manage', () => {
+      setup([], false)
+      expect(screen.queryByLabelText('Tout sélectionner')).not.toBeInTheDocument()
+    })
   })
 
   it('says so when the club has no active licensee', () => {

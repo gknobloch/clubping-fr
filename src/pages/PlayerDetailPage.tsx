@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
@@ -14,16 +14,20 @@ import {
   ELIGIBILITY_REASON_LABELS,
   eligibilityCell,
 } from '@/lib/competitionEligibility'
+import { assignmentSummary, assignmentsByPlayer } from '@/lib/competitionAssignments'
+import { useConfirm } from '@/components/useConfirm'
 
 export function PlayerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { user } = useAuth()
   const {
     players, clubs, competitions, competitionEligibilities, setCompetitionEligibility,
+    teams, divisions, gameSelections,
   } = useAppData()
   const [zoom, setZoom] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
@@ -38,10 +42,21 @@ export function PlayerDetailPage() {
   // Every competition with its verdict, not only the ones that admit them: the
   // point of this section for a club admin is the ones that do NOT, since those
   // are what they might amend.
+  // What each competition already has them down for, so a verdict of "non
+  // éligible" beside an équipe that fields them cannot pass unremarked (#482).
+  const clubTeams = useMemo(
+    () => teams.filter((t) => t.clubId === player?.clubId),
+    [teams, player?.clubId],
+  )
   const rows = player
     ? ordered.map((competition) => ({
       competition,
       ...eligibilityCell(player, competition, overrides),
+      summary: assignmentSummary(
+        assignmentsByPlayer(competition.id, {
+          teams: clubTeams, divisions, competitions, gameSelections,
+        }).get(player.id),
+      ),
     }))
     : []
 
@@ -51,8 +66,20 @@ export function PlayerDetailPage() {
     && user?.role === 'club_admin'
     && user.clubId === player.clubId
 
-  const amend = async (competitionId: string, effect: 'included' | 'excluded' | 'default') => {
+  const amend = async (
+    competitionId: string,
+    effect: 'included' | 'excluded' | 'default',
+    summary?: string | null,
+  ) => {
     if (!player) return
+    if (effect === 'excluded' && summary) {
+      const competition = ordered.find((c) => c.id === competitionId)
+      if (!(await confirm({
+        title: `Exclure ${player.firstName} ${player.lastName} de « ${competition?.displayName} » ?`,
+        message: `${summary}. L'exclusion ne le retire d'aucune équipe ni d'aucune composition — elle l'empêche seulement d'être ajouté ailleurs. À vous de régler le reste.`,
+        confirmLabel: 'Exclure',
+      }))) return
+    }
     setBusy(true)
     setError(null)
     const ok = await setCompetitionEligibility(player.clubId, competitionId, player.id, effect)
@@ -137,7 +164,7 @@ export function PlayerDetailPage() {
             </p>
           )}
           <ul className="divide-y divide-slate-100">
-            {rows.map(({ competition, eligible, reason, action }) => (
+            {rows.map(({ competition, eligible, reason, action, summary }) => (
               <li
                 key={competition.id}
                 className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
@@ -149,6 +176,9 @@ export function PlayerDetailPage() {
                   <p className="text-xs text-slate-500">
                     {eligible ? 'Éligible' : 'Non éligible'} · {ELIGIBILITY_REASON_LABELS[reason]}
                   </p>
+                  {!eligible && summary && (
+                    <p className="text-xs font-medium text-amber-600">⚠ {summary}</p>
+                  )}
                 </div>
                 {canManage && action !== 'none' && (
                   <button
@@ -157,6 +187,7 @@ export function PlayerDetailPage() {
                     onClick={() => amend(
                       competition.id,
                       action === 'exclude' ? 'excluded' : action === 'include' ? 'included' : 'default',
+                      summary,
                     )}
                     className={`text-sm font-medium disabled:opacity-50 ${TEXT_TARGET_CLASS} ${
                       action === 'exclude' ? 'text-red-600 hover:text-red-800' : 'text-accent-600 hover:text-accent-800'
@@ -177,6 +208,8 @@ export function PlayerDetailPage() {
       )}
 
       <PlayerPhaseHistory playerId={player.id} />
+
+      {confirmDialog}
 
       {/* Avatar lightbox */}
       {zoom && player.avatarUpdatedAt && (

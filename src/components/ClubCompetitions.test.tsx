@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render as rtlRender, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
-import type { Competition, CompetitionEligibility, Player } from '@/types'
+import type {
+  Competition, CompetitionEligibility, Division, GameSelection, Player, Team,
+} from '@/types'
 import { ClubCompetitions } from './ClubCompetitions'
 
 // Each name links to the player behind it, so the tree needs a router.
@@ -21,6 +23,9 @@ const data = vi.hoisted(() => ({
   competitions: [] as Competition[],
   players: [] as Player[],
   competitionEligibilities: [] as CompetitionEligibility[],
+  teams: [] as Team[],
+  divisions: [] as Division[],
+  gameSelections: [] as GameSelection[],
 }))
 const auth = vi.hoisted(() => ({ user: null as unknown }))
 
@@ -35,6 +40,10 @@ vi.mock('@/contexts/DataContext', () => ({
     players: data.players,
     competitionEligibilities: data.competitionEligibilities,
     setCompetitionEligibility: data.setCompetitionEligibility,
+    // Engagements the list warns about (#482) — empty unless a test says so.
+    teams: data.teams,
+    divisions: data.divisions,
+    gameSelections: data.gameSelections,
   }),
 }))
 
@@ -61,6 +70,9 @@ beforeEach(() => {
   data.competitions = [youth, veterans]
   data.players = [CADET, SENIOR, VETERAN]
   data.competitionEligibilities = []
+  data.teams = []
+  data.divisions = []
+  data.gameSelections = []
   auth.user = { id: 'ca', role: 'club_admin', isPlayer: false, clubId: CLUB }
 })
 
@@ -150,5 +162,57 @@ describe('ClubCompetitions (#482)', () => {
     data.competitions = []
     render(<ClubCompetitions clubId={CLUB} />)
     expect(screen.getByText(/Aucune compétition n'est définie/)).toBeInTheDocument()
+  })
+
+  // #482 — the same two additions the desktop grid got: a category filter, and
+  // the warning that an exclusion contradicts a squad without undoing it.
+  it('filters the club by category, offering only the ones it holds', async () => {
+    const user = userEvent.setup()
+    render(<ClubCompetitions clubId={CLUB} />)
+    const filter = screen.getByLabelText('Catégorie')
+    expect(within(filter).getAllByRole('option').map((o) => o.textContent))
+      .toEqual(['Toutes les catégories', 'Cadet', 'Senior', 'Vétéran 55'])
+
+    await user.selectOptions(filter, 'C')
+    expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
+    expect(screen.queryByText('Joris Szulc')).not.toBeInTheDocument()
+  })
+
+  it('says when a licensee it calls ineligible is already in an équipe', async () => {
+    const user = userEvent.setup()
+    data.divisions = [{ id: 'div-1', competitionId: 'comp-veterans' } as Division]
+    data.teams = [{
+      id: 't6', number: 6, clubId: CLUB, divisionId: 'div-1',
+      playerIds: ['p-senior'], isArchived: false,
+    } as Team]
+
+    render(<ClubCompetitions clubId={CLUB} />)
+    await user.selectOptions(screen.getByLabelText('Compétition'), 'comp-veterans')
+    const row = screen.getByText('Joris Szulc').closest('li')!
+    expect(row).toHaveTextContent("Déjà dans l'équipe 6")
+  })
+
+  it('asks before making that contradiction, and writes nothing if refused', async () => {
+    const user = userEvent.setup()
+    data.divisions = [{ id: 'div-1', competitionId: 'comp-veterans' } as Division]
+    data.teams = [{
+      id: 't6', number: 6, clubId: CLUB, divisionId: 'div-1',
+      playerIds: ['p-veteran'], isArchived: false,
+    } as Team]
+
+    render(<ClubCompetitions clubId={CLUB} />)
+    await user.selectOptions(screen.getByLabelText('Compétition'), 'comp-veterans')
+    const row = screen.getByText('Hervé Ceroni').closest('li')!
+    await user.click(within(row).getByRole('button', { name: 'Exclure' }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent("Déjà dans l'équipe 6")
+    await user.click(within(dialog).getByRole('button', { name: 'Annuler' }))
+    expect(data.setCompetitionEligibility).not.toHaveBeenCalled()
+
+    await user.click(within(row).getByRole('button', { name: 'Exclure' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Exclure' }))
+    expect(data.setCompetitionEligibility)
+      .toHaveBeenCalledWith(CLUB, 'comp-veterans', 'p-veteran', 'excluded')
   })
 })

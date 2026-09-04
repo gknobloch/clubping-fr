@@ -3,8 +3,9 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { PageHeader } from '@/components/PageHeader'
-import { CompetitionMatrix } from '@/components/CompetitionMatrix'
+import { CompetitionMatrix, type AssignmentIndex } from '@/components/CompetitionMatrix'
 import { ClubCompetitions } from '@/components/ClubCompetitions'
+import { assignmentsByPlayer } from '@/lib/competitionAssignments'
 
 /**
  * A club's own competitions screen (#482).
@@ -22,7 +23,10 @@ import { ClubCompetitions } from '@/components/ClubCompetitions'
  */
 export function ClubCompetitionsPage() {
   const { user } = useAuth()
-  const { clubs, players, competitions, competitionEligibilities, setCompetitionEligibility } = useAppData()
+  const {
+    clubs, players, competitions, competitionEligibilities, setCompetitionEligibility,
+    teams, divisions, gameSelections,
+  } = useAppData()
 
   const clubId = user?.clubId ?? null
   const club = clubId ? clubs.find((c) => c.id === clubId) ?? null : null
@@ -42,6 +46,17 @@ export function ClubCompetitionsPage() {
     () => competitionEligibilities.filter((e) => e.clubId === clubId),
     [competitionEligibilities, clubId],
   )
+
+  // Who is already engaged where, so the grid can flag a licensee it calls
+  // ineligible while an équipe of this club is fielding them (#482). This
+  // club's teams only — another club's squad is not this screen's business.
+  const clubTeams = useMemo(() => teams.filter((t) => t.clubId === clubId), [teams, clubId])
+  const assignments: AssignmentIndex = useMemo(() => new Map(
+    active.map((c) => [
+      c.id,
+      assignmentsByPlayer(c.id, { teams: clubTeams, divisions, competitions, gameSelections }),
+    ]),
+  ), [active, clubTeams, divisions, competitions, gameSelections])
 
   if (!clubId) return <Navigate to="/" replace />
   if (!club) {
@@ -76,6 +91,7 @@ export function ClubCompetitionsPage() {
               players={clubPlayers}
               competitions={active}
               overrides={overrides}
+              assignments={assignments}
               canManage={canManage}
               onSet={(competitionId, playerId, effect) =>
                 setCompetitionEligibility(clubId, competitionId, playerId, effect)}

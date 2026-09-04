@@ -215,6 +215,22 @@ its competition admits, and so does the "autres joueurs" list of a line-up.
 Availabilities already given and line-ups already made are never filtered — the
 rule restricts what can be added, it does not erase what exists.
 
+Which is exactly why an exclusion has to be **stated rather than assumed**. A
+licensee already on a team's roster, or named in a line-up, stays there: the
+club has excluded them from what comes next, not from what is already arranged.
+So wherever a competition calls someone ineligible while one of the club's teams
+still fields them, the screens mark it, and excluding such a licensee asks for
+confirmation first — naming the équipes and the rencontres concerned, and saying
+plainly that the exclusion undoes none of them. Reconciling the two is the
+club's decision, and it is one the app makes visible rather than one it takes.
+
+A club works through this in bulk as often as one licensee at a time — a whole
+category joins a new championship, a age group moves up. So both views filter by
+category, and the grid additionally lets a club select what the filter shows and
+apply one amendment to all of it, on one competition at a time. A bulk amendment
+only ever touches the selected licensees it would actually change, and it can no
+more widen a reserved competition than a single one can.
+
 Both places a club sees eligibility answer the same question at a different
 scale. **Compétitions** is a screen of its own in a Club Admin's navigation: on
 a wide screen it is a grid of the whole club against every competition, since
