@@ -6,12 +6,22 @@
 // pdfjs-dist is a large dependency (~1MB+) only ever needed once an admin
 // actually opens the import-from-file modal and picks a PDF — a dynamic
 // import keeps it out of the app's main bundle entirely.
+//
+// The `legacy/` build, not the default one, and not for old browsers: pdfjs 6
+// calls `Map.prototype.getOrInsertComputed` — a 2025 proposal that Chrome 141
+// (the current stable at the time of writing) does not have — and only the
+// legacy build ships the polyfills for it. With the default build, rendering a
+// page throws "getOrInsertComputed is not a function" outright there, and the
+// admin is told "Impossible de lire ce fichier" (#486). Text extraction
+// happens to miss those call sites today, which is not a property to rely on:
+// whichever engine is one API behind, this path either works or refuses a
+// perfectly good calendar.
 async function loadPdfjs() {
   const [pdfjsLib, { default: pdfWorkerUrl }] = await Promise.all([
-    import('pdfjs-dist'),
+    import('pdfjs-dist/legacy/build/pdf.mjs'),
     // Vite-specific asset import: resolves to the worker script's final
     // bundled URL so pdfjs can run parsing off the main thread.
-    import('pdfjs-dist/build/pdf.worker.mjs?url'),
+    import('pdfjs-dist/legacy/build/pdf.worker.mjs?url'),
   ])
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
   return pdfjsLib
@@ -40,6 +50,40 @@ function reconstructLines(items: PositionedItem[]): string[] {
   return rows.map((row) => row.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '))
 }
 
+/** One chunk of pdfjs's text stream: text items, plus marked-content markers with no `str`. */
+interface TextContentChunk {
+  items: Array<{ str?: string; transform?: number[] }>
+}
+
+/**
+ * Read one page's positioned text items.
+ *
+ * Deliberately NOT `page.getTextContent()`, which is the same stream read for
+ * us: pdfjs consumes it with `for await (… of readableStream)`, and WebKit
+ * still does not implement async iteration over a ReadableStream
+ * (https://bugs.webkit.org/show_bug.cgi?id=194379). On an iPhone that call
+ * throws "undefined is not a function" before returning a single line, so
+ * every text-layer PDF — the common case, FFTT's own export included — was
+ * refused there with nothing but "Impossible de lire ce fichier" (#486).
+ * A reader does the same work, minus the styles and language nothing here
+ * reads. Keep it that way: no `for await` over a stream, on any path an
+ * import depends on.
+ */
+async function readTextItems(page: { streamTextContent: () => ReadableStream }): Promise<PositionedItem[]> {
+  const reader = (page.streamTextContent() as ReadableStream<TextContentChunk>).getReader()
+  const items: PositionedItem[] = []
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    for (const item of value.items) {
+      const text = item.str?.trim()
+      if (!text || !item.transform) continue
+      items.push({ text, x: item.transform[4], y: item.transform[5] })
+    }
+  }
+  return items
+}
+
 /**
  * Extract text lines from every page of a PDF file, reconstructed from
  * positioned text items (pdfjs's own `getTextContent` join order isn't
@@ -56,15 +100,60 @@ export async function extractPdfScheduleLines(file: File): Promise<string[]> {
     const doc = await loadingTask.promise
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum)
-      const content = await page.getTextContent()
-      const items: PositionedItem[] = content.items.flatMap((item) => {
-        if (!('str' in item) || !item.str.trim()) return []
-        return [{ text: item.str.trim(), x: item.transform[4], y: item.transform[5] }]
-      })
-      lines.push(...reconstructLines(items))
+      lines.push(...reconstructLines(await readTextItems(page)))
     }
   } finally {
     await loadingTask.destroy()
   }
   return lines
+}
+
+// Enough resolution for OCR to read the export's smallest type once the page
+// is rasterized: A4 at this scale is ~2500px on its long edge, around 150 dpi
+// — comfortably past the 1200px floor preprocessForOcr() upscales a phone
+// photo to, without making tesseract chew through a needlessly huge bitmap.
+const OCR_RENDER_SCALE = 3
+
+/**
+ * Render each page of a PDF to a canvas, one at a time, for the OCR fallback.
+ *
+ * A calendar that was scanned or photographed and then saved as a PDF — an
+ * entirely ordinary thing to be handed — has no text layer at all, so
+ * extractPdfScheduleLines() above returns nothing. Handing the PDF file
+ * itself to the OCR path (which is what happened until #486) only ever threw
+ * `InvalidStateError` from createImageBitmap(), which decodes images and not
+ * PDFs, and the admin was told "Impossible de lire ce fichier" about a
+ * document OCR could read perfectly well. Rasterizing here is what makes it
+ * readable — every page, since one file holds every poule of a division.
+ *
+ * A generator, so only the page being read exists: at this resolution a page
+ * is a ~4.5 Mpx bitmap, and a division's export runs to eight of them, which
+ * is a straight route to a phone's canvas-memory ceiling.
+ */
+export async function* renderPdfPages(file: File): AsyncGenerator<HTMLCanvasElement> {
+  const pdfjsLib = await loadPdfjs()
+  const buffer = await file.arrayBuffer()
+  const loadingTask = pdfjsLib.getDocument({ data: buffer })
+  try {
+    const doc = await loadingTask.promise
+    for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+      const page = await doc.getPage(pageNum)
+      const viewport = page.getViewport({ scale: OCR_RENDER_SCALE })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.ceil(viewport.width)
+      canvas.height = Math.ceil(viewport.height)
+      // No canvasContext: pdfjs takes the canvas itself since v5, and paints a
+      // white background under the page — which is what OCR wants anyway.
+      await page.render({ canvas, viewport }).promise
+      yield canvas
+      // Resumed here, the consumer is done with this page — it reads one
+      // before asking for the next. Drop the backing store rather than wait
+      // for a collection that may not come before the next page is drawn.
+      canvas.width = 0
+      canvas.height = 0
+      page.cleanup()
+    }
+  } finally {
+    await loadingTask.destroy()
+  }
 }

@@ -8,27 +8,35 @@ const IMPORT = '**/api/schedule-documents/import'
 // Fixture document
 // ---------------------------------------------------------------------------
 // The file is built here rather than committed as a binary so the lines under
-// test are readable in the diff. It is a real single-page PDF with a genuine
-// text layer, so this drives the actual pdfjs path the app uses — not a stub.
+// test are readable in the diff. It is a real PDF with a genuine text layer,
+// so this drives the actual pdfjs path the app uses — not a stub. One page per
+// poule, as FFTT publishes them (#486).
 //
 // Deliberately NOT an image: the OCR fallback is tesseract/WASM, far too slow
 // and variable to belong in a browser test. OCR tolerance is covered where it
 // can be tested precisely, on fixed text, in ffttScheduleDocumentOcr.spec.ts.
 
-function buildTextPdf(lines: string[]): Buffer {
+function buildTextPdf(pages: string[][]): Buffer {
   const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')
-  let y = 800
   // One text-showing operator per line, each on its own baseline, so the app's
   // reconstructLines() groups them back into exactly these strings.
-  const content = lines
-    .filter((l) => l.trim())
-    .map((l) => { const op = `BT /F1 10 Tf 40 ${y} Td (${esc(l)}) Tj ET`; y -= 14; return op })
-    .join('\n')
+  const contents = pages.map((lines) => {
+    let y = 800
+    return lines
+      .filter((l) => l.trim())
+      .map((l) => { const op = `BT /F1 10 Tf 40 ${y} Td (${esc(l)}) Tj ET`; y -= 14; return op })
+      .join('\n')
+  })
+  // 1 catalog, 2 pages node, then one page + one content stream per page, font last.
+  const pageObj = (i: number) => 3 + i * 2
+  const fontObj = 3 + pages.length * 2
   const objs = [
     '<</Type/Catalog/Pages 2 0 R>>',
-    '<</Type/Pages/Kids[3 0 R]/Count 1>>',
-    '<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>',
-    `<</Length ${Buffer.byteLength(content, 'latin1')}>>\nstream\n${content}\nendstream`,
+    `<</Type/Pages/Kids[${pages.map((_, i) => `${pageObj(i)} 0 R`).join(' ')}]/Count ${pages.length}>>`,
+    ...pages.flatMap((_, i) => [
+      `<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents ${pageObj(i) + 1} 0 R/Resources<</Font<</F1 ${fontObj} 0 R>>>>>>`,
+      `<</Length ${Buffer.byteLength(contents[i], 'latin1')}>>\nstream\n${contents[i]}\nendstream`,
+    ]),
     // WinAnsiEncoding so "Journée" survives the round trip.
     '<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>',
   ]
@@ -62,6 +70,24 @@ const POULE_1_LINES = [
   'Journée 2 : 03 octobre 2026',
   'Samedi 16h ROSENAU TT 1 contre ETIVAL TT 1 -',
   'Samedi 16h STRASBOURG RCS 2 contre RIXHEIM PPA 1 -',
+]
+
+// The second page of a two-poule export: same division, poule 2, and a poule
+// the mock data does not have — so the row offers to create it, which is what
+// an admin importing a division's whole calendar actually faces.
+const POULE_2_LINES = [
+  'CHAMPIONNAT GRAND EST 1 Poule 2',
+  '1ère phase 2025-2026',
+  '1 VITTEL ST REMY 1 Samedi 16h 06880022',
+  '2 ILLZACH TTSJB 2 Samedi 16h 06680091',
+  '3 MOUSSEY TT 1 Samedi 16h 06100004',
+  '4 ANOULD CP 2 Samedi 16h 06880002',
+  'Journée 1 : 19 septembre 2026',
+  'Samedi 16h VITTEL ST REMY 1 contre ANOULD CP 2 -',
+  'Samedi 16h ILLZACH TTSJB 2 contre MOUSSEY TT 1 -',
+  'Journée 2 : 03 octobre 2026',
+  'Samedi 16h MOUSSEY TT 1 contre ILLZACH TTSJB 2 -',
+  'Samedi 16h ANOULD CP 2 contre VITTEL ST REMY 1 -',
 ]
 
 // Same document, except ROSENAU plays twice in journée 1 — impossible, so the
@@ -108,8 +134,12 @@ type ImportBody = {
 }
 
 async function attach(page: Page, lines: string[], name = 'poule-1.pdf') {
+  await attachPages(page, [lines], name)
+}
+
+async function attachPages(page: Page, pages: string[][], name: string) {
   await page.locator('input[type=file]').setInputFiles({
-    name, mimeType: 'application/pdf', buffer: buildTextPdf(lines),
+    name, mimeType: 'application/pdf', buffer: buildTextPdf(pages),
   })
 }
 
@@ -148,7 +178,7 @@ test.describe('General admin — import a schedule from a file', () => {
     await dialog.getByLabel('Groupe').selectOption({ label: 'Poule 1' })
     await expect(dialog.getByLabel('Groupe')).toHaveValue('group-1')
 
-    await dialog.getByRole('button', { name: 'Importer 4 matchs (1 fichier)' }).click()
+    await dialog.getByRole('button', { name: 'Importer 4 matchs (1 poule)' }).click()
     await expect(dialog.getByText('4 matchs importés.')).toBeVisible()
 
     expect(body).toBeDefined()
@@ -165,6 +195,76 @@ test.describe('General admin — import a schedule from a file', () => {
     expect(s.teams).toHaveLength(4)
     expect(s.journees.map((j) => j.number)).toEqual([1, 2])
     expect(s.journees.flatMap((j) => j.matches)).toHaveLength(4)
+  })
+
+  test('reads a PDF on an engine with no async iteration over streams', async ({ page }) => {
+    // WebKit does not implement it (https://bugs.webkit.org/show_bug.cgi?id=194379),
+    // and pdfjs's own getTextContent() reads its text stream with
+    // `for await (… of readableStream)`. On an iPhone that threw
+    // "undefined is not a function" before a single line came back, so every
+    // text-layer PDF — FFTT's own export included — was refused with
+    // "Impossible de lire ce fichier" (#486). Chromium with the feature taken
+    // away is that iPhone, as far as this path is concerned.
+    await page.addInitScript(() => {
+      delete (ReadableStream.prototype as Record<symbol, unknown>)[Symbol.asyncIterator]
+    })
+
+    await page.goto('/groupes')
+    await expect(page.evaluate(() => Symbol.asyncIterator in ReadableStream.prototype)).resolves.toBe(false)
+    await page.getByRole('button', { name: 'Importer depuis un fichier' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await attach(page, POULE_1_LINES)
+
+    await expect(dialog.getByText('CHAMPIONNAT GRAND EST 1', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('2 journées · 4 matchs')).toBeVisible()
+    await expect(dialog.getByText(/Impossible de lire/)).toHaveCount(0)
+  })
+
+  test('splits a document holding several poules into one row per poule', async ({ page }) => {
+    // FFTT publishes every poule of a division in ONE file, one page each
+    // (#486). Read whole, such a file used to import as a single poule
+    // holding both pages' journées and only the first page's roster.
+    let body: ImportBody | undefined
+    await page.route(IMPORT, (route) => {
+      body = route.request().postDataJSON()
+      return route.fulfill({ json: importedResult })
+    })
+
+    await page.goto('/groupes')
+    await page.getByRole('button', { name: 'Importer depuis un fichier' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await attachPages(page, [POULE_1_LINES, POULE_2_LINES], 'ge1-p1.pdf')
+
+    // One row per poule, each named after the poule it holds.
+    await expect(dialog.getByText('ge1-p1.pdf · Poule 1')).toBeVisible()
+    await expect(dialog.getByText('ge1-p1.pdf · Poule 2')).toBeVisible()
+    await expect(dialog.getByText('2 journées · 4 matchs')).toHaveCount(2)
+    // Each roster is its own: page 2's teams never appear under poule 1.
+    await expect(dialog.getByText('RIXHEIM PPA n° 1 · Déjà présente')).toBeVisible()
+    await expect(dialog.getByText('MOUSSEY TT n° 1 · Déjà présente')).toBeVisible()
+
+    // Mapped independently: poule 1 exists, poule 2 is created under the same
+    // division.
+    await dialog.getByLabel('Division').nth(0).selectOption({ label: 'GE 1' })
+    await dialog.getByLabel('Groupe').nth(0).selectOption({ label: 'Poule 1' })
+    await dialog.getByLabel('Division').nth(1).selectOption({ label: 'GE 1' })
+    await expect(dialog.getByLabel('Groupe').nth(1)).toHaveValue('')
+
+    await dialog.getByRole('button', { name: 'Importer 8 matchs (2 poules)' }).click()
+    await expect(dialog.getByText('4 matchs importés.')).toBeVisible()
+
+    expect(body).toBeDefined()
+    expect(body!.schedules).toHaveLength(2)
+    const [first, second] = body!.schedules
+    expect(first.groupId).toBe('group-1')
+    expect(first.journees.flatMap((j) => j.matches)).toHaveLength(4)
+    expect(second.divisionId).toBe('198609')
+    expect(second.groupId).toBeNull()
+    expect(second.newGroupNumber).toBe(2)
+    expect(second.teams).toHaveLength(4)
+    expect(second.journees.flatMap((j) => j.matches)).toHaveLength(4)
   })
 
   test('refuses a document where a team plays twice in one journée', async ({ page }) => {

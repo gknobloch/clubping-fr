@@ -225,8 +225,56 @@ function parseJourneeDate(text: string): { type: 'fixed' | 'range'; date: string
 }
 
 /**
+ * A template line that is not a match row and never was: the points column
+ * the export prints under the last journée ("0" on its own, once per team),
+ * and the "X joue toujours à domicile" note it adds for a club that hosts
+ * every round. Both sit inside the journée block, so without this they are
+ * reported as unreadable match rows — eight of them on a single page of a
+ * real export, which buries the warnings that actually matter, exactly as
+ * the "Edition du ..." footer would.
+ */
+const TEMPLATE_NOISE_RE = /^(?:[^\p{L}]+|.*joue toujours [aà] domicile.*)$/iu
+
+/**
+ * Split extracted lines into one section per poule, in document order.
+ *
+ * FFTT publishes every poule of a division in ONE file, one page each — the
+ * real "GE 7 phase 1" export holds poules 42 to 45 — and the pages reach the
+ * parser as a single line array, with nothing but a fresh "... Poule N"
+ * header to mark the seam. Parsed whole, that file reads as one poule holding
+ * four rounds of every journée number, the roster of its first page only, and
+ * every other page's lines as unreadable match rows (#486). Each section is
+ * its own calendar, mapped to its own division/group.
+ *
+ * A section starts at a header line and runs to the next one; anything before
+ * the first header stays with it, since that is where the parser looks for
+ * the header anyway. A line only counts as a header when it says "Poule N"
+ * AND is none of the three row shapes the body is made of — a poule number
+ * inside a roster or match row must never split a document in two.
+ */
+export function splitScheduleDocumentSections(rawLines: string[]): string[][] {
+  const lines = rawLines.map(normalizeLine).filter(Boolean)
+  const isHeader = (l: string) =>
+    POOL_RE.test(l) && !JOURNEE_RE.test(l) && !MATCH_RE.test(l) && !ROSTER_RE.test(l)
+
+  const sections: string[][] = []
+  let current: string[] = []
+  let currentHasHeader = false
+  for (const line of lines) {
+    const header = isHeader(line)
+    if (header && currentHasHeader) { sections.push(current); current = [] }
+    currentHasHeader = currentHasHeader || header
+    current.push(line)
+  }
+  sections.push(current)
+  return sections
+}
+
+/**
  * Parse an already-extracted array of text lines (from either a text-layer
- * PDF or OCR) into one schedule document. Returns `{ error }` only when the
+ * PDF or OCR) into one schedule document. Hand it ONE poule's lines —
+ * splitScheduleDocumentSections() above cuts a multi-poule export into those.
+ * Returns `{ error }` only when the
  * header ("... Poule N") can't be located at all — every other issue is
  * reported as a non-fatal warning so the admin can still review/complete the
  * roster or journées manually before confirming the import.
@@ -301,6 +349,7 @@ export function parseScheduleDocumentLines(rawLines: string[]): ParsedScheduleDo
       // The template's trailing "Edition du 15/07/2026" is not a match row;
       // warning about it every time only buries the warnings that matter.
       if (/^edition\s+du\b/i.test(line)) continue
+      if (TEMPLATE_NOISE_RE.test(line)) continue
       const mm = MATCH_RE.exec(line)
       if (!mm) {
         warnings.push(`Ligne de match illisible (journée ${current.number}) : "${line}"`)
