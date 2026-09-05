@@ -50,6 +50,40 @@ function reconstructLines(items: PositionedItem[]): string[] {
   return rows.map((row) => row.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '))
 }
 
+/** One chunk of pdfjs's text stream: text items, plus marked-content markers with no `str`. */
+interface TextContentChunk {
+  items: Array<{ str?: string; transform?: number[] }>
+}
+
+/**
+ * Read one page's positioned text items.
+ *
+ * Deliberately NOT `page.getTextContent()`, which is the same stream read for
+ * us: pdfjs consumes it with `for await (… of readableStream)`, and WebKit
+ * still does not implement async iteration over a ReadableStream
+ * (https://bugs.webkit.org/show_bug.cgi?id=194379). On an iPhone that call
+ * throws "undefined is not a function" before returning a single line, so
+ * every text-layer PDF — the common case, FFTT's own export included — was
+ * refused there with nothing but "Impossible de lire ce fichier" (#486).
+ * A reader does the same work, minus the styles and language nothing here
+ * reads. Keep it that way: no `for await` over a stream, on any path an
+ * import depends on.
+ */
+async function readTextItems(page: { streamTextContent: () => ReadableStream }): Promise<PositionedItem[]> {
+  const reader = (page.streamTextContent() as ReadableStream<TextContentChunk>).getReader()
+  const items: PositionedItem[] = []
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    for (const item of value.items) {
+      const text = item.str?.trim()
+      if (!text || !item.transform) continue
+      items.push({ text, x: item.transform[4], y: item.transform[5] })
+    }
+  }
+  return items
+}
+
 /**
  * Extract text lines from every page of a PDF file, reconstructed from
  * positioned text items (pdfjs's own `getTextContent` join order isn't
@@ -66,12 +100,7 @@ export async function extractPdfScheduleLines(file: File): Promise<string[]> {
     const doc = await loadingTask.promise
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum)
-      const content = await page.getTextContent()
-      const items: PositionedItem[] = content.items.flatMap((item) => {
-        if (!('str' in item) || !item.str.trim()) return []
-        return [{ text: item.str.trim(), x: item.transform[4], y: item.transform[5] }]
-      })
-      lines.push(...reconstructLines(items))
+      lines.push(...reconstructLines(await readTextItems(page)))
     }
   } finally {
     await loadingTask.destroy()

@@ -118,6 +118,12 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - pdf.js comes from `pdfjs-dist/legacy/build/`, and not for old browsers: the
   default build calls `Map.prototype.getOrInsertComputed`, which Chrome 141 does
   not have, so rendering a page throws there. Only the legacy build polyfills it.
+- **Never `for await` over a stream here**, and never call pdfjs's
+  `getTextContent()`, which does: WebKit has no async iteration over a
+  `ReadableStream` (webkit.org/b/194379), so on an iPhone that call threw before
+  a single line came back and every text-layer PDF was refused. `readTextItems()`
+  reads the same `streamTextContent()` stream with a reader. An E2E test deletes
+  `ReadableStream.prototype[Symbol.asyncIterator]` to hold this.
 - **OCR never sees a PDF.** `createImageBitmap` decodes images, not documents,
   and throws on one. A PDF with no text layer goes through
   `renderPdfPages` first — that is the whole scanned-calendar path.

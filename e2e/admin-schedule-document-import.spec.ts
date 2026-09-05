@@ -197,6 +197,30 @@ test.describe('General admin — import a schedule from a file', () => {
     expect(s.journees.flatMap((j) => j.matches)).toHaveLength(4)
   })
 
+  test('reads a PDF on an engine with no async iteration over streams', async ({ page }) => {
+    // WebKit does not implement it (https://bugs.webkit.org/show_bug.cgi?id=194379),
+    // and pdfjs's own getTextContent() reads its text stream with
+    // `for await (… of readableStream)`. On an iPhone that threw
+    // "undefined is not a function" before a single line came back, so every
+    // text-layer PDF — FFTT's own export included — was refused with
+    // "Impossible de lire ce fichier" (#486). Chromium with the feature taken
+    // away is that iPhone, as far as this path is concerned.
+    await page.addInitScript(() => {
+      delete (ReadableStream.prototype as Record<symbol, unknown>)[Symbol.asyncIterator]
+    })
+
+    await page.goto('/groupes')
+    await expect(page.evaluate(() => Symbol.asyncIterator in ReadableStream.prototype)).resolves.toBe(false)
+    await page.getByRole('button', { name: 'Importer depuis un fichier' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await attach(page, POULE_1_LINES)
+
+    await expect(dialog.getByText('CHAMPIONNAT GRAND EST 1', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('2 journées · 4 matchs')).toBeVisible()
+    await expect(dialog.getByText(/Impossible de lire/)).toHaveCount(0)
+  })
+
   test('splits a document holding several poules into one row per poule', async ({ page }) => {
     // FFTT publishes every poule of a division in ONE file, one page each
     // (#486). Read whole, such a file used to import as a single poule
