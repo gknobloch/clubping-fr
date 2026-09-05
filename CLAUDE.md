@@ -108,3 +108,16 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - A team can change poule without being recreated — `PATCH /teams/:id` with a
   new `groupId` moves it, and its fixtures in the poule it leaves go with it.
   The phase never moves: team ids are derived from (club, phase, number) (#282).
+
+### Import from a file (#260, #486)
+- **One FFTT export holds every poule of a division**, one page each (the real
+  "GE 7 phase 1" file holds poules 42 to 45). The extracted lines are cut into
+  one section per "… Poule N" header (`splitScheduleDocumentSections`) and each
+  section becomes its own import row with its own division/group mapping.
+  Parsing a whole file as one poule stacks four calendars into the first one.
+- pdf.js comes from `pdfjs-dist/legacy/build/`, and not for old browsers: the
+  default build calls `Map.prototype.getOrInsertComputed`, which Chrome 141 does
+  not have, so rendering a page throws there. Only the legacy build polyfills it.
+- **OCR never sees a PDF.** `createImageBitmap` decodes images, not documents,
+  and throws on one. A PDF with no text layer goes through
+  `renderPdfPages` first — that is the whole scanned-calendar path.

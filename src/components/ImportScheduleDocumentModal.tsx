@@ -3,9 +3,12 @@ import {
   useAppData, type ScheduleDocImportInput, type ScheduleDocImportResult,
 } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
-import { extractPdfScheduleLines } from '@/lib/pdfScheduleText'
+import { extractPdfScheduleLines, renderPdfPages } from '@/lib/pdfScheduleText'
 import { extractOcrScheduleLines } from '@/lib/ocrScheduleText'
-import { divisionLabelScore, parseScheduleDocumentLines, type ParsedScheduleDocument } from '@/lib/ffttScheduleDocument'
+import {
+  divisionLabelScore, parseScheduleDocumentLines, splitScheduleDocumentSections,
+  type ParsedScheduleDocument,
+} from '@/lib/ffttScheduleDocument'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 
 type FileStatus = 'reading' | 'ready' | 'error'
@@ -31,12 +34,40 @@ const DIVISION_MATCH_THRESHOLD = 0.3
 let nextEntryId = 0
 
 /**
+ * Read whatever the admin picked into text lines: a PDF's own text layer
+ * first, then OCR as the fallback — and for a PDF, OCR reads its pages
+ * rendered to canvases, never the PDF file itself (#486). Handing the file
+ * over is what the fallback used to do, and no browser can decode a document
+ * as an image: a scanned calendar was always refused, never read.
+ */
+async function extractScheduleLines(file: File): Promise<string[]> {
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+  if (!isPdf) return extractOcrScheduleLines(file)
+  const lines = await extractPdfScheduleLines(file)
+  if (lines.length > 0) return lines
+  return extractOcrScheduleLines(renderPdfPages(file))
+}
+
+/**
+ * A bare "Impossible de lire ce fichier." told the admin nothing and left a
+ * real report — an iPhone refusing an export this very code reads fine
+ * elsewhere (#486) — with nothing to go on. The cause is what separates a
+ * corrupt file from a tesseract download that never arrived or a browser that
+ * could not run pdf.js at all, and it is the admin who has to relay it.
+ */
+function readFailureMessage(err: unknown): string {
+  const detail = err instanceof Error ? err.message || err.name : String(err ?? '')
+  return detail ? `Impossible de lire ce fichier : ${detail}` : 'Impossible de lire ce fichier.'
+}
+
+/**
  * Import a calendar from an uploaded PDF/image instead of the live FFTT API
- * (#260). Multi-file: each file is parsed independently into its own
- * division/poule and shown as its own confirmation row — `lockedGroupId`
- * (from the per-group "Importer les matchs" flow) only pre-fills that row's
- * default division/group, it never silently overrides what the document
- * itself says; a mismatch is surfaced as a warning, not a block.
+ * (#260). Multi-file, and multi-poule within a file: FFTT publishes every
+ * poule of a division in one document, one page each, so each poule becomes
+ * its own confirmation row with its own division/group mapping (#486).
+ * `lockedGroupId` (from the per-group "Importer les matchs" flow) only
+ * pre-fills a row's default division/group, it never silently overrides what
+ * the document itself says; a mismatch is surfaced as a warning, not a block.
  */
 export function ImportScheduleDocumentModal({
   onClose, lockedGroupId,
@@ -56,13 +87,19 @@ export function ImportScheduleDocumentModal({
   const updateEntry = (id: string, patch: Partial<FileEntry>) =>
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
 
-  const resolveEntry = useCallback((id: string, parsed: ParsedScheduleDocument, extractedLines: string[]) => {
+  /** Swap the placeholder row a file was queued as for the rows it turned out to hold. */
+  const replaceEntry = (id: string, rows: FileEntry[]) =>
+    setEntries((prev) => prev.flatMap((e) => (e.id === id ? rows : [e])))
+
+  const resolveEntry = useCallback((
+    base: FileEntry, parsed: ParsedScheduleDocument, extractedLines: string[], applyLock: boolean,
+  ): FileEntry => {
     const seasonMissing = !parsed.seasonId || !seasons.some((s) => s.id === parsed.seasonId)
     const phase = parsed.seasonId && parsed.phaseNumber !== null
       ? phases.find((p) => p.seasonId === parsed.seasonId && p.name === `Phase ${parsed.phaseNumber}`)
       : undefined
 
-    const lockedGroup = lockedGroupId ? groups.find((g) => g.id === lockedGroupId) : undefined
+    const lockedGroup = applyLock && lockedGroupId ? groups.find((g) => g.id === lockedGroupId) : undefined
     const lockedDivision = lockedGroup ? divisions.find((d) => d.id === lockedGroup.divisionId) : undefined
 
     let divisionChoice = ''
@@ -93,9 +130,10 @@ export function ImportScheduleDocumentModal({
       }
     }
 
-    updateEntry(id, {
+    return {
+      ...base,
       status: 'ready', parsed, extractedLines, seasonMissing, divisionChoice, groupChoice, mismatchWarning,
-    })
+    }
   }, [seasons, phases, divisions, groups, lockedGroupId])
 
   const handleFiles = async (files: FileList) => {
@@ -108,24 +146,50 @@ export function ImportScheduleDocumentModal({
     setImportError(false)
 
     await Promise.all([...files].map(async (file, i) => {
-      const id = newEntries[i].id
+      const placeholder = newEntries[i]
+      let lines: string[]
       try {
-        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-        let lines = isPdf ? await extractPdfScheduleLines(file) : []
-        if (lines.length === 0) lines = await extractOcrScheduleLines(file)
-        const parsed = parseScheduleDocumentLines(lines)
+        lines = await extractScheduleLines(file)
+      } catch (err) {
+        updateEntry(placeholder.id, { status: 'error', errorMessage: readFailureMessage(err) })
+        return
+      }
+
+      // One row per poule the file holds — a division's whole export is one
+      // document (#486). Each section is parsed on its own, so a page whose
+      // header was lost costs that page, not the file.
+      const sections = splitScheduleDocumentSections(lines)
+      const parsedSections = sections.map((section) => ({ section, parsed: parseScheduleDocumentLines(section) }))
+      // The lock names ONE group, so in a multi-poule document it can only
+      // belong to the page that says so; the others are auto-matched as if the
+      // admin had opened the import from the Groupes page, which is what they
+      // are. Pre-filling every page with the group clicked from would map three
+      // other poules onto it, warning or no warning.
+      const lockedNumber = lockedGroupId ? groups.find((g) => g.id === lockedGroupId)?.number : undefined
+      const lockIndex = parsedSections.length === 1
+        ? 0
+        : parsedSections.findIndex((x) => !('error' in x.parsed) && x.parsed.poolNumber === lockedNumber)
+
+      const rows = parsedSections.map(({ section, parsed }, index): FileEntry => {
+        const base: FileEntry = {
+          id: `${placeholder.id}-${index}`,
+          name: parsedSections.length > 1 && !('error' in parsed)
+            ? `${file.name} · Poule ${parsed.poolNumber}`
+            : file.name,
+          status: 'reading',
+          divisionChoice: '', groupChoice: '', seasonMissing: false, mismatchWarning: null,
+        }
         if ('error' in parsed) {
-          updateEntry(id, {
+          return {
+            ...base,
             status: 'error',
             errorMessage: 'En-tête du calendrier introuvable dans ce document.',
-            extractedLines: lines,
-          })
-          return
+            extractedLines: section,
+          }
         }
-        resolveEntry(id, parsed, lines)
-      } catch {
-        updateEntry(id, { status: 'error', errorMessage: 'Impossible de lire ce fichier.' })
-      }
+        return resolveEntry(base, parsed, section, index === lockIndex)
+      })
+      replaceEntry(placeholder.id, rows)
     }))
   }
 
@@ -305,7 +369,7 @@ export function ImportScheduleDocumentModal({
               )}
               {imported.skippedSchedules.length > 0 && (
                 <p className="text-sm text-amber-700">
-                  {plural(imported.skippedSchedules.length, 'fichier')} ignoré{imported.skippedSchedules.length > 1 ? 's' : ''} (saison ou division introuvable).
+                  {plural(imported.skippedSchedules.length, 'poule')} ignorée{imported.skippedSchedules.length > 1 ? 's' : ''} (saison ou division introuvable).
                 </p>
               )}
               {imported.skippedMatches > 0 && (
@@ -500,7 +564,7 @@ export function ImportScheduleDocumentModal({
                 ? 'Import…'
                 : readyEntries.length === 0
                   ? 'Rien à importer'
-                  : `Importer ${plural(totalMatches, 'match')} (${plural(readyEntries.length, 'fichier')})`}
+                  : `Importer ${plural(totalMatches, 'match')} (${plural(readyEntries.length, 'poule')})`}
             </button>
           )}
         </div>
