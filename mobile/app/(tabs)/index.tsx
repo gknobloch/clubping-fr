@@ -41,7 +41,7 @@ export default function HomeScreen() {
   const {
     clubs, seasons, teams, players, matchDays, games,
     phases, divisions, groups,
-    gameAvailabilities, gameSelections,
+    gameAvailabilities, gameSelections, playerSeasonLicences,
     setAvailability, clearAvailability, setGameSelection,
     refreshing, refresh,
   } = useAppData()
@@ -440,6 +440,8 @@ export default function HomeScreen() {
             matchDays,
             games,
             gameSelections,
+            playerSeasonLicences,
+            seasonId: seasons.find((s) => s.status === 'active')?.id,
           }}
           onSave={(ids) => setGameSelection(myActiveTeam.id, composeGame.id, ids)}
           onClose={() => setComposeGameId(null)}

@@ -38,7 +38,7 @@ type Status =
 export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClose: () => void }) {
   const {
     clubs, phases, players, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
-    playerSeasonCategories, setPlayerSeasonCategories,
+    playerSeasonCategories, setPlayerSeasonCategories, setClubSeasonLicences,
   } = useAppData()
 
   const club = clubs.find((c) => c.id === clubId)
@@ -112,6 +112,18 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
     // ours — drop anything that came back for another club rather than trust it.
     const ours = licences.filter((l) => sameClubNumber(l.clubNumber, club.affiliationNumber))
     showRows(ours, playersMissingFromFftt(ours, clubPlayers))
+    // Who holds a validated licence this season is a fact about this listing,
+    // not about which fields an admin then ticks — so it is recorded here, and
+    // for the whole club at once, since only a club-wide fetch can say who is
+    // absent from it (#488).
+    if (seasonId) {
+      const listed = new Set(ours.map((l) => l.licence.trim()))
+      setClubSeasonLicences(
+        clubId,
+        seasonId,
+        clubPlayers.filter((p) => listed.has((p.licenseNumber ?? '').trim())).map((p) => p.id),
+      )
+    }
   }
 
   const toggleField = (licence: string, key: string) => {

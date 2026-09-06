@@ -26,7 +26,13 @@ const mockData: {
   phases: Phase[]
   seasons: Season[]
   playerPhasePoints: never[]
-} = { players: [], clubs: [], teams: [], phases: [], seasons: [], playerPhasePoints: [] }
+  // Per-season facts about a licensee (#482, #488) — none in these fixtures.
+  playerSeasonCategories: never[]
+  playerSeasonLicences: never[]
+} = {
+  players: [], clubs: [], teams: [], phases: [], seasons: [],
+  playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
+}
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))

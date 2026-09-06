@@ -39,8 +39,8 @@ export default function MatchDetailScreen() {
   const router = useRouter()
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, divisions, groups,
-    gameAvailabilities, gameSelections, playerPhasePoints,
+    clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
+    gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
     setAvailability, clearAvailability, setGameSelection,
   } = useAppData()
 
@@ -313,6 +313,8 @@ export default function MatchDetailScreen() {
             matchDays,
             games,
             gameSelections,
+            playerSeasonLicences,
+            seasonId: seasons.find((s) => s.status === 'active')?.id,
           }}
           onSave={(ids) => setGameSelection(team.id, game.id, ids)}
           onClose={() => setShowCompose(false)}

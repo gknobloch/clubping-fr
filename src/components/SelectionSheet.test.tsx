@@ -16,6 +16,7 @@ function renderSheet({
   roster = [player('r1', 'Alice', 'Martin'), player('r2', 'Bob', 'Durand')],
   others = [] as Player[],
   initialSelection = [] as string[],
+  unlicensed = undefined as ReadonlySet<string> | undefined,
   onSave = vi.fn(),
 } = {}) {
   render(
@@ -27,6 +28,7 @@ function renderSheet({
       initialSelection={initialSelection}
       availabilityOf={() => undefined}
       committedElsewhere={new Map()}
+      unlicensed={unlicensed}
       onSave={onSave}
       onClose={vi.fn()}
     />,
@@ -106,5 +108,64 @@ describe('SelectionSheet — joueurs archivés (#454)', () => {
       initialSelection: ['r2'],
     })
     expect(screen.getByText('Bob Durand')).toBeInTheDocument()
+  })
+})
+
+// #488 — a member the FFTT has not listed a licence for this season may not be
+// fielded. The sheet is where that mistake would be made, so it says so twice:
+// beside the name, and about the line-up as it stands.
+describe('SelectionSheet — licence not validated (#488)', () => {
+  it('tags the name, without removing them from the list', () => {
+    renderSheet({ unlicensed: new Set(['r2']) })
+    const row = screen.getByRole('button', { name: /Bob Durand/ })
+    expect(row).toHaveTextContent('Sans licence')
+    expect(screen.getByRole('button', { name: /Alice Martin/ })).not.toHaveTextContent('Sans licence')
+  })
+
+  it('says nothing at all until one of them is actually picked', () => {
+    renderSheet({ unlicensed: new Set(['r2']) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('names the player once one is on the sheet', async () => {
+    const user = userEvent.setup()
+    renderSheet({ unlicensed: new Set(['r2']) })
+    await user.click(screen.getByRole('button', { name: /Bob Durand/ }))
+    expect(screen.getByRole('alert'))
+      .toHaveTextContent(/Bob Durand n’a pas de licence validée pour cette saison/)
+  })
+
+  it('names all of them when several are, and counts them', async () => {
+    const user = userEvent.setup()
+    renderSheet({ unlicensed: new Set(['r1', 'r2']) })
+    await user.click(screen.getByRole('button', { name: /Alice Martin/ }))
+    await user.click(screen.getByRole('button', { name: /Bob Durand/ }))
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('2 joueurs alignés')
+    expect(alert).toHaveTextContent('Alice Martin, Bob Durand')
+  })
+
+  it('withdraws the warning when the player is taken back off', async () => {
+    const user = userEvent.setup()
+    renderSheet({ unlicensed: new Set(['r2']), initialSelection: ['r2'] })
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Bob Durand/ }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  // It never blocks: an unvalidated licence is usually a renewal in flight, and
+  // the captain is the one who knows.
+  it('still saves the line-up it warned about', async () => {
+    const user = userEvent.setup()
+    const { onSave } = renderSheet({ unlicensed: new Set(['r2']) })
+    await user.click(screen.getByRole('button', { name: /Bob Durand/ }))
+    await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(onSave).toHaveBeenCalledWith(['r2'])
+  })
+
+  it('is silent for a club whose licences are simply not known', () => {
+    renderSheet()
+    expect(screen.queryByText('Sans licence')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

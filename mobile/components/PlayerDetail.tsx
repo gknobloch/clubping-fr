@@ -10,6 +10,10 @@ import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
 import { fonts } from '@/constants/typography'
 import { pointsFor } from '@shared/lib/phasePoints'
+import { categoryFor } from '@shared/lib/seasonCategories'
+import { categoryDisplay } from '@shared/lib/playerCategories'
+import { clubLicences } from '@shared/lib/seasonLicences'
+import { LicenceTag } from '@/components/LicenceTag'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -32,7 +36,10 @@ export function PlayerDetail({
   embedded?: boolean
 }) {
   const id = playerId
-  const { players, teams, clubs, phases, seasons, playerPhasePoints } = useAppData()
+  const {
+    players, teams, clubs, phases, seasons, playerPhasePoints,
+    playerSeasonCategories, playerSeasonLicences,
+  } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
   const [avatarOpen, setAvatarOpen] = useState(false)
@@ -49,6 +56,17 @@ export function PlayerDetail({
   // Points belong to (phase, player) since #384 — a player with no team this
   // phase still has them.
   const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, id)
+
+  // A category belongs to a season, not to the licensee (#482): a cadet becomes
+  // a junior, and last season's answer is not this season's.
+  const category = categoryDisplay(categoryFor(playerSeasonCategories, activeSeason?.id, id))
+
+  // And whether the federation listed their licence at all this season (#488).
+  const unlicensed = !!player && clubLicences(
+    playerSeasonLicences,
+    activeSeason?.id,
+    players.filter((p) => p.clubId === player.clubId).map((p) => p.id),
+  ).statusOf(player.id) === 'missing'
 
   // The pushed screen names itself after the licencié. In a pane there is no
   // such header to set — the one above belongs to the section, and is «Joueurs».
@@ -81,10 +99,20 @@ export function PlayerDetail({
           onAvatarPress={player.avatarUpdatedAt ? () => setAvatarOpen(true) : undefined}
         />
 
+        {unlicensed && (
+          <View style={styles.section}>
+            <LicenceTag />
+            <Text style={styles.licenceNote}>
+              La FFTT n’a pas listé sa licence pour cette saison.
+            </Text>
+          </View>
+        )}
+
         {/* Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informations</Text>
           {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+          <InfoRow label="Catégorie" value={category || 'Inconnue'} />
           {phasePoints && <InfoRow label="Points" value={phasePoints} />}
           {player.email && <InfoRow label="Email" value={player.email} />}
           {player.phone && (
@@ -167,6 +195,8 @@ const styles = StyleSheet.create({
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 
   identityCard: { marginHorizontal: 16 },
+
+  licenceNote: { marginTop: 6, fontSize: 12, color: colors.textSecondary },
 
   // Padded section (Informations)
   section: {

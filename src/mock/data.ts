@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -189,6 +189,17 @@ export const mockPlayerSeasonCategories: PlayerSeasonCategory[] = basePlayers.ma
   playerId: p.id,
   category: MOCK_CATEGORIES[p.id] ?? 'S',
 }))
+
+/**
+ * Which licences the FFTT listed this season (#488). Stéphane Lach is left out
+ * on purpose: without someone unlisted, neither the "Sans licence" tag nor the
+ * line-up warning has anything to show.
+ */
+const UNLICENSED = new Set(['p2-player-3'])
+
+export const mockPlayerSeasonLicences: PlayerSeasonLicence[] = basePlayers
+  .filter((p) => !UNLICENSED.has(p.id))
+  .map((p) => ({ seasonId: ACTIVE_SEASON_ID, playerId: p.id }))
 
 // ---------------------------------------------------------------------------
 // Competitions (#482)

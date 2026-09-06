@@ -62,20 +62,33 @@ function fakeDb(
           }
           return null
         },
-        async all() { return { results: [] } },
+        async all() {
+          if (sql.includes('FROM users WHERE club_id = ?')) {
+            return { results: users.filter((u) => u.club_id === params[0]).map((u) => ({ id: u.id })) }
+          }
+          return { results: [] }
+        },
         async run() {
           writes.push({ sql, params })
           return { success: true }
         },
       })
       return {
-        bind: (...params: unknown[]) => bound(params),
+        bind: (...params: unknown[]) => ({ ...bound(params), __write: { sql, params } }),
         async first() { return null },
         async all() { return { results: [] } },
         async run() { writes.push({ sql, params: [] }); return { success: true } },
       }
     },
-    async batch(stmts: unknown[]) { return stmts.map(() => ({ success: true })) },
+    // The licence route writes in one batch (#488); the fake records the bound
+    // statements so a test can read what it would have written.
+    async batch(stmts: unknown[]) {
+      for (const stmt of stmts) {
+        const recorded = (stmt as { __write?: { sql: string; params: unknown[] } }).__write
+        if (recorded) writes.push(recorded)
+      }
+      return stmts.map(() => ({ success: true }))
+    },
   } as unknown as D1Database
   return { db, writes }
 }
@@ -564,8 +577,9 @@ describe('a category is written against a season (#482)', () => {
       ],
     })
     expect(res.status).toBe(200)
-    // Batched, so the writes go through db.batch rather than run().
-    expect(writes.filter((w) => /player_season_categories/.test(w.sql))).toEqual([])
+    const upserts = writes.filter((w) => /INSERT INTO player_season_categories/.test(w.sql))
+    expect(upserts.map((w) => w.params))
+      .toEqual([['27', 'p-cadet', 'C1'], ['27', 'p-senior', 'S']])
   })
 
   it('accepts an empty batch without touching anything', async () => {
@@ -604,5 +618,61 @@ describe('a category is written against a season (#482)', () => {
     })
     expect(res.status).toBe(200)
     expect(writes.find((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))).toBeDefined()
+  })
+})
+
+// #488 — which licences the FFTT listed for a season. A replacement, not an
+// addition: the set answers "who did the last import list?", so whoever has
+// dropped off it drops off here.
+describe('the licences a season lists (#488)', () => {
+  const route = `/clubs/${CLUB}/seasons/27/licences`
+
+  it('clears the club\'s season before writing what the import listed', async () => {
+    const { db, writes } = fakeDb([clubAdmin, cadet, senior], [], 'ca')
+    const res = await send(db, route, 'PUT', { playerIds: ['p-cadet', 'p-senior'] })
+    expect(res.status).toBe(200)
+
+    const licenceWrites = writes.filter((w) => /player_season_licences/.test(w.sql))
+    expect(licenceWrites[0].sql).toMatch(/^DELETE FROM player_season_licences/)
+    expect(licenceWrites[0].params).toEqual(['27', CLUB])
+    expect(licenceWrites.slice(1).map((w) => w.params))
+      .toEqual([['27', 'p-cadet'], ['27', 'p-senior']])
+  })
+
+  // An empty list is a real answer — the federation listed nobody — and must
+  // still clear what the previous import left behind.
+  it('accepts an empty list, which clears the season', async () => {
+    const { db, writes } = fakeDb([clubAdmin, cadet], [], 'ca')
+    const res = await send(db, route, 'PUT', { playerIds: [] })
+    expect(res.status).toBe(200)
+    const licenceWrites = writes.filter((w) => /player_season_licences/.test(w.sql))
+    expect(licenceWrites).toHaveLength(1)
+    expect(licenceWrites[0].sql).toMatch(/^DELETE/)
+  })
+
+  it('drops a player who is not of this club, rather than filing them under it', async () => {
+    const { db, writes } = fakeDb([clubAdmin, cadet, outsider], [], 'ca')
+    await send(db, route, 'PUT', { playerIds: ['p-cadet', 'p-outsider'] })
+    const inserts = writes.filter((w) => /INSERT OR IGNORE INTO player_season_licences/.test(w.sql))
+    expect(inserts.map((w) => w.params)).toEqual([['27', 'p-cadet']])
+  })
+
+  it('refuses a club that is not the admin\'s own', async () => {
+    const { db, writes } = fakeDb([otherClubAdmin, cadet], [], 'ca2')
+    const res = await send(db, route, 'PUT', { playerIds: ['p-cadet'] })
+    expect(res.status).toBe(403)
+    expect(writes.filter((w) => /player_season_licences/.test(w.sql))).toEqual([])
+  })
+
+  it('refuses a player who is not an admin at all', async () => {
+    const { db } = fakeDb([cadet], [], 'p-cadet')
+    expect((await send(db, route, 'PUT', { playerIds: [] })).status).toBe(403)
+  })
+
+  it('refuses a body that names no list', async () => {
+    const { db } = fakeDb([clubAdmin], [], 'ca')
+    const res = await send(db, route, 'PUT', {})
+    expect(res.status).toBe(400)
+    expect(await errorOf(res)).toBe('bad_request')
   })
 })

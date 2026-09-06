@@ -477,6 +477,13 @@ INSERT INTO player_season_categories (season_id, player_id, category) VALUES
   ('26', 'p2-player-25', 'S')
 ;
 
+-- Which licences the FFTT listed for the season (#488). Everyone the import
+-- read a category off was listed — except Stéphane Lach, left out on purpose so
+-- the "Sans licence" tag and the line-up warning have something to show.
+INSERT INTO player_season_licences (season_id, player_id)
+SELECT season_id, player_id FROM player_season_categories
+WHERE player_id <> 'p2-player-3';
+
 -- user_avatars — a sample avatar so the authed-image round trip (GET/PUT
 -- /api/users/:id/avatar) is exercisable locally. 1x1 transparent PNG.
 INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES

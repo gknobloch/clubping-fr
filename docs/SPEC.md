@@ -205,6 +205,24 @@ readable. Eligibility, being a question about the season being played, always
 reads the active season's; a player's own page shows the category beside the
 season it belongs to, above that season's phases and the points they hold there.
 
+### Licence validée
+
+A licence is validated for a season, and until it is, its holder may not be
+fielded. The club import already knows who is concerned — it lists the members
+the federation did not return — so that answer is kept rather than shown once
+and forgotten: whoever the last club-wide import did not list carries a **Sans
+licence** tag beside their name, everywhere their name appears, and a captain
+who puts them on a team sheet is told so by name before saving it.
+
+It is a warning and never a refusal. An unvalidated licence is usually a renewal
+still going through, the club is the one that knows, and a line-up that has to
+be made today should not be blocked by a record that will be right tomorrow.
+
+Saying nothing is also an answer. No licence on file for a club that has never
+imported means only that nobody has asked the federation, so no member of such a
+club is tagged — the question is only answered for a club that has imported at
+least once for that season.
+
 ### Eligibility
 
 A licensee is eligible to **as many competitions as the mapping allows**: a

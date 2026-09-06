@@ -9,6 +9,8 @@ import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
+import { activeSeasonId } from '@/lib/season'
+import { clubLicences } from '@/lib/seasonLicences'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
@@ -35,6 +37,7 @@ export function MatchDayDetailPage() {
   const {
     teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
     competitions, competitionEligibilities, setGameSelection,
+    playerSeasonLicences, seasons,
   } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
@@ -107,6 +110,17 @@ export function MatchDayDetailPage() {
     competitionOfDivision(team.divisionId, divisions, competitions),
     competitionEligibilities.filter((e) => e.clubId === team.clubId),
   )
+
+  // Whose licence the federation has not listed this season (#488). Not a
+  // filter: an unvalidated licence is usually a renewal in flight, so the sheet
+  // says so beside the name rather than removing them from it.
+  // Not memoised: this sits past the component's early returns, where a hook
+  // may not go, and it is one pass over the club.
+  const unlicensed = (() => {
+    const clubIds = players.filter((p) => p.clubId === team.clubId).map((p) => p.id)
+    const { statusOf } = clubLicences(playerSeasonLicences, activeSeasonId(seasons), clubIds)
+    return new Set(clubIds.filter((id) => statusOf(id) === 'missing'))
+  })()
 
   // Already fielded by another of the club's teams this round — pickable
   // nowhere else, so the sheet locks them and says where they are.
@@ -313,6 +327,7 @@ export function MatchDayDetailPage() {
           initialSelection={selectedIds}
           availabilityOf={(playerId) => getAvailability(game.id, playerId)}
           committedElsewhere={committedElsewhere}
+          unlicensed={unlicensed}
           onSave={(playerIds) => setGameSelection(game.id, team.id, playerIds)}
           onClose={() => setComposing(false)}
         />

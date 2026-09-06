@@ -9,6 +9,7 @@ import {
   filterPlayersBySearch,
 } from '@/lib/playerSearch'
 import { selectablePlayers } from '@/lib/playerVisibility'
+import { LicenceBadge } from '@/components/LicenceBadge'
 import type { AvailabilityStatus, Player } from '@/types'
 
 /**
@@ -33,6 +34,8 @@ export function SelectionSheet({
   availabilityOf,
   /** playerId → team number already fielding them this round. */
   committedElsewhere,
+  /** Those the federation has not listed a licence for this season (#488). */
+  unlicensed,
   onSave,
   onClose,
 }: {
@@ -43,6 +46,7 @@ export function SelectionSheet({
   initialSelection: string[]
   availabilityOf: (playerId: string) => AvailabilityStatus | undefined
   committedElsewhere: Map<string, number>
+  unlicensed?: ReadonlySet<string>
   onSave: (playerIds: string[]) => void
   onClose: () => void
 }) {
@@ -51,6 +55,15 @@ export function SelectionSheet({
   const [query, setQuery] = useState('')
 
   const full = selection.length >= playersPerGame
+
+  // Named, not counted: a captain needs to know *who* to check on, and the
+  // sheet is where the mistake would be made (#488).
+  const pickedUnlicensed = useMemo(() => {
+    if (!unlicensed?.size) return []
+    return [...roster, ...others]
+      .filter((p) => selection.includes(p.id) && unlicensed.has(p.id))
+      .map((p) => `${p.firstName} ${p.lastName}`)
+  }, [selection, roster, others, unlicensed])
 
   const toggle = (playerId: string) => {
     setLimitHit(false)
@@ -106,12 +119,15 @@ export function SelectionSheet({
           >
             ✓
           </span>
-          <span
-            className={`min-w-0 flex-1 truncate text-sm ${
-              locked ? 'text-slate-400' : picked ? 'font-semibold text-slate-900' : 'text-slate-800'
-            }`}
-          >
-            {player.firstName} {player.lastName}
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              className={`min-w-0 truncate text-sm ${
+                locked ? 'text-slate-400' : picked ? 'font-semibold text-slate-900' : 'text-slate-800'
+              }`}
+            >
+              {player.firstName} {player.lastName}
+            </span>
+            {unlicensed?.has(player.id) && <LicenceBadge />}
           </span>
           {locked ? (
             <span className="shrink-0 text-xs text-slate-500">Équipe {lockedTeam}</span>
@@ -137,6 +153,14 @@ export function SelectionSheet({
           <h2 id="selection-title" className="font-display text-base font-bold text-slate-800">
             Sélection — {teamLabel} ({selection.length}/{playersPerGame})
           </h2>
+          {pickedUnlicensed.length > 0 && (
+            <p role="alert" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {pickedUnlicensed.length === 1
+                ? `${pickedUnlicensed[0]} n’a pas de licence validée pour cette saison à la FFTT.`
+                : `${pickedUnlicensed.length} joueurs alignés n’ont pas de licence validée pour cette saison à la FFTT : ${pickedUnlicensed.join(', ')}.`}
+              {' '}Vérifiez avant la rencontre.
+            </p>
+          )}
           {limitHit && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Maximum {playersPerGame} joueurs par match. Retirez un joueur avant d’en ajouter un

@@ -11,8 +11,12 @@ import {
   filterPlayersBySearch,
 } from '@shared/lib/playerSearch'
 import { selectablePlayers } from '@shared/lib/playerVisibility'
+import { clubLicences } from '@shared/lib/seasonLicences'
+import { LicenceTag } from '@/components/LicenceTag'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
-import type { AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection } from '@shared/types'
+import type {
+  AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection, PlayerSeasonLicence,
+} from '@shared/types'
 import { fonts } from '@/constants/typography'
 
 export interface SelectionData {
@@ -22,6 +26,9 @@ export interface SelectionData {
   matchDays: MatchDay[]
   games: Game[]
   gameSelections: GameSelection[]
+  /** Licences the FFTT listed, and the season to read them for (#488). */
+  playerSeasonLicences?: PlayerSeasonLicence[]
+  seasonId?: string
 }
 
 // Bottom-sheet line-up picker for captains: this team's roster plus other
@@ -49,8 +56,28 @@ export function CaptainSelectionSheet({
   onClose: () => void
 }) {
   const [selection, setSelection] = useState<string[]>(initialSelection)
+
   const [query, setQuery] = useState('')
-  const { matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections } = selectionData
+  const {
+    matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections,
+    playerSeasonLicences = [], seasonId,
+  } = selectionData
+
+  // Not a filter: an unvalidated licence is usually a renewal in flight, so the
+  // sheet flags it beside the name rather than hiding the player (#488).
+  const unlicensed = useMemo(() => {
+    const ids = allClubPlayers.map((p) => p.id)
+    const { statusOf } = clubLicences(playerSeasonLicences, seasonId, ids)
+    return new Set(ids.filter((id) => statusOf(id) === 'missing'))
+  }, [allClubPlayers, playerSeasonLicences, seasonId])
+  // Named, not counted: a captain needs to know *who* to check on, and this
+  // sheet is where the mistake would be made (#488).
+  const pickedUnlicensed = useMemo(
+    () => allClubPlayers
+      .filter((p) => selection.includes(p.id) && unlicensed.has(p.id))
+      .map((p) => `${p.firstName} ${p.lastName}`),
+    [selection, allClubPlayers, unlicensed],
+  )
 
   // Archived players have left the club and are not offered (#454); the web
   // sheet has always filtered them out, this one did not. `initialSelection`
@@ -110,9 +137,12 @@ export function CaptainSelectionSheet({
         <View style={[sel.check, picked && sel.checkActive]}>
           {picked && <Text style={sel.checkMark}>✓</Text>}
         </View>
-        <Text style={[sel.playerName, picked && sel.playerNamePicked]}>
-          {p.firstName} {p.lastName}
-        </Text>
+        <View style={sel.nameCell}>
+          <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
+            {p.firstName} {p.lastName}
+          </Text>
+          {unlicensed.has(p.id) && <LicenceTag />}
+        </View>
         {locked ? (
           <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
         ) : cfg ? (
@@ -131,6 +161,14 @@ export function CaptainSelectionSheet({
       <Text style={sel.title}>
         Sélection — {getTeamName(team, clubs)} ({selection.length}/{playersPerGame})
       </Text>
+      {pickedUnlicensed.length > 0 && (
+        <Text style={sel.licenceWarning}>
+          {pickedUnlicensed.length === 1
+            ? `${pickedUnlicensed[0]} n’a pas de licence validée pour cette saison à la FFTT.`
+            : `${pickedUnlicensed.length} joueurs alignés n’ont pas de licence validée pour cette saison à la FFTT : ${pickedUnlicensed.join(', ')}.`}
+          {' '}Vérifiez avant la rencontre.
+        </Text>
+      )}
       {searchable && (
         <TextInput
           style={sel.search}
@@ -178,6 +216,11 @@ export function CaptainSelectionSheet({
 }
 
 const sel = StyleSheet.create({
+  nameCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  licenceWarning: {
+    marginBottom: 8, borderRadius: 8, backgroundColor: '#FEF3C7',
+    paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, color: '#92400E',
+  },
   title: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 8 },
   sectionLabel: {
     fontSize: 11, fontFamily: fonts.bold, color: colors.textSecondary,
@@ -203,7 +246,7 @@ const sel = StyleSheet.create({
   },
   checkActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   checkMark: { color: '#fff', fontSize: 12, fontFamily: fonts.bold },
-  playerName: { flex: 1, fontSize: 15, color: colors.textPrimary },
+  playerName: { flexShrink: 1, fontSize: 15, color: colors.textPrimary },
   playerNamePicked: { fontFamily: fonts.semiBold, color: colors.accent },
   availChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   availTxt: { fontSize: 11, fontFamily: fonts.semiBold },

@@ -52,6 +52,7 @@ const initialData: DataState = {
   groups: [groupOne, groupTwo],
   teams: [team('team-a', 1, 'group-1'), team('team-b', 2, 'group-1'), team('team-c', 3, 'group-2'), team('team-d', 4, 'group-2')],
   playerSeasonCategories: [],
+  playerSeasonLicences: [],
   playerPhasePoints: [],
   players: [player('p1')],
   matchDays: [

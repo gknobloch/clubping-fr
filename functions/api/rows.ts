@@ -203,6 +203,12 @@ export interface PlayerPhasePointsRow {
   points: string
 }
 
+/** (season_id, player_id): the FFTT listed this licence for that season (#488). */
+export interface PlayerSeasonLicenceRow {
+  season_id: string
+  player_id: string
+}
+
 /** (season_id, player_id) → the FFTT category, verbatim (#482). */
 export interface PlayerSeasonCategoryRow {
   season_id: string
