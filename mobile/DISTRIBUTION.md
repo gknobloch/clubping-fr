@@ -84,9 +84,17 @@ is pinned in `eas.json` under `submit.production.ios.ascAppId`.
 App Store Connect holds a *version record* — the "1.0" or "1.2.0" at the top of the
 Distribution tab — and it is created by hand there, not by the upload. A build can only
 be attached to a record whose number matches its `CFBundleShortVersionString`, which is
-`expo.version` from `app.json`. When the store page and this repo disagree about the
-number, it is the record that is wrong or that was never created for the new version:
-check which build the live record actually carries before concluding a release shipped.
+`expo.version` from `app.json`.
+
+The record that first went through review says **1.0**, left over from an early
+submission attempt made before the repo reached 1.1.x. It is history, not a convention:
+from here every release creates a **new** record carrying the exact `expo.version` of
+the build it will hold — 1.2.0, 1.3.0, and so on. Never rename or reuse an old record to
+avoid making one.
+
+So when the store page and this repo disagree about the number, the record is what is
+behind: check which build the live record actually carries before concluding that a
+version shipped.
 
 ## The store page's language comes from the binary, not from App Store Connect
 
@@ -257,6 +265,40 @@ it. `--auto-submit` submits the artifact it just produced.
 
 Builds land on the `internal` track. Promote to `closed`, `open` or `production` from
 the Play Console, or change `track` in `eas.json`.
+
+---
+
+# `eas update` — what can skip the stores
+
+The app is set up for over-the-air updates and nothing in this repo said so: `app.json`
+carries `updates.url`, `eas.json` gives the `preview` and `production` profiles a
+`channel`, and `runtimeVersion` is on the `appVersion` policy.
+
+That last one is the rule that matters. **The runtime version *is* `expo.version`**, so
+an update only reaches installs built from the same version string. Two consequences:
+
+- Publish the update **while the repo is still on the version people have installed**.
+  Bump `expo.version` to 1.3.0 first and the update targets a runtime that exists
+  nowhere yet — it reaches nobody, and the members on 1.2.0 never learn it happened.
+- After a store release, the previous version stops receiving anything. Members who do
+  not update are frozen where they are; only a store update moves them.
+
+What can go OTA: JS and TypeScript, the shared code under `src/lib` and `src/types`,
+images and fonts bundled by Metro. What cannot: anything in `app.json` beyond that
+(`Info.plist`, entitlements, `AndroidManifest.xml`), a new native module, an Expo SDK
+bump — those are the binary, and an update that assumes them crashes on a build that
+does not have them.
+
+```bash
+eas update --branch production --message "…"
+```
+
+Both stores allow it for fixes and content within what the app already does. Reserve it
+for that: an OTA has **no notes anywhere** (see below), no consent, and no trace on
+either store page — a member's app simply changes under them, on the next launch or the
+one after. Anything a member would notice deserves a real release with a version number
+and notes. Whatever does go out this way still belongs in `mobile/CHANGELOG.md`, folded
+into the section of the version that carries it.
 
 ---
 

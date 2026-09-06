@@ -44,6 +44,26 @@ sees on the web, not what is installed on their phone.
 change still costs an App Store review and asks every tester to download the
 same app again. Let the user decide whether it is worth it.
 
+### A store release, or an `eas update`?
+
+This project can also ship over the air: `app.json` has `updates.url`, the
+`production` profile has a channel, and `runtimeVersion` is on the `appVersion`
+policy. Say which of the two a change needs rather than assuming a release.
+
+It **must** be a store release — an OTA cannot carry it — when the diff touches
+`mobile/app.json` beyond the version, `mobile/plugins/`, a native dependency or
+the Expo SDK. It **should** be a store release, even when an OTA could carry it,
+for anything a member would notice: an OTA has no version number, no notes on
+either store, no consent, and no trace — the app just changes under them on a
+later launch. A crash fix or a wrong label is what OTA is for.
+
+If an OTA is the answer, one thing decides whether it works: `appVersion` policy
+means the runtime version *is* `expo.version`, so **publish before bumping**.
+`eas update --branch production --message "…"` while the repo still says 1.2.0
+reaches the 1.2.0 installs; run it after a bump to 1.3.0 and it targets a runtime
+nobody has yet. Fold what went out into the current version's section of
+`mobile/CHANGELOG.md` either way. `mobile/DISTRIBUTION.md` has the rest.
+
 ## 2. Decide major, minor or patch
 
 Judge by what a **member notices**, not by the size of the diff. A 400-line
