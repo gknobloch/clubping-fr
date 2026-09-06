@@ -4,6 +4,7 @@ import {
   canMoveDivisionUp,
   divisionDisplayName,
   ffttIdFromIri,
+  isFfttContestIdentifier,
   orderDivisions,
   playersPerGameFor,
   type FfttDivision,
@@ -157,5 +158,34 @@ describe('divisionDisplayName', () => {
   it('leaves names with no marker alone', () => {
     expect(divisionDisplayName('Division 234020')).toBe('Division 234020')
     expect(divisionDisplayName('')).toBe('')
+  })
+})
+
+// #482 — a shape check on the identifier an older client may still send.
+// Nothing is interpolated into a query any more (see the function's own note),
+// so this is no longer a security boundary; the real ones are taken from three
+// live listings.
+describe('isFfttContestIdentifier', () => {
+  it('accepts the identifiers FFTT issues', () => {
+    expect(isFfttContestIdentifier('1')).toBe(true)
+    expect(isFfttContestIdentifier('TO')).toBe(true)
+    expect(isFfttContestIdentifier('L06-V')).toBe(true)
+    expect(isFfttContestIdentifier('FRC-Q')).toBe(true)
+    expect(isFfttContestIdentifier('OPR21')).toBe(true)
+    expect(isFfttContestIdentifier('L07TD')).toBe(true)
+  })
+
+  it('refuses anything that could end a string literal', () => {
+    expect(isFfttContestIdentifier('1" name: "x')).toBe(false)
+    expect(isFfttContestIdentifier('1\\')).toBe(false)
+    expect(isFfttContestIdentifier('a b')).toBe(false)
+    expect(isFfttContestIdentifier('{')).toBe(false)
+  })
+
+  it('refuses what is empty, oversized, or not a string at all', () => {
+    expect(isFfttContestIdentifier('')).toBe(false)
+    expect(isFfttContestIdentifier('x'.repeat(21))).toBe(false)
+    expect(isFfttContestIdentifier(1)).toBe(false)
+    expect(isFfttContestIdentifier(undefined)).toBe(false)
   })
 })

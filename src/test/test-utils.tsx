@@ -18,16 +18,22 @@ import {
   mockGameAvailabilities,
   mockGameSelections,
   mockUsers,
+  mockCompetitions,
+  mockCompetitionEligibilities,
+  mockPlayerSeasonCategories,
 } from '@/mock/data'
 
 const testData = {
   divisions: mockDivisions,
+  competitions: mockCompetitions,
+  competitionEligibilities: mockCompetitionEligibilities,
   clubs: mockClubs,
   seasons: mockSeasons,
   phases: mockPhases,
   groups: mockGroups,
   teams: mockTeams,
   players: mockPlayers,
+  playerSeasonCategories: mockPlayerSeasonCategories,
   playerPhasePoints: mockPlayerPhasePoints,
   matchDays: mockMatchDays,
   games: mockGames,

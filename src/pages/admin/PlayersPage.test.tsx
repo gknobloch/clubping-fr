@@ -40,6 +40,11 @@ vi.mock('@/contexts/DataContext', () => ({
     clubs: [club],
     updatePlayer: data.updatePlayer,
     addPlayer: data.addPlayer,
+    // A category is stated per season (#482); these fixtures hold none.
+    seasons: [{ id: '26', displayName: '2025/2026', status: 'active' }],
+    playerSeasonCategories: [],
+    setPlayerSeasonCategories: vi.fn(),
+    clearPlayerSeasonCategory: vi.fn(),
   }),
 }))
 
@@ -54,7 +59,7 @@ async function openEditor(name: string) {
 
 beforeEach(() => {
   data.updatePlayer.mockClear()
-  data.addPlayer.mockClear()
+  data.addPlayer.mockClear().mockReturnValue({ id: 'p-new' })
 })
 
 describe('PlayersPage — e-mail is optional (#315)', () => {

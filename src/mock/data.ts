@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, Address, MatchDay, Game, GameAvailability, GameSelection } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -47,8 +47,11 @@ export const mockClubs: Club[] = baseClubs.map((c) => ({ ...c, channels: [] }))
 // ---------------------------------------------------------------------------
 // Season & Phase
 // ---------------------------------------------------------------------------
+/** The season the fixtures are played in — and the one categories hang off. */
+const ACTIVE_SEASON_ID = '26'
+
 export const mockSeasons: Season[] = [
-  { id: '26', displayName: '2025/2026', status: 'active' },
+  { id: ACTIVE_SEASON_ID, displayName: '2025/2026', status: 'active' },
 ]
 
 export const mockPhases: Phase[] = [
@@ -63,13 +66,13 @@ export const mockPhases: Phase[] = [
 // are orphans, same as real FFTT data — lets #236's locked reordering be
 // exercised locally without needing a live FFTT import.
 export const mockDivisions: Division[] = [
-  { id: '198609', phaseId: 'phase-26-1', displayName: 'GE 1', rank: 1, playersPerGame: 4, isArchived: false, identifier: 'GE1P1' },
-  { id: '198755', phaseId: 'phase-26-1', displayName: 'GE 2', rank: 2, playersPerGame: 4, isArchived: false, identifier: 'GE2P1', parentId: '198609' },
-  { id: '198305', phaseId: 'phase-26-1', displayName: 'GE 3', rank: 3, playersPerGame: 4, isArchived: false, identifier: 'GE3P1', parentId: '198755' },
-  { id: '198821', phaseId: 'phase-26-1', displayName: 'GE 4', rank: 4, playersPerGame: 4, isArchived: false, identifier: 'GE4P1', parentId: '198305' },
-  { id: '198895', phaseId: 'phase-26-1', displayName: 'GE 5', rank: 5, playersPerGame: 4, isArchived: false, identifier: 'GE5P1', parentId: '198821' },
-  { id: '198435', phaseId: 'phase-26-1', displayName: 'GE 6', rank: 6, playersPerGame: 3, isArchived: false, identifier: 'GE6P1' },
-  { id: '198907', phaseId: 'phase-26-1', displayName: 'GE 7', rank: 7, playersPerGame: 3, isArchived: false, identifier: 'GE7P1' },
+  { id: '198609', phaseId: 'phase-26-1', displayName: 'GE 1', rank: 1, playersPerGame: 4, isArchived: false, identifier: 'GE1P1', competitionId: 'comp-seniors' },
+  { id: '198755', phaseId: 'phase-26-1', displayName: 'GE 2', rank: 2, playersPerGame: 4, isArchived: false, identifier: 'GE2P1', competitionId: 'comp-seniors', parentId: '198609' },
+  { id: '198305', phaseId: 'phase-26-1', displayName: 'GE 3', rank: 3, playersPerGame: 4, isArchived: false, identifier: 'GE3P1', competitionId: 'comp-seniors', parentId: '198755' },
+  { id: '198821', phaseId: 'phase-26-1', displayName: 'GE 4', rank: 4, playersPerGame: 4, isArchived: false, identifier: 'GE4P1', competitionId: 'comp-seniors', parentId: '198305' },
+  { id: '198895', phaseId: 'phase-26-1', displayName: 'GE 5', rank: 5, playersPerGame: 4, isArchived: false, identifier: 'GE5P1', competitionId: 'comp-seniors', parentId: '198821' },
+  { id: '198435', phaseId: 'phase-26-1', displayName: 'GE 6', rank: 6, playersPerGame: 3, isArchived: false, identifier: 'GE6P1', competitionId: 'comp-seniors' },
+  { id: '198907', phaseId: 'phase-26-1', displayName: 'GE 7', rank: 7, playersPerGame: 3, isArchived: false, identifier: 'GE7P1', competitionId: 'comp-seniors' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -88,7 +91,7 @@ function visitedDaysAgo(days: number): string {
   return d.toISOString()
 }
 
-export const mockPlayers: Player[] = [
+const basePlayers: Player[] = [
   // Equipe 1
   { id: 'p2-player-5', firstName: 'Joris', lastName: 'Szulc', licenseNumber: '686910', email: 'joris.szulc@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011', lastSeenAt: visitedDaysAgo(0) },
   { id: 'p2-player-1', firstName: 'Grégory', lastName: 'Canaque', licenseNumber: '425881', email: 'gregory.canaque@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011', lastSeenAt: visitedDaysAgo(3) },
@@ -144,6 +147,88 @@ export const mockPlayers: Player[] = [
   { id: 'p2-player-45', firstName: 'Marie-Line', lastName: 'Wertenschlag', licenseNumber: '686416', email: 'marieline.wertenschlag@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   // Equipe 5 extra
   { id: 'p2-player-25', firstName: 'Jordan', lastName: 'Pesenti', licenseNumber: '6718937', email: 'jordan.pesenti@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
+]
+
+/**
+ * Age categories (#482), as FFTT states them.
+ *
+ * The club gets a realistic spread rather than a uniform one: team 6 is the
+ * young squad, and there are veterans scattered through the rest — otherwise
+ * the competition screens have nothing to show and every mapping looks alike.
+ * Anyone not named here is a senior, which is what most of a club is.
+ */
+const MOCK_CATEGORIES: Record<string, string> = {
+  // Equipe 6 — l'équipe jeunes
+  'p2-player-41': 'B2',  // Nathan Moreau
+  'p2-player-42': 'B1',  // Sacha Pent
+  'p2-player-43': 'M2',  // Léo Remetter
+  'p2-player-44': 'M1',  // Mathéo Scremin
+  'p2-player-39': 'C1',  // Samuel Canemolla
+  'p2-player-38': 'J2',  // Quentin Broglin
+  'p2-player-4': 'J1',   // Enzo Lotz
+  // Vétérans
+  'p2-player-7': 'V55',  // Hervé Ceroni
+  'p2-player-1': 'V40',  // Grégory Canaque
+  'p2-player-16': 'V45', // Didier Clément
+  'p2-player-30': 'V70', // Jean-Claude Laffuge
+  'p2-player-37': 'V60', // Alain Schillinger
+  'p2-player-33': 'V50', // Eric Cavasino
+  'p2-player-36': 'V50', // Bruno Lafont
+  'p2-player-24': 'V50', // Gilles Knobloch
+}
+
+export const mockPlayers: Player[] = basePlayers
+
+/**
+ * The categories, filed under the active season (#482) — a licence is issued
+ * for a season, so that is where the value lives. Everyone not named above is
+ * a senior, which is what most of a club is.
+ */
+export const mockPlayerSeasonCategories: PlayerSeasonCategory[] = basePlayers.map((p) => ({
+  seasonId: ACTIVE_SEASON_ID,
+  playerId: p.id,
+  category: MOCK_CATEGORIES[p.id] ?? 'S',
+}))
+
+// ---------------------------------------------------------------------------
+// Competitions (#482)
+// ---------------------------------------------------------------------------
+// The senior championship lists no category on purpose — an empty list admits
+// everyone, which is what keeps the existing fixtures behaving exactly as they
+// did. The other two are what the feature is for: one locked to the young, one
+// open to a club's judgement.
+export const mockCompetitions: Competition[] = [
+  {
+    // As the divisions import creates it: pinned to FFTT contest "1", with no
+    // categories, so nothing is restricted until a general admin says so. The
+    // contest's name is stored beside its identifier because the identifier
+    // alone is not unique (see migration 0048).
+    id: 'comp-seniors', displayName: 'Championnat par équipes',
+    categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+    ffttContestIdentifier: '1',
+    ffttContestName: 'FED_Championnat de France par Equipes Masculin',
+  },
+  {
+    id: 'comp-jeunes', displayName: 'Championnat jeunes',
+    categories: ['P', 'B', 'M', 'C', 'J'], isCategoryLocked: true,
+    sortOrder: 2, isArchived: false,
+    ffttContestIdentifier: '4',
+    ffttContestName: 'FED_Championnat par Equipes Jeunes',
+  },
+  {
+    id: 'comp-veterans', displayName: 'Championnat vétérans',
+    categories: ['V50', 'V55', 'V60', 'V65', 'V70', 'V75', 'V80', 'V85', 'V90'],
+    isCategoryLocked: false, sortOrder: 3, isArchived: false,
+  },
+]
+
+// One of each amendment, so both halves of the club screen have a row.
+export const mockCompetitionEligibilities: CompetitionEligibility[] = [
+  // A V45 the club fields with its veterans anyway — the competition is not
+  // locked, so this is theirs to decide.
+  { clubId: 'club-fftt-06680011', competitionId: 'comp-veterans', playerId: 'p2-player-16', effect: 'included' },
+  // And one its default would admit but who does not play that championship.
+  { clubId: 'club-fftt-06680011', competitionId: 'comp-veterans', playerId: 'p2-player-30', effect: 'excluded' },
 ]
 
 // ---------------------------------------------------------------------------

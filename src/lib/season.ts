@@ -34,3 +34,14 @@ export function seasonNameFromFftt(ffttName: string): string {
 export function seasonIdFromFftt(ffttIri: string): string {
   return ffttIri.slice(ffttIri.lastIndexOf('/') + 1)
 }
+
+/**
+ * The season everything unqualified means: the one being played.
+ *
+ * Eligibility, and the category it reads, are questions about now — a club
+ * asking "can this licensee play?" is not asking about 2023. Screens that show
+ * history (a player's own page) name their season explicitly instead.
+ */
+export function activeSeasonId(seasons: Array<{ id: string; status: string }>): string | undefined {
+  return seasons.find((s) => s.status === 'active')?.id
+}

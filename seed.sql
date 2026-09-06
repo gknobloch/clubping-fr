@@ -8,18 +8,44 @@ INSERT INTO seasons (id, display_name, status) VALUES
 INSERT INTO phases (id, season_id, name, display_name, status) VALUES
   ('phase-26-1', '26', 'Phase 1', '2025/2026 Phase 1', 'active');
 
+-- competitions (#482)
+-- The senior championship lists no category on purpose: an empty array admits
+-- everyone, so the existing fixtures behave exactly as they did. The other two
+-- are what the feature is for — one reserved to the young, one left to the
+-- club's judgement.
+-- comp-seniors carries the FFTT contest identifier the divisions import pins
+-- itself to ("1", the men's team championship): re-importing divisions finds
+-- this row rather than creating a second one.
+-- comp-seniors carries the FFTT contest the divisions import pins itself to,
+-- as the pair that identifies one: identifier "1" AND the name FFTT gives it.
+-- The identifier alone is not unique — org 15 lists "TO" twice in one season
+-- (see migration 0048) — which is why the name is stored beside it, apart from
+-- display_name so a rename cannot break the match.
+INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name) VALUES
+  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0, '1', 'FED_Championnat de France par Equipes Masculin'),
+  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0, '4', 'FED_Championnat par Equipes Jeunes'),
+  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0, NULL, NULL);
+
+-- club_competition_eligibility — one of each amendment, so both halves of the
+-- club screen have a row: a V45 the club fields with its veterans anyway, and
+-- one its default admits who does not play that championship.
+-- (club_id, competition_id, player_id) is the primary key.
+INSERT INTO club_competition_eligibility (club_id, competition_id, player_id, effect) VALUES
+  ('club-fftt-06680011', 'comp-veterans', 'p2-player-16', 'included'),
+  ('club-fftt-06680011', 'comp-veterans', 'p2-player-30', 'excluded');
+
 -- divisions
 -- Ids, identifiers and names are the real FFTT ones for 2025/2026 Phase 1
 -- (#275). GE 1 -> GE 5 form a parent chain (#236); GE 6/GE 7 are orphans here,
 -- same as real FFTT data (see src/mock/data.ts for the rationale).
-INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier) VALUES
-  ('198609', 'phase-26-1', 'GE 1', 1, 4, 0, NULL, 'GE1P1'),
-  ('198755', 'phase-26-1', 'GE 2', 2, 4, 0, '198609', 'GE2P1'),
-  ('198305', 'phase-26-1', 'GE 3', 3, 4, 0, '198755', 'GE3P1'),
-  ('198821', 'phase-26-1', 'GE 4', 4, 4, 0, '198305', 'GE4P1'),
-  ('198895', 'phase-26-1', 'GE 5', 5, 4, 0, '198821', 'GE5P1'),
-  ('198435', 'phase-26-1', 'GE 6', 6, 3, 0, NULL, 'GE6P1'),
-  ('198907', 'phase-26-1', 'GE 7', 7, 3, 0, NULL, 'GE7P1');
+INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES
+  ('198609', 'phase-26-1', 'GE 1', 1, 4, 0, NULL, 'GE1P1', 'comp-seniors'),
+  ('198755', 'phase-26-1', 'GE 2', 2, 4, 0, '198609', 'GE2P1', 'comp-seniors'),
+  ('198305', 'phase-26-1', 'GE 3', 3, 4, 0, '198755', 'GE3P1', 'comp-seniors'),
+  ('198821', 'phase-26-1', 'GE 4', 4, 4, 0, '198305', 'GE4P1', 'comp-seniors'),
+  ('198895', 'phase-26-1', 'GE 5', 5, 4, 0, '198821', 'GE5P1', 'comp-seniors'),
+  ('198435', 'phase-26-1', 'GE 6', 6, 3, 0, NULL, 'GE6P1', 'comp-seniors'),
+  ('198907', 'phase-26-1', 'GE 7', 7, 3, 0, NULL, 'GE7P1', 'comp-seniors');
 
 -- clubs
 INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES
@@ -398,6 +424,57 @@ INSERT INTO users (id, email, role, is_player, first_name, last_name, license_nu
   ('p2-player-31', 'gilles.metz@example.com', 'player', 1, 'Gilles', 'Metz', '6816164', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-45', 'marieline.wertenschlag@example.com', 'player', 1, 'Marie-Line', 'Wertenschlag', '686416', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-25', 'jordan.pesenti@example.com', 'player', 1, 'Jordan', 'Pesenti', '6718937', '', NULL, NULL, 'active', 'club-fftt-06680011')
+;
+
+-- Age categories (#482). A licence is issued for a season, so the category is
+-- stated per season, never as one value on the person — the next August's
+-- import would overwrite the value that decided this season's eligibility.
+INSERT INTO player_season_categories (season_id, player_id, category) VALUES
+  ('26', 'p2-player-5', 'S'),
+  ('26', 'p2-player-1', 'V40'),
+  ('26', 'p2-player-2', 'S'),
+  ('26', 'p2-player-3', 'S'),
+  ('26', 'p2-player-4', 'J1'),
+  ('26', 'p2-player-6', 'S'),
+  ('26', 'p2-player-10', 'S'),
+  ('26', 'p2-player-7', 'V55'),
+  ('26', 'p2-player-9', 'S'),
+  ('26', 'p2-player-8', 'S'),
+  ('26', 'p2-player-12', 'S'),
+  ('26', 'p2-player-13', 'S'),
+  ('26', 'p2-player-14', 'S'),
+  ('26', 'p2-player-11', 'S'),
+  ('26', 'p2-player-17', 'S'),
+  ('26', 'p2-player-16', 'V45'),
+  ('26', 'p2-player-19', 'S'),
+  ('26', 'p2-player-18', 'S'),
+  ('26', 'p2-player-15', 'S'),
+  ('26', 'p2-player-20', 'S'),
+  ('26', 'p2-player-22', 'S'),
+  ('26', 'p2-player-24', 'V50'),
+  ('26', 'p2-player-21', 'S'),
+  ('26', 'p2-player-23', 'S'),
+  ('26', 'p2-player-26', 'S'),
+  ('26', 'p2-player-29', 'S'),
+  ('26', 'p2-player-39', 'C1'),
+  ('26', 'p2-player-40', 'S'),
+  ('26', 'p2-player-41', 'B2'),
+  ('26', 'p2-player-42', 'B1'),
+  ('26', 'p2-player-38', 'J2'),
+  ('26', 'p2-player-43', 'M2'),
+  ('26', 'p2-player-44', 'M1'),
+  ('26', 'p2-player-33', 'V50'),
+  ('26', 'p2-player-35', 'S'),
+  ('26', 'p2-player-34', 'S'),
+  ('26', 'p2-player-36', 'V50'),
+  ('26', 'p2-player-37', 'V60'),
+  ('26', 'p2-player-32', 'S'),
+  ('26', 'p2-player-27', 'S'),
+  ('26', 'p2-player-28', 'S'),
+  ('26', 'p2-player-30', 'V70'),
+  ('26', 'p2-player-31', 'S'),
+  ('26', 'p2-player-45', 'S'),
+  ('26', 'p2-player-25', 'S')
 ;
 
 -- user_avatars — a sample avatar so the authed-image round trip (GET/PUT

@@ -8,6 +8,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
+import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
@@ -31,7 +32,10 @@ export function MatchDayDetailPage() {
   const teamId = searchParams.get('equipe')
 
   const { user } = useAuth()
-  const { teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints, setGameSelection } = useAppData()
+  const {
+    teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
+    competitions, competitionEligibilities, setGameSelection,
+  } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
@@ -89,14 +93,19 @@ export function MatchDayDetailPage() {
   const availableCount = roster.filter((p) => getAvailability(game.id, p.id) === 'available').length
 
   // Club players outside the roster who are still eligible for this team this
-  // round (brûlage). Ineligible ones are left out here rather than shown
-  // disabled: this sheet is the line-up itself, not a browse of the club.
-  const eligibleOthers = players.filter(
-    (p) =>
-      p.clubId === team.clubId &&
-      p.status === 'active' &&
-      !rosterIds.has(p.id) &&
-      isEligibleForTeam(p.id, team.id, matchDay.id),
+  // round (brûlage), and admitted by the competition its division belongs to
+  // (#482). Ineligible ones are left out here rather than shown disabled: this
+  // sheet is the line-up itself, not a browse of the club.
+  const eligibleOthers = eligiblePlayers(
+    players.filter(
+      (p) =>
+        p.clubId === team.clubId &&
+        p.status === 'active' &&
+        !rosterIds.has(p.id) &&
+        isEligibleForTeam(p.id, team.id, matchDay.id),
+    ),
+    competitionOfDivision(team.divisionId, divisions, competitions),
+    competitionEligibilities.filter((e) => e.clubId === team.clubId),
   )
 
   // Already fielded by another of the club's teams this round — pickable

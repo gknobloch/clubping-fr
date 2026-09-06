@@ -16,6 +16,7 @@ import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
 import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
+import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 
 export function TeamsPage() {
   const { user } = useAuth()
@@ -27,6 +28,8 @@ export function TeamsPage() {
     groups,
     players,
     playerPhasePoints,
+    competitions,
+    competitionEligibilities,
     updateTeam,
     moveTeamToGroup,
     addTeam,
@@ -145,9 +148,28 @@ export function TeamsPage() {
     )
   }, [allTeams, form.phaseId, editing?.id])
 
-  /** Players available to add: in club, not already in this team, not in another team in the same phase. */
+  /**
+   * The competition this team plays in, via its division (#482). Undefined —
+   * a division attached to none — restricts nobody, which is every division
+   * until a general admin says otherwise.
+   */
+  const teamCompetition = competitionOfDivision(form.divisionId, divisions, competitions)
+
+  /**
+   * Players available to add: in club, not already in this team, not in another
+   * team in the same phase, and admitted by the team's competition.
+   *
+   * The roster is where the restriction belongs, because everything else —
+   * availability, line-ups, the match sheet — derives from it. Someone already
+   * on the roster is left alone: a competition edited after the fact must not
+   * silently empty a squad.
+   */
   const availablePlayersToAdd = sortByName(
-    playersInClub.filter((p) => !form.playerIds.includes(p.id) && !playerIdsInOtherTeams.has(p.id)),
+    eligiblePlayers(
+      playersInClub.filter((p) => !form.playerIds.includes(p.id) && !playerIdsInOtherTeams.has(p.id)),
+      teamCompetition,
+      competitionEligibilities.filter((e) => e.clubId === form.clubId),
+    ),
   )
 
   // "Importer depuis la phase précédente" (#229 follow-up): only offered when
@@ -721,6 +743,14 @@ export function TeamsPage() {
                     </tbody>
                   </table>
                 </div>
+                {availablePlayersToAdd.length === 0 && teamCompetition && (
+                  // Saying why the picker is gone. Without this the form simply
+                  // offers nobody, and a club admin has no way to tell an empty
+                  // club from a competition that admits none of it (#482).
+                  <p className="mt-2 text-sm text-slate-500">
+                    Aucun autre licencié du club n'est éligible à {teamCompetition.displayName}.
+                  </p>
+                )}
                 {availablePlayersToAdd.length > 0 && (
                   <div className="mt-2">
                     {/* A searchable sheet, not a dropdown: a club of fifty made

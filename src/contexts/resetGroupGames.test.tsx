@@ -45,11 +45,13 @@ function team(id: string, number: number, groupId: string): Team {
 
 const initialData: DataState = {
   divisions: [division],
+  competitions: [], competitionEligibilities: [],
   clubs: [club],
   seasons: [season],
   phases: [phase],
   groups: [groupOne, groupTwo],
   teams: [team('team-a', 1, 'group-1'), team('team-b', 2, 'group-1'), team('team-c', 3, 'group-2'), team('team-d', 4, 'group-2')],
+  playerSeasonCategories: [],
   playerPhasePoints: [],
   players: [player('p1')],
   matchDays: [
