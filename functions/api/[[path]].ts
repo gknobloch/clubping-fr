@@ -6,7 +6,7 @@ import { jsonParseCategories, jsonParseIds } from './rows'
 import type { Address, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
-  CompetitionRow, CompetitionEligibilityRow,
+  CompetitionRow, CompetitionEligibilityRow, PlayerSeasonCategoryRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { canClubAdd } from '../../src/lib/competitionEligibility'
