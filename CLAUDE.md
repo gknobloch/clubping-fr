@@ -117,6 +117,17 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - The FFTT `<cat>` code is stored **verbatim** and normalised on read
   (`src/lib/playerCategories.ts`): youth suffixes drop (`B2` → `B`), veteran
   bands stay apart (`V50` ≠ `V60`).
+- **A category belongs to a season, not to the licensee** (0050): keyed
+  `(season_id, player_id)`, exactly as points are keyed `(phase_id, player_id)`
+  — one grain up, because nobody changes category at a phase boundary. One
+  field on `users` would have let each August's import overwrite the value that
+  decided last season's eligibility. `User.category` no longer exists; screens
+  resolve through `src/lib/seasonCategories.ts`, and everything unqualified
+  means the **active** season (`activeSeasonId`), since eligibility is a
+  question about now.
+- Clearing the field **deletes the row**. "We do not know" is the absence of a
+  category, not an empty one — an empty string would read as a code we simply
+  do not recognise.
 - **A competition is FFTT data, imported like everything else.** The `contests`
   query without its `identifier` filter lists an organisation's championships;
   `/competitions` imports from that, and the manual add is the fallback for what

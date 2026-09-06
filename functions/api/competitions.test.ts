@@ -17,7 +17,7 @@ const OTHER = 'club-fftt-06680105'
 const member = (over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow => ({
   email: null, role: 'player', is_player: 1,
   first_name: 'A', last_name: 'B', license_number: '1', phone: '',
-  birth_date: null, birth_place: null, category: null,
+  birth_date: null, birth_place: null,
   status: 'active', club_id: CLUB, first_login_at: null, last_seen_at: null,
   ...over,
 })
@@ -36,6 +36,8 @@ function fakeDb(
   users: UserRow[],
   competitions: CompetitionFixture[],
   viewerId: string | null,
+  /** Categories of the active season, by player — they live there now (#482). */
+  categories: Record<string, string> = {},
 ) {
   const writes: { sql: string; params: unknown[] }[] = []
   const db = {
@@ -52,6 +54,11 @@ function fakeDb(
           }
           if (sql.includes('FROM competitions')) {
             return competitions.find((c) => c.id === params[0]) ?? null
+          }
+          // The category is read for the season being played (#482).
+          if (sql.includes('player_season_categories')) {
+            const category = categories[params[0] as string]
+            return category ? { category } : null
           }
           return null
         },
@@ -99,9 +106,11 @@ const featureWrites = (writes: { sql: string }[]) =>
 const generalAdmin = member({ id: 'ga', role: 'general_admin', club_id: null, is_player: 0 })
 const clubAdmin = member({ id: 'ca', role: 'club_admin' })
 const otherClubAdmin = member({ id: 'ca2', role: 'club_admin', club_id: OTHER })
-const cadet = member({ id: 'p-cadet', category: 'C1' })
-const senior = member({ id: 'p-senior', category: 'S' })
-const outsider = member({ id: 'p-outsider', club_id: OTHER, category: 'S' })
+const cadet = member({ id: 'p-cadet' })
+const senior = member({ id: 'p-senior' })
+const outsider = member({ id: 'p-outsider', club_id: OTHER })
+/** What each of them holds this season. */
+const CATEGORIES = { 'p-cadet': 'C1', 'p-senior': 'S', 'p-outsider': 'S' }
 
 const youth: CompetitionFixture = { id: 'comp-jeunes', categories: '["P","B","M","C","J"]', is_category_locked: 1 }
 const veterans: CompetitionFixture = { id: 'comp-veterans', categories: '["V50","V55"]', is_category_locked: 0 }
@@ -146,7 +155,7 @@ describe('competitions are a general admin\'s to create (#482)', () => {
 
 describe('a club amends the default mapping for its own licensees', () => {
   it('records an exclusion', async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca')
+    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'excluded',
     })
@@ -156,7 +165,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('records an addition on a competition that is not locked', async () => {
-    const { db, writes } = fakeDb([clubAdmin, senior], [veterans], 'ca')
+    const { db, writes } = fakeDb([clubAdmin, senior], [veterans], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-veterans/eligibility`, 'PUT', {
       playerId: 'p-senior', effect: 'included',
     })
@@ -168,7 +177,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   // The whole point of the lock: a youth championship does not admit a veteran
   // because a club asked nicely.
   it('refuses an addition out of category on a locked competition', async () => {
-    const { db, writes } = fakeDb([clubAdmin, senior], [youth], 'ca')
+    const { db, writes } = fakeDb([clubAdmin, senior], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-senior', effect: 'included',
     })
@@ -178,7 +187,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('still lets a locked competition exclude one of its own', async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca')
+    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'excluded',
     })
@@ -187,7 +196,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it("drops the row for 'default' — the third state is the absence of one", async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca')
+    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'default',
     })
@@ -197,7 +206,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('refuses a club admin writing on another club', async () => {
-    const { db, writes } = fakeDb([otherClubAdmin, cadet], [youth], 'ca2')
+    const { db, writes } = fakeDb([otherClubAdmin, cadet], [youth], 'ca2', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'excluded',
     })
@@ -206,7 +215,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('refuses a plain player', async () => {
-    const { db } = fakeDb([cadet], [youth], 'p-cadet')
+    const { db } = fakeDb([cadet], [youth], 'p-cadet', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'excluded',
     })
@@ -214,7 +223,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('refuses a licensee who is not in the club named', async () => {
-    const { db } = fakeDb([clubAdmin, outsider], [youth], 'ca')
+    const { db } = fakeDb([clubAdmin, outsider], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-outsider', effect: 'excluded',
     })
@@ -223,7 +232,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('refuses an unknown effect', async () => {
-    const { db } = fakeDb([clubAdmin, cadet], [youth], 'ca')
+    const { db } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'peut-être',
     })
@@ -231,7 +240,7 @@ describe('a club amends the default mapping for its own licensees', () => {
   })
 
   it('lets a general admin write on any club', async () => {
-    const { db, writes } = fakeDb([generalAdmin, cadet], [youth], 'ga')
+    const { db, writes } = fakeDb([generalAdmin, cadet], [youth], 'ga', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'excluded',
     })
@@ -539,5 +548,61 @@ describe('a stored FFTT name that has gone stale', () => {
     })
     expect(rows).toHaveLength(3)
     expect(rows[2].fftt_contest_name).toBe('TOP DE QUALIFICATION')
+  })
+})
+
+// #482 — the category moved off the licensee and onto (season, player), the
+// same shape points took for the phase. These two routes are its only writers
+// besides the import, and both are addressed by season.
+describe('a category is written against a season (#482)', () => {
+  it('upserts a batch, keyed on the season and the player', async () => {
+    const { db, writes } = fakeDb([generalAdmin], [], 'ga')
+    const res = await send(db, '/player-season-categories/batch', 'POST', {
+      updates: [
+        { seasonId: '27', playerId: 'p-cadet', category: 'C1' },
+        { seasonId: '27', playerId: 'p-senior', category: 'S' },
+      ],
+    })
+    expect(res.status).toBe(200)
+    // Batched, so the writes go through db.batch rather than run().
+    expect(writes.filter((w) => /player_season_categories/.test(w.sql))).toEqual([])
+  })
+
+  it('accepts an empty batch without touching anything', async () => {
+    const { db, writes } = fakeDb([generalAdmin], [], 'ga')
+    const res = await send(db, '/player-season-categories/batch', 'POST', { updates: [] })
+    expect(res.status).toBe(200)
+    expect(writes).toEqual([])
+  })
+
+  // "We do not know" is the absence of a row, never an empty string: an empty
+  // category would read as a code we simply do not recognise.
+  it('clears one season\'s category by deleting the row', async () => {
+    const { db, writes } = fakeDb([generalAdmin], [], 'ga')
+    const res = await send(db, '/player-season-categories/27/p-cadet', 'DELETE')
+    expect(res.status).toBe(200)
+    const write = writes.find((w) => /DELETE FROM player_season_categories/.test(w.sql))!
+    expect(write.params).toEqual(['27', 'p-cadet'])
+  })
+
+  // The eligibility guard reads the category of the season being played, not a
+  // field on the person — so a licensee with no row for it is out of category.
+  it('refuses an addition on a locked competition for a player with no category', async () => {
+    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', {})
+    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
+      playerId: 'p-cadet', effect: 'included',
+    })
+    expect(res.status).toBe(409)
+    expect(await errorOf(res)).toBe('competition_locked')
+    expect(featureWrites(writes)).toEqual([])
+  })
+
+  it('allows it once that season states a category the competition admits', async () => {
+    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
+    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
+      playerId: 'p-cadet', effect: 'included',
+    })
+    expect(res.status).toBe(200)
+    expect(writes.find((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))).toBeDefined()
   })
 })

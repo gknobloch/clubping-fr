@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { DataProvider } from '@/contexts/DataContext'
 import {
   mockDivisions, mockClubs, mockSeasons, mockPhases, mockGroups, mockTeams,
-  mockPlayers, mockPlayerPhasePoints, mockMatchDays, mockGames, mockGameAvailabilities,
+  mockPlayers, mockPlayerPhasePoints, mockPlayerSeasonCategories, mockMatchDays, mockGames, mockGameAvailabilities,
   mockGameSelections, mockUsers, mockCompetitions, mockCompetitionEligibilities,
 } from '@/mock/data'
 
@@ -17,6 +17,7 @@ const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
   competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
+  playerSeasonCategories: mockPlayerSeasonCategories,
   playerPhasePoints: mockPlayerPhasePoints, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,

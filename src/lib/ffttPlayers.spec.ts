@@ -38,8 +38,14 @@ const CLUB_XML =
 
 const player = (over: Partial<Player>): Player => ({
   id: 'p-1', firstName: 'Bertrand', lastName: 'De Coatpont', licenseNumber: '6813454',
-  phone: '', status: 'active', clubId: 'club-fftt-06680011', category: 'S', ...over,
+  phone: '', status: 'active', clubId: 'club-fftt-06680011', ...over,
 })
+
+// A category belongs to a season (#482), so the fixtures state it as a row
+// rather than as a field on the licensee.
+const SEASON = '27'
+const categories = (category?: string) =>
+  (category ? [{ seasonId: SEASON, playerId: 'p-1', category }] : [])
 
 describe('normalizePersonName', () => {
   it('title-cases the all-caps family names FFTT sends', () => {
@@ -213,7 +219,9 @@ describe('buildImportRows', () => {
   ]
 
   it('matches on the licence number, not on the name', () => {
-    const rows = buildImportRows([LICENCE], [player({ lastName: 'Coatpont' })], points, 'phase-27-1')
+    const rows = buildImportRows(
+      [LICENCE], [player({ lastName: 'Coatpont' })], points, 'phase-27-1', [], categories('S'), SEASON,
+    )
     expect(rows[0].playerId).toBe('p-1')
     expect(rows[0].status).toBe('changed')
     expect(writableFields(rows[0].fields).map((f) => f.key)).toEqual(['lastName', 'points'])
@@ -227,6 +235,9 @@ describe('buildImportRows', () => {
       [player({})],
       [{ phaseId: 'phase-27-1', playerId: 'p-1', points: '803' }],
       'phase-27-1',
+      [],
+      categories('S'),
+      SEASON,
     )
     expect(rows[0].status).toBe('changed')
     expect(writableFields(rows[0].fields).map((f) => f.key)).toEqual(['category'])
@@ -236,7 +247,7 @@ describe('buildImportRows', () => {
   })
 
   it('offers the category of a licensee we hold without one', () => {
-    const rows = buildImportRows([LICENCE], [player({ category: undefined })], points, 'phase-27-1')
+    const rows = buildImportRows([LICENCE], [player({})], points, 'phase-27-1', [], [], SEASON)
     expect(rows[0].fields.find((f) => f.key === 'category')).toMatchObject({
       current: null, incoming: 'S', unchanged: false,
     })
@@ -254,6 +265,9 @@ describe('buildImportRows', () => {
       [player({})],
       [{ phaseId: 'phase-27-1', playerId: 'p-1', points: '803' }],
       'phase-27-1',
+      [],
+      categories('S'),
+      SEASON,
     )
     expect(rows[0].status).toBe('unchanged')
     expect(writableFields(rows[0].fields)).toEqual([])

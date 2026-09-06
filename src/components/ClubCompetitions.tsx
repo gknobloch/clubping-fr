@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { sortByName } from '@/lib/sortByName'
+import { activeSeasonId } from '@/lib/season'
+import { withSeasonCategory } from '@/lib/seasonCategories'
 import { categoriesSummary, categoryDisplay, normalizeCategory, orderedCategories } from '@/lib/playerCategories'
 import {
   ELIGIBILITY_REASON_LABELS,
@@ -46,7 +48,7 @@ export function ClubCompetitions({
   const { user } = useAuth()
   const {
     competitions, players, competitionEligibilities, setCompetitionEligibility,
-    teams, divisions, gameSelections,
+    teams, divisions, gameSelections, playerSeasonCategories, seasons,
   } = useAppData()
   const [selectedId, setSelectedId] = useState('')
   const [category, setCategory] = useState<string>(ALL)
@@ -63,9 +65,16 @@ export function ClubCompetitions({
   )
   const competition = available.find((c) => c.id === selectedId) ?? available[0]
 
+  // The category is a fact about a season (#482); the one that decides who may
+  // play is the season being played.
+  const seasonId = activeSeasonId(seasons)
   const clubPlayers = useMemo(
-    () => sortByName(players.filter((p) => p.clubId === clubId && p.status === 'active')),
-    [players, clubId],
+    () => withSeasonCategory(
+      sortByName(players.filter((p) => p.clubId === clubId && p.status === 'active')),
+      playerSeasonCategories,
+      seasonId,
+    ),
+    [players, clubId, playerSeasonCategories, seasonId],
   )
 
   // Overrides of this club only. A general admin sees every club's rows in the

@@ -9,6 +9,8 @@ import { PlayerPhaseHistory, InfoRow } from '@/components/PlayerPhaseHistory'
 import { ModalShell } from '@/components/ModalShell'
 import { useAuth } from '@/contexts/AuthContext'
 import { categoryDisplay } from '@/lib/playerCategories'
+import { activeSeasonId } from '@/lib/season'
+import { categoryFor } from '@/lib/seasonCategories'
 import {
   ELIGIBILITY_ACTION_LABELS,
   ELIGIBILITY_REASON_LABELS,
@@ -22,7 +24,7 @@ export function PlayerDetailPage() {
   const { user } = useAuth()
   const {
     players, clubs, competitions, competitionEligibilities, setCompetitionEligibility,
-    teams, divisions, gameSelections,
+    teams, divisions, gameSelections, playerSeasonCategories, seasons,
   } = useAppData()
   const [zoom, setZoom] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -39,6 +41,11 @@ export function PlayerDetailPage() {
     .filter((c) => !c.isArchived)
     .sort((a, b) => a.sortOrder - b.sortOrder)
   const overrides = competitionEligibilities.filter((e) => e.clubId === player?.clubId)
+  // A category belongs to a season (#482), and eligibility is a question about
+  // the season being played.
+  const seasonId = activeSeasonId(seasons)
+  const category = categoryFor(playerSeasonCategories, seasonId, player?.id)
+  const categorized = player ? { ...player, category } : undefined
   // Every competition with its verdict, not only the ones that admit them: the
   // point of this section for a club admin is the ones that do NOT, since those
   // are what they might amend.
@@ -51,7 +58,7 @@ export function PlayerDetailPage() {
   const rows = player
     ? ordered.map((competition) => ({
       competition,
-      ...eligibilityCell(player, competition, overrides),
+      ...eligibilityCell(categorized!, competition, overrides),
       summary: assignmentSummary(
         assignmentsByPlayer(competition.id, {
           teams: clubTeams, divisions, competitions, gameSelections,
@@ -143,9 +150,10 @@ export function PlayerDetailPage() {
         </h2>
         <dl className="divide-y divide-slate-100">
           {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
-          {categoryDisplay(player.category) && (
-            <InfoRow label="Catégorie" value={categoryDisplay(player.category)} />
-          )}
+          <InfoRow
+            label="Catégorie"
+            value={categoryDisplay(category) || 'Inconnue'}
+          />
           {player.email && <InfoRow label="Email" value={player.email} />}
           {player.phone && <InfoRow label="Téléphone" value={player.phone} />}
         </dl>

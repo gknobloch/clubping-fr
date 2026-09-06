@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -47,8 +47,11 @@ export const mockClubs: Club[] = baseClubs.map((c) => ({ ...c, channels: [] }))
 // ---------------------------------------------------------------------------
 // Season & Phase
 // ---------------------------------------------------------------------------
+/** The season the fixtures are played in — and the one categories hang off. */
+const ACTIVE_SEASON_ID = '26'
+
 export const mockSeasons: Season[] = [
-  { id: '26', displayName: '2025/2026', status: 'active' },
+  { id: ACTIVE_SEASON_ID, displayName: '2025/2026', status: 'active' },
 ]
 
 export const mockPhases: Phase[] = [
@@ -174,8 +177,16 @@ const MOCK_CATEGORIES: Record<string, string> = {
   'p2-player-24': 'V50', // Gilles Knobloch
 }
 
-export const mockPlayers: Player[] = basePlayers.map((p) => ({
-  ...p,
+export const mockPlayers: Player[] = basePlayers
+
+/**
+ * The categories, filed under the active season (#482) — a licence is issued
+ * for a season, so that is where the value lives. Everyone not named above is
+ * a senior, which is what most of a club is.
+ */
+export const mockPlayerSeasonCategories: PlayerSeasonCategory[] = basePlayers.map((p) => ({
+  seasonId: ACTIVE_SEASON_ID,
+  playerId: p.id,
   category: MOCK_CATEGORIES[p.id] ?? 'S',
 }))
 
@@ -626,7 +637,6 @@ export const mockUsers: User[] = [
       phone: p.phone,
       ...(p.birthDate ? { birthDate: p.birthDate } : {}),
       ...(p.birthPlace ? { birthPlace: p.birthPlace } : {}),
-      ...(p.category ? { category: p.category } : {}),
       status: p.status,
       clubId: p.clubId,
       ...(p.lastSeenAt ? { lastSeenAt: p.lastSeenAt } : {}),

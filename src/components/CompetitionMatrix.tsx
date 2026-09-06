@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Competition, CompetitionEligibility, Player } from '@/types'
 import { sortByName } from '@/lib/sortByName'
+import type { CategorizedPlayer } from '@/lib/seasonCategories'
 import {
   PLAYER_SEARCH_LABEL,
   PLAYER_SEARCH_THRESHOLD,
@@ -66,7 +67,8 @@ export function CompetitionMatrix({
   canManage,
   onSet,
 }: {
-  players: Player[]
+  /** Already carrying the category of the season in view (#482). */
+  players: CategorizedPlayer<Player>[]
   competitions: Competition[]
   /** This club's amendments only — never another's. */
   overrides: CompetitionEligibility[]
@@ -96,7 +98,7 @@ export function CompetitionMatrix({
     return { options, hasUnknown: sorted.some((p) => !normalizeCategory(p.category)) }
   }, [sorted])
 
-  const cellOf = (player: Player, competition: Competition) => {
+  const cellOf = (player: CategorizedPlayer<Player>, competition: Competition) => {
     const verdict = eligibilityCell(player, competition, overrides)
     const summary = assignmentSummary(assignments.get(competition.id)?.get(player.id))
     // An ineligible player who is nonetheless in a squad is the contradiction

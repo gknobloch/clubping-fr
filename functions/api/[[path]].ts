@@ -100,7 +100,7 @@ app.get('/data', async (c) => {
   const canSeeLastSeen = lastSeenVisibleTo(c.get('user'))
   const [
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
-    groupsR, teamsR, phasePointsR, matchDaysR, gamesR,
+    groupsR, teamsR, phasePointsR, seasonCategoriesR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, eligibilitiesR,
   ] = await Promise.all([
@@ -113,6 +113,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM groups').all<GroupRow>(),
     db.prepare('SELECT * FROM teams').all<TeamRow>(),
     db.prepare('SELECT * FROM player_phase_points').all<PlayerPhasePointsRow>(),
+    db.prepare('SELECT * FROM player_season_categories').all<PlayerSeasonCategoryRow>(),
     db.prepare('SELECT * FROM match_days').all<MatchDayRow>(),
     db.prepare('SELECT * FROM games').all<GameRow>(),
     db.prepare('SELECT * FROM game_availabilities').all<GameAvailabilityRow>(),
@@ -221,7 +222,6 @@ app.get('/data', async (c) => {
       ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
-      ...(r.category ? { category: r.category } : {}),
       status: r.status, clubId: r.club_id ?? '',
       ...lastSeenField(r, canSeeLastSeen),
       ...(avatarUpdatedAt.has(r.id as string)
@@ -242,6 +242,11 @@ app.get('/data', async (c) => {
     // (phase_id, player_id) is the primary key (#384) — no surrogate id.
     playerPhasePoints: phasePointsR.results.map(r => ({
       phaseId: r.phase_id, playerId: r.player_id, points: r.points,
+    })),
+    // Likewise (season_id, player_id) for the category (#482): a licence is
+    // issued for a season, so that is the grain it is stated at.
+    playerSeasonCategories: seasonCategoriesR.results.map(r => ({
+      seasonId: r.season_id, playerId: r.player_id, category: r.category,
     })),
     matchDays: matchDaysR.results.map(r => ({
       id: r.id, groupId: r.group_id, number: r.number, date: r.date,
@@ -275,7 +280,6 @@ app.get('/data', async (c) => {
       ...(r.phone ? { phone: r.phone } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
-      ...(r.category ? { category: r.category } : {}),
       ...(r.status ? { status: r.status } : {}),
       ...(r.club_id ? { clubId: r.club_id } : {}),
       ...lastSeenField(r, canSeeLastSeen),
@@ -3048,10 +3052,19 @@ app.put('/clubs/:clubId/competitions/:competitionId/eligibility', async (c) => {
   }
 
   const player = await db
-    .prepare('SELECT id, club_id, category FROM users WHERE id = ?')
+    .prepare('SELECT id, club_id FROM users WHERE id = ?')
     .bind(playerId)
-    .first<Pick<UserRow, 'id' | 'club_id' | 'category'>>()
+    .first<Pick<UserRow, 'id' | 'club_id'>>()
   if (!player || player.club_id !== clubId) return c.json({ error: 'not_in_club' }, 404)
+
+  // The category is a fact about a season (#482), and the season that decides
+  // whether a club may add someone is the one being played.
+  const category = await db
+    .prepare(`SELECT c.category FROM player_season_categories c
+              JOIN seasons s ON s.id = c.season_id AND s.status = 'active'
+              WHERE c.player_id = ?`)
+    .bind(playerId)
+    .first<{ category: string }>()
 
   if (effect === 'default') {
     await db.prepare(
@@ -3071,7 +3084,7 @@ app.put('/clubs/:clubId/competitions/:competitionId/eligibility', async (c) => {
       categories: jsonParseCategories(competition.categories),
       isCategoryLocked: bool(competition.is_category_locked),
     },
-    { id: player.id, category: player.category ?? undefined },
+    { id: player.id, category: category?.category ?? undefined },
   )) {
     return c.json({ error: 'competition_locked' }, 409)
   }
@@ -3439,9 +3452,9 @@ const emailOrNull = (email: unknown): string | null =>
 app.post('/players', async (c) => {
   const d = await c.req.json()
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, category, status, club_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.category || null, d.status, d.clubId).run()
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
   return c.json({ ok: true })
 })
 
@@ -3456,8 +3469,6 @@ app.patch('/players/:id', async (c) => {
   if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
   if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
   if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
-  // The FFTT code, verbatim (#482); '' is how the form says "no category".
-  if ('category' in p) { s.push('category = ?'); v.push(p.category || null) }
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
@@ -4254,6 +4265,29 @@ app.post('/player-phase-points/batch', async (c) => {
        ON CONFLICT(phase_id, player_id) DO UPDATE SET points = excluded.points`
     ).bind(u.phaseId, u.playerId, u.points)
   ))
+  return c.json({ ok: true })
+})
+
+app.post('/player-season-categories/batch', async (c) => {
+  const { updates } = await c.req.json() as {
+    updates?: Array<{ seasonId: string; playerId: string; category: string }>
+  }
+  if (!updates?.length) return c.json({ ok: true })
+  await c.env.DB.batch(updates.map((u) =>
+    c.env.DB.prepare(
+      `INSERT INTO player_season_categories (season_id, player_id, category) VALUES (?, ?, ?)
+       ON CONFLICT(season_id, player_id) DO UPDATE SET category = excluded.category`
+    ).bind(u.seasonId, u.playerId, u.category)
+  ))
+  return c.json({ ok: true })
+})
+
+// A form clearing the field means "we do not know", which is the absence of a
+// row rather than an empty string — same three-state care as a derogation.
+app.delete('/player-season-categories/:seasonId/:playerId', async (c) => {
+  await c.env.DB.prepare(
+    'DELETE FROM player_season_categories WHERE season_id = ? AND player_id = ?',
+  ).bind(c.req.param('seasonId'), c.req.param('playerId')).run()
   return c.json({ ok: true })
 })
 

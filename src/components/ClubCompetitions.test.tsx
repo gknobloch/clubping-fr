@@ -3,7 +3,8 @@ import { render as rtlRender, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type {
-  Competition, CompetitionEligibility, Division, GameSelection, Player, Team,
+  Competition, CompetitionEligibility, Division, GameSelection, Player,
+  PlayerSeasonCategory, Team,
 } from '@/types'
 import { ClubCompetitions } from './ClubCompetitions'
 
@@ -17,6 +18,7 @@ const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryR
 // competition, and it shows the API's refusal rather than inventing one.
 
 const CLUB = 'club-1'
+const SEASON = '26'
 
 const data = vi.hoisted(() => ({
   setCompetitionEligibility: vi.fn(),
@@ -26,6 +28,7 @@ const data = vi.hoisted(() => ({
   teams: [] as Team[],
   divisions: [] as Division[],
   gameSelections: [] as GameSelection[],
+  playerSeasonCategories: [] as PlayerSeasonCategory[],
 }))
 const auth = vi.hoisted(() => ({ user: null as unknown }))
 
@@ -44,13 +47,20 @@ vi.mock('@/contexts/DataContext', () => ({
     teams: data.teams,
     divisions: data.divisions,
     gameSelections: data.gameSelections,
+    // A category is stated per season (#482): the fixtures file theirs here.
+    seasons: [{ id: SEASON, displayName: '2025/2026', status: 'active' }],
+    playerSeasonCategories: data.playerSeasonCategories,
   }),
 }))
 
-const player = (id: string, first: string, last: string, category?: string): Player => ({
-  id, firstName: first, lastName: last, licenseNumber: '1', phone: '',
-  status: 'active', clubId: CLUB, ...(category ? { category } : {}),
-})
+const player = (id: string, first: string, last: string, category?: string): Player => {
+  if (category) CATEGORIES.push({ seasonId: SEASON, playerId: id, category })
+  return {
+    id, firstName: first, lastName: last, licenseNumber: '1', phone: '',
+    status: 'active', clubId: CLUB,
+  }
+}
+const CATEGORIES: PlayerSeasonCategory[] = []
 
 const youth: Competition = {
   id: 'comp-jeunes', displayName: 'Championnat jeunes',
@@ -73,6 +83,7 @@ beforeEach(() => {
   data.teams = []
   data.divisions = []
   data.gameSelections = []
+  data.playerSeasonCategories = CATEGORIES
   auth.user = { id: 'ca', role: 'club_admin', isPlayer: false, clubId: CLUB }
 })
 

@@ -13,7 +13,7 @@ import {
   mockGroups,
   mockMatchDays,
   mockPhases,
-  mockPlayerPhasePoints,
+  mockPlayerPhasePoints, mockPlayerSeasonCategories,
   mockPlayers,
   mockSeasons,
   mockTeams,
@@ -70,6 +70,7 @@ function baseData() {
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
+    playerSeasonCategories: mockPlayerSeasonCategories,
     playerPhasePoints: mockPlayerPhasePoints,
   }
 }

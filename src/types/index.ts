@@ -248,6 +248,23 @@ export interface PlayerPhasePoints {
   points: string
 }
 
+/**
+ * A player's FFTT age category for a season (#482).
+ *
+ * Keyed on (seasonId, playerId). It hung off the licensee at first, as one
+ * value per person, which reads fine for a week and is wrong by August: a cadet
+ * becomes a junior, and the next import would overwrite the value that decided
+ * last season's eligibility. A licence is issued for a season, so the category
+ * is stated per season — the same reasoning that put points on the phase, one
+ * grain up, because nobody changes category at a phase boundary.
+ */
+export interface PlayerSeasonCategory {
+  seasonId: string
+  playerId: string
+  /** The FFTT code verbatim ("S", "V45", "B2") — normalized on read. */
+  category: string
+}
+
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
 
 export type AvailabilityOverriddenBy = 'captain' | 'club_admin'
@@ -319,6 +336,7 @@ export interface DataState {
   teams: Team[]
   players: Player[]
   playerPhasePoints: PlayerPhasePoints[]
+  playerSeasonCategories: PlayerSeasonCategory[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -346,12 +364,6 @@ export interface User {
   phone?: string
   birthDate?: string
   birthPlace?: string
-  /**
-   * Age category, as the FFTT's <cat> states it — "S", "V45", sometimes "B2"
-   * (#482). Stored verbatim and normalized on read (see
-   * `src/lib/playerCategories.ts`), so a code we have never met costs nothing.
-   */
-  category?: string
   status?: PlayerStatus
   /** The person's club (players have one; club_admins administer it). */
   clubId?: string

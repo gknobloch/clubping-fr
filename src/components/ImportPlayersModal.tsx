@@ -15,7 +15,7 @@ import {
   type PlayerImportRow,
 } from '@/lib/ffttPlayers'
 import { sortByName } from '@/lib/sortByName'
-import type { Player, PlayerPhasePoints } from '@/types'
+import type { Player, PlayerPhasePoints, PlayerSeasonCategory } from '@/types'
 
 type Status =
   | { kind: 'idle' }
@@ -38,6 +38,7 @@ type Status =
 export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClose: () => void }) {
   const {
     clubs, phases, players, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
+    playerSeasonCategories, setPlayerSeasonCategories,
   } = useAppData()
 
   const club = clubs.find((c) => c.id === clubId)
@@ -48,6 +49,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
   const [phaseId, setPhaseId] = useState(
     () => phases.find((p) => p.status === 'active')?.id ?? orderedPhases[orderedPhases.length - 1]?.id ?? '',
   )
+  const seasonId = phases.find((p) => p.id === phaseId)?.seasonId
 
   const [licenceInput, setLicenceInput] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -62,7 +64,10 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
 
   /** Everything a fresh fetch replaces. */
   const showRows = (licences: FfttLicence[], missingPlayers: Player[]) => {
-    const built = buildImportRows(licences, players, playerPhasePoints, phaseId)
+    // The category belongs to the season the chosen phase sits in (#482).
+    const built = buildImportRows(
+      licences, players, playerPhasePoints, phaseId, [], playerSeasonCategories, seasonId,
+    )
     setRows(built)
     setMissing(missingPlayers)
     // Pre-tick exactly what is writable — importing an identical value is a
@@ -137,6 +142,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
 
   const applyImport = () => {
     const points: PlayerPhasePoints[] = []
+    const categories: PlayerSeasonCategory[] = []
     let created = 0
     let updated = 0
 
@@ -157,10 +163,6 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
           phone: '',
           status: 'active',
           clubId,
-          // The category comes with the licence (#482) — it is stated on the
-          // same record, and a licensee created without one is eligible for
-          // nothing until somebody notices.
-          ...(has('category') && row.licence.category ? { category: row.licence.category } : {}),
         })
         playerId = player.id
         created += 1
@@ -168,16 +170,21 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
         const patch: Partial<Player> = {}
         if (has('lastName')) patch.lastName = row.licence.lastName
         if (has('firstName')) patch.firstName = row.licence.firstName
-        if (has('category')) patch.category = row.licence.category
         if (Object.keys(patch).length) updatePlayer(playerId, patch)
-        if (Object.keys(patch).length || has('points')) updated += 1
+        if (Object.keys(patch).length || has('points') || has('category')) updated += 1
       }
       if (has('points') && row.licence.points) {
         points.push({ phaseId, playerId, points: row.licence.points })
       }
+      // The category comes with the licence, and is filed under the season it
+      // was issued for — never over last season's (#482).
+      if (has('category') && row.licence.category && seasonId) {
+        categories.push({ seasonId, playerId, category: row.licence.category })
+      }
     }
 
     setPlayerPhasePoints(points)
+    setPlayerSeasonCategories(categories)
     setRows([])
     setSelected(new Set())
     setStatus({ kind: 'done', created, updated })

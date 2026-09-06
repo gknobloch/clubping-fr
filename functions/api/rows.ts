@@ -203,6 +203,13 @@ export interface PlayerPhasePointsRow {
   points: string
 }
 
+/** (season_id, player_id) → the FFTT category, verbatim (#482). */
+export interface PlayerSeasonCategoryRow {
+  season_id: string
+  player_id: string
+  category: string
+}
+
 export interface MatchDayRow {
   id: string
   group_id: string
@@ -251,8 +258,6 @@ export interface UserRow {
   phone: string
   birth_date: string | null
   birth_place: string | null
-  /** FFTT age category, verbatim — "S", "V45", "B2" (#482); NULL when unknown. */
-  category: string | null
   status: PlayerStatus
   club_id: string | null
   /** Unix epoch ms of the member's first ever sign-in; NULL = never (#406). */

@@ -25,6 +25,7 @@ import type {
   Team,
   Player,
   PlayerPhasePoints,
+  PlayerSeasonCategory,
   MatchDay,
   Game,
   GameAvailability,
@@ -42,6 +43,7 @@ import {
   mockTeams,
   mockPlayers,
   mockPlayerPhasePoints,
+  mockPlayerSeasonCategories,
   mockMatchDays,
   mockGames,
   mockGameAvailabilities,
@@ -503,6 +505,10 @@ interface DataContextValue extends DataState {
   removeClubAdmin: (clubId: string, userId: string) => Promise<ClubAdminResult>
   /** Upsert points for (phase, player) — the FFTT import's only write (#384). */
   setPlayerPhasePoints: (updates: PlayerPhasePoints[]) => void
+  playerSeasonCategories: PlayerSeasonCategory[]
+  /** Write the category a player holds for a season; '' clears the row (#482). */
+  setPlayerSeasonCategories: (updates: PlayerSeasonCategory[]) => void
+  clearPlayerSeasonCategory: (seasonId: string, playerId: string) => void
   setAvatar: (id: string, base64: string, contentType: string) => Promise<void>
   removeAvatar: (id: string) => Promise<void>
   matchDays: MatchDay[]
@@ -561,6 +567,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const [playerPhasePoints, setPlayerPhasePointsState] = useState<PlayerPhasePoints[]>(
     initialData?.playerPhasePoints ?? []
   )
+  const [playerSeasonCategories, setPlayerSeasonCategoriesState] = useState<PlayerSeasonCategory[]>(
+    initialData?.playerSeasonCategories ?? [],
+  )
   const [matchDays, setMatchDays] = useState<MatchDay[]>(initialData?.matchDays ?? [])
   const [games, setGames] = useState<Game[]>(initialData?.games ?? [])
   const [gameAvailabilities, setGameAvailabilities] = useState<GameAvailability[]>(
@@ -606,6 +615,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPlayers(data.players)
       setUsers(data.users ?? [])
       setPlayerPhasePointsState(data.playerPhasePoints ?? [])
+      setPlayerSeasonCategoriesState(data.playerSeasonCategories ?? [])
       setMatchDays(data.matchDays)
       setGames(data.games)
       setGameAvailabilities(data.gameAvailabilities)
@@ -621,6 +631,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         competitionEligibilities: mockCompetitionEligibilities,
         clubs: mockClubs, groups: mockGroups, teams: mockTeams, players: mockPlayers,
         playerPhasePoints: mockPlayerPhasePoints,
+        playerSeasonCategories: mockPlayerSeasonCategories,
         matchDays: mockMatchDays, games: mockGames,
         gameAvailabilities: mockGameAvailabilities,
         gameSelections: mockGameSelections, users: mockUsers,
@@ -1849,6 +1860,30 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [persist])
 
+  const setPlayerSeasonCategories = useCallback((updates: PlayerSeasonCategory[]) => {
+    if (!updates.length) return
+    setPlayerSeasonCategoriesState((prev) => {
+      const next = prev.filter(
+        (c) => !updates.some((u) => u.seasonId === c.seasonId && u.playerId === c.playerId),
+      )
+      return [...next, ...updates]
+    })
+    if (persist) {
+      api('/player-season-categories/batch', { method: 'POST', body: JSON.stringify({ updates }) })
+    }
+  }, [persist])
+
+  // "We do not know" is the absence of a row, not an empty category — the same
+  // three-state care a club derogation takes (#482).
+  const clearPlayerSeasonCategory = useCallback((seasonId: string, playerId: string) => {
+    setPlayerSeasonCategoriesState((prev) => prev.filter(
+      (c) => !(c.seasonId === seasonId && c.playerId === playerId),
+    ))
+    if (persist) {
+      api(`/player-season-categories/${seasonId}/${playerId}`, { method: 'DELETE' })
+    }
+  }, [persist])
+
   // Avatars are stored base64 in D1 behind PUT/DELETE /users/:id/avatar; the
   // players list only carries avatarUpdatedAt for cache-busting, so we bump it
   // optimistically and the Avatar component refetches.
@@ -2027,6 +2062,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       teams,
       players,
       playerPhasePoints,
+      playerSeasonCategories,
       matchDays,
       games,
       updateDivision,
@@ -2090,6 +2126,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       addClubAdmin,
       removeClubAdmin,
       setPlayerPhasePoints,
+      setPlayerSeasonCategories,
+      clearPlayerSeasonCategory,
       setAvatar,
       removeAvatar,
       updateMatchDay,
@@ -2108,6 +2146,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       staleSince,
       divisions, competitions, competitionEligibilities,
       clubs, seasons, phases, groups, teams, players, playerPhasePoints,
+      playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionEligibility,

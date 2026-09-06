@@ -13,6 +13,8 @@ import { ACTIVE_ONLY_LABEL, canSeeArchivedPlayers, visiblePlayers } from '@/lib/
 import {
   PLAYER_CATEGORIES, categoryDisplay, orderedCategories, type PlayerCategory,
 } from '@/lib/playerCategories'
+import { activeSeasonId } from '@/lib/season'
+import { categoryFor } from '@/lib/seasonCategories'
 import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
@@ -24,7 +26,16 @@ const STATUS_LABELS: Record<PlayerType['status'], string> = {
 
 export function PlayersPage() {
   const { user } = useAuth()
-  const { players: allPlayers, clubs, updatePlayer, addPlayer } = useAppData()
+  const {
+    players: allPlayers, clubs, seasons, updatePlayer, addPlayer,
+    playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
+  } = useAppData()
+
+  // A category belongs to a season (#482). This screen edits the one being
+  // played; a player's own page shows what they held in the others.
+  const seasonId = activeSeasonId(seasons)
+  const categoryOf = (playerId: string) =>
+    categoryDisplay(categoryFor(playerSeasonCategories, seasonId, playerId))
   const [query, setQuery] = useState('')
   const [activeOnly, setActiveOnly] = useState(true)
   const [editing, setEditing] = useState<PlayerType | null>(null)
@@ -112,7 +123,7 @@ export function PlayersPage() {
       firstName: player.firstName,
       lastName: player.lastName,
       licenseNumber: player.licenseNumber,
-      category: player.category ?? '',
+      category: categoryFor(playerSeasonCategories, seasonId, player.id) ?? '',
       email: player.email ?? '',
       phone: player.phone ?? '',
       birthDate: player.birthDate ?? '',
@@ -144,6 +155,16 @@ export function PlayersPage() {
     setCreating(false)
   }
 
+  // The category is written against the season being played, not onto the
+  // person (#482): clearing the field removes the row rather than storing an
+  // empty one, since "we do not know" is not "no category".
+  const saveCategory = (playerId: string) => {
+    if (!seasonId) return
+    const value = form.category.trim()
+    if (value) setPlayerSeasonCategories([{ seasonId, playerId, category: value }])
+    else clearPlayerSeasonCategory(seasonId, playerId)
+  }
+
   const handleSave = () => {
     // Sent even when empty, unlike the other optional fields: the key has to
     // reach PATCH for the API to clear a stored address (#315).
@@ -153,22 +174,21 @@ export function PlayersPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
-        category: form.category,
         email,
         phone: form.phone || undefined,
         birthDate: form.birthDate || undefined,
         birthPlace: form.birthPlace || undefined,
         status: form.status,
       })
+      saveCategory(editing.id)
       closeModal()
       return
     }
     if (creating && form.clubId && form.firstName && form.lastName) {
-      addPlayer({
+      const created = addPlayer({
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
-        category: form.category,
         email,
         phone: form.phone,
         birthDate: form.birthDate || undefined,
@@ -176,6 +196,7 @@ export function PlayersPage() {
         status: form.status,
         clubId: form.clubId,
       })
+      saveCategory(created.id)
       closeModal()
     }
   }
@@ -285,7 +306,7 @@ export function PlayersPage() {
                       e2e/mobile-touch-targets-detail.spec.ts. */}
                   <p className="text-xs text-slate-500">
                     <span className="font-mono">{player.licenseNumber}</span>
-                    {categoryDisplay(player.category) && ` · ${categoryDisplay(player.category)}`}
+                    {categoryOf(player.id) && ` · ${categoryOf(player.id)}`}
                     {!hasClubScope && ` · ${getClubName(player.clubId)}`}
                     {showLastSeen && (
                       <span className={hasVisited(player.lastSeenAt) ? undefined : 'text-amber-700'}>
@@ -382,7 +403,7 @@ export function PlayersPage() {
                   {player.licenseNumber}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
-                  {categoryDisplay(player.category) || '—'}
+                  {categoryOf(player.id) || '—'}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{player.email}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{player.phone || '—'}</td>

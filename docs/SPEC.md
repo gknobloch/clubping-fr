@@ -186,8 +186,8 @@ General Admin has put somewhere else.
 
 ### Category
 
-Every licensee has an age category, as the FFTT states it in the licence record
-the player import already reads: a letter for the young and the seniors (P, B,
+Every licensee has an age category **for a season**, as the FFTT states it in
+the licence record the player import already reads: a letter for the young and the seniors (P, B,
 M, C, J, S — sometimes suffixed, "B2") and a five-year band for the veterans
 (V40 … V90). It is stored exactly as the FFTT sent it and normalised on read:
 the youth suffixes are dropped, since nothing is organised that separates them,
@@ -195,6 +195,15 @@ while the veteran bands are kept apart, since "vétérans 50 ans et plus" is a
 real competition. A code we do not recognise leaves the licensee without a
 category, and someone without one is eligible only to competitions that admit
 every category — or by their club's explicit say-so.
+
+The season is part of the answer, not decoration. A licence is issued for a
+season, and a cadet becomes a junior the way a V45 becomes a V50 — so the
+category is recorded per season, the way points are recorded per phase. Nothing
+about last season is rewritten when this season's licences are imported, and the
+value that decided who could be fielded in a championship that is now over stays
+readable. Eligibility, being a question about the season being played, always
+reads the active season's; a player's own page shows the category beside the
+season it belongs to, above that season's phases and the points they hold there.
 
 ### Eligibility
 

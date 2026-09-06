@@ -6,6 +6,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { CompetitionMatrix, type AssignmentIndex } from '@/components/CompetitionMatrix'
 import { ClubCompetitions } from '@/components/ClubCompetitions'
 import { assignmentsByPlayer } from '@/lib/competitionAssignments'
+import { activeSeasonId } from '@/lib/season'
+import { withSeasonCategory } from '@/lib/seasonCategories'
 
 /**
  * A club's own competitions screen (#482).
@@ -25,7 +27,7 @@ export function ClubCompetitionsPage() {
   const { user } = useAuth()
   const {
     clubs, players, competitions, competitionEligibilities, setCompetitionEligibility,
-    teams, divisions, gameSelections,
+    teams, divisions, gameSelections, playerSeasonCategories, seasons,
   } = useAppData()
 
   const clubId = user?.clubId ?? null
@@ -36,9 +38,16 @@ export function ClubCompetitionsPage() {
     () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
     [competitions],
   )
+  // Resolved for the season being played: eligibility is a question about now,
+  // and a category is a fact about a season (#482).
+  const seasonId = activeSeasonId(seasons)
   const clubPlayers = useMemo(
-    () => players.filter((p) => p.clubId === clubId && p.status === 'active'),
-    [players, clubId],
+    () => withSeasonCategory(
+      players.filter((p) => p.clubId === clubId && p.status === 'active'),
+      playerSeasonCategories,
+      seasonId,
+    ),
+    [players, clubId, playerSeasonCategories, seasonId],
   )
   // This club's amendments only: GET /api/data carries every club's, and one
   // club's exception must not decide another's grid.

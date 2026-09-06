@@ -35,8 +35,9 @@
 // veterans. It is stored exactly as sent and normalized on read — see
 // src/lib/playerCategories.ts.
 
-import type { Player, PlayerPhasePoints } from '../types'
+import type { Player, PlayerPhasePoints, PlayerSeasonCategory } from '../types'
 import { normalizeFfttName } from './ffttClub'
+import { categoryFor } from './seasonCategories'
 
 const LICENCES_URL = 'https://fftt.dafunker.com/v1/proxy/xml_licence_b.php'
 const TIMEOUT_MS = 15000
@@ -381,6 +382,9 @@ export function buildImportRows(
   phaseId: string,
   /** Club members outside `players` — non-playing admins, chiefly (#474). */
   candidates: ImportCandidate[] = [],
+  /** A category is stated per season (#482), so it is read for `phaseId`'s. */
+  seasonCategories: PlayerSeasonCategory[] = [],
+  seasonId?: string,
 ): PlayerImportRow[] {
   const byLicence = new Map(
     players.filter((p) => p.licenseNumber).map((p) => [p.licenseNumber.trim(), p]),
@@ -411,7 +415,7 @@ export function buildImportRows(
       firstName: player.firstName,
       licenseNumber: player.licenseNumber,
       points: phasePoints.find((p) => p.phaseId === phaseId && p.playerId === player.id)?.points,
-      category: player.category,
+      category: categoryFor(seasonCategories, seasonId, player.id),
     })
     return {
       licence,

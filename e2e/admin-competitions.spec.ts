@@ -171,11 +171,24 @@ test.describe('Player detail — which competitions (#482)', () => {
   const section = (page: import('@playwright/test').Page) =>
     page.getByRole('heading', { name: 'Compétitions' }).locator('xpath=..')
 
+  test('states the category, and says so plainly when none is on file', async ({ page }) => {
+    await loginAs(page, 'admin')
+    await page.goto('/joueurs/p2-player-39')
+    // In the identity card, for the season being played.
+    const informations = page.getByRole('heading', { name: 'Informations' }).locator('xpath=..')
+    await expect(informations).toContainText('Catégorie')
+    await expect(informations).toContainText('Cadet (C1)')
+
+    // And beside the season it belongs to — points are per phase, a category
+    // per season (#482).
+    await expect(page.getByText('Catégorie Cadet (C1)')).toBeVisible()
+  })
+
   test('a cadet is eligible to his category and to the adults', async ({ page }) => {
     await loginAs(page, 'admin')
     // Samuel Canemolla, C1 in the mock — team 6.
     await page.goto('/joueurs/p2-player-39')
-    await expect(page.getByText('Cadet (C1)')).toBeVisible()
+    await expect(page.getByText('Cadet (C1)').first()).toBeVisible()
 
     const competitions = section(page)
     await expect(competitions.locator('li').filter({ hasText: 'Championnat par équipes' }))
@@ -190,7 +203,7 @@ test.describe('Player detail — which competitions (#482)', () => {
     await loginAs(page, 'admin')
     // Hervé Ceroni, V55 in the mock.
     await page.goto('/joueurs/p2-player-7')
-    await expect(page.getByText('Vétéran 55')).toBeVisible()
+    await expect(page.getByText('Vétéran 55').first()).toBeVisible()
 
     const competitions = section(page)
     await expect(competitions.locator('li').filter({ hasText: 'Championnat vétérans' }))
