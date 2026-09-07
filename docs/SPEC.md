@@ -211,9 +211,11 @@ A licence is validated for a season, and until it is, its holder may not be
 fielded. The club import already knows who is concerned — it lists the members
 the federation did not return — so that answer is kept rather than shown once
 and forgotten: whoever the last club-wide import did not list carries a **Sans
-licence** tag beside their name, everywhere their name appears, and a captain
-who puts them on a team sheet is told so by name — both while composing and, for
-a line-up already saved, on the match screen itself. Warning only at the moment
+licence** tag beside their name, everywhere their name appears — the journées
+matrix a captain works from, a match's roster, a team's squad, the players list,
+their own page — and a captain who puts them on a team sheet is told so by name,
+both while composing and, for a line-up already saved, on the match screen
+itself. Warning only at the moment
 of composing would miss the ordinary case: the line-up was made three weeks ago,
 and nobody reopens it to check.
 

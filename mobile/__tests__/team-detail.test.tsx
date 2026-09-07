@@ -23,6 +23,9 @@ const mockData = {
   matchDays: [],
   games: [],
   gameSelections: [],
+  // Per-season facts about a licensee (#482, #488) — none in these fixtures.
+  seasons: [] as { id: string; displayName: string; status: string }[],
+  playerSeasonLicences: [] as { seasonId: string; playerId: string }[],
   updateTeam,
 }
 
@@ -84,6 +87,8 @@ beforeEach(() => {
   mockData.teams = [team]
   mockData.players = [captain, teammate]
   mockData.clubs = [club]
+  mockData.seasons = [{ id: 's1', displayName: '2026/2027', status: 'active' }]
+  mockData.playerSeasonLicences = []
   mockData.phases = [
     { id: 'ph1', seasonId: 's1', name: 'p1', displayName: '2026/2027 Phase 1', status: 'active' },
   ]
@@ -177,5 +182,25 @@ describe('Fiche équipe — groupe WhatsApp', () => {
     fireEvent.press(screen.getByText("Modifier l'équipe"))
 
     expect(screen.getByDisplayValue('https://chat.whatsapp.com/xyz')).toBeTruthy()
+  })
+})
+
+// #488 — a squad list is exactly where a captain would otherwise not notice
+// that one of his players has no validated licence this season.
+describe('Fiche équipe — licence non validée (#488)', () => {
+  it('marque le joueur que la FFTT n’a pas listé', () => {
+    // The club has imported (one licence on file), and Lou is not on it.
+    mockData.playerSeasonLicences = [{ seasonId: 's1', playerId: 'p1' }]
+    render(<TeamDetailScreen />)
+    expect(screen.getByText('Lou Dubois')).toBeTruthy()
+    expect(screen.queryAllByText('Sans licence')).toHaveLength(1)
+  })
+
+  // No row is not the same as no licence: a club that never imported says
+  // nothing about anybody.
+  it('ne marque personne tant que le club n’a rien importé', () => {
+    mockData.playerSeasonLicences = []
+    render(<TeamDetailScreen />)
+    expect(screen.queryAllByText('Sans licence')).toHaveLength(0)
   })
 })

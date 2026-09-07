@@ -150,6 +150,14 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Warning **while composing is not enough**: nobody reopens the sheet to check,
   so the match screen itself carries it too, on the line-up already saved. That
   is the screen a captain lands on the morning of the match.
+- It rides with the **name**, wherever a name is listed: the journées matrix and
+  its "autres joueurs", a match's roster and its quick view, a team's squad, the
+  player sheet — web and app alike. `unlicensedIds` is the one derivation; never
+  re-answer it at a call site.
+- In the **matrix** the marker goes on the licence line, not beside the name:
+  that line is already about the licence, and the name column is the one column
+  the matrix cannot afford to widen. The feuille de match is left alone — it
+  mirrors FFTT's own sheet.
 - **The mobile app reads both per-season tables** (#482's category, this one),
   which is the first time it has carried either; `withDefaults` fills them in
   for an offline cache written before they existed.

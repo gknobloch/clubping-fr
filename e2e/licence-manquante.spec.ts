@@ -23,6 +23,15 @@ test.describe('Licence non validée (#488)', () => {
     await expect(other).not.toContainText('Sans licence')
   })
 
+  // The matrix is the screen a captain works from: the fact has to be there
+  // too, not only on a match's own page.
+  test('marque le licencié dans la matrice des journées', async ({ page }) => {
+    await loginAs(page, 'colle')
+    await page.goto('/journees')
+    await expect(page.getByRole('row', { name: new RegExp(LACH) })).toContainText('Sans licence')
+    await expect(page.getByRole('row', { name: /Joris Szulc/ })).not.toContainText('Sans licence')
+  })
+
   test('le marque aussi sur sa fiche', async ({ page }) => {
     await loginAs(page, 'admin')
     await page.goto('/joueurs/p2-player-3')
@@ -48,6 +57,15 @@ test.describe('Licence non validée (#488)', () => {
     // And the tag rides next to his name in the roster itself.
     await expect(page.getByRole('listitem').filter({ hasText: LACH }))
       .toContainText('Sans licence')
+  })
+
+  test('le marque dans l’aperçu d’une rencontre', async ({ page }) => {
+    await loginAs(page, 'colle')
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Aperçu' }).first().click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('listitem').filter({ hasText: LACH })).toContainText('Sans licence')
   })
 
   test('prévient le capitaine qui l’aligne, sans l’en empêcher', async ({ page }) => {

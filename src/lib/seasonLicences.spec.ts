@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { PlayerSeasonLicence } from '@/types'
-import { clubLicences } from './seasonLicences'
+import { clubLicences, unlicensedIds } from './seasonLicences'
 
 // #488 — a licence not validated for the season is a fact the import already
 // establishes and used to throw away. The care here is entirely about the third
@@ -48,5 +48,17 @@ describe('clubLicences', () => {
     const { missing } = clubLicences(rows, '26', CLUB)
     expect(missing(['p3', 'p1', 'p2'])).toEqual(['p3'])
     expect(missing(['p1', 'p2'])).toEqual([])
+  })
+})
+
+describe('unlicensedIds', () => {
+  const club = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }]
+
+  it('is the set a list of names needs', () => {
+    expect(unlicensedIds(rows, '26', club)).toEqual(new Set(['p3']))
+  })
+
+  it('is empty for a club that has never imported — not "everyone"', () => {
+    expect(unlicensedIds([], '26', club)).toEqual(new Set())
   })
 })

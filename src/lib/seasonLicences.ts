@@ -53,3 +53,20 @@ export function clubLicences(
       imported ? playerIds.filter((id) => !held.has(id)) : [],
   }
 }
+
+/**
+ * The club members the federation did not list, as a set — what a screen that
+ * renders a list of names actually wants.
+ *
+ * Empty for a club that has never imported, which is the point: no row is not
+ * the same as no licence.
+ */
+export function unlicensedIds(
+  rows: PlayerSeasonLicence[],
+  seasonId: string | undefined,
+  clubPlayers: readonly { id: string }[],
+): Set<string> {
+  const ids = clubPlayers.map((p) => p.id)
+  const { statusOf } = clubLicences(rows, seasonId, ids)
+  return new Set(ids.filter((id) => statusOf(id) === 'missing'))
+}
