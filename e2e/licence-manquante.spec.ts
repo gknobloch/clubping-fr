@@ -34,6 +34,22 @@ test.describe('Licence non validée (#488)', () => {
   test.describe('depuis un téléphone', () => {
     test.use({ viewport: { width: 375, height: 812 } })
 
+  // The captain has to know without going looking: the line-up he saved three
+  // weeks ago is the one he will field, and nobody reopens the sheet to check.
+  test('le dit sur la composition déjà enregistrée, pas seulement en composant', async ({ page }) => {
+    await loginAs(page, 'colle')
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Aperçu' }).first().click()
+    await page.getByRole('link', { name: 'Détails' }).click()
+    await expect(page).toHaveURL(/\/journees\//)
+
+    await expect(page.getByRole('alert'))
+      .toContainText(`${LACH} — licence non validée cette saison`)
+    // And the tag rides next to his name in the roster itself.
+    await expect(page.getByRole('listitem').filter({ hasText: LACH }))
+      .toContainText('Sans licence')
+  })
+
   test('prévient le capitaine qui l’aligne, sans l’en empêcher', async ({ page }) => {
     await loginAs(page, 'colle')
     await page.goto('/')

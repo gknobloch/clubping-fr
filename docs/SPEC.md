@@ -212,7 +212,10 @@ fielded. The club import already knows who is concerned — it lists the members
 the federation did not return — so that answer is kept rather than shown once
 and forgotten: whoever the last club-wide import did not list carries a **Sans
 licence** tag beside their name, everywhere their name appears, and a captain
-who puts them on a team sheet is told so by name before saving it.
+who puts them on a team sheet is told so by name — both while composing and, for
+a line-up already saved, on the match screen itself. Warning only at the moment
+of composing would miss the ordinary case: the line-up was made three weeks ago,
+and nobody reopens it to check.
 
 It is a warning and never a refusal. An unvalidated licence is usually a renewal
 still going through, the club is the one that knows, and a line-up that has to

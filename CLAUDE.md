@@ -145,8 +145,11 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   who holds a licence is a fact about FFTT's answer, not about which checkboxes
   an admin ticked.
 - It **never filters and never blocks** — an unvalidated licence is usually a
-  renewal in flight. The tag rides next to the name, and the line-up sheet names
+  renewal in flight. The tag rides next to the name, and the line-up names
   whoever is picked, on web and mobile alike.
+- Warning **while composing is not enough**: nobody reopens the sheet to check,
+  so the match screen itself carries it too, on the line-up already saved. That
+  is the screen a captain lands on the morning of the match.
 - **The mobile app reads both per-season tables** (#482's category, this one),
   which is the first time it has carried either; `withDefaults` fills them in
   for an offline cache written before they existed.
