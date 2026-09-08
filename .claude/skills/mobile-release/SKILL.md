@@ -177,6 +177,13 @@ TestFlight and review; Android lands on the Play `internal` track, set by
 `eas.json`. **Promotion to production is manual, from each console** — say this
 plainly when reporting, so nobody thinks the release is live when it is not.
 
+On the iOS side that promotion starts with a **new version record** in App Store
+Connect, named for the exact `expo.version` of this release. The record's number
+is what the product page shows, and it is allowed to differ from the build's — the
+live record still says 1.0 while carrying the 1.2.0 binary, because no record was
+ever made for 1.1.x or 1.2.0. One release, one new record, so the store page and
+the repo finally agree.
+
 ### The three fields EAS does not fill
 
 `eas submit` uploads the binary and no text at all. The version's section of

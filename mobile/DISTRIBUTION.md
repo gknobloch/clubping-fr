@@ -81,20 +81,23 @@ is pinned in `eas.json` under `submit.production.ios.ascAppId`.
 
 ## The version record in App Store Connect is not the version in the repo
 
-App Store Connect holds a *version record* — the "1.0" or "1.2.0" at the top of the
-Distribution tab — and it is created by hand there, not by the upload. A build can only
-be attached to a record whose number matches its `CFBundleShortVersionString`, which is
-`expo.version` from `app.json`.
+App Store Connect holds a *version record* — the "1.0" at the top of the Distribution
+tab — and it is created by hand there, not by the upload. **Its number and the build's
+`CFBundleShortVersionString` are allowed to diverge**, and here they do: the record is
+still the 1.0 from the first submission attempt, made before the repo reached 1.1.x, and
+the build attached to it is 1.2.0. The product page says 1.0; the app on a member's
+phone says 1.2.0. Nothing is broken — the store simply shows the record's number, and
+nobody made a new record.
 
-The record that first went through review says **1.0**, left over from an early
-submission attempt made before the repo reached 1.1.x. It is history, not a convention:
-from here every release creates a **new** record carrying the exact `expo.version` of
-the build it will hold — 1.2.0, 1.3.0, and so on. Never rename or reuse an old record to
-avoid making one.
+Version records only have to *increase*, so this is fixed forward, not backfilled: the
+next release creates a record named for the exact `expo.version` it will hold — 1.3.0 —
+and from then on the repo, the binary and the store page say the same thing. 1.1.x and
+1.2.0 never get records of their own, and do not need them.
 
-So when the store page and this repo disagree about the number, the record is what is
-behind: check which build the live record actually carries before concluding that a
-version shipped.
+So the rule from here: **one release, one new record, named `expo.version`.** Never
+rename or reuse an old record to avoid making one, and when the store page and this repo
+disagree about the number, look at which build the record carries before concluding
+anything about what shipped.
 
 ## The store page's language comes from the binary, not from App Store Connect
 
