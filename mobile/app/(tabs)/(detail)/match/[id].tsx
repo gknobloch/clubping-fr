@@ -14,6 +14,7 @@ import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
 import { PlayerRow } from '@/components/PlayerRow'
+import { clubLicences } from '@shared/lib/seasonLicences'
 import { PlayerSheet } from '@/components/PlayerSheet'
 import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
@@ -39,8 +40,8 @@ export default function MatchDetailScreen() {
   const router = useRouter()
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, divisions, groups,
-    gameAvailabilities, gameSelections, playerPhasePoints,
+    clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
+    gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
     setAvailability, clearAvailability, setGameSelection,
   } = useAppData()
 
@@ -110,6 +111,24 @@ export default function MatchDetailScreen() {
   const selectedPlayers = selection.map((pid) => playerMap.get(pid)).filter(Boolean) as Player[]
   const rosterIds = new Set(roster.map((p) => p.id))
   const borrowedSelected = selectedPlayers.filter((p) => !rosterIds.has(p.id))
+
+  // Whose licence the federation has not listed this season (#488). Not a
+  // filter: an unvalidated licence is usually a renewal in flight.
+  // Not memoised: this sits past the screen's early returns, where a hook may
+  // not go, and it is one pass over the club.
+  const unlicensed = (() => {
+    const clubIds = allClubPlayers.map((p) => p.id)
+    const { statusOf } = clubLicences(
+      playerSeasonLicences,
+      seasons.find((s) => s.status === 'active')?.id,
+      clubIds,
+    )
+    return new Set(clubIds.filter((playerId) => statusOf(playerId) === 'missing'))
+  })()
+
+  const pickedUnlicensed = allClubPlayers
+    .filter((p) => selection.includes(p.id) && unlicensed.has(p.id))
+    .map((p) => `${p.firstName} ${p.lastName}`)
 
   const committed = playersCommittedElsewhere(
     team.id, matchDay.number, clubTeamsInPhase, games, matchDays, gameSelections,
@@ -192,6 +211,20 @@ export default function MatchDetailScreen() {
         </View>
 
         {/* Availabilities + line-up (check = selected) */}
+        {/* The line-up as it stands, not only as it is being made (#488):
+            nobody reopens the sheet to check, and this is the screen a captain
+            lands on the morning of the match. */}
+        {pickedUnlicensed.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.licenceWarning}>
+              {pickedUnlicensed.length === 1
+                ? `${pickedUnlicensed[0]} est aligné sans licence validée pour cette saison à la FFTT.`
+                : `${pickedUnlicensed.length} joueurs alignés n’ont pas de licence validée pour cette saison à la FFTT : ${pickedUnlicensed.join(', ')}.`}
+              {' '}Vérifiez avant la rencontre.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Disponibilités</Text>
           {roster.map((p) => {
@@ -207,6 +240,7 @@ export default function MatchDetailScreen() {
                   canEdit={false}
                   gameDatePast={gameDatePast}
                   lockedReason={`Joue en Équipe ${lockedTeam}`}
+                  unlicensed={unlicensed.has(p.id)}
                   onPickAvailability={() => {}}
                   onClear={() => {}}
                   onPressName={() => setQuickViewPlayer(p)}
@@ -224,6 +258,7 @@ export default function MatchDetailScreen() {
                 selected={selection.includes(p.id)}
                 isMe={p.id === myPlayerId}
                 canEdit={canEdit}
+                unlicensed={unlicensed.has(p.id)}
                 gameDatePast={gameDatePast}
                 onPickAvailability={(status) =>
                   setAvailability(
@@ -313,6 +348,8 @@ export default function MatchDetailScreen() {
             matchDays,
             games,
             gameSelections,
+            playerSeasonLicences,
+            seasonId: seasons.find((s) => s.status === 'active')?.id,
           }}
           onSave={(ids) => setGameSelection(team.id, game.id, ids)}
           onClose={() => setShowCompose(false)}
@@ -376,6 +413,7 @@ export default function MatchDetailScreen() {
 
 const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 12 },
+  licenceWarning: { fontSize: 13, color: '#92400E' },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 
   card: {

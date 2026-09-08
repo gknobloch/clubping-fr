@@ -18,6 +18,9 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
 import { getVenue } from '@/lib/venue'
 import { sortByName } from '@/lib/sortByName'
+import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
+import { activeSeasonId } from '@/lib/season'
+import { clubLicences } from '@/lib/seasonLicences'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingRounds } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
@@ -39,11 +42,20 @@ export function HomePage() {
   const {
     clubs, seasons, teams, players, phases, divisions, groups,
     matchDays, games, gameAvailabilities, gameSelections,
+    competitions, competitionEligibilities, playerSeasonLicences,
     setGameAvailability, clearGameAvailability, setGameSelection,
   } = useAppData()
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
   const [matchIndex, setMatchIndex] = useState(0)
   const [composing, setComposing] = useState(false)
+
+  // Whose licence the federation has not listed this season, in my own club
+  // (#488) — the line-up sheet flags them rather than hiding them.
+  const unlicensedInMyClub = useMemo(() => {
+    const clubIds = players.filter((p) => p.clubId === user?.clubId).map((p) => p.id)
+    const { statusOf } = clubLicences(playerSeasonLicences, activeSeasonId(seasons), clubIds)
+    return new Set(clubIds.filter((id) => statusOf(id) === 'missing'))
+  }, [players, user?.clubId, playerSeasonLicences, seasons])
 
   const today = new Date().toISOString().slice(0, 10)
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
@@ -212,12 +224,18 @@ export function HomePage() {
                 const selectedIds = gameSelections.find((s) => s.gameId === g.id && s.teamId === myActiveTeam.id)?.playerIds ?? []
                 const canCompose = canEditGameSelection(myActiveTeam.id)
                 const short = availableCount < playersPerGame
-                const eligibleOthers = players.filter(
-                  (p) =>
-                    p.clubId === myActiveTeam.clubId &&
-                    p.status === 'active' &&
-                    !myActiveTeam.playerIds.includes(p.id) &&
-                    isEligibleForTeam(p.id, myActiveTeam.id, md.id),
+                // Brûlage, then the competition the team's division belongs
+                // to (#482): a renfort has to be admitted by both.
+                const eligibleOthers = eligiblePlayers(
+                  players.filter(
+                    (p) =>
+                      p.clubId === myActiveTeam.clubId &&
+                      p.status === 'active' &&
+                      !myActiveTeam.playerIds.includes(p.id) &&
+                      isEligibleForTeam(p.id, myActiveTeam.id, md.id),
+                  ),
+                  competitionOfDivision(myActiveTeam.divisionId, divisions, competitions),
+                  competitionEligibilities.filter((e) => e.clubId === myActiveTeam.clubId),
                 )
                 const composeCommittedElsewhere = playersCommittedElsewhere(
                   myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections,
@@ -414,6 +432,7 @@ export function HomePage() {
                         initialSelection={selectedIds}
                         availabilityOf={(playerId) => statusOf(g.id, playerId)}
                         committedElsewhere={composeCommittedElsewhere}
+                        unlicensed={unlicensedInMyClub}
                         onSave={(playerIds) => setGameSelection(g.id, myActiveTeam.id, playerIds)}
                         onClose={() => setComposing(false)}
                       />

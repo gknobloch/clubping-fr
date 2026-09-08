@@ -13,11 +13,13 @@ import {
   mockGroups,
   mockMatchDays,
   mockPhases,
-  mockPlayerPhasePoints,
+  mockPlayerPhasePoints, mockPlayerSeasonCategories,
   mockPlayers,
   mockSeasons,
   mockTeams,
   mockUsers,
+  mockCompetitions,
+  mockCompetitionEligibilities,
 } from '@/mock/data'
 
 const CLUB_ID = 'club-fftt-06680011'
@@ -64,9 +66,12 @@ const OTHER_PLAYER = (() => {
 function baseData() {
   return {
     divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
+    competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
+    playerSeasonLicences: [],
+    playerSeasonCategories: mockPlayerSeasonCategories,
     playerPhasePoints: mockPlayerPhasePoints,
   }
 }

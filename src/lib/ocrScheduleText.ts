@@ -80,15 +80,26 @@ function adaptiveBinarize(gray: Uint8ClampedArray, width: number, height: number
   return out
 }
 
-async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
-  const bitmap = await createImageBitmap(file)
-  const scale = bitmap.width < 1200 ? 1200 / bitmap.width : 1
+/**
+ * One page to read: an image (a picked File is one), or a canvas a PDF page
+ * was rendered onto (renderPdfPages, in pdfScheduleText.ts). A PDF is never a
+ * page itself — createImageBitmap() below decodes images, not documents, and
+ * given one it throws (#486).
+ */
+export type OcrPage = Blob | HTMLCanvasElement
+
+/** One page, or however many a document turned out to have. */
+export type OcrPages = OcrPage | Iterable<OcrPage> | AsyncIterable<OcrPage>
+
+async function preprocessForOcr(page: OcrPage): Promise<HTMLCanvasElement> {
+  const source = page instanceof HTMLCanvasElement ? page : await createImageBitmap(page)
+  const scale = source.width < 1200 ? 1200 / source.width : 1
   const canvas = document.createElement('canvas')
-  canvas.width = Math.round(bitmap.width * scale)
-  canvas.height = Math.round(bitmap.height * scale)
+  canvas.width = Math.round(source.width * scale)
+  canvas.height = Math.round(source.height * scale)
   const ctx = canvas.getContext('2d')!
   ctx.imageSmoothingEnabled = true
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
   const d = imageData.data
   const gray = new Uint8ClampedArray(d.length / 4)
@@ -110,39 +121,65 @@ async function preprocessForOcr(file: File | Blob): Promise<HTMLCanvasElement> {
 // real validation once these lines are handed to the parser.
 const TITLE_LINE_RE = /Poule|phase/i
 
-/** Extract text lines from an image file (or a rasterized PDF page) via OCR. */
-export async function extractOcrScheduleLines(file: File | Blob): Promise<string[]> {
+/**
+ * Extract text lines from one or more pages — an image file, or the canvases a
+ * PDF's pages were rendered onto — via OCR, in order. One worker reads them
+ * all: creating it downloads the French language data, which is by far the
+ * most expensive part of a run and has nothing to do with the page.
+ */
+export async function extractOcrScheduleLines(pages: OcrPages): Promise<string[]> {
   const { createWorker, PSM } = await import('tesseract.js')
   const worker = await createWorker('fra')
   try {
-    const canvas = await preprocessForOcr(file)
-    const { data } = await worker.recognize(canvas)
-    const lines = data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-    if (lines.some((l) => /Poule/i.test(l))) return lines
-
-    // Tesseract's default automatic layout analysis (PSM.AUTO) can classify
-    // a bordered, shaded box as a non-text graphic and drop it entirely
-    // rather than misreading it — confirmed against a real upload whose
-    // extracted text started exactly at the roster table, the title box
-    // simply absent, not garbled, even after the per-tile binarization above
-    // (which fixes the header's own readability once Tesseract actually
-    // attempts to read it, but not this layout-classification problem).
-    // PSM.SPARSE_TEXT ("find text in no particular order") re-attempts the
-    // whole page without that layout analysis, which does recover the box —
-    // but only pull the specific title-shaped line(s) out of its result
-    // rather than trusting the rest of it: sparse mode's lack of layout
-    // assumptions produces heavy noise on anything with real-world grain
-    // (compression artifacts, camera noise), and that noise routinely lands
-    // on the same output line as otherwise-correct body text, breaking the
-    // parser's end-of-line-anchored regexes — confirmed against a noisy
-    // synthetic image where trusting the full retry output corrupted an
-    // otherwise perfectly-read roster/journée section.
-    await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
-    const retry = await worker.recognize(canvas)
-    const retryLines = retry.data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-    const recovered = retryLines.filter((l) => TITLE_LINE_RE.test(l))
-    return [...recovered, ...lines]
+    const lines: string[] = []
+    // `for await` over the one-page case too, and over the PDF renderer's
+    // generator, which only draws the next page once this one has been read.
+    for await (const page of isMany(pages) ? pages : [pages]) {
+      lines.push(...await recognizePage(worker, page, PSM))
+    }
+    return lines
   } finally {
     await worker.terminate()
   }
+}
+
+function isMany(pages: OcrPages): pages is Iterable<OcrPage> | AsyncIterable<OcrPage> {
+  return Symbol.iterator in pages || Symbol.asyncIterator in pages
+}
+
+type Tesseract = typeof import('tesseract.js')
+type OcrWorker = Awaited<ReturnType<Tesseract['createWorker']>>
+
+/** Read one page, with the title-box rescue pass below when it needs it. */
+async function recognizePage(worker: OcrWorker, page: OcrPage, PSM: Tesseract['PSM']): Promise<string[]> {
+  const canvas = await preprocessForOcr(page)
+  const { data } = await worker.recognize(canvas)
+  const lines = data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  if (lines.some((l) => /Poule/i.test(l))) return lines
+
+  // Tesseract's default automatic layout analysis (PSM.AUTO) can classify
+  // a bordered, shaded box as a non-text graphic and drop it entirely
+  // rather than misreading it — confirmed against a real upload whose
+  // extracted text started exactly at the roster table, the title box
+  // simply absent, not garbled, even after the per-tile binarization above
+  // (which fixes the header's own readability once Tesseract actually
+  // attempts to read it, but not this layout-classification problem).
+  // PSM.SPARSE_TEXT ("find text in no particular order") re-attempts the
+  // whole page without that layout analysis, which does recover the box —
+  // but only pull the specific title-shaped line(s) out of its result
+  // rather than trusting the rest of it: sparse mode's lack of layout
+  // assumptions produces heavy noise on anything with real-world grain
+  // (compression artifacts, camera noise), and that noise routinely lands
+  // on the same output line as otherwise-correct body text, breaking the
+  // parser's end-of-line-anchored regexes — confirmed against a noisy
+  // synthetic image where trusting the full retry output corrupted an
+  // otherwise perfectly-read roster/journée section.
+  await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
+  const retry = await worker.recognize(canvas)
+  const retryLines = retry.data.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const recovered = retryLines.filter((l) => TITLE_LINE_RE.test(l))
+  // Back to the default for the next page: sparse mode is a rescue for this
+  // page's title box, not a setting the rest of the document should inherit.
+  await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO })
+  return [...recovered, ...lines]
 }

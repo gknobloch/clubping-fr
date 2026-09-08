@@ -26,6 +26,7 @@ import { sortByName } from '@shared/lib/sortByName'
 import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
+import { unlicensedIds } from '@shared/lib/seasonLicences'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
@@ -100,10 +101,22 @@ function shortDate(iso: string): string {
 export default function JourneesScreen() {
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, divisions, groups,
-    gameAvailabilities, gameSelections, playerPhasePoints,
+    clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
+    gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
     setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
   } = useAppData()
+
+  // Members the federation has not listed a licence for this season (#488).
+  // The matrix is where a captain reads his squad, so the fact rides with the
+  // name here as it does on a match's own screen.
+  const unlicensed = useMemo(
+    () => unlicensedIds(
+      playerSeasonLicences,
+      seasons.find((se) => se.status === 'active')?.id,
+      players.filter((p) => p.clubId === user?.clubId),
+    ),
+    [playerSeasonLicences, seasons, players, user?.clubId],
+  )
   const router = useRouter()
 
   const myClubId = user?.clubId
@@ -274,6 +287,7 @@ export default function JourneesScreen() {
       return {
         player,
         isCaptain: team.captainId === player.id,
+        unlicensed: unlicensed.has(player.id),
         points: pointsFor(playerPhasePoints, team.phaseId, player.id) || undefined,
         availableCount: fixtures.filter(
           (g) => availabilityOf(player.id, g.id) === 'available',
@@ -342,6 +356,7 @@ export default function JourneesScreen() {
       return {
         player,
         isCaptain: false,
+        unlicensed: unlicensed.has(player.id),
         // Read on the phase, not on a team (#384): these players are in none,
         // and they have points all the same.
         points: phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined,

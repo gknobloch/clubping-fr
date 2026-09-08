@@ -106,6 +106,8 @@ export interface MatrixRow {
   player: Player
   isCaptain: boolean
   points?: string
+  /** The FFTT has not listed a licence for them this season (#488). */
+  unlicensed?: boolean
   /** Answered available, over the team's fixtures in the phase. Ignored in a
    *  section with no team: there are no fixtures of theirs to count. */
   availableCount: number
@@ -271,8 +273,17 @@ export function MatchDayMatrix({
                   {row.player.firstName} {row.player.lastName}
                   {row.points ? <Text style={s.points}> ({row.points})</Text> : null}
                 </Text>
-                {row.player.licenseNumber ? (
-                  <Text style={s.license}>{row.player.licenseNumber}</Text>
+                {/* The marker goes on the licence line — that line is already
+                    about the licence, and the name column cannot widen (#488). */}
+                {(row.player.licenseNumber || row.unlicensed) ? (
+                  <Text style={s.license} numberOfLines={1}>
+                    {row.player.licenseNumber}
+                    {row.unlicensed ? (
+                      <Text style={s.unlicensed}>
+                        {row.player.licenseNumber ? ' ' : ''}Sans licence
+                      </Text>
+                    ) : null}
+                  </Text>
                 ) : null}
               </View>
               <Text style={[s.count, { width: c.dispo }]}>
@@ -516,6 +527,7 @@ const s = StyleSheet.create({
   name: { fontSize: 13, color: colors.textPrimary, paddingHorizontal: 4 },
   nameCaptain: { fontFamily: fonts.bold },
   points: { color: colors.textSecondary },
+  unlicensed: { fontFamily: fonts.semiBold, color: '#92400E' },
   license: { fontSize: 10, color: colors.textSecondary, paddingHorizontal: 4, marginTop: 1 },
   count: {
     fontSize: 12,

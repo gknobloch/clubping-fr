@@ -32,6 +32,9 @@ const mockData = {
   gameAvailabilities: [],
   gameSelections: [],
   playerPhasePoints: [],
+  // Per-season facts about a licensee (#482, #488) — none in these fixtures.
+  seasons: [],
+  playerSeasonLicences: [],
   setAvailability: jest.fn(),
   clearAvailability: jest.fn(),
   setGameSelection: jest.fn(),

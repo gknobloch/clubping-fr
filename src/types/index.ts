@@ -1,3 +1,5 @@
+import type { PlayerCategory } from '../lib/playerCategories'
+
 // Captaincy is per-team (see Team.captainId), so it is NOT a role — it's derived.
 export type Role = 'general_admin' | 'club_admin' | 'player'
 
@@ -81,6 +83,86 @@ export interface Division {
   identifier?: string
   /** FFTT id of the division directly above this one (#236); absent for a top-level division. */
   parentId?: string
+  /**
+   * The competition this division belongs to (#482); absent for a division
+   * that belongs to none — which restricts nobody, and is what every division
+   * is until a general admin says otherwise.
+   */
+  competitionId?: string
+  /**
+   * Categories this division admits, narrowing its competition's (#482).
+   * **Absent means inherit**; an empty array means every category. More
+   * specific wins, so where this is set the competition's list is not read.
+   *
+   * Only has an effect inside a competition: a division belonging to none
+   * restricts nobody, since there is no place for a club's derogations to hang.
+   */
+  categories?: PlayerCategory[]
+}
+
+/**
+ * A competition — a championship a division belongs to (#482).
+ *
+ * The rattachement runs division → competition rather than team → competition
+ * on purpose: a team already declares a division, a division already declares
+ * its level, and a championship is what a set of divisions IS. Asking a club
+ * to restate it per team would be a third place for the same fact to be wrong.
+ */
+export interface Competition {
+  id: string
+  displayName: string
+  /**
+   * The categories admitted by default. **Empty means every category** — the
+   * senior championship does not enumerate seventeen codes to say "anyone".
+   */
+  categories: PlayerCategory[]
+  /**
+   * When true a club may only ever exclude, never add: the competition is
+   * reserved to its categories, and no club decides otherwise. This is what
+   * keeps a veteran out of a youth championship.
+   */
+  isCategoryLocked: boolean
+  sortOrder: number
+  isArchived: boolean
+  /**
+   * The FFTT contest this competition is, when it came from the divisions
+   * import — "1" is the men's team championship. Absent for a competition
+   * created by hand.
+   *
+   * The contest's *identifier*, never its id: FFTT issues a fresh id per
+   * (organisation, season), so the id would make this a different competition
+   * every August. Set by the import alone; renaming the competition does not
+   * change what it is.
+   */
+  ffttContestIdentifier?: string
+  /**
+   * FFTT's own name for that contest, kept beside the identifier because the
+   * identifier alone does NOT identify one: org 15 lists "TO" twice in a single
+   * season ("TOP DE ZONE 06" and "TOP DE QUALIFICATION"), and "TO" in another
+   * league is "Tournoi par Equipes". The pair is what is unique and stable.
+   *
+   * Distinct from `displayName` on purpose: renaming a competition — which the
+   * import invites — must not break the match on the next import.
+   */
+  ffttContestName?: string
+}
+
+/** A club's amendment to a competition's default mapping (#482). */
+export type EligibilityEffect = 'included' | 'excluded'
+
+/**
+ * One licensee a club has added to, or removed from, one competition.
+ *
+ * Keyed on (clubId, competitionId, playerId) — the table's primary key. The
+ * club is carried rather than derived from the player because it is the scope
+ * the API authorizes against: a club admin writes rows bearing their own club
+ * and no others.
+ */
+export interface CompetitionEligibility {
+  clubId: string
+  competitionId: string
+  playerId: string
+  effect: EligibilityEffect
 }
 
 export interface Group {
@@ -166,6 +248,37 @@ export interface PlayerPhasePoints {
   points: string
 }
 
+/**
+ * A player's FFTT age category for a season (#482).
+ *
+ * Keyed on (seasonId, playerId). It hung off the licensee at first, as one
+ * value per person, which reads fine for a week and is wrong by August: a cadet
+ * becomes a junior, and the next import would overwrite the value that decided
+ * last season's eligibility. A licence is issued for a season, so the category
+ * is stated per season — the same reasoning that put points on the phase, one
+ * grain up, because nobody changes category at a phase boundary.
+ */
+export interface PlayerSeasonCategory {
+  seasonId: string
+  playerId: string
+  /** The FFTT code verbatim ("S", "V45", "B2") — normalized on read. */
+  category: string
+}
+
+/**
+ * A licence the FFTT listed for a season (#488).
+ *
+ * Keyed on (seasonId, playerId), and a row is the whole content: its presence
+ * means the federation listed that licence when the club last imported. Its
+ * absence means one of two very different things — the licence is not validated
+ * for the season, or nobody has ever run the import — which is why nothing
+ * reads it without `src/lib/seasonLicences.ts` to say which.
+ */
+export interface PlayerSeasonLicence {
+  seasonId: string
+  playerId: string
+}
+
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
 
 export type AvailabilityOverriddenBy = 'captain' | 'club_admin'
@@ -228,6 +341,8 @@ export interface GameSelection {
  */
 export interface DataState {
   divisions: Division[]
+  competitions: Competition[]
+  competitionEligibilities: CompetitionEligibility[]
   clubs: Club[]
   seasons: Season[]
   phases: Phase[]
@@ -235,6 +350,8 @@ export interface DataState {
   teams: Team[]
   players: Player[]
   playerPhasePoints: PlayerPhasePoints[]
+  playerSeasonCategories: PlayerSeasonCategory[]
+  playerSeasonLicences: PlayerSeasonLicence[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]

@@ -24,6 +24,8 @@ import {
   filterPlayersBySearch,
 } from '@/lib/playerSearch'
 import { pointsFor } from '@/lib/phasePoints'
+import { activeSeasonId } from '@/lib/season'
+import { unlicensedIds } from '@/lib/seasonLicences'
 import { orderPhases, defaultPhase } from '@/lib/phases'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
@@ -128,6 +130,37 @@ function MatchDayColgroup({ matchDayCount }: { matchDayCount: number }) {
   )
 }
 
+/**
+ * The licence line under a name in the matrix: the number, and whether the
+ * federation listed it at all this season (#488).
+ *
+ * The marker goes here rather than beside the name because this line is already
+ * about the licence, and because a pill next to the name would widen the one
+ * column the matrix cannot afford to widen.
+ */
+function LicenceLine({
+  licenseNumber,
+  unlicensed,
+}: {
+  licenseNumber?: string
+  unlicensed: boolean
+}) {
+  if (!licenseNumber && !unlicensed) return null
+  return (
+    <span className="block text-xs">
+      {licenseNumber && <span className="text-slate-400">{licenseNumber}</span>}
+      {unlicensed && (
+        <span
+          className={`font-semibold text-amber-700 ${licenseNumber ? 'ml-1' : ''}`}
+          title="La FFTT n’a pas listé sa licence pour cette saison."
+        >
+          Sans licence
+        </span>
+      )}
+    </span>
+  )
+}
+
 export function MatchDaysPage() {
   const { user } = useAuth()
   const {
@@ -142,6 +175,8 @@ export function MatchDaysPage() {
     gameAvailabilities,
     gameSelections,
     playerPhasePoints,
+    playerSeasonLicences,
+    seasons,
     setGameAvailability,
     clearGameAvailability,
     getGameSelectionPlayerIds,
@@ -212,6 +247,18 @@ export function MatchDaysPage() {
   }, [myClubTeamsInPhase, getMatchDaysForTeam])
 
   /** Club players (active) not in any of the phase's team rosters; for "Other players" section. */
+  // Members the federation has not listed a licence for this season (#488).
+  // The matrix is the screen a captain works from, so the fact rides with the
+  // name here too — not only on a match's own page.
+  const unlicensed = useMemo(
+    () => unlicensedIds(
+      playerSeasonLicences,
+      activeSeasonId(seasons),
+      players.filter((p) => p.clubId === userClubId),
+    ),
+    [playerSeasonLicences, seasons, players, userClubId],
+  )
+
   const otherPlayers = useMemo(() => {
     if (!userClubId) return []
     const inRoster = new Set(myClubTeamsInPhase.flatMap((t) => t.playerIds ?? []))
@@ -1210,9 +1257,10 @@ export function MatchDaysPage() {
                                   return pts ? <span className="ml-1 text-slate-500 font-normal">({pts})</span> : null
                                 })()}
                               </span>
-                              {player.licenseNumber && (
-                                <span className="block text-xs text-slate-400">{player.licenseNumber}</span>
-                              )}
+                              <LicenceLine
+                                licenseNumber={player.licenseNumber}
+                                unlicensed={unlicensed.has(player.id)}
+                              />
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-center text-slate-600">
                               {availCount}/{teamGamesCount}
@@ -1546,9 +1594,10 @@ export function MatchDaysPage() {
                           return pts ? <span className="ml-1 text-slate-500 font-normal">({pts})</span> : null
                         })()}
                       </span>
-                      {player.licenseNumber && (
-                        <span className="block text-xs text-slate-400">{player.licenseNumber}</span>
-                      )}
+                      <LicenceLine
+                        licenseNumber={player.licenseNumber}
+                        unlicensed={unlicensed.has(player.id)}
+                      />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-center text-slate-400">—</td>
                     <td className="whitespace-nowrap px-3 py-2 text-center text-slate-400">—</td>

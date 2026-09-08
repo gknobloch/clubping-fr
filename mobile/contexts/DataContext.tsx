@@ -27,6 +27,8 @@ import type {
   GameSelection,
   AvailabilityOverriddenBy,
   AvailabilityStatus,
+  PlayerSeasonCategory,
+  PlayerSeasonLicence,
   User,
 } from '@shared/types'
 import { apiUrl } from '@/constants/api'
@@ -45,6 +47,8 @@ interface DataState {
   teams: Team[]
   players: Player[]
   playerPhasePoints: PlayerPhasePoints[]
+  playerSeasonCategories: PlayerSeasonCategory[]
+  playerSeasonLicences: PlayerSeasonLicence[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -61,6 +65,8 @@ const emptyState: DataState = {
   teams: [],
   players: [],
   playerPhasePoints: [],
+  playerSeasonCategories: [],
+  playerSeasonLicences: [],
   matchDays: [],
   games: [],
   gameAvailabilities: [],
@@ -71,12 +77,15 @@ const emptyState: DataState = {
 /**
  * A payload — from the API or from the offline cache — brought up to the
  * current shape. An offline cache written before #384 has no
- * `playerPhasePoints`, and a cold start hydrates from it before the first
- * fetch, so the screens would read points off `undefined`.
+ * `playerPhasePoints`, and one written before #482/#488 has neither category
+ * nor licence; a cold start hydrates from it before the first fetch, so the
+ * screens would read them off `undefined`.
  */
 const withDefaults = (data: DataState): DataState => ({
   ...data,
   playerPhasePoints: data.playerPhasePoints ?? [],
+  playerSeasonCategories: data.playerSeasonCategories ?? [],
+  playerSeasonLicences: data.playerSeasonLicences ?? [],
 })
 
 // ---------------------------------------------------------------------------

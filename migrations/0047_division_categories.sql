@@ -1,0 +1,26 @@
+-- 0047 — a division may narrow its competition's categories (#482)
+--
+-- The competition says which categories it admits by default. A division of it
+-- can be more specific: a youth championship whose lowest division is reserved
+-- to benjamins and minimes, say. The more specific statement wins, which is why
+-- this lives on the division rather than being a second competition.
+--
+-- Three states, and the third is why the column is nullable rather than
+-- defaulting to '[]':
+--
+--   NULL   inherit the competition's categories — every division, today
+--   '[]'   admit EVERY category, whatever the competition says
+--   '[…]'  admit exactly these
+--
+-- '[]' meaning "everyone" is the same convention `competitions.categories`
+-- already uses, so the two columns read alike; NULL is the state a competition
+-- has no need for, since there is nothing above it to inherit from.
+--
+-- The lock stays the competition's (`is_category_locked`): whether a club may
+-- add someone outside the admitted set is a policy of the championship, not of
+-- one of its levels. What a division changes is *which* set the lock guards.
+--
+-- Nothing is created or backfilled. Every existing division inherits, which is
+-- exactly how they behaved before this column existed.
+
+ALTER TABLE divisions ADD COLUMN categories TEXT;

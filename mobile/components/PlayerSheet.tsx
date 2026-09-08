@@ -6,6 +6,8 @@ import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Sheet } from '@/components/Sheet'
 import { TeamBadge } from '@/components/TeamBadge'
+import { LicenceTag } from '@/components/LicenceTag'
+import { unlicensedIds } from '@shared/lib/seasonLicences'
 import type { Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -63,7 +65,15 @@ export function PlayerSheet({
    *  the player's profile in the Joueurs tab. The button is always shown. */
   onProfile?: () => void
 }) {
-  const { clubs } = useAppData()
+  const { clubs, players, seasons, playerSeasonLicences } = useAppData()
+
+  // The FFTT did not list their licence this season (#488) — said here too,
+  // since this sheet is how a captain looks a player up from the matrix.
+  const unlicensed = unlicensedIds(
+    playerSeasonLicences,
+    seasons.find((s) => s.status === 'active')?.id,
+    players.filter((p) => p.clubId === player.clubId),
+  ).has(player.id)
   const router = useRouter()
 
   const openProfile =
@@ -74,7 +84,10 @@ export function PlayerSheet({
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {/* Identity */}
-        <Text style={s.name}>{player.firstName} {player.lastName}</Text>
+        <View style={s.nameCell}>
+          <Text style={s.name}>{player.firstName} {player.lastName}</Text>
+          {unlicensed && <LicenceTag />}
+        </View>
         <View style={s.row}>
           <Text style={s.label}>Licence</Text>
           <Text style={s.value}>{player.licenseNumber}</Text>
@@ -168,6 +181,7 @@ export function PlayerSheet({
 }
 
 const s = StyleSheet.create({
+  nameCell: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   name: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 12 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 14 },
   sectionHeading: {

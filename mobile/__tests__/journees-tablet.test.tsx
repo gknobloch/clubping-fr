@@ -40,6 +40,9 @@ const mockData = {
   gameAvailabilities: [] as { playerId: string; gameId: string; status: string }[],
   gameSelections: [] as { teamId: string; gameId: string; playerIds: string[] }[],
   playerPhasePoints: [] as never[],
+  // Per-season facts about a licensee (#482, #488) — none in these fixtures.
+  seasons: [] as never[],
+  playerSeasonLicences: [] as never[],
   setAvailability,
   clearAvailability,
   setGameSelection,

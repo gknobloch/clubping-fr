@@ -5,6 +5,8 @@ import { computeBrulage } from '@/lib/brulage'
 import { gameDate } from '@/lib/matchdays'
 import { getTeamName } from '@/lib/teamName'
 import { pointsFor } from '@/lib/phasePoints'
+import { categoryFor } from '@/lib/seasonCategories'
+import { categoryDisplay } from '@/lib/playerCategories'
 import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
@@ -44,7 +46,10 @@ type PhaseBlock = {
 // season. Shared by PlayerDetailPage (viewing any player) and HomePage (the
 // logged-in player's own "Tous mes matchs") (#233).
 export function PlayerPhaseHistory({ playerId, title }: { playerId: string; title?: string }) {
-  const { players, teams, clubs, phases, seasons, matchDays, games, gameSelections, playerPhasePoints } = useAppData()
+  const {
+    players, teams, clubs, phases, seasons, matchDays, games, gameSelections,
+    playerPhasePoints, playerSeasonCategories,
+  } = useAppData()
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined)
 
@@ -163,6 +168,9 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
   const seasonIndex = orderedSeasonIds.indexOf(currentSeasonId)
   const currentSeasonLabel = seasons.find((s) => s.id === currentSeasonId)?.displayName
   const visibleBlocks = phaseBlocks.filter((b) => b.seasonId === currentSeasonId)
+  const seasonCategory = categoryDisplay(
+    categoryFor(playerSeasonCategories, currentSeasonId, playerId),
+  )
 
   return (
     <div className="space-y-3">
@@ -175,7 +183,17 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
             onClick={() => seasonIndex > 0 && setSelectedSeasonId(orderedSeasonIds[seasonIndex - 1])}
             prevLabel="Saison précédente"
           />
-          <span className="font-display text-sm font-semibold text-slate-800">Saison {currentSeasonLabel}</span>
+          <span className="text-center">
+            <span className="block font-display text-sm font-semibold text-slate-800">
+              Saison {currentSeasonLabel}
+            </span>
+            {/* Points are stated per phase and sit on the phase cards below;
+                a category is stated per season, so it belongs up here with the
+                season it was issued for (#482). */}
+            <span className="block text-xs text-slate-500">
+              {seasonCategory ? `Catégorie ${seasonCategory}` : 'Catégorie inconnue'}
+            </span>
+          </span>
           <PhaseSwitchButton
             dir="next"
             disabled={seasonIndex >= orderedSeasonIds.length - 1}

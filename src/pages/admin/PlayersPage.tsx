@@ -10,6 +10,13 @@ import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
 import { ACTIVE_ONLY_LABEL, canSeeArchivedPlayers, visiblePlayers } from '@/lib/playerVisibility'
+import {
+  PLAYER_CATEGORIES, categoryDisplay, orderedCategories, type PlayerCategory,
+} from '@/lib/playerCategories'
+import { activeSeasonId } from '@/lib/season'
+import { categoryFor } from '@/lib/seasonCategories'
+import { clubLicences } from '@/lib/seasonLicences'
+import { LicenceBadge } from '@/components/LicenceBadge'
 import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
@@ -21,7 +28,29 @@ const STATUS_LABELS: Record<PlayerType['status'], string> = {
 
 export function PlayersPage() {
   const { user } = useAuth()
-  const { players: allPlayers, clubs, updatePlayer, addPlayer } = useAppData()
+  const {
+    players: allPlayers, clubs, seasons, updatePlayer, addPlayer,
+    playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
+    playerSeasonLicences,
+  } = useAppData()
+
+  // A category belongs to a season (#482). This screen edits the one being
+  // played; a player's own page shows what they held in the others.
+  const seasonId = activeSeasonId(seasons)
+  const categoryOf = (playerId: string) =>
+    categoryDisplay(categoryFor(playerSeasonCategories, seasonId, playerId))
+
+  // Whether the federation listed a member's licence this season (#488). Judged
+  // per club: one club having imported says nothing about another's.
+  const licencesByClub = useMemo(() => {
+    const byClub = new Map<string, string[]>()
+    for (const p of allPlayers) byClub.set(p.clubId, [...(byClub.get(p.clubId) ?? []), p.id])
+    return new Map(
+      [...byClub].map(([club, ids]) => [club, clubLicences(playerSeasonLicences, seasonId, ids)]),
+    )
+  }, [allPlayers, playerSeasonLicences, seasonId])
+  const unlicensed = (player: PlayerType) =>
+    licencesByClub.get(player.clubId)?.statusOf(player.id) === 'missing'
   const [query, setQuery] = useState('')
   const [activeOnly, setActiveOnly] = useState(true)
   const [editing, setEditing] = useState<PlayerType | null>(null)
@@ -31,6 +60,7 @@ export function PlayersPage() {
     firstName: '',
     lastName: '',
     licenseNumber: '',
+    category: '',
     email: '',
     phone: '',
     birthDate: '',
@@ -108,6 +138,7 @@ export function PlayersPage() {
       firstName: player.firstName,
       lastName: player.lastName,
       licenseNumber: player.licenseNumber,
+      category: categoryFor(playerSeasonCategories, seasonId, player.id) ?? '',
       email: player.email ?? '',
       phone: player.phone ?? '',
       birthDate: player.birthDate ?? '',
@@ -124,6 +155,7 @@ export function PlayersPage() {
       firstName: '',
       lastName: '',
       licenseNumber: '',
+      category: '',
       email: '',
       phone: '',
       birthDate: '',
@@ -136,6 +168,16 @@ export function PlayersPage() {
   const closeModal = () => {
     setEditing(null)
     setCreating(false)
+  }
+
+  // The category is written against the season being played, not onto the
+  // person (#482): clearing the field removes the row rather than storing an
+  // empty one, since "we do not know" is not "no category".
+  const saveCategory = (playerId: string) => {
+    if (!seasonId) return
+    const value = form.category.trim()
+    if (value) setPlayerSeasonCategories([{ seasonId, playerId, category: value }])
+    else clearPlayerSeasonCategory(seasonId, playerId)
   }
 
   const handleSave = () => {
@@ -153,11 +195,12 @@ export function PlayersPage() {
         birthPlace: form.birthPlace || undefined,
         status: form.status,
       })
+      saveCategory(editing.id)
       closeModal()
       return
     }
     if (creating && form.clubId && form.firstName && form.lastName) {
-      addPlayer({
+      const created = addPlayer({
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
@@ -168,6 +211,7 @@ export function PlayersPage() {
         status: form.status,
         clubId: form.clubId,
       })
+      saveCategory(created.id)
       closeModal()
     }
   }
@@ -260,8 +304,9 @@ export function PlayersPage() {
                   size={40}
                 />
                 <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {player.firstName} {player.lastName}
+                  <p className="flex items-center gap-2 font-medium">
+                    <span className="truncate">{player.firstName} {player.lastName}</span>
+                    {unlicensed(player) && <LicenceBadge />}
                   </p>
                   {/* The visit rides on the detail line rather than a badge of
                       its own (#406). A badge sat between the name and the
@@ -277,6 +322,7 @@ export function PlayersPage() {
                       e2e/mobile-touch-targets-detail.spec.ts. */}
                   <p className="text-xs text-slate-500">
                     <span className="font-mono">{player.licenseNumber}</span>
+                    {categoryOf(player.id) && ` · ${categoryOf(player.id)}`}
                     {!hasClubScope && ` · ${getClubName(player.clubId)}`}
                     {showLastSeen && (
                       <span className={hasVisited(player.lastSeenAt) ? undefined : 'text-amber-700'}>
@@ -321,6 +367,9 @@ export function PlayersPage() {
                 N° licence
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
+                Catégorie
+              </th>
+              <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Email
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
@@ -359,6 +408,7 @@ export function PlayersPage() {
                     <span className="hover:underline">
                       {player.firstName} {player.lastName}
                     </span>
+                    {unlicensed(player) && <LicenceBadge />}
                     {player.status !== 'active' && (
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                         {STATUS_LABELS[player.status]}
@@ -368,6 +418,9 @@ export function PlayersPage() {
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600 font-mono">
                   {player.licenseNumber}
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  {categoryOf(player.id) || '—'}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{player.email}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{player.phone || '—'}</td>
@@ -447,6 +500,28 @@ export function PlayersPage() {
                   onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
+              </div>
+              <div>
+                <label htmlFor="player-category" className="block text-sm font-medium text-slate-700">
+                  Catégorie
+                </label>
+                <select
+                  id="player-category"
+                  value={form.category}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                >
+                  {/* The import fills this in from the licence; the picker is
+                      for a licensee created by hand, and for the rare code FFTT
+                      sends that we do not recognise (#482). */}
+                  <option value="">Inconnue</option>
+                  {orderedCategories().map(({ code, label }) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                  {form.category && !PLAYER_CATEGORIES.includes(form.category as PlayerCategory) && (
+                    <option value={form.category}>{form.category} (code FFTT)</option>
+                  )}
+                </select>
               </div>
               <div>
                 <label htmlFor="player-email" className="block text-sm font-medium text-slate-700">Email (optionnel)</label>

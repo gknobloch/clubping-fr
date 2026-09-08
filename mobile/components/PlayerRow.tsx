@@ -3,6 +3,7 @@ import { colors } from '@/constants/colors'
 import { AVAIL, ALL_STATUSES } from '@/constants/availability'
 import type { AvailabilityStatus, Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { LicenceTag } from '@/components/LicenceTag'
 
 // A roster row: an optional "selected for the line-up" check, the player's
 // name, and the OUI/PE/NON availability pills (re-tapping the active one
@@ -17,6 +18,7 @@ export function PlayerRow({
   gameDatePast,
   borrowed,
   lockedReason,
+  unlicensed,
   onPickAvailability,
   onClear,
   onPressName,
@@ -32,6 +34,8 @@ export function PlayerRow({
   /** Non-selectable (e.g. already fielded elsewhere) — shows the reason in
    *  place of the pills, greyed, in the same slot as the "Renfort" tag. */
   lockedReason?: string
+  /** The FFTT has not listed a licence for them this season (#488). */
+  unlicensed?: boolean
   onPickAvailability: (s: AvailabilityStatus) => void
   /** Re-tapping the active pill clears the response. */
   onClear: () => void
@@ -47,9 +51,15 @@ export function PlayerRow({
       )}
 
       <TouchableOpacity style={pr.nameBtn} onPress={onPressName}>
-        <Text style={[pr.name, isMe && pr.nameMe, lockedReason ? pr.nameLocked : null]} numberOfLines={1}>
-          {player.firstName} {player.lastName}
-        </Text>
+        <View style={pr.nameCell}>
+          <Text
+            style={[pr.name, isMe && pr.nameMe, lockedReason ? pr.nameLocked : null]}
+            numberOfLines={1}
+          >
+            {player.firstName} {player.lastName}
+          </Text>
+          {unlicensed && <LicenceTag />}
+        </View>
       </TouchableOpacity>
 
       {slotLabel !== null ? (
@@ -96,7 +106,8 @@ const pr = StyleSheet.create({
   checkPlaceholder: { width: 18 },
   checkTxt: { color: '#fff', fontSize: 10, fontFamily: fonts.bold },
   nameBtn: { flex: 1 },
-  name: { fontSize: 14, color: colors.textPrimary },
+  nameCell: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { flexShrink: 1, fontSize: 14, color: colors.textPrimary },
   nameMe: { fontFamily: fonts.bold, color: colors.accent },
   nameLocked: { color: colors.textSecondary },
   pills: { flexDirection: 'row', gap: 5 },

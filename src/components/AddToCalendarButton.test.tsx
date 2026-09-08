@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { DataProvider } from '@/contexts/DataContext'
 import {
   mockDivisions, mockClubs, mockSeasons, mockPhases, mockGroups, mockTeams,
-  mockPlayers, mockPlayerPhasePoints, mockMatchDays, mockGames, mockGameAvailabilities,
-  mockGameSelections, mockUsers,
+  mockPlayers, mockPlayerPhasePoints, mockPlayerSeasonCategories, mockPlayerSeasonLicences, mockMatchDays, mockGames, mockGameAvailabilities,
+  mockGameSelections, mockUsers, mockCompetitions, mockCompetitionEligibilities,
 } from '@/mock/data'
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -15,7 +15,10 @@ const { AddToCalendarButton } = await import('./AddToCalendarButton')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
+  competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
+  playerSeasonCategories: mockPlayerSeasonCategories,
+  playerSeasonLicences: mockPlayerSeasonLicences,
   playerPhasePoints: mockPlayerPhasePoints, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,

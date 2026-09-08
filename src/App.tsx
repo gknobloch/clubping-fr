@@ -10,6 +10,8 @@ import { ClubDetailPage } from '@/pages/admin/ClubDetailPage'
 import { SeasonsPage } from '@/pages/admin/SeasonsPage'
 import { PhasesPage } from '@/pages/admin/PhasesPage'
 import { DivisionsPage } from '@/pages/admin/DivisionsPage'
+import { CompetitionsPage } from '@/pages/admin/CompetitionsPage'
+import { ClubCompetitionsPage } from '@/pages/ClubCompetitionsPage'
 import { GroupsPage } from '@/pages/admin/GroupsPage'
 import { TeamsPage } from '@/pages/admin/TeamsPage'
 import { PlayersPage } from '@/pages/admin/PlayersPage'
@@ -24,6 +26,12 @@ import { JoinPage } from '@/pages/JoinPage'
 import { ConfirmRequestPage } from '@/pages/ConfirmRequestPage'
 import { RequestsPage } from '@/pages/admin/RequestsPage'
 import { DeleteAccountPage } from '@/pages/DeleteAccountPage'
+
+/** /competitions means something different to a general admin and to a club. */
+function CompetitionsRoute() {
+  const { user } = useAuth()
+  return user?.role === 'general_admin' ? <CompetitionsPage /> : <ClubCompetitionsPage />
+}
 
 function AuthLoading() {
   return (
@@ -81,6 +89,11 @@ export default function App() {
             <Route path="saisons" element={<SeasonsPage />} />
             <Route path="phases" element={<PhasesPage />} />
             <Route path="divisions" element={<DivisionsPage />} />
+            {/* One label in the navigation, two screens behind it (#482): a
+                general admin configures the global mapping, a club amends it
+                for its own licensees. Same shape as /joueurs, where the route
+                is shared and the reach is not. */}
+            <Route path="competitions" element={<CompetitionsRoute />} />
             <Route path="groupes" element={<GroupsPage />} />
             <Route path="equipes" element={<TeamsPage />} />
             <Route path="equipes/:id" element={<TeamDetailPage />} />

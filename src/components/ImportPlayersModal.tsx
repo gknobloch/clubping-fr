@@ -15,7 +15,7 @@ import {
   type PlayerImportRow,
 } from '@/lib/ffttPlayers'
 import { sortByName } from '@/lib/sortByName'
-import type { Player, PlayerPhasePoints } from '@/types'
+import type { Player, PlayerPhasePoints, PlayerSeasonCategory } from '@/types'
 
 type Status =
   | { kind: 'idle' }
@@ -38,6 +38,7 @@ type Status =
 export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClose: () => void }) {
   const {
     clubs, phases, players, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
+    playerSeasonCategories, setPlayerSeasonCategories, setClubSeasonLicences,
   } = useAppData()
 
   const club = clubs.find((c) => c.id === clubId)
@@ -48,6 +49,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
   const [phaseId, setPhaseId] = useState(
     () => phases.find((p) => p.status === 'active')?.id ?? orderedPhases[orderedPhases.length - 1]?.id ?? '',
   )
+  const seasonId = phases.find((p) => p.id === phaseId)?.seasonId
 
   const [licenceInput, setLicenceInput] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -62,7 +64,10 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
 
   /** Everything a fresh fetch replaces. */
   const showRows = (licences: FfttLicence[], missingPlayers: Player[]) => {
-    const built = buildImportRows(licences, players, playerPhasePoints, phaseId)
+    // The category belongs to the season the chosen phase sits in (#482).
+    const built = buildImportRows(
+      licences, players, playerPhasePoints, phaseId, [], playerSeasonCategories, seasonId,
+    )
     setRows(built)
     setMissing(missingPlayers)
     // Pre-tick exactly what is writable — importing an identical value is a
@@ -107,6 +112,18 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
     // ours — drop anything that came back for another club rather than trust it.
     const ours = licences.filter((l) => sameClubNumber(l.clubNumber, club.affiliationNumber))
     showRows(ours, playersMissingFromFftt(ours, clubPlayers))
+    // Who holds a validated licence this season is a fact about this listing,
+    // not about which fields an admin then ticks — so it is recorded here, and
+    // for the whole club at once, since only a club-wide fetch can say who is
+    // absent from it (#488).
+    if (seasonId) {
+      const listed = new Set(ours.map((l) => l.licence.trim()))
+      setClubSeasonLicences(
+        clubId,
+        seasonId,
+        clubPlayers.filter((p) => listed.has((p.licenseNumber ?? '').trim())).map((p) => p.id),
+      )
+    }
   }
 
   const toggleField = (licence: string, key: string) => {
@@ -137,6 +154,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
 
   const applyImport = () => {
     const points: PlayerPhasePoints[] = []
+    const categories: PlayerSeasonCategory[] = []
     let created = 0
     let updated = 0
 
@@ -165,14 +183,20 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
         if (has('lastName')) patch.lastName = row.licence.lastName
         if (has('firstName')) patch.firstName = row.licence.firstName
         if (Object.keys(patch).length) updatePlayer(playerId, patch)
-        if (Object.keys(patch).length || has('points')) updated += 1
+        if (Object.keys(patch).length || has('points') || has('category')) updated += 1
       }
       if (has('points') && row.licence.points) {
         points.push({ phaseId, playerId, points: row.licence.points })
       }
+      // The category comes with the licence, and is filed under the season it
+      // was issued for — never over last season's (#482).
+      if (has('category') && row.licence.category && seasonId) {
+        categories.push({ seasonId, playerId, category: row.licence.category })
+      }
     }
 
     setPlayerPhasePoints(points)
+    setPlayerSeasonCategories(categories)
     setRows([])
     setSelected(new Set())
     setStatus({ kind: 'done', created, updated })

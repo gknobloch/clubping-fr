@@ -47,6 +47,12 @@ vi.mock('@/contexts/DataContext', () => ({
     clubs: [club],
     updatePlayer: vi.fn(),
     addPlayer: vi.fn(),
+    // A category is stated per season (#482); these fixtures hold none.
+    seasons: [{ id: '26', displayName: '2025/2026', status: 'active' }],
+    playerSeasonCategories: [],
+    playerSeasonLicences: [],
+    setPlayerSeasonCategories: vi.fn(),
+    clearPlayerSeasonCategory: vi.fn(),
   }),
 }))
 
