@@ -128,6 +128,39 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Clearing the field **deletes the row**. "We do not know" is the absence of a
   category, not an empty one — an empty string would read as a code we simply
   do not recognise.
+
+### Licence non validée (#488)
+- The club import already computed "Absents de la liste FFTT" and threw it away
+  on close. It is now recorded per season in `player_season_licences`: **a row
+  means the federation listed that licence**, nothing more.
+- The absence of a row is **two different things** — not listed, or never
+  imported — so nothing reads the table directly. `src/lib/seasonLicences.ts`
+  answers per club, and only for a club holding at least one row for the season,
+  which is what proves an import ran. Tagging a whole club because nobody
+  pressed a button would be worse than saying nothing.
+- Only the **club-wide** import writes it, and it **replaces** the club's set for
+  that season. Looking a single licence up says nothing about the rest of the
+  club and must not empty it.
+- It is written when the listing is fetched, not when the fields are applied:
+  who holds a licence is a fact about FFTT's answer, not about which checkboxes
+  an admin ticked.
+- It **never filters and never blocks** — an unvalidated licence is usually a
+  renewal in flight. The tag rides next to the name, and the line-up names
+  whoever is picked, on web and mobile alike.
+- Warning **while composing is not enough**: nobody reopens the sheet to check,
+  so the match screen itself carries it too, on the line-up already saved. That
+  is the screen a captain lands on the morning of the match.
+- It rides with the **name**, wherever a name is listed: the journées matrix and
+  its "autres joueurs", a match's roster and its quick view, a team's squad, the
+  player sheet — web and app alike. `unlicensedIds` is the one derivation; never
+  re-answer it at a call site.
+- In the **matrix** the marker goes on the licence line, not beside the name:
+  that line is already about the licence, and the name column is the one column
+  the matrix cannot afford to widen. The feuille de match is left alone — it
+  mirrors FFTT's own sheet.
+- **The mobile app reads both per-season tables** (#482's category, this one),
+  which is the first time it has carried either; `withDefaults` fills them in
+  for an offline cache written before they existed.
 - **A competition is FFTT data, imported like everything else.** The `contests`
   query without its `identifier` filter lists an organisation's championships;
   `/competitions` imports from that, and the manual add is the fallback for what

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import {
   mockDivisions, mockClubs, mockSeasons, mockPhases, mockGroups, mockTeams,
-  mockPlayers, mockPlayerPhasePoints, mockPlayerSeasonCategories, mockMatchDays, mockGames, mockGameAvailabilities, mockGameSelections,
+  mockPlayers, mockPlayerPhasePoints, mockPlayerSeasonCategories, mockPlayerSeasonLicences, mockMatchDays, mockGames, mockGameAvailabilities, mockGameSelections,
   mockUsers,
   mockCompetitions,
   mockCompetitionEligibilities,
@@ -28,6 +28,7 @@ const testData = {
   competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
   playerSeasonCategories: mockPlayerSeasonCategories,
+  playerSeasonLicences: mockPlayerSeasonLicences,
   playerPhasePoints: mockPlayerPhasePoints, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,

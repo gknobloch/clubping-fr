@@ -11,6 +11,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { categoryDisplay } from '@/lib/playerCategories'
 import { activeSeasonId } from '@/lib/season'
 import { categoryFor } from '@/lib/seasonCategories'
+import { clubLicences } from '@/lib/seasonLicences'
+import { LicenceBadge } from '@/components/LicenceBadge'
 import {
   ELIGIBILITY_ACTION_LABELS,
   ELIGIBILITY_REASON_LABELS,
@@ -24,7 +26,7 @@ export function PlayerDetailPage() {
   const { user } = useAuth()
   const {
     players, clubs, competitions, competitionEligibilities, setCompetitionEligibility,
-    teams, divisions, gameSelections, playerSeasonCategories, seasons,
+    teams, divisions, gameSelections, playerSeasonCategories, playerSeasonLicences, seasons,
   } = useAppData()
   const [zoom, setZoom] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -46,6 +48,14 @@ export function PlayerDetailPage() {
   const seasonId = activeSeasonId(seasons)
   const category = categoryFor(playerSeasonCategories, seasonId, player?.id)
   const categorized = player ? { ...player, category } : undefined
+  // Did the federation list their licence this season? (#488) Judged against
+  // their own club, since one club's import says nothing about another's.
+  const unlicensed = player
+    && clubLicences(
+      playerSeasonLicences,
+      seasonId,
+      players.filter((p) => p.clubId === player.clubId).map((p) => p.id),
+    ).statusOf(player.id) === 'missing'
   // Every competition with its verdict, not only the ones that admit them: the
   // point of this section for a club admin is the ones that do NOT, since those
   // are what they might amend.
@@ -137,7 +147,12 @@ export function PlayerDetailPage() {
             />
           </button>
         }
-        title={`${player.firstName} ${player.lastName}`}
+        title={(
+          <span className="flex flex-wrap items-center gap-2">
+            {player.firstName} {player.lastName}
+            {unlicensed && <LicenceBadge />}
+          </span>
+        )}
         trailing={club && <ClubLogo clubId={club.id} logoUpdatedAt={club.logoUpdatedAt} size={64} />}
       >
         {club && <p className="text-slate-500">{club.displayName}</p>}

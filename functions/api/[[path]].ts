@@ -6,7 +6,7 @@ import { jsonParseCategories, jsonParseIds } from './rows'
 import type { Address, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
-  CompetitionRow, CompetitionEligibilityRow, PlayerSeasonCategoryRow,
+  CompetitionRow, CompetitionEligibilityRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { canClubAdd } from '../../src/lib/competitionEligibility'
@@ -100,7 +100,7 @@ app.get('/data', async (c) => {
   const canSeeLastSeen = lastSeenVisibleTo(c.get('user'))
   const [
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
-    groupsR, teamsR, phasePointsR, seasonCategoriesR, matchDaysR, gamesR,
+    groupsR, teamsR, phasePointsR, seasonCategoriesR, seasonLicencesR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, eligibilitiesR,
   ] = await Promise.all([
@@ -114,6 +114,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM teams').all<TeamRow>(),
     db.prepare('SELECT * FROM player_phase_points').all<PlayerPhasePointsRow>(),
     db.prepare('SELECT * FROM player_season_categories').all<PlayerSeasonCategoryRow>(),
+    db.prepare('SELECT * FROM player_season_licences').all<PlayerSeasonLicenceRow>(),
     db.prepare('SELECT * FROM match_days').all<MatchDayRow>(),
     db.prepare('SELECT * FROM games').all<GameRow>(),
     db.prepare('SELECT * FROM game_availabilities').all<GameAvailabilityRow>(),
@@ -247,6 +248,10 @@ app.get('/data', async (c) => {
     // issued for a season, so that is the grain it is stated at.
     playerSeasonCategories: seasonCategoriesR.results.map(r => ({
       seasonId: r.season_id, playerId: r.player_id, category: r.category,
+    })),
+    // A row is the whole content: the FFTT listed this licence (#488).
+    playerSeasonLicences: seasonLicencesR.results.map(r => ({
+      seasonId: r.season_id, playerId: r.player_id,
     })),
     matchDays: matchDaysR.results.map(r => ({
       id: r.id, groupId: r.group_id, number: r.number, date: r.date,
@@ -4266,6 +4271,45 @@ app.post('/player-phase-points/batch', async (c) => {
     ).bind(u.phaseId, u.playerId, u.points)
   ))
   return c.json({ ok: true })
+})
+
+/**
+ * Replace what the federation listed for one club and season (#488).
+ *
+ * A replacement, not an upsert: the set is the answer to "who did the last
+ * import list?", so a licensee who has since dropped off it must drop off here
+ * too. Scoped to the club's own members — the body names players, and one club
+ * must not decide another's.
+ */
+app.put('/clubs/:clubId/seasons/:seasonId/licences', async (c) => {
+  const db = c.env.DB
+  const clubId = c.req.param('clubId')
+  const seasonId = c.req.param('seasonId')
+  const viewer = managingViewer(c)
+  if (viewer.role !== 'general_admin' && !(viewer.role === 'club_admin' && viewer.clubId === clubId)) {
+    return c.json({ error: 'not_allowed' }, 403)
+  }
+  const { playerIds } = await c.req.json<{ playerIds?: string[] }>()
+  if (!Array.isArray(playerIds)) return c.json({ error: 'bad_request' }, 400)
+
+  const members = await db
+    .prepare('SELECT id FROM users WHERE club_id = ?')
+    .bind(clubId)
+    .all<{ id: string }>()
+  const ours = new Set(members.results.map((r) => r.id))
+  const keep = playerIds.filter((id) => ours.has(id))
+
+  const statements = [
+    db.prepare(
+      `DELETE FROM player_season_licences
+       WHERE season_id = ? AND player_id IN (SELECT id FROM users WHERE club_id = ?)`,
+    ).bind(seasonId, clubId),
+    ...keep.map((playerId) => db.prepare(
+      'INSERT OR IGNORE INTO player_season_licences (season_id, player_id) VALUES (?, ?)',
+    ).bind(seasonId, playerId)),
+  ]
+  await db.batch(statements)
+  return c.json({ ok: true, count: keep.length })
 })
 
 app.post('/player-season-categories/batch', async (c) => {

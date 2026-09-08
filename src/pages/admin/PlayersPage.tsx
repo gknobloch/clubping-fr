@@ -15,6 +15,8 @@ import {
 } from '@/lib/playerCategories'
 import { activeSeasonId } from '@/lib/season'
 import { categoryFor } from '@/lib/seasonCategories'
+import { clubLicences } from '@/lib/seasonLicences'
+import { LicenceBadge } from '@/components/LicenceBadge'
 import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
@@ -29,6 +31,7 @@ export function PlayersPage() {
   const {
     players: allPlayers, clubs, seasons, updatePlayer, addPlayer,
     playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
+    playerSeasonLicences,
   } = useAppData()
 
   // A category belongs to a season (#482). This screen edits the one being
@@ -36,6 +39,18 @@ export function PlayersPage() {
   const seasonId = activeSeasonId(seasons)
   const categoryOf = (playerId: string) =>
     categoryDisplay(categoryFor(playerSeasonCategories, seasonId, playerId))
+
+  // Whether the federation listed a member's licence this season (#488). Judged
+  // per club: one club having imported says nothing about another's.
+  const licencesByClub = useMemo(() => {
+    const byClub = new Map<string, string[]>()
+    for (const p of allPlayers) byClub.set(p.clubId, [...(byClub.get(p.clubId) ?? []), p.id])
+    return new Map(
+      [...byClub].map(([club, ids]) => [club, clubLicences(playerSeasonLicences, seasonId, ids)]),
+    )
+  }, [allPlayers, playerSeasonLicences, seasonId])
+  const unlicensed = (player: PlayerType) =>
+    licencesByClub.get(player.clubId)?.statusOf(player.id) === 'missing'
   const [query, setQuery] = useState('')
   const [activeOnly, setActiveOnly] = useState(true)
   const [editing, setEditing] = useState<PlayerType | null>(null)
@@ -289,8 +304,9 @@ export function PlayersPage() {
                   size={40}
                 />
                 <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {player.firstName} {player.lastName}
+                  <p className="flex items-center gap-2 font-medium">
+                    <span className="truncate">{player.firstName} {player.lastName}</span>
+                    {unlicensed(player) && <LicenceBadge />}
                   </p>
                   {/* The visit rides on the detail line rather than a badge of
                       its own (#406). A badge sat between the name and the
@@ -392,6 +408,7 @@ export function PlayersPage() {
                     <span className="hover:underline">
                       {player.firstName} {player.lastName}
                     </span>
+                    {unlicensed(player) && <LicenceBadge />}
                     {player.status !== 'active' && (
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                         {STATUS_LABELS[player.status]}

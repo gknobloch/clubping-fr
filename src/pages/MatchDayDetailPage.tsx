@@ -9,10 +9,13 @@ import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
+import { activeSeasonId } from '@/lib/season'
+import { clubLicences } from '@/lib/seasonLicences'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
 import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
+import { LicenceBadge } from '@/components/LicenceBadge'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
 
@@ -35,6 +38,7 @@ export function MatchDayDetailPage() {
   const {
     teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
     competitions, competitionEligibilities, setGameSelection,
+    playerSeasonLicences, seasons,
   } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
@@ -107,6 +111,21 @@ export function MatchDayDetailPage() {
     competitionOfDivision(team.divisionId, divisions, competitions),
     competitionEligibilities.filter((e) => e.clubId === team.clubId),
   )
+
+  // Whose licence the federation has not listed this season (#488). Not a
+  // filter: an unvalidated licence is usually a renewal in flight, so the sheet
+  // says so beside the name rather than removing them from it.
+  // Not memoised: this sits past the component's early returns, where a hook
+  // may not go, and it is one pass over the club.
+  const unlicensed = (() => {
+    const clubIds = players.filter((p) => p.clubId === team.clubId).map((p) => p.id)
+    const { statusOf } = clubLicences(playerSeasonLicences, activeSeasonId(seasons), clubIds)
+    return new Set(clubIds.filter((id) => statusOf(id) === 'missing'))
+  })()
+
+  const pickedUnlicensed = players
+    .filter((p) => selectedIds.includes(p.id) && unlicensed.has(p.id))
+    .map((p) => `${p.firstName} ${p.lastName}`)
 
   // Already fielded by another of the club's teams this round — pickable
   // nowhere else, so the sheet locks them and says where they are.
@@ -200,6 +219,18 @@ export function MatchDayDetailPage() {
         </div>
       </div>
 
+      {/* The line-up as it stands, not only as it is being made (#488): nobody
+          reopens the sheet to check, and this is the screen a captain lands on
+          the morning of the match. */}
+      {pickedUnlicensed.length > 0 && (
+        // One line, deliberately: a taller banner pushes «Composer l'équipe»
+        // off a phone screen, and the controls are what this page is for. The
+        // names are here, the full sentence is in the sheet.
+        <p role="alert" className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ⚠ {pickedUnlicensed.join(', ')} — licence non validée cette saison.
+        </p>
+      )}
+
       {/* Availability — the whole roster, one row each, with the same
           OUI/PE/NON control the Accueil card and the game modal use. Composing
           is a separate step below rather than a second column here: picking a
@@ -225,7 +256,10 @@ export function MatchDayDetailPage() {
                   className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5 last:border-b-0"
                 >
                   <span className="flex min-w-0 flex-col">
-                    <span className="flex items-center gap-2">
+                    {/* min-w-0 on the row too, or the name cannot truncate
+                        inside it and a second badge pushes the roster sideways
+                        on a phone — caught by e2e/journees-mobile.spec.ts. */}
+                    <span className="flex min-w-0 items-center gap-2">
                       <span
                         className={`truncate text-sm ${isMe ? 'font-semibold text-accent-600' : 'text-slate-800'} ${player.id === team.captainId ? 'font-bold' : ''}`}
                       >
@@ -236,6 +270,7 @@ export function MatchDayDetailPage() {
                           Renfort
                         </span>
                       )}
+                      {unlicensed.has(player.id) && <LicenceBadge />}
                     </span>
                     {isPicked && (
                       <span className="text-[11px] font-medium text-green-700">Sélectionné</span>
@@ -313,6 +348,7 @@ export function MatchDayDetailPage() {
           initialSelection={selectedIds}
           availabilityOf={(playerId) => getAvailability(game.id, playerId)}
           committedElsewhere={committedElsewhere}
+          unlicensed={unlicensed}
           onSave={(playerIds) => setGameSelection(game.id, team.id, playerIds)}
           onClose={() => setComposing(false)}
         />

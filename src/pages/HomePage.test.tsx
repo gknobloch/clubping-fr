@@ -13,6 +13,7 @@ import {
   mockPhases,
   mockPlayerPhasePoints,
   mockPlayerSeasonCategories,
+  mockPlayerSeasonLicences,
   mockPlayers,
   mockSeasons,
   mockTeams,
@@ -39,6 +40,7 @@ const testData = {
   groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,
+  playerSeasonLicences: mockPlayerSeasonLicences,
   playerSeasonCategories: mockPlayerSeasonCategories,
   playerPhasePoints: mockPlayerPhasePoints,
 }

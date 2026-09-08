@@ -265,6 +265,20 @@ export interface PlayerSeasonCategory {
   category: string
 }
 
+/**
+ * A licence the FFTT listed for a season (#488).
+ *
+ * Keyed on (seasonId, playerId), and a row is the whole content: its presence
+ * means the federation listed that licence when the club last imported. Its
+ * absence means one of two very different things — the licence is not validated
+ * for the season, or nobody has ever run the import — which is why nothing
+ * reads it without `src/lib/seasonLicences.ts` to say which.
+ */
+export interface PlayerSeasonLicence {
+  seasonId: string
+  playerId: string
+}
+
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
 
 export type AvailabilityOverriddenBy = 'captain' | 'club_admin'
@@ -337,6 +351,7 @@ export interface DataState {
   players: Player[]
   playerPhasePoints: PlayerPhasePoints[]
   playerSeasonCategories: PlayerSeasonCategory[]
+  playerSeasonLicences: PlayerSeasonLicence[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]

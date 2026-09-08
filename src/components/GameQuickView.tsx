@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { activeSeasonId } from '@/lib/season'
+import { unlicensedIds } from '@/lib/seasonLicences'
+import { LicenceBadge } from '@/components/LicenceBadge'
 import { useAppData } from '@/contexts/DataContext'
 import { TeamBadge } from '@/components/TeamBadge'
 import { AvailabilityButtons, AvailabilityPills, LineupCheck } from '@/components/Availability'
@@ -28,7 +31,7 @@ export function GameQuickView({
   const { user } = useAuth()
   const {
     clubs, teams, players, groups, divisions, matchDays, games,
-    gameAvailabilities, gameSelections,
+    gameAvailabilities, gameSelections, playerSeasonLicences, seasons,
     setGameAvailability, clearGameAvailability,
   } = useAppData()
   const myPlayerId = user?.isPlayer ? user.id : undefined
@@ -73,6 +76,14 @@ export function GameQuickView({
   const time = gameSchedule(game, matchDay, homeTeam).time
 
   const selection = gameSelections.find((s) => s.teamId === team.id && s.gameId === game.id)?.playerIds ?? []
+  // The federation did not list these licences this season (#488) — flagged
+  // here too, since this modal is how a captain reads a line-up from /journees.
+  const unlicensed = unlicensedIds(
+    playerSeasonLicences,
+    activeSeasonId(seasons),
+    players.filter((p) => p.clubId === team?.clubId),
+  )
+
   const rosterIds = new Set(roster.map((p) => p.id))
   const borrowed = selection
     .filter((pid) => !rosterIds.has(pid))
@@ -136,6 +147,7 @@ export function GameQuickView({
                   <span className={`truncate text-sm ${selected ? 'font-semibold text-accent-600' : 'text-slate-800'}`}>
                     {p.firstName} {p.lastName}
                   </span>
+                  {unlicensed.has(p.id) && <LicenceBadge />}
                 </Link>
                 {lockedTeam !== undefined ? (
                   <span className="shrink-0 text-xs italic text-slate-500">Joue en Équipe {lockedTeam}</span>
@@ -163,6 +175,7 @@ export function GameQuickView({
                 <span className="truncate text-sm font-semibold text-accent-600">
                   {p.firstName} {p.lastName}
                 </span>
+                {unlicensed.has(p.id) && <LicenceBadge />}
               </Link>
               <span className="shrink-0 text-xs italic text-slate-500">Renfort</span>
             </li>

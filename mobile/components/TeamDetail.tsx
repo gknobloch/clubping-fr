@@ -21,6 +21,8 @@ import {
 import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
+import { LicenceTag } from '@/components/LicenceTag'
+import { unlicensedIds } from '@shared/lib/seasonLicences'
 import { Screen, contentWidth } from '@/components/Screen'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
@@ -56,7 +58,10 @@ export function TeamDetail({
   embedded?: boolean
 }) {
   const id = teamId
-  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections, playerPhasePoints, updateTeam } = useAppData()
+  const {
+    teams, players, clubs, seasons, phases, divisions, matchDays, games, gameSelections,
+    playerPhasePoints, playerSeasonLicences, updateTeam,
+  } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
   const router = useRouter()
@@ -73,6 +78,17 @@ export function TeamDetail({
   const division = divisions.find((d) => d.id === team?.divisionId)
   const phase = phases.find((p) => p.id === team?.phaseId)
   const isCaptain = !!(user && team && canManageTeam(user, team))
+
+  // The FFTT did not list these licences this season (#488): a squad list is
+  // exactly where a captain would otherwise not notice.
+  const unlicensed = useMemo(
+    () => unlicensedIds(
+      playerSeasonLicences,
+      seasons.find((s) => s.status === 'active')?.id,
+      players.filter((p) => p.clubId === team?.clubId),
+    ),
+    [playerSeasonLicences, seasons, players, team?.clubId],
+  )
 
   const members = useMemo(
     () =>
@@ -282,7 +298,8 @@ export function TeamDetail({
               style={styles.playerRow}
               onPress={() => setSelectedPlayer(p)}
             >
-              <Text style={styles.playerName}>{p.firstName} {p.lastName}</Text>
+              <Text style={styles.playerName} numberOfLines={1}>{p.firstName} {p.lastName}</Text>
+              {unlicensed.has(p.id) && <LicenceTag />}
               {p.id === team.captainId && <Text style={styles.badge}>Cap.</Text>}
             </TouchableOpacity>
           ))}
@@ -551,7 +568,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  playerName: { fontSize: 15, color: colors.textPrimary },
+  playerName: { flexShrink: 1, fontSize: 15, color: colors.textPrimary },
   badge: {
     fontSize: 11,
     fontFamily: fonts.semiBold,

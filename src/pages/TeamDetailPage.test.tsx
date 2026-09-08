@@ -38,6 +38,7 @@ function baseTestData(clubs = mockClubs) {
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
+    playerSeasonLicences: [],
     playerSeasonCategories: [],
     playerPhasePoints: mockPlayerPhasePoints,
   }
