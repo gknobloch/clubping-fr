@@ -19,6 +19,12 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+- Un joueur dont la licence n'est pas validée pour la saison porte un tag **Sans
+  licence** partout où son nom apparaît — liste, fiche, effectif d'équipe, feuille
+  de composition — et l'aligner affiche un avertissement, au moment de composer
+  comme sur une composition déjà enregistrée. Rien n'est interdit : un
+  renouvellement en cours reste une affaire de club.
+- La catégorie d'âge d'un joueur s'affiche enfin sur mobile, comme sur le web.
 - L'arrivée d'un nouveau club se fait toute seule : création du club, de sa saison
   et de ses administrateurs, sans passer par un administrateur général.
 - Sur tablette, la matrice des journées montre aussi les autres joueurs du club,
