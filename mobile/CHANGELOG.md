@@ -19,21 +19,21 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.3.0 — 9 septembre 2026
+
+Les licences sous les yeux du capitaine.
+
 - Un joueur dont la licence n'est pas validée pour la saison porte un tag **Sans
   licence** partout où son nom apparaît — liste, fiche, effectif d'équipe, feuille
   de composition — et l'aligner affiche un avertissement, au moment de composer
   comme sur une composition déjà enregistrée. Rien n'est interdit : un
   renouvellement en cours reste une affaire de club.
-- La catégorie d'âge d'un joueur s'affiche enfin sur mobile, comme sur le web.
-- L'arrivée d'un nouveau club se fait toute seule : création du club, de sa saison
-  et de ses administrateurs, sans passer par un administrateur général.
+- La fiche d'un joueur affiche sa catégorie d'âge.
 - Sur tablette, la matrice des journées montre aussi les autres joueurs du club,
   et plus seulement ceux déjà retenus.
 - Les écrans sont dimensionnés avec les polices de la marque, ce qui corrige des
   textes coupés ou décalés d'un ou deux pixels.
-- La fiche App Store annonce désormais le français, et Face ID demande son
-  autorisation en français.
-- Mise à jour technique : Expo 55.0.31.
+- Face ID demande son autorisation en français.
 
 ## 1.2.0 — 28 août 2026
 
