@@ -44,6 +44,26 @@ sees on the web, not what is installed on their phone.
 change still costs an App Store review and asks every tester to download the
 same app again. Let the user decide whether it is worth it.
 
+### A store release, or an `eas update`?
+
+This project can also ship over the air: `app.json` has `updates.url`, the
+`production` profile has a channel, and `runtimeVersion` is on the `appVersion`
+policy. Say which of the two a change needs rather than assuming a release.
+
+It **must** be a store release — an OTA cannot carry it — when the diff touches
+`mobile/app.json` beyond the version, `mobile/plugins/`, a native dependency or
+the Expo SDK. It **should** be a store release, even when an OTA could carry it,
+for anything a member would notice: an OTA has no version number, no notes on
+either store, no consent, and no trace — the app just changes under them on a
+later launch. A crash fix or a wrong label is what OTA is for.
+
+If an OTA is the answer, one thing decides whether it works: `appVersion` policy
+means the runtime version *is* `expo.version`, so **publish before bumping**.
+`eas update --branch production --message "…"` while the repo still says 1.2.0
+reaches the 1.2.0 installs; run it after a bump to 1.3.0 and it targets a runtime
+nobody has yet. Fold what went out into the current version's section of
+`mobile/CHANGELOG.md` either way. `mobile/DISTRIBUTION.md` has the rest.
+
 ## 2. Decide major, minor or patch
 
 Judge by what a **member notices**, not by the size of the diff. A 400-line
@@ -86,6 +106,13 @@ npm version <new-version> --no-git-tag-version
 
 That covers `mobile/package.json` and `mobile/package-lock.json`. Then set
 `expo.version` in `mobile/app.json` to the same string.
+
+**And give the version its notes.** `mobile/CHANGELOG.md` opens with `## À
+paraître`; retitle that section `## <version> — <date>` and open a fresh empty one
+above it. The text is French, from the member's side — what they can now do, not
+which module changed. It belongs in this PR: written here it gets reviewed with
+the bump; written at submission time it gets improvised, which is how a release
+ships "Corrections de bugs". Step 5 copies it into the stores.
 
 **Leave `versionCode` and `buildNumber` alone.** `eas.json` sets
 `appVersionSource: "remote"`, so EAS owns them and increments each on its own at
@@ -149,6 +176,24 @@ Neither goes straight to the public. iOS arrives in App Store Connect for
 TestFlight and review; Android lands on the Play `internal` track, set by
 `eas.json`. **Promotion to production is manual, from each console** — say this
 plainly when reporting, so nobody thinks the release is live when it is not.
+
+On the iOS side that promotion starts with a **new version record** in App Store
+Connect, named for the exact `expo.version` of this release. The record's number
+is what the product page shows, and it is allowed to differ from the build's — the
+live record still says 1.0 while carrying the 1.2.0 binary, because no record was
+ever made for 1.1.x or 1.2.0. One release, one new record, so the store page and
+the repo finally agree.
+
+### The three fields EAS does not fill
+
+`eas submit` uploads the binary and no text at all. The version's section of
+`mobile/CHANGELOG.md` has to be pasted by hand into **Nouveautés de cette
+version** (App Store, per version, required for every update after the first),
+**Éléments à tester** (TestFlight, per build, addressed to testers) and **Notes de
+version** (Play Console, when promoting off the `internal` track, 500 characters —
+so cut, do not rewrite). Neither field can be changed after release without
+another submission, so list them as work the user still has to do, with the text
+ready to paste. `mobile/DISTRIBUTION.md` has the details.
 
 ## Reporting
 
