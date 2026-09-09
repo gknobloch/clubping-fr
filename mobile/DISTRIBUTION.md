@@ -313,17 +313,87 @@ the previous version's text.
 
 `mobile/CHANGELOG.md` is the source. It is written in French, from the member's side,
 in the version-bump PR — which is what gets it reviewed rather than improvised at
-submission time. The same text then goes into three fields, by hand:
+submission time. That text feeds three fields:
 
 | Where | Scope | Notes |
 | ----- | ----- | ----- |
 | App Store — **Nouveautés de cette version** | per version | Required for every update after the first. Per listing language; only French exists here. 4 000 characters. |
 | TestFlight — **Éléments à tester** | per build | Optional, and the only one addressed to testers: say what to try, not what changed. |
-| Play Console — **Notes de version** | per release | Filled when promoting off the `internal` track, in `fr-FR`. 500 characters — the shortest of the three, so write the App Store text first and cut. |
+| Play Console — **Notes de version** | per release | Filled when promoting off the `internal` track, in `fr-FR`. 500 characters — the shortest of the three by far. |
 
 Write them **before** submitting. On the App Store the text belongs to the version:
 changing it once the version is released means submitting another one, and another
 review.
+
+## Filling them (#492)
+
+They are no longer typed into three consoles. `scripts/store-notes.mjs` renders the
+version's section of the CHANGELOG into the files fastlane uploads, from the repo root:
+
+```
+npm run store:notes
+```
+
+It unwraps the markdown — the file is hard-wrapped at 80 columns and `**gras**` shows
+its asterisks in a store field — and writes:
+
+```
+mobile/fastlane/metadata/fr-FR/release_notes.txt              App Store
+mobile/fastlane/metadata/fr-FR/testflight_notes.txt           TestFlight
+mobile/fastlane/metadata/android/fr-FR/changelogs/<code>.txt  Play
+mobile/fastlane/build-context.json                            version + build numbers
+```
+
+All four are git-ignored. The CHANGELOG is the reviewed artefact, and the Play file
+cannot be committed with the bump anyway: it is named for a `versionCode` EAS only
+assigns at build time.
+
+**Run it after the build, not before.** The numbers come off a finished production
+build of that exact version (`eas build:list`), not from `eas build:version:get`, which
+returns the last number EAS handed out — before a build that is still the *previous*
+release's. A changelog file named for a `versionCode` that is not the one being promoted
+makes `supply` upload no notes at all, and say nothing about it. If no build for the
+version exists yet, the script says so and stops.
+
+Then, from `mobile/`:
+
+```
+bundle exec fastlane notes
+```
+
+which regenerates the files and runs the three lanes: `ios notes` (deliver — creates the
+App Store version record and fills it), `ios testflight_notes` (pilot), `android notes`
+(supply). None of them promotes anything: iOS stays in TestFlight, Android stays on
+`internal`, and the buttons that make a release public stay manual.
+
+`bundle install` once, in `mobile/`; commit the `Gemfile.lock` it writes. There are
+deliberately **no build lanes** — `gym` and `match` would replace EAS Build with locally
+managed signing, and `increment_build_number` would fight `appVersionSource: "remote"`.
+
+### The 500-character field
+
+Play takes 500 characters against the App Store's 4 000, and every release so far has
+been over it — 1.2.0 was 681, 1.3.0 was 741. A version that does not fit carries a
+`### Play` subsection in its CHANGELOG entry: the short text Play shows, written rather
+than cut. Without one, the script fails with the character count instead of truncating
+mid-sentence, and `npm run test:run` fails the same way in CI — so it is caught in the
+PR that writes the notes, not on release day.
+
+### Credentials
+
+`supply` reuses `mobile/google-play-service-account.json`, already there for
+`eas submit`. Promoting to production later needs *Mettre les applications à disposition
+de tous les utilisateurs* added to it (see above).
+
+`deliver` and `pilot` need an App Store Connect API key of their own — EAS never hands
+its own key back out. Create one in App Store Connect (**Users and Access → Integrations**),
+role **App Manager**, and export:
+
+```
+ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT   # the .p8, base64-encoded
+```
+
+Never commit the `.p8`; `mobile/.gitignore` already refuses `*.p8`.
 
 An `eas update` (OTA) has no notes anywhere — nothing tells a member the app changed
 under them. That is a reason to prefer a real release for anything a member would

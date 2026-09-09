@@ -1,0 +1,140 @@
+# ---------------------------------------------------------------------------
+# Store release notes (#492)
+#
+# fastlane is here for one job: the text `eas submit` does not upload. deliver,
+# pilot and supply are App Store Connect and Play API clients — no Xcode, no
+# macOS runner, no local certificate.
+#
+# There are deliberately no build lanes. gym and match would replace EAS Build
+# with locally managed signing, and increment_build_number would fight
+# `appVersionSource: "remote"` in eas.json, which is what makes EAS the single
+# owner of versionCode and buildNumber. Building stays `eas build --auto-submit`.
+#
+# Nothing here promotes anything: iOS stays in TestFlight, Android stays on the
+# `internal` track. Sending a release to the public is a separate, manual step.
+#
+# The lanes are flat rather than in `platform` blocks so that `notes` can call
+# all three by name — crossing a platform boundary from a lane needs fastlane's
+# internals, and this needs none of it.
+# ---------------------------------------------------------------------------
+
+skip_docs
+
+MOBILE_DIR = File.expand_path("..", __dir__)
+REPO_ROOT = File.expand_path("..", MOBILE_DIR)
+METADATA = File.join(__dir__, "metadata")
+CONTEXT = File.join(__dir__, "build-context.json")
+
+# The version and the two build numbers, written by scripts/store-notes.mjs off
+# the finished EAS build. Read rather than recomputed: a number guessed here and
+# a number guessed there is how notes end up attached to the wrong build.
+def build_context
+  unless File.exist?(CONTEXT)
+    UI.user_error!(
+      "#{CONTEXT} absent. Lancez d'abord `npm run store:notes` depuis la racine " \
+      "du dépôt — il lit mobile/CHANGELOG.md et interroge EAS pour le build."
+    )
+  end
+  require "json"
+  JSON.parse(File.read(CONTEXT))
+end
+
+def read_notes(relative)
+  file = File.join(METADATA, relative)
+  UI.user_error!("#{file} absent. Relancez `npm run store:notes`.") unless File.exist?(file)
+  File.read(file).strip
+end
+
+# App Store Connect authenticates with an API key, not an Apple ID: it is the
+# only form that works unattended, and it is separate from the key EAS holds —
+# EAS never hands its own back out.
+def asc_key
+  %w[ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_CONTENT].each do |name|
+    next unless ENV[name].to_s.empty?
+
+    UI.user_error!("Variable d'environnement #{name} absente. Voir mobile/DISTRIBUTION.md.")
+  end
+  app_store_connect_api_key(
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    key_content: ENV["ASC_KEY_CONTENT"],
+    is_key_content_base64: true,
+    in_house: false,
+  )
+end
+
+desc "Régénère les trois fichiers depuis mobile/CHANGELOG.md"
+lane :generate_notes do
+  # The script resolves its own paths from its location, so the working
+  # directory fastlane happens to be in does not matter.
+  sh("node", File.join(REPO_ROOT, "scripts", "store-notes.mjs"))
+end
+
+desc "Nouveautés de cette version — App Store, par version"
+lane :ios_notes do
+  context = build_context
+  deliver(
+    api_key: asc_key,
+    app_version: context["version"],
+    metadata_path: METADATA,
+    # EAS already uploaded the binary; deliver is here for the text alone.
+    skip_binary_upload: true,
+    skip_screenshots: true,
+    overwrite_screenshots: false,
+    # Nothing is sent to review from here: the version record is created and
+    # filled, and a human presses the button in App Store Connect.
+    submit_for_review: false,
+    run_precheck_before_submit: false,
+    # No HTML preview to confirm — this has to run unattended.
+    force: true,
+  )
+  UI.success("Notes App Store déposées sur la version #{context['version']} (pas soumise à la revue).")
+end
+
+desc "Éléments à tester — TestFlight, par build"
+lane :testflight_notes do
+  context = build_context
+  upload_to_testflight(
+    api_key: asc_key,
+    app_version: context["version"],
+    # Named, never `--latest`: "the most recent build" and "the build we just
+    # made" stop being the same thing after any build that did not ship.
+    build_number: context["buildNumber"].to_s,
+    distribute_only: true,
+    changelog: read_notes("fr-FR/testflight_notes.txt"),
+  )
+  UI.success("Éléments à tester déposés sur le build #{context['buildNumber']}.")
+end
+
+desc "Notes de version — Play Console, canal internal"
+lane :android_notes do
+  context = build_context
+  key = File.join(MOBILE_DIR, "google-play-service-account.json")
+  UI.user_error!("#{key} absent. Voir mobile/DISTRIBUTION.md.") unless File.exist?(key)
+  upload_to_play_store(
+    json_key: key,
+    package_name: "fr.clubping.app",
+    # The build is already on `internal`, put there by `eas build --auto-submit`.
+    track: "internal",
+    version_code: context["versionCode"].to_i,
+    # Changelogs only. The listing — description, icon, feature graphic,
+    # screenshots — is not managed from here yet, and uploading a metadata
+    # folder that holds none of it over the live one would wipe it.
+    skip_upload_aab: true,
+    skip_upload_apk: true,
+    skip_upload_metadata: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true,
+    skip_upload_changelogs: false,
+    metadata_path: File.join(METADATA, "android"),
+  )
+  UI.success("Notes de version déposées sur le versionCode #{context['versionCode']} (canal internal).")
+end
+
+desc "Les trois champs, une fois les deux builds terminés"
+lane :notes do
+  generate_notes
+  ios_notes
+  testflight_notes
+  android_notes
+end

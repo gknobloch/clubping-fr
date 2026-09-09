@@ -1,0 +1,8 @@
+source "https://rubygems.org"
+
+# fastlane is used here for its metadata half only — deliver, pilot and supply,
+# which are App Store Connect and Play API clients. The build half (gym, match)
+# is deliberately unused: EAS Build owns the binaries and the credentials, and
+# `appVersionSource: "remote"` in eas.json means EAS owns the version numbers
+# too. See mobile/DISTRIBUTION.md.
+gem "fastlane", "~> 2.228"
