@@ -366,9 +366,40 @@ App Store version record and fills it), `ios testflight_notes` (pilot), `android
 (supply). None of them promotes anything: iOS stays in TestFlight, Android stays on
 `internal`, and the buttons that make a release public stay manual.
 
-`bundle install` once, in `mobile/`; commit the `Gemfile.lock` it writes. There are
-deliberately **no build lanes** — `gym` and `match` would replace EAS Build with locally
-managed signing, and `increment_build_number` would fight `appVersionSource: "remote"`.
+There are deliberately **no build lanes** — `gym` and `match` would replace EAS Build
+with locally managed signing, and `increment_build_number` would fight
+`appVersionSource: "remote"`.
+
+### Ruby, once
+
+Two traps, both silent, and both cost an afternoon the first time.
+
+**`bundle` on the PATH is macOS's own.** `/usr/bin/bundle` belongs to the system Ruby
+2.6, which Apple deprecated and whose gem directory lives under `/Library` — so
+`bundle install` asks for a sudo password and installs fastlane outside the project.
+Homebrew's Ruby is keg-only, so `/opt/homebrew/bin` is *not* enough either: its binaries
+are under `/opt/homebrew/opt/ruby/bin`, which has to come first.
+
+```
+export PATH="/opt/homebrew/opt/ruby/bin:$PATH"   # ruby 4.0.6, bundler 4.0.16
+cd mobile
+bundle config set --local path vendor/bundle     # keeps gems in the project, no sudo
+bundle install
+```
+
+`vendor/` and `.bundle/` are git-ignored; `Gemfile.lock` is committed, so everyone
+resolves the same fastlane.
+
+**fastlane needs a UTF-8 locale.** It warns and carries on, but every one of these notes
+is French — `é`, `à`, `«»` — and the whole point is the text landing on a store page
+intact. Export it alongside:
+
+```
+export LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8
+```
+
+Check the install with `bundle exec fastlane lanes`, which lists the five lanes without
+touching a store or needing a credential.
 
 ### The 500-character field
 
