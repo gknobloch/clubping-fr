@@ -22,7 +22,7 @@
     "db:refresh:dev": "bash scripts/refresh-dev-db.sh",
     "store:notes": "node scripts/store-notes.mjs",
     "store:notes:check": "node scripts/store-notes.mjs --check",
-    "store:fastlane": "cd mobile && PATH=\"$(brew --prefix ruby)/bin:$PATH\" LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8 bundle exec fastlane"
+    "store:fastlane": "npm --prefix mobile run store:fastlane --"
   },
   "dependencies": {
     "hono": "^4.12.7",

@@ -328,7 +328,9 @@ review.
 ## Filling them (#492)
 
 They are no longer typed into three consoles. `scripts/store-notes.mjs` renders the
-version's section of the CHANGELOG into the files fastlane uploads, from the repo root:
+version's section of the CHANGELOG into the files fastlane uploads. Both commands below
+work from `mobile/` and from the repo root — the scripts are defined in both
+`package.json` files, and the root one delegates:
 
 ```
 npm run store:notes
@@ -355,7 +357,7 @@ release's. A changelog file named for a `versionCode` that is not the one being 
 makes `supply` upload no notes at all, and say nothing about it. If no build for the
 version exists yet, the script says so and stops.
 
-Then, from the repo root:
+Then:
 
 ```
 npm run store:fastlane -- notes

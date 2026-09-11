@@ -194,7 +194,7 @@ the repo finally agree.
 `eas submit` uploads the binary and no text at all. Fastlane fills the three
 text fields from `mobile/CHANGELOG.md` — **Nouveautés de cette version** (App
 Store), **Éléments à tester** (TestFlight) and **Notes de version** (Play). Once
-both builds have finished, from the repo root:
+both builds have finished (from `mobile/` or the repo root — either works):
 
 ```bash
 npm run store:fastlane -- notes
