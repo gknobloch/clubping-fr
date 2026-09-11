@@ -392,8 +392,27 @@ app.get_app_store_versions.each { |v| puts "#{v.version_string} #{v.app_store_st
 puts app.get_edit_app_store_version&.version_string || "NONE"
 ```
 
-`android_notes` has no such window — the `internal` track changelog stays writable — and
-`testflight_notes` is per build, so it follows the build rather than the version.
+`testflight_notes` is per build, so it follows the build rather than the version and
+stays writable as long as the build does (90 days).
+
+### Play has a window too, of a different shape
+
+`supply` finds a release by the **versionCode it holds**, not by its name. Promoting a
+release in the Play Console moves the bundle on and leaves the old release without one —
+so notes written after a promotion have nothing to attach to, and supply says only:
+
+```
+Could not find release for version code '13' to update changelog
+```
+
+1.3.0 ended up exactly there: the AAB for versionCode 13 is uploaded, but neither the
+`internal` release nor the `alpha` draft named 1.3.0 still holds it. `android_notes`
+pre-checks this and prints every track, release and versionCode before refusing, because
+the bare supply error names no cause.
+
+So on both stores the rule is the same, and it is about **order, not tooling**: the notes
+go on straight after `eas build --auto-submit`, before anything is promoted or submitted
+anywhere. That is the whole reason these lanes exist between the build and the buttons.
 
 There are deliberately **no build lanes** — `gym` and `match` would replace EAS Build
 with locally managed signing, and `increment_build_number` would fight

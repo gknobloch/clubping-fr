@@ -28,6 +28,7 @@ skip_docs
 # wrote the files.
 FASTLANE_DIR = File.expand_path(__dir__)
 MOBILE_DIR = File.expand_path("..", FASTLANE_DIR)
+PACKAGE = "fr.clubping.app"
 REPO_ROOT = File.expand_path("..", MOBILE_DIR)
 CONTEXT = File.join(FASTLANE_DIR, "build-context.json")
 
@@ -111,14 +112,55 @@ lane :testflight_notes do
   UI.success("Éléments à tester déposés sur le build #{context['buildNumber']}.")
 end
 
+# supply matches a release by the versionCode it holds, and fails with a bare
+# "Could not find release for version code 'N'" when none does — which says
+# nothing about why. A release loses its bundle when it is promoted in the
+# Console, so this is what a release promoted before its notes were written looks
+# like. Answer the question the error does not.
+def play_release_holding?(version_code, track_name, key)
+  require "google/apis/androidpublisher_v3"
+  require "googleauth"
+
+  service = Google::Apis::AndroidpublisherV3::AndroidPublisherService.new
+  service.authorization = Google::Auth::ServiceAccountCredentials.make_creds(
+    json_key_io: File.open(key),
+    scope: "https://www.googleapis.com/auth/androidpublisher",
+  )
+  edit = service.insert_edit(PACKAGE)
+  begin
+    tracks = service.list_edit_tracks(PACKAGE, edit.id).tracks
+    wanted = tracks.find { |t| t.track == track_name }
+    held = (wanted&.releases || []).any? { |r| (r.version_codes || []).map(&:to_s).include?(version_code.to_s) }
+    return true if held
+
+    UI.error("Aucune release du canal #{track_name} ne porte le versionCode #{version_code}.")
+    UI.error("Ce que la Play Console contient aujourd'hui :")
+    tracks.each do |t|
+      (t.releases || []).each do |r|
+        codes = (r.version_codes || []).join(",")
+        UI.error("  #{t.track.ljust(11)} #{r.name} (#{r.status}) versionCodes=#{codes.empty? ? '—' : codes}")
+      end
+    end
+    UI.error("Une release perd son bundle quand elle est promue depuis la Console : " \
+             "les notes se posent juste après `eas build --auto-submit`, avant toute promotion.")
+    false
+  ensure
+    # Never committed: this edit only ever read.
+    service.delete_edit(PACKAGE, edit.id)
+  end
+end
+
 desc "Notes de version — Play Console, canal internal"
 lane :android_notes do
   context = build_context
   key = File.join(MOBILE_DIR, "google-play-service-account.json")
   UI.user_error!("#{key} absent. Voir mobile/DISTRIBUTION.md.") unless File.exist?(key)
+  unless play_release_holding?(context["versionCode"], "internal", key)
+    UI.user_error!("Notes non déposées — voir ci-dessus.")
+  end
   upload_to_play_store(
     json_key: key,
-    package_name: "fr.clubping.app",
+    package_name: PACKAGE,
     # The build is already on `internal`, put there by `eas build --auto-submit`.
     track: "internal",
     version_code: context["versionCode"].to_i,
