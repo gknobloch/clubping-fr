@@ -205,9 +205,13 @@ plain PATH is macOS's system Ruby 2.6, which fails with
 `Could not find 'bundler'`; the script resolves Homebrew's Ruby and sets the
 UTF-8 locale fastlane needs to upload accented French intact.
 
-**After the builds, never before.** The generator reads the version's numbers off
-a finished production build of that exact version; run before, there is no such
-build and it stops. That is deliberate — a Play changelog named for the wrong
+**After the builds, never before — and before submitting for review.** The
+generator reads the version's numbers off a finished production build of that
+exact version; run before, there is no such build and it stops. And App Store
+Connect freezes *Nouveautés de cette version* once a version leaves the editable
+state, so `ios_notes` run after submission fails with *"The version number has
+been previously used"* — deliver finding no editable record and being refused a
+new one. That text then costs another version and another review. That is deliberate — a Play changelog named for the wrong
 `versionCode` uploads nothing and reports success.
 
 Two things still need a human, and both belong in the report: pressing **Submit

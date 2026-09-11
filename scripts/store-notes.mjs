@@ -297,7 +297,25 @@ function main(argv) {
     write(path.join(meta, `android/fr-FR/changelogs/${versionCode}.txt`), notes.play),
     write(
       path.join(ROOT, 'mobile/fastlane/build-context.json'),
-      JSON.stringify({ version, versionCode, buildNumber }, null, 2),
+      // Absolute paths, because the Fastfile must not compute its own. `__dir__`
+      // inside a Fastfile is `.` — fastlane evaluates it under a relative name —
+      // and fastlane then chdirs from fastlane/ to mobile/ between parsing a lane
+      // and running its action. A relative path built at parse time therefore
+      // points somewhere else by the time deliver or supply reads it, which is
+      // how `metadata_path` became mobile/metadata instead of
+      // mobile/fastlane/metadata. The script knows where it wrote; it says so.
+      JSON.stringify(
+        {
+          version,
+          versionCode,
+          buildNumber,
+          metadataPath: meta,
+          androidMetadataPath: path.join(meta, 'android'),
+          testflightNotesPath: path.join(meta, 'fr-FR/testflight_notes.txt'),
+        },
+        null,
+        2,
+      ),
     ),
   ]
 

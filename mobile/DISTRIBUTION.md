@@ -366,6 +366,35 @@ App Store version record and fills it), `ios testflight_notes` (pilot), `android
 (supply). None of them promotes anything: iOS stays in TestFlight, Android stays on
 `internal`, and the buttons that make a release public stay manual.
 
+### The App Store window closes
+
+`ios_notes` has a window, and it is narrower than the other two: **after the build
+reaches App Store Connect, and before the version is submitted for review.** App Store
+Connect freezes *Nouveautés de cette version* the moment a version leaves the editable
+state, and nothing reopens it — not deliver, not the console. Changing the text then
+costs a new version number and another review.
+
+Run it too late and deliver fails like this, which reads as a bug and is not one:
+
+```
+The provided entity includes an attribute with a value that has already been used
+- The version number has been previously used. - /data/attributes/versionString
+```
+
+That is deliver finding no *editable* record, trying to create one, and Apple refusing a
+version string that already exists. 1.3.0 hit it exactly this way: released on 9
+September, `READY_FOR_SALE`, no editable version. To see the state before assuming
+anything, the read-only probe is three calls:
+
+```ruby
+app = Spaceship::ConnectAPI::App.find("fr.clubping.app")
+app.get_app_store_versions.each { |v| puts "#{v.version_string} #{v.app_store_state}" }
+puts app.get_edit_app_store_version&.version_string || "NONE"
+```
+
+`android_notes` has no such window — the `internal` track changelog stays writable — and
+`testflight_notes` is per build, so it follows the build rather than the version.
+
 There are deliberately **no build lanes** — `gym` and `match` would replace EAS Build
 with locally managed signing, and `increment_build_number` would fight
 `appVersionSource: "remote"`.

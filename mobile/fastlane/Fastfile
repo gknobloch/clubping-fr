@@ -20,10 +20,16 @@
 
 skip_docs
 
-MOBILE_DIR = File.expand_path("..", __dir__)
+# `__dir__` is "." inside a Fastfile — fastlane evaluates it under a relative
+# name — and fastlane chdirs from fastlane/ to mobile/ between parsing a lane and
+# running its action. So every path here is expanded once, at parse time, while
+# the working directory is still this folder. The metadata paths are not built
+# here at all: build-context.json carries them absolute, from the script that
+# wrote the files.
+FASTLANE_DIR = File.expand_path(__dir__)
+MOBILE_DIR = File.expand_path("..", FASTLANE_DIR)
 REPO_ROOT = File.expand_path("..", MOBILE_DIR)
-METADATA = File.join(__dir__, "metadata")
-CONTEXT = File.join(__dir__, "build-context.json")
+CONTEXT = File.join(FASTLANE_DIR, "build-context.json")
 
 # The version and the two build numbers, written by scripts/store-notes.mjs off
 # the finished EAS build. Read rather than recomputed: a number guessed here and
@@ -39,8 +45,7 @@ def build_context
   JSON.parse(File.read(CONTEXT))
 end
 
-def read_notes(relative)
-  file = File.join(METADATA, relative)
+def read_notes(file)
   UI.user_error!("#{file} absent. Relancez `npm run store:notes`.") unless File.exist?(file)
   File.read(file).strip
 end
@@ -76,7 +81,7 @@ lane :ios_notes do
   deliver(
     api_key: asc_key,
     app_version: context["version"],
-    metadata_path: METADATA,
+    metadata_path: context["metadataPath"],
     # EAS already uploaded the binary; deliver is here for the text alone.
     skip_binary_upload: true,
     skip_screenshots: true,
@@ -101,7 +106,7 @@ lane :testflight_notes do
     # made" stop being the same thing after any build that did not ship.
     build_number: context["buildNumber"].to_s,
     distribute_only: true,
-    changelog: read_notes("fr-FR/testflight_notes.txt"),
+    changelog: read_notes(context["testflightNotesPath"]),
   )
   UI.success("Éléments à tester déposés sur le build #{context['buildNumber']}.")
 end
@@ -126,7 +131,7 @@ lane :android_notes do
     skip_upload_images: true,
     skip_upload_screenshots: true,
     skip_upload_changelogs: false,
-    metadata_path: File.join(METADATA, "android"),
+    metadata_path: context["androidMetadataPath"],
   )
   UI.success("Notes de version déposées sur le versionCode #{context['versionCode']} (canal internal).")
 end
