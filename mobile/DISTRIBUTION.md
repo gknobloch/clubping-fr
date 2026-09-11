@@ -313,17 +313,177 @@ the previous version's text.
 
 `mobile/CHANGELOG.md` is the source. It is written in French, from the member's side,
 in the version-bump PR — which is what gets it reviewed rather than improvised at
-submission time. The same text then goes into three fields, by hand:
+submission time. That text feeds three fields:
 
 | Where | Scope | Notes |
 | ----- | ----- | ----- |
 | App Store — **Nouveautés de cette version** | per version | Required for every update after the first. Per listing language; only French exists here. 4 000 characters. |
 | TestFlight — **Éléments à tester** | per build | Optional, and the only one addressed to testers: say what to try, not what changed. |
-| Play Console — **Notes de version** | per release | Filled when promoting off the `internal` track, in `fr-FR`. 500 characters — the shortest of the three, so write the App Store text first and cut. |
+| Play Console — **Notes de version** | per release | Filled when promoting off the `internal` track, in `fr-FR`. 500 characters — the shortest of the three by far. |
 
 Write them **before** submitting. On the App Store the text belongs to the version:
 changing it once the version is released means submitting another one, and another
 review.
+
+## Filling them (#492)
+
+They are no longer typed into three consoles. `scripts/store-notes.mjs` renders the
+version's section of the CHANGELOG into the files fastlane uploads. Both commands below
+work from `mobile/` and from the repo root — the scripts are defined in both
+`package.json` files, and the root one delegates:
+
+```
+npm run store:notes
+```
+
+It unwraps the markdown — the file is hard-wrapped at 80 columns and `**gras**` shows
+its asterisks in a store field — and writes:
+
+```
+mobile/fastlane/metadata/fr-FR/release_notes.txt              App Store
+mobile/fastlane/metadata/fr-FR/testflight_notes.txt           TestFlight
+mobile/fastlane/metadata/android/fr-FR/changelogs/<code>.txt  Play
+mobile/fastlane/build-context.json                            version + build numbers
+```
+
+All four are git-ignored. The CHANGELOG is the reviewed artefact, and the Play file
+cannot be committed with the bump anyway: it is named for a `versionCode` EAS only
+assigns at build time.
+
+**Run it after the build, not before.** The numbers come off a finished production
+build of that exact version (`eas build:list`), not from `eas build:version:get`, which
+returns the last number EAS handed out — before a build that is still the *previous*
+release's. A changelog file named for a `versionCode` that is not the one being promoted
+makes `supply` upload no notes at all, and say nothing about it. If no build for the
+version exists yet, the script says so and stops.
+
+Then:
+
+```
+npm run store:fastlane -- notes
+```
+
+which regenerates the files and runs the three lanes: `ios notes` (deliver — creates the
+App Store version record and fills it), `ios testflight_notes` (pilot), `android notes`
+(supply). Nothing is submitted to review and nothing is promoted to production: iOS
+stays in TestFlight, Android stays on `internal`, and the buttons that make a release
+public stay manual.
+
+One exception worth knowing: setting a TestFlight changelog goes through pilot's
+*distribute* path, so `testflight_notes` hands the build to its TestFlight groups. For
+internal testers that changes nothing — they get every build automatically. External
+testers would be emailed, and pilot's default for that is `true`, so the lane pins
+`notify_external_testers: false`: writing release notes must not by itself mail anybody.
+
+### The App Store window closes
+
+`ios_notes` has a window, and it is narrower than the other two: **after the build
+reaches App Store Connect, and before the version is submitted for review.** App Store
+Connect freezes *Nouveautés de cette version* the moment a version leaves the editable
+state, and nothing reopens it — not deliver, not the console. Changing the text then
+costs a new version number and another review.
+
+Run it too late and deliver fails like this, which reads as a bug and is not one:
+
+```
+The provided entity includes an attribute with a value that has already been used
+- The version number has been previously used. - /data/attributes/versionString
+```
+
+That is deliver finding no *editable* record, trying to create one, and Apple refusing a
+version string that already exists. 1.3.0 hit it exactly this way: released on 9
+September, `READY_FOR_SALE`, no editable version. To see the state before assuming
+anything, the read-only probe is three calls:
+
+```ruby
+app = Spaceship::ConnectAPI::App.find("fr.clubping.app")
+app.get_app_store_versions.each { |v| puts "#{v.version_string} #{v.app_store_state}" }
+puts app.get_edit_app_store_version&.version_string || "NONE"
+```
+
+`testflight_notes` is per build, so it follows the build rather than the version and
+stays writable as long as the build does (90 days).
+
+### Play has a window too, of a different shape
+
+`supply` finds a release by the **versionCode it holds**, not by its name. Promoting a
+release in the Play Console moves the bundle on and leaves the old release without one —
+so notes written after a promotion have nothing to attach to, and supply says only:
+
+```
+Could not find release for version code '13' to update changelog
+```
+
+1.3.0 ended up exactly there: the AAB for versionCode 13 is uploaded, but neither the
+`internal` release nor the `alpha` draft named 1.3.0 still holds it. `android_notes`
+pre-checks this and prints every track, release and versionCode before refusing, because
+the bare supply error names no cause.
+
+So on both stores the rule is the same, and it is about **order, not tooling**: the notes
+go on straight after `eas build --auto-submit`, before anything is promoted or submitted
+anywhere. That is the whole reason these lanes exist between the build and the buttons.
+
+There are deliberately **no build lanes** — `gym` and `match` would replace EAS Build
+with locally managed signing, and `increment_build_number` would fight
+`appVersionSource: "remote"`.
+
+### Ruby, once
+
+**Always call fastlane through `npm run store:fastlane --`**, never `bundle exec
+fastlane` directly. The wrapper exists because two silent traps sit between a fresh
+terminal and a working lane, and both cost an afternoon the first time.
+
+**`bundle` on the PATH is macOS's own.** `/usr/bin/bundle` belongs to the system Ruby
+2.6, which Apple deprecated and whose gem directory lives under `/Library` — so
+`bundle install` asks for a sudo password and installs fastlane outside the project, and
+`bundle exec` later dies with `Could not find 'bundler' (4.0.16)`. Homebrew's Ruby is
+keg-only, so putting `/opt/homebrew/bin` first is *not* enough either: its binaries are
+under `/opt/homebrew/opt/ruby/bin`. The wrapper resolves that with `brew --prefix ruby`,
+which is right on both Apple Silicon and Intel.
+
+**fastlane needs a UTF-8 locale.** It warns and carries on, but every one of these notes
+is French — `é`, `à`, `«»` — and the whole point is the text landing on a store page
+intact. The wrapper sets `LANG` and `LC_ALL` too.
+
+Install once, from the repo root:
+
+```
+PATH="$(brew --prefix ruby)/bin:$PATH" bundle install --gemfile mobile/Gemfile
+```
+
+`vendor/` and `.bundle/` are git-ignored; `Gemfile.lock` is committed, so everyone
+resolves the same fastlane. Check it with:
+
+```
+npm run store:fastlane -- lanes
+```
+
+which lists the five lanes without touching a store or needing a credential.
+
+### The 500-character field
+
+Play takes 500 characters against the App Store's 4 000, and every release so far has
+been over it — 1.2.0 was 681, 1.3.0 was 741. A version that does not fit carries a
+`### Play` subsection in its CHANGELOG entry: the short text Play shows, written rather
+than cut. Without one, the script fails with the character count instead of truncating
+mid-sentence, and `npm run test:run` fails the same way in CI — so it is caught in the
+PR that writes the notes, not on release day.
+
+### Credentials
+
+`supply` reuses `mobile/google-play-service-account.json`, already there for
+`eas submit`. Promoting to production later needs *Mettre les applications à disposition
+de tous les utilisateurs* added to it (see above).
+
+`deliver` and `pilot` need an App Store Connect API key of their own — EAS never hands
+its own key back out. Create one in App Store Connect (**Users and Access → Integrations**),
+role **App Manager**, and export:
+
+```
+ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT   # the .p8, base64-encoded
+```
+
+Never commit the `.p8`; `mobile/.gitignore` already refuses `*.p8`.
 
 An `eas update` (OTA) has no notes anywhere — nothing tells a member the app changed
 under them. That is a reason to prefer a real release for anything a member would

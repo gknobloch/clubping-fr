@@ -9,10 +9,18 @@ Une section par version, la plus récente en haut. `## À paraître` recueille c
 a touché le binaire depuis la dernière bascule ; elle prend son numéro le jour de
 la release.
 
-Le texte d'une version part ensuite, tel quel, dans les trois champs que `eas
-submit` ne remplit pas : **Nouveautés de cette version** sur l'App Store,
-**Éléments à tester** dans TestFlight, **Notes de version** dans la Play Console.
-`mobile/DISTRIBUTION.md` dit où ils se trouvent et ce que chacun accepte.
+Le texte d'une version part ensuite dans les trois champs que `eas submit` ne
+remplit pas : **Nouveautés de cette version** sur l'App Store, **Éléments à
+tester** dans TestFlight, **Notes de version** dans la Play Console. Il n'y va
+plus à la main : `node scripts/store-notes.mjs` génère les trois fichiers que
+fastlane téléverse, et `mobile/DISTRIBUTION.md` dit comment.
+
+La Play Console n'accepte que 500 caractères, contre 4 000 pour l'App Store. Une
+version qui dépasse porte une sous-section `### Play` : le texte court que Play
+affichera. C'est un texte **écrit**, pas une troncature — la limite tombe au
+milieu d'une phrase, et aucun de ces champs ne se corrige après publication sans
+repasser une soumission. Sans cette sous-section, une version trop longue arrête
+la release au lieu de partir coupée.
 
 Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 (#435, #441, #471).
@@ -35,6 +43,18 @@ Les licences sous les yeux du capitaine.
   textes coupés ou décalés d'un ou deux pixels.
 - Face ID demande son autorisation en français.
 
+### Play
+
+Les licences sous les yeux du capitaine.
+
+- Un joueur dont la licence n'est pas validée porte un tag « Sans licence »
+  partout où son nom apparaît, et l'aligner affiche un avertissement. Rien n'est
+  interdit : un renouvellement en cours reste une affaire de club.
+- La fiche d'un joueur affiche sa catégorie d'âge.
+- Sur tablette, la matrice des journées montre aussi les autres joueurs du club.
+- Face ID demande son autorisation en français, et des textes coupés ou décalés
+  sont corrigés.
+
 ## 1.2.0 — 28 août 2026
 
 L'application sur tablette.
@@ -49,3 +69,16 @@ L'application sur tablette.
 - Répondre pour un coéquipier suit la règle des disponibilités.
 
 Sur téléphone, rien ne change : mêmes écrans, même barre en bas, mêmes gestes.
+
+### Play
+
+L'application sur tablette.
+
+- Plein écran sur iPad, mode paysage, encoches respectées.
+- En paysage, la navigation passe le long du bord gauche ; **Équipes** et
+  **Joueurs** affichent la fiche à côté de leur liste.
+- **Journées** devient la grille du web : joueurs en lignes, journées en
+  colonnes, disponibilités et compositions modifiables sur place.
+- Le choix d'un joueur écarte les licenciés archivés et se filtre par nom.
+
+Sur téléphone, rien ne change.

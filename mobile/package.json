@@ -18,7 +18,9 @@
     "submit:ios": "eas submit --platform ios --profile production --latest",
     "build:android": "eas build --platform android --profile production",
     "build:android:preview": "eas build --platform android --profile preview",
-    "submit:android": "eas submit --platform android --profile production --latest"
+    "submit:android": "eas submit --platform android --profile production --latest",
+    "store:notes": "npm --prefix .. run store:notes",
+    "store:fastlane": "PATH=\"$(brew --prefix ruby)/bin:$PATH\" LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8 bundle exec fastlane"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

@@ -18,3 +18,14 @@ ios/
 
 expo-env.d.ts
 # @end expo-cli
+# fastlane (#492). The store notes are generated from CHANGELOG.md, which is the
+# reviewed source; the Play file is named for a versionCode EAS only assigns at
+# build time, so it cannot exist when the bump PR is reviewed anyway.
+fastlane/metadata/
+fastlane/build-context.json
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+vendor/
+.bundle/

@@ -112,7 +112,12 @@ paraître`; retitle that section `## <version> — <date>` and open a fresh empt
 above it. The text is French, from the member's side — what they can now do, not
 which module changed. It belongs in this PR: written here it gets reviewed with
 the bump; written at submission time it gets improvised, which is how a release
-ships "Corrections de bugs". Step 5 copies it into the stores.
+ships "Corrections de bugs". Step 5 renders it into the three store fields.
+
+Play accepts 500 characters against the App Store's 4 000, and every release so
+far has run over. If the section does not fit, add a `### Play` subsection to it
+— the shorter text Play will show, written rather than truncated. `npm run
+test:run` fails on a version that fits neither, so this PR is where it surfaces.
 
 **Leave `versionCode` and `buildNumber` alone.** `eas.json` sets
 `appVersionSource: "remote"`, so EAS owns them and increments each on its own at
@@ -186,14 +191,38 @@ the repo finally agree.
 
 ### The three fields EAS does not fill
 
-`eas submit` uploads the binary and no text at all. The version's section of
-`mobile/CHANGELOG.md` has to be pasted by hand into **Nouveautés de cette
-version** (App Store, per version, required for every update after the first),
-**Éléments à tester** (TestFlight, per build, addressed to testers) and **Notes de
-version** (Play Console, when promoting off the `internal` track, 500 characters —
-so cut, do not rewrite). Neither field can be changed after release without
-another submission, so list them as work the user still has to do, with the text
-ready to paste. `mobile/DISTRIBUTION.md` has the details.
+`eas submit` uploads the binary and no text at all. Fastlane fills the three
+text fields from `mobile/CHANGELOG.md` — **Nouveautés de cette version** (App
+Store), **Éléments à tester** (TestFlight) and **Notes de version** (Play). Once
+both builds have finished (from `mobile/` or the repo root — either works):
+
+```bash
+npm run store:fastlane -- notes
+```
+
+**Through the npm script, never `bundle exec fastlane` directly.** `bundle` on a
+plain PATH is macOS's system Ruby 2.6, which fails with
+`Could not find 'bundler'`; the script resolves Homebrew's Ruby and sets the
+UTF-8 locale fastlane needs to upload accented French intact.
+
+**After the builds, never before — and before submitting for review.** The
+generator reads the version's numbers off a finished production build of that
+exact version; run before, there is no such build and it stops. And App Store
+Connect freezes *Nouveautés de cette version* once a version leaves the editable
+state, so `ios_notes` run after submission fails with *"The version number has
+been previously used"* — deliver finding no editable record and being refused a
+new one. That text then costs another version and another review. That is deliberate — a Play changelog named for the wrong
+`versionCode` uploads nothing and reports success.
+
+Two things still need a human, and both belong in the report: pressing **Submit
+for review** in App Store Connect, and promoting off the Play `internal` track.
+The lanes create the version record and fill the text; they publish nothing.
+
+If the version is over Play's 500 characters, the generator fails with the count
+and asks for a `### Play` subsection in the CHANGELOG — the short text, written
+rather than cut. Write it in the step-4 PR alongside the notes it shortens, not
+here: `npm run test:run` checks it, so a missing one fails CI on that PR rather
+than blocking a release. `mobile/DISTRIBUTION.md` has the rest.
 
 ## Reporting
 

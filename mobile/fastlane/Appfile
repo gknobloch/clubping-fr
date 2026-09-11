@@ -1,0 +1,4 @@
+# Identifiers only. Every credential comes from the environment (Fastfile), so
+# nothing here is a secret and nothing here is per-developer.
+app_identifier("fr.clubping.app")   # iOS bundle id and Android package: the same string
+apple_id(ENV["ASC_APPLE_ID"])       # only used by lanes that fall back to session auth
