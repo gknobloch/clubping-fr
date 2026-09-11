@@ -365,8 +365,15 @@ npm run store:fastlane -- notes
 
 which regenerates the files and runs the three lanes: `ios notes` (deliver — creates the
 App Store version record and fills it), `ios testflight_notes` (pilot), `android notes`
-(supply). None of them promotes anything: iOS stays in TestFlight, Android stays on
-`internal`, and the buttons that make a release public stay manual.
+(supply). Nothing is submitted to review and nothing is promoted to production: iOS
+stays in TestFlight, Android stays on `internal`, and the buttons that make a release
+public stay manual.
+
+One exception worth knowing: setting a TestFlight changelog goes through pilot's
+*distribute* path, so `testflight_notes` hands the build to its TestFlight groups. For
+internal testers that changes nothing — they get every build automatically. External
+testers would be emailed, and pilot's default for that is `true`, so the lane pins
+`notify_external_testers: false`: writing release notes must not by itself mail anybody.
 
 ### The App Store window closes
 

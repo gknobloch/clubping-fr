@@ -106,8 +106,17 @@ lane :testflight_notes do
     # Named, never `--latest`: "the most recent build" and "the build we just
     # made" stop being the same thing after any build that did not ship.
     build_number: context["buildNumber"].to_s,
+    # Without this, pilot asks "Please enter the app's platform" on stdin —
+    # twice — and a run with no terminal hangs on the question.
+    app_platform: "ios",
     distribute_only: true,
     changelog: read_notes(context["testflightNotesPath"]),
+    # Setting a changelog goes through pilot's distribute path, so this lane
+    # does hand the build to its TestFlight groups. For internal testers that
+    # changes nothing — they receive every build automatically. External testers
+    # are the ones who would be emailed, and pilot's default for that is *true*:
+    # writing release notes must not, by itself, mail anybody.
+    notify_external_testers: false,
   )
   UI.success("Éléments à tester déposés sur le build #{context['buildNumber']}.")
 end
