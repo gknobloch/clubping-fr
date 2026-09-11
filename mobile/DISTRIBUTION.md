@@ -355,10 +355,10 @@ release's. A changelog file named for a `versionCode` that is not the one being 
 makes `supply` upload no notes at all, and say nothing about it. If no build for the
 version exists yet, the script says so and stops.
 
-Then, from `mobile/`:
+Then, from the repo root:
 
 ```
-bundle exec fastlane notes
+npm run store:fastlane -- notes
 ```
 
 which regenerates the files and runs the three lanes: `ios notes` (deliver — creates the
@@ -372,34 +372,36 @@ with locally managed signing, and `increment_build_number` would fight
 
 ### Ruby, once
 
-Two traps, both silent, and both cost an afternoon the first time.
+**Always call fastlane through `npm run store:fastlane --`**, never `bundle exec
+fastlane` directly. The wrapper exists because two silent traps sit between a fresh
+terminal and a working lane, and both cost an afternoon the first time.
 
 **`bundle` on the PATH is macOS's own.** `/usr/bin/bundle` belongs to the system Ruby
 2.6, which Apple deprecated and whose gem directory lives under `/Library` — so
-`bundle install` asks for a sudo password and installs fastlane outside the project.
-Homebrew's Ruby is keg-only, so `/opt/homebrew/bin` is *not* enough either: its binaries
-are under `/opt/homebrew/opt/ruby/bin`, which has to come first.
-
-```
-export PATH="/opt/homebrew/opt/ruby/bin:$PATH"   # ruby 4.0.6, bundler 4.0.16
-cd mobile
-bundle config set --local path vendor/bundle     # keeps gems in the project, no sudo
-bundle install
-```
-
-`vendor/` and `.bundle/` are git-ignored; `Gemfile.lock` is committed, so everyone
-resolves the same fastlane.
+`bundle install` asks for a sudo password and installs fastlane outside the project, and
+`bundle exec` later dies with `Could not find 'bundler' (4.0.16)`. Homebrew's Ruby is
+keg-only, so putting `/opt/homebrew/bin` first is *not* enough either: its binaries are
+under `/opt/homebrew/opt/ruby/bin`. The wrapper resolves that with `brew --prefix ruby`,
+which is right on both Apple Silicon and Intel.
 
 **fastlane needs a UTF-8 locale.** It warns and carries on, but every one of these notes
 is French — `é`, `à`, `«»` — and the whole point is the text landing on a store page
-intact. Export it alongside:
+intact. The wrapper sets `LANG` and `LC_ALL` too.
+
+Install once, from the repo root:
 
 ```
-export LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8
+PATH="$(brew --prefix ruby)/bin:$PATH" bundle install --gemfile mobile/Gemfile
 ```
 
-Check the install with `bundle exec fastlane lanes`, which lists the five lanes without
-touching a store or needing a credential.
+`vendor/` and `.bundle/` are git-ignored; `Gemfile.lock` is committed, so everyone
+resolves the same fastlane. Check it with:
+
+```
+npm run store:fastlane -- lanes
+```
+
+which lists the five lanes without touching a store or needing a credential.
 
 ### The 500-character field
 

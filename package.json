@@ -21,7 +21,8 @@
     "deploy": "CLOUDFLARE_API_TOKEN=$CLUBPING_FR_CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=$CLUBPING_FR_CLOUDFLARE_ACCOUNT_ID npx wrangler pages deploy --project-name=clubping-fr",
     "db:refresh:dev": "bash scripts/refresh-dev-db.sh",
     "store:notes": "node scripts/store-notes.mjs",
-    "store:notes:check": "node scripts/store-notes.mjs --check"
+    "store:notes:check": "node scripts/store-notes.mjs --check",
+    "store:fastlane": "cd mobile && PATH=\"$(brew --prefix ruby)/bin:$PATH\" LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8 bundle exec fastlane"
   },
   "dependencies": {
     "hono": "^4.12.7",

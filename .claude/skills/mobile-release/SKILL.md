@@ -194,11 +194,16 @@ the repo finally agree.
 `eas submit` uploads the binary and no text at all. Fastlane fills the three
 text fields from `mobile/CHANGELOG.md` — **Nouveautés de cette version** (App
 Store), **Éléments à tester** (TestFlight) and **Notes de version** (Play). Once
-both builds have finished, from `mobile/`:
+both builds have finished, from the repo root:
 
 ```bash
-bundle exec fastlane notes
+npm run store:fastlane -- notes
 ```
+
+**Through the npm script, never `bundle exec fastlane` directly.** `bundle` on a
+plain PATH is macOS's system Ruby 2.6, which fails with
+`Could not find 'bundler'`; the script resolves Homebrew's Ruby and sets the
+UTF-8 locale fastlane needs to upload accented French intact.
 
 **After the builds, never before.** The generator reads the version's numbers off
 a finished production build of that exact version; run before, there is no such
