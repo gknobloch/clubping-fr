@@ -32,6 +32,24 @@ database_id = "033f804f-e2d5-48e3-a5f5-8e3b34dd2411"
 # The one real secret, RESEND_API_KEY, is set as a Pages Secret in the dashboard
 # (or `wrangler pages secret put RESEND_API_KEY`) — never committed.
 # Locally, all of these come from `.dev.vars` (see .dev.vars.example).
+#
+# Push notifications (#495) add two more, and NEITHER has a value in this file:
+#
+#   NOTIFY_SECRET      A Pages Secret, production only. POST
+#                      /api/notifications/dispatch is authenticated by it —
+#                      it is the credential a scheduled GitHub workflow holds,
+#                      so writing it here would commit it. The same value goes
+#                      in the CLUBPING_FR_NOTIFY_SECRET repository secret.
+#                      An environment without it answers 404 rather than
+#                      accepting anything, which is exactly what we want of a
+#                      preview: no schedule calls it, and nobody who finds the
+#                      URL can make it notify a club.
+#   EXPO_ACCESS_TOKEN  Optional, and unset today. exp.host accepts
+#                      unauthenticated sends until the Expo project turns push
+#                      security on; setting this then is the whole change.
+#
+# src/test/workflows.spec.ts fails the build if NOTIFY_SECRET ever gains a
+# value here.
 [vars]
 RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # Comma-separated accepted OIDC audiences — fill in once OAuth clients exist (#100):

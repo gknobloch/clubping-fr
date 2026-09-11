@@ -1,0 +1,36 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Android notification icon (#495). Android ignores every colour in this file
+    and paints the alpha channel in the status bar's tint — so the mark is
+    drawn as a silhouette, and the red blade, the darker overlap and the white
+    ball would all come out identical. Handing it icon.png instead is what
+    produces the notorious white square: a fully opaque image is a fully opaque
+    silhouette.
+
+    Hence the two holes. The ball is punched out of the mark with a mask rather
+    than filled white, and the two blades are separated by a gap wide enough to
+    survive at 24dp — without it the pair reads as one blob.
+
+    Same geometry as adaptive-icon.svg (mark bounds 116..908 x 176..826, centre
+    512, 501.2), but scaled to 0.92 instead of 0.63: nothing crops this one,
+    the system only pads it.
+  -->
+  <defs>
+    <mask id="punch-ball">
+      <rect width="1024" height="1024" fill="#000"/>
+      <g transform="translate(512 512) scale(0.92) translate(-512 -501.2)">
+        <g stroke-width="104" stroke-linecap="round" stroke="#fff">
+          <line x1="320" y1="510.4" x2="168" y2="774.4"/>
+          <line x1="704" y1="510.4" x2="856" y2="774.4"/>
+        </g>
+        <circle cx="384" cy="400" r="224" fill="#fff"/>
+        <circle cx="640" cy="400" r="224" fill="#fff"/>
+        <!-- The ball, and the seam between the blades: black in a mask is a
+             hole, which is the only way a silhouette can have detail. -->
+        <circle cx="512" cy="400" r="80" fill="#000"/>
+        <rect x="488" y="150" width="48" height="500" fill="#000"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="1024" height="1024" fill="#ffffff" mask="url(#punch-ball)"/>
+</svg>

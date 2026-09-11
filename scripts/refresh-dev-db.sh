@@ -104,6 +104,7 @@ REMAINING=$(npx wrangler d1 execute "$DEV_DB" --remote --json \
   --command "SELECT (SELECT count(*) FROM users WHERE email NOT LIKE '%@example.invalid') \
     + (SELECT count(*) FROM sessions) + (SELECT count(*) FROM auth_otp) \
     + (SELECT count(*) FROM auth_identities) \
+    + (SELECT count(*) FROM push_tokens) \
     + (SELECT count(*) FROM user_avatars) + (SELECT count(*) FROM player_avatars_pre_0036) \
     + (SELECT count(*) FROM club_logos) \
     + (SELECT count(*) FROM clubs WHERE affiliation_number NOT LIKE '99%') \

@@ -36,6 +36,17 @@ export type Env = {
     // account must still be a real user row: only the emailed code is skipped.
     REVIEW_LOGIN_EMAIL?: string
     REVIEW_LOGIN_CODE?: string
+    // Expo push (#495). Optional: exp.host accepts unauthenticated sends
+    // unless the Expo project turns push security on, and setting it then is
+    // the whole change. See functions/api/push.ts.
+    EXPO_ACCESS_TOKEN?: string
+    // The shared secret POST /api/notifications/dispatch is called with.
+    // Pages Functions have no cron trigger, so the daily sweep is driven from
+    // outside (.github/workflows/notify.yml) and there is nobody at the
+    // keyboard to hold a session. UNSET MEANS THE ENDPOINT DOES NOT EXIST:
+    // an env without the secret answers 404, so a preview cannot be made to
+    // notify a whole club by guessing a URL. See notificationRoutes.ts.
+    NOTIFY_SECRET?: string
   }
   Variables: {
     user: UserRow
@@ -220,6 +231,12 @@ function serializeUser(r: UserRow) {
     ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
     ...(r.status ? { status: r.status } : {}),
     ...(r.club_id ? { clubId: r.club_id } : {}),
+    // Always sent, never omitted: the mobile switch has to draw itself before
+    // the member has ever touched it, and `undefined` would read as off (#495).
+    // It rides here rather than in GET /api/data because this is the endpoint
+    // that answers about the person asking — one member's preference is not
+    // part of the club's dataset.
+    notificationsEnabled: r.notifications_enabled !== 0,
   }
 }
 

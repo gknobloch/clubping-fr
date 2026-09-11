@@ -1,0 +1,50 @@
+name: Notifications
+
+# The daily push sweep (#495): ask the squad of every match inside the next
+# seven days for their availability, once each.
+#
+# It lives here rather than on Cloudflare because Pages Functions have no cron
+# trigger — only Workers do, and a second Worker for one scheduled POST would
+# mean its own wrangler config, its own deploy step and its own copy of the D1
+# binding and the secrets. The endpoint it calls is the same one a developer
+# can curl, which is also what makes it testable.
+#
+# The dispatcher is idempotent: it writes down every (member, match) pair it
+# notifies and never sends the same one twice. So a run that fires late, twice,
+# or by hand is harmless — which is what makes GitHub's cron, drifting by up to
+# a quarter of an hour, good enough for a daily reminder.
+
+on:
+  schedule:
+    # 17:00 UTC — early evening in France, whichever side of the DST change we
+    # are on (19:00 CEST, 18:00 CET). The hour matters more than the minute:
+    # this is the message asking someone to open the app and answer.
+    - cron: '0 17 * * *'
+  # So a failed night can be replayed without waiting for the next one.
+  workflow_dispatch:
+
+concurrency:
+  group: notifications-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask every near squad for their availability
+        env:
+          NOTIFY_SECRET: ${{ secrets.CLUBPING_FR_NOTIFY_SECRET }}
+        run: |
+          if [ -z "$NOTIFY_SECRET" ]; then
+            echo "✘ CLUBPING_FR_NOTIFY_SECRET is not set — the endpoint would answer 401"
+            exit 1
+          fi
+          # --fail-with-body so a 401 or a 500 fails the job AND still prints
+          # what the API said; a silent green run here is a week of nobody
+          # being asked for their availability and nobody noticing.
+          curl --fail-with-body --silent --show-error \
+            --request POST 'https://clubping.fr/api/notifications/dispatch' \
+            --header "Authorization: Bearer $NOTIFY_SECRET" \
+            --header 'Content-Type: application/json' \
+            --data '{}'
+          echo

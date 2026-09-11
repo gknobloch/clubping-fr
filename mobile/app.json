@@ -64,7 +64,15 @@
       "./plugins/withoutAndroidCalendarPermissions",
       "./plugins/withDisableScriptSandboxing",
       "./plugins/withoutAppleSignInEntitlement",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1e293b",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

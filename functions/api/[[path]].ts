@@ -3,7 +3,7 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseCategories, jsonParseIds } from './rows'
-import type { Address, ClubChannel, Competition, DataState } from '../../src/types'
+import type { Address, AvailabilityStatus, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, CompetitionEligibilityRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
@@ -29,6 +29,7 @@ import {
   type ClubAdminRequest, type ClubAdminRequestSnapshot, type ClubAdminRequestStatus,
 } from '../../src/lib/clubAdminRequests'
 import { sendEmails } from './email'
+import { notificationsApp, notifyAvailabilityChange } from './notificationRoutes'
 import {
   clubConfirmationEmail, decisionEmail, newRequestForAdminEmail, type RequestSummary,
 } from './onboardingEmails'
@@ -61,6 +62,10 @@ app.use('*', async (c, next) => {
 
 // Authentication (email OTP + Google/Apple OAuth).
 app.route('/auth', authApp)
+
+// Mobile push: device registration, the member's own switch, and the daily
+// sweep the scheduled workflow calls (#495).
+app.route('/notifications', notificationsApp)
 
 // --- Helpers ---
 const bool = (v: unknown) => v === 1 || v === true
@@ -4400,10 +4405,31 @@ app.patch('/games/:id', async (c) => {
 // --- Game Availabilities ---
 app.post('/game-availabilities/set', async (c) => {
   const d = await c.req.json()
+  // The previous answer, read before the upsert overwrites it. This is the one
+  // place in the app that can see both values — web and mobile both write
+  // here — and the captain's notification turns entirely on the difference:
+  // a first answer is the expected reply to the daily reminder, a change to an
+  // answer already given is the late withdrawal they need to hear about (#495).
+  const previous = await c.env.DB
+    .prepare('SELECT status FROM game_availabilities WHERE game_id = ? AND player_id = ?')
+    .bind(d.gameId, d.playerId).first<{ status: AvailabilityStatus }>()
   await c.env.DB.prepare(
     `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) VALUES (?, ?, ?, ?)
      ON CONFLICT(game_id, player_id) DO UPDATE SET status = excluded.status, overridden_by = excluded.overridden_by`
   ).bind(d.gameId, d.playerId, d.status, d.overriddenBy ?? null).run()
+  if (previous && previous.status !== d.status) {
+    // Awaited rather than backgrounded: a Worker stops at the response, and
+    // waitUntil is not reachable from a Hono handler here. The send is one
+    // fetch and never throws (see notifyAvailabilityChange).
+    await notifyAvailabilityChange(c.env, {
+      gameId: d.gameId,
+      playerId: d.playerId,
+      from: previous.status,
+      to: d.status,
+      actorId: c.get('user')?.id ?? null,
+      today: new Date().toISOString().slice(0, 10),
+    })
+  }
   return c.json({ ok: true })
 })
 

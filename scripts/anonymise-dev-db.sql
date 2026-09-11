@@ -61,6 +61,18 @@ DELETE FROM auth_otp;
 -- Google/Apple subject ids — stable per-person identifiers from the provider.
 DELETE FROM auth_identities;
 
+-- Push tokens (#495). The worst of the three: a session token copied here lets
+-- somebody read a preview, but a push token lets a preview WRITE — to the lock
+-- screen of a real licensee's phone, with text a preview deployment chose.
+-- Nothing here needs them, and a developer pointing a dev build at a preview
+-- registers their own on the way in.
+DELETE FROM push_tokens;
+
+-- The ledger of what has already been pushed. Not sensitive, but keeping it
+-- means a preview can never be made to demonstrate the sweep: every pair it
+-- would send is already marked sent.
+DELETE FROM notifications_sent;
+
 -- ---------------------------------------------------------------------------
 -- Clubs (#359)
 --

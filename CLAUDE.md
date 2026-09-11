@@ -266,3 +266,57 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - **OCR never sees a PDF.** `createImageBitmap` decodes images, not documents,
   and throws on one. A PDF with no text layer goes through
   `renderPdfPages` first — that is the whole scanned-calendar path.
+
+### Notifications push (#495)
+- **Un registre d'envois, pas un calcul de date.** La règle n'est pas « les
+  matchs qui sont à J-7 aujourd'hui » mais « qui, dans l'effectif d'un match à
+  moins de 7 jours, n'a pas encore été prévenu ? ». La première formulation ne
+  voit pas le joueur ajouté à l'effectif à J-3 — le seul que personne n'a
+  prévenu — et exige donc un second déclencheur sur les effectifs, qui doit
+  ensuite s'accorder avec le premier sur ce qui est déjà parti.
+  `notifications_sent`, clé `(kind, user_id, game_id)`, répond aux deux avec un
+  seul balayage, et rend le cron rejouable : deux exécutions n'envoient rien
+  deux fois.
+- Rien n'est inscrit au registre pour quelqu'un **sans appareil ou qui a coupé
+  les notifications**. L'inscrire voudrait dire qu'installer l'app le jeudi ne
+  ramène plus la demande pour le match de samedi.
+- **Le déclencheur est un workflow GitHub**, pas Cloudflare : les Pages
+  Functions n'ont pas de cron trigger. `POST /api/notifications/dispatch`
+  s'authentifie avec `NOTIFY_SECRET`, et **un environnement sans ce secret
+  répond 404** — pas 401. Une preview n'admet donc même pas que la route
+  existe. C'est aussi pour ça que la route est dans `needsSession` : elle porte
+  sa propre preuve, plutôt qu'une session de 30 jours créée pour un cron.
+- **Le ping capitaine part de `POST /game-availabilities/set`**, le seul
+  endroit qui voit l'ancienne réponse à côté de la nouvelle — web et mobile y
+  passent tous les deux. Il ne se déclenche **que sur un changement**, jamais
+  sur une première réponse : remplir la grille est le retour attendu du rappel
+  quotidien, et un capitaine notifié une fois par coéquipier le soir du rappel
+  ne lit plus la neuvième, celle qui dit qu'il manque quelqu'un.
+- **L'auteur du changement n'est jamais notifié.** Cela couvre le capitaine qui
+  force la dispo de quelqu'un depuis la composition, sans que `captainsToAlert`
+  ait à savoir si l'écriture est un override ou non.
+- La notification ne porte **pas d'équipe**, seulement `gameId` : l'écran de
+  match est la vue d'**une** équipe sur une rencontre, et la bonne équipe est
+  celle dont l'effectif contient celui qui tape — réponse différente pour le
+  joueur et pour son capitaine, et résolue à l'ouverture plutôt que figée dans
+  une charge utile écrite une semaine plus tôt.
+- **`push_tokens` est clé sur le token, pas sur (membre, token)** : un
+  téléphone de club repris par le capitaine suivant réenregistre le *même*
+  token sous un autre membre, et seul le remplacement de la ligne le déplace.
+  Sinon l'ancien porteur continue de recevoir les matchs du club.
+- Le token est **écrit dans AsyncStorage avant d'être envoyé**. La
+  déconnexion est le moment où `getExpoPushTokenAsync` a le moins de chances de
+  répondre, et un token qu'on ne sait plus nommer est un token qu'on ne peut
+  plus faire oublier — donc un téléphone déconnecté qui sonne encore.
+- **L'anonymisation de la base dev supprime `push_tokens`**, au même titre que
+  les sessions. Pire qu'une session, même : une session copiée laisse *lire* une
+  preview, un token de push laisse une preview *écrire* sur l'écran verrouillé
+  d'un vrai licencié.
+- L'icône Android est une **silhouette** : Android ignore les couleurs et ne
+  garde que le canal alpha. `notification-icon.svg` est donc dessinée comme un
+  masque — la balle et la fente entre les raquettes sont des trous, sans quoi
+  la marque se réduit à une tache. Lui passer `icon.png` donne le carré blanc.
+- Les règles (fenêtre, destinataires, textes) sont dans
+  `src/lib/pushNotifications.ts`, sans base ni réseau ; `functions/api/push.ts`
+  est le transport Expo, et le seul à savoir purger un token qu'Expo déclare
+  mort — personne d'autre ne le remarquera jamais.

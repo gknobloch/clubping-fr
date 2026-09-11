@@ -27,6 +27,15 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+- L'application prévient désormais sur votre téléphone. Une semaine avant chaque
+  match, chaque joueur de l'équipe reçoit une demande de disponibilité — et
+  ceux qui rejoignent l'effectif entre-temps la reçoivent aussi.
+- Les capitaines sont prévenus quand une disponibilité déjà donnée change dans
+  les sept jours qui précèdent le match. Une première réponse ne déclenche rien :
+  seul un changement d'avis remonte.
+- Une notification ouvre directement le match concerné.
+- Mon compte : un interrupteur pour tout couper.
+
 ## 1.3.0 — 9 septembre 2026
 
 Les licences sous les yeux du capitaine.

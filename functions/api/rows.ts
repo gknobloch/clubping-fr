@@ -270,4 +270,6 @@ export interface UserRow {
   first_login_at: number | null
   /** Unix epoch ms, refreshed at most hourly while the member uses the app. */
   last_seen_at: number | null
+  /** 0 silences every push to this member's devices (#495). Defaults to 1. */
+  notifications_enabled: number
 }

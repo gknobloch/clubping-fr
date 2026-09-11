@@ -28,6 +28,15 @@ const PUBLIC_ONBOARDING_PATH = /^\/api\/onboarding\/requests$/
 // neither can reach anything else.
 const PUBLIC_CONFIRM_PATH = /^\/api\/onboarding\/confirm$/
 
+// The daily push sweep (#495). Pages Functions have no cron trigger, so it is
+// driven from outside — .github/workflows/notify.yml — and there is nobody at
+// the keyboard to hold a session. It is NOT unauthenticated: it carries a
+// shared secret the handler checks itself, and an environment that has no
+// NOTIFY_SECRET answers 404 rather than accepting anything. Passing it through
+// this guard instead would mean minting a session for a scheduled job, which
+// is a longer-lived credential for a narrower need.
+const PUBLIC_DISPATCH_PATH = /^\/api\/notifications\/dispatch$/
+
 // Image endpoints are served to <img> / <Image> tags, which cannot attach an
 // Authorization header — so GETs to them are public (read-only, non-sensitive
 // logos / avatars). Writes still require a session.
@@ -44,5 +53,6 @@ export function needsSession(method: string, path: string): boolean {
   if (method === 'GET' && PUBLIC_IMAGE_PATH.test(path)) return false
   if (method === 'POST' && PUBLIC_ONBOARDING_PATH.test(path)) return false
   if ((method === 'GET' || method === 'POST') && PUBLIC_CONFIRM_PATH.test(path)) return false
+  if (method === 'POST' && PUBLIC_DISPATCH_PATH.test(path)) return false
   return true
 }

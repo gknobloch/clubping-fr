@@ -15,6 +15,7 @@ import {
   verifyEmailCode,
 } from '@/utils/api'
 import { IS_PRODUCTION_API } from '@/constants/api'
+import { forgetPush } from '@/utils/push'
 
 // Real session token (SecureStore) and the pre-#358 dev user-id (AsyncStorage),
 // kept only so an old install's leftover is cleared on logout.
@@ -161,6 +162,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [loginWithIdToken])
 
   const logout = useCallback(async () => {
+    // Before the session goes, not after: deregistering the device needs one,
+    // and a phone that keeps its token after sign-out keeps ringing with the
+    // matches of whoever was signed in (#495). Never fails the logout.
+    await forgetPush()
     if (realToken) await apiLogout(realToken)
     setSessionToken(null)
     await SecureStore.deleteItemAsync(SESSION_KEY)
