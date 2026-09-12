@@ -1,3 +1,11 @@
+/* eslint-disable @typescript-eslint/no-require-imports --
+ * These tests are about import TIMING, which a static import cannot express:
+ * the module has to be loaded after jest.resetModules(), and loaded again per
+ * case, so that the throwing mock is in place when it happens. A top-level
+ * import would resolve once, before any of that — and would also throw at the
+ * top of this very file, taking the suite down with it.
+ */
+
 // The regression this file exists for (#495): `expo-notifications` throws at
 // IMPORT on Android in Expo Go since SDK 53 — before any function is called,
 // so no guard around a call can help.
