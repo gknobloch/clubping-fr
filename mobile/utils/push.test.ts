@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import { forgetPush, gameIdOf, registerForPush, setNotificationsEnabled } from '@/utils/push'
-import { setSessionToken } from '@/utils/api'
+import { setSession } from '@/utils/api'
 
 // The device's side of push (#495). What matters here is not that a token was
 // obtained — expo-notifications is mocked — but what the app does around it:
@@ -55,10 +55,10 @@ beforeEach(async () => {
   perms.mockResolvedValue({ granted: true, canAskAgain: true })
   ask.mockResolvedValue({ granted: true, canAskAgain: true })
   getToken.mockResolvedValue({ data: 'ExponentPushToken[test]' })
-  setSessionToken('session-token')
+  setSession('session-token', 'u-member')
 })
 
-afterEach(() => setSessionToken(null))
+afterEach(() => setSession(null, null))
 
 describe('registering the device', () => {
   it('sends the token and the platform, authenticated', async () => {

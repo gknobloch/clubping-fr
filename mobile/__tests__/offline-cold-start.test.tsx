@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store'
 import type { User } from '@shared/types'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { DataProvider, useAppData } from '@/contexts/DataContext'
-import { setSessionToken } from '@/utils/api'
+import { setSession } from '@/utils/api'
 
 // ---------------------------------------------------------------------------
 // The whole chain, on the boot it was broken for (#513).
@@ -60,9 +60,13 @@ const mount = () =>
 beforeEach(async () => {
   await SecureStore.setItemAsync('pp-club-session', 'stored-token')
   await AsyncStorage.setItem('pp-club-user', JSON.stringify(captain))
+  // Written for this member, as the app writes it since #509 — an entry naming
+  // nobody is refused now, which is the whole point of that change.
   await AsyncStorage.setItem(
     CACHE_KEY,
     JSON.stringify({
+      version: 1,
+      userId: captain.id,
       data: { teams: [{ id: 't1' }, { id: 't2' }] },
       lastSyncedAt: '2026-09-01T10:00:00.000Z',
     }),
@@ -72,7 +76,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  setSessionToken(null)
+  setSession(null, null)
   await SecureStore.deleteItemAsync('pp-club-session')
   await AsyncStorage.multiRemove([CACHE_KEY, 'pp-club-user'])
 })
@@ -115,5 +119,33 @@ describe('opening the app against a revoked session (#513)', () => {
 
     await waitFor(async () => expect(await AsyncStorage.getItem(CACHE_KEY)).toBeNull())
     expect(await SecureStore.getItemAsync('pp-club-session')).toBeNull()
+  })
+})
+
+describe('a shared phone, offline (#509)', () => {
+  it("never shows one member the previous member's club", async () => {
+    // The tablet was last used by someone else, and there is no network to
+    // correct the mistake with.
+    await AsyncStorage.setItem('pp-club-user', JSON.stringify({ ...captain, id: 'u-other' }))
+    mockFetch.mockRejectedValue(new TypeError('Network request failed'))
+
+    mount()
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    // Signed in as the other member, and shown nothing: the cache on disk is
+    // not theirs to read.
+    await waitFor(() => expect(screen.getByText('auth:true teams:0 stale:true')).toBeTruthy())
+  })
+
+  // Refusing is not deleting — the entry is still there for whoever owns it.
+  it('leaves the rightful owner their cache', async () => {
+    await AsyncStorage.setItem('pp-club-user', JSON.stringify({ ...captain, id: 'u-other' }))
+    mockFetch.mockRejectedValue(new TypeError('Network request failed'))
+
+    mount()
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+
+    const raw = await AsyncStorage.getItem(CACHE_KEY)
+    expect(JSON.parse(raw!).userId).toBe(captain.id)
   })
 })
