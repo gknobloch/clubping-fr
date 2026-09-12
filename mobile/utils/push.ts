@@ -35,11 +35,20 @@ async function ensureAndroidChannel(): Promise<void> {
 
 /**
  * The EAS project this build belongs to — `getExpoPushTokenAsync` needs it and
- * throws without one, and it is not inferable at runtime from a release build.
+ * refuses to run without one.
+ *
+ * Read from two places on purpose. `Constants.expoConfig` is typed `| null`,
+ * and with expo-updates configured it is derived from the embedded update
+ * manifest: a build made locally rather than by EAS can have no such manifest,
+ * and then the whole of app.json — `extra.eas.projectId` included — is simply
+ * absent at runtime. `easConfig` is populated by EAS itself and survives that.
+ *
+ * Neither is a secret: the id is committed in app.json and travels in every
+ * binary.
  */
 function projectId(): string | undefined {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined
-  return extra?.eas?.projectId
+  return extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? undefined
 }
 
 export type PermissionOutcome = 'granted' | 'denied' | 'unavailable'
@@ -61,6 +70,21 @@ async function ensurePermission(): Promise<PermissionOutcome> {
 }
 
 /**
+ * Why a device ended up with no registration. Every one of these is an
+ * ordinary state rather than a fault — but they are four different ordinary
+ * states, and they are indistinguishable from outside.
+ */
+export type RegistrationSkip =
+  /** The member refused, or had already refused for good. */
+  | 'permission'
+  /** No EAS project id at runtime — see projectId(). */
+  | 'no-project-id'
+  /** No push service to register with: a simulator, or APNs refused. */
+  | 'no-device-token'
+  /** The backend would not take it — no session, or it is down. */
+  | 'not-registered'
+
+/**
  * Register this device for the signed-in member, returning the token.
  *
  * Called on every launch with a session, not only the first: iOS reissues a
@@ -68,27 +92,44 @@ async function ensurePermission(): Promise<PermissionOutcome> {
  * the token, so re-registering is also what moves a shared phone to whoever is
  * signed into it now.
  *
- * Returns null for every reason a device may have none — a simulator, a
- * refusal, a build with no EAS project — all of which are ordinary states and
- * none of which is worth an alert: the app simply is not notified.
+ * Returns null for every reason a device may have none, and none of them is
+ * worth an alert — the app simply is not notified. But silence is not the same
+ * as invisibility: each exit says which one it took, because the four are
+ * indistinguishable from the outside and the only symptom they share is an
+ * empty `push_tokens` table. The log line is not behind `__DEV__`: this fails
+ * in exactly the builds where `__DEV__` is false.
  */
 export async function registerForPush(): Promise<string | null> {
+  const skip = (reason: RegistrationSkip) => {
+    console.warn(`[push] appareil non enregistré : ${reason}`)
+    return null
+  }
   try {
     await ensureAndroidChannel()
-    if ((await ensurePermission()) !== 'granted') return null
+    if ((await ensurePermission()) !== 'granted') return skip('permission')
     const id = projectId()
-    if (!id) return null
-    // Throws on a simulator, where there is no push service to register with.
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id })
+    if (!id) return skip('no-project-id')
+    let token: string
+    try {
+      // Throws on a simulator, where there is no push service to register with.
+      ;({ data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id }))
+    } catch (e) {
+      console.warn('[push] jeton refusé par la plateforme', e)
+      return skip('no-device-token')
+    }
     await AsyncStorage.setItem(TOKEN_KEY, token)
     const res = await fetch(apiUrl('/notifications/push-tokens'), {
       method: 'POST',
       headers: dataHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ token, platform: Platform.OS }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.warn(`[push] le serveur a refusé l'enregistrement : HTTP ${res.status}`)
+      return skip('not-registered')
+    }
     return token
-  } catch {
+  } catch (e) {
+    console.warn('[push] enregistrement interrompu', e)
     return null
   }
 }

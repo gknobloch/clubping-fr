@@ -11,10 +11,18 @@ import { setSessionToken } from '@/utils/api'
 
 // jest-expo does not load app.json into Constants, and `getExpoPushTokenAsync`
 // refuses to run without an EAS project id — so a build that has one is what
-// these tests describe. The value is the one in app.json.
+// these tests describe. The value is the one in app.json, and both sources it
+// can come from are writable so the fallback can be exercised (#498).
+const PROJECT_ID = '917d2d0b-d20e-412f-8ab4-a5f2177f635c'
+const constants: { expoConfig: unknown; easConfig: unknown } = {
+  expoConfig: { extra: { eas: { projectId: PROJECT_ID } } },
+  easConfig: null,
+}
 jest.mock('expo-constants', () => ({
   __esModule: true,
-  default: { expoConfig: { extra: { eas: { projectId: '917d2d0b-d20e-412f-8ab4-a5f2177f635c' } } } },
+  get default() {
+    return constants
+  },
 }))
 
 const ok = () => Promise.resolve(new Response('{}', { status: 200 }))
@@ -40,6 +48,9 @@ function captureFetch(impl: () => Promise<Response> = ok) {
 
 beforeEach(async () => {
   jest.clearAllMocks()
+  constants.expoConfig = { extra: { eas: { projectId: PROJECT_ID } } }
+  constants.easConfig = null
+  jest.spyOn(console, 'warn').mockImplementation(() => {})
   await AsyncStorage.clear()
   perms.mockResolvedValue({ granted: true, canAskAgain: true })
   ask.mockResolvedValue({ granted: true, canAskAgain: true })
@@ -92,6 +103,66 @@ describe('registering the device', () => {
     getToken.mockRejectedValue(new Error('no push service'))
     captureFetch()
     await expect(registerForPush()).resolves.toBeNull()
+  })
+})
+
+describe('finding the EAS project id (#498)', () => {
+  // `Constants.expoConfig` is typed `| null`, and with expo-updates configured
+  // it comes from the embedded update manifest — which a build made locally
+  // rather than by EAS does not have. The whole of app.json is then absent at
+  // runtime, `getExpoPushTokenAsync` is never called, and the only symptom is
+  // an empty push_tokens table. That is how this shipped once.
+  it('falls back to easConfig when app.json did not survive the build', async () => {
+    constants.expoConfig = null
+    constants.easConfig = { projectId: PROJECT_ID }
+    const calls = captureFetch()
+
+    await expect(registerForPush()).resolves.toBe('ExponentPushToken[test]')
+    expect(getToken).toHaveBeenCalledWith({ projectId: PROJECT_ID })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('prefers app.json when both are there', async () => {
+    constants.easConfig = { projectId: 'stale-id' }
+    captureFetch()
+
+    await registerForPush()
+    expect(getToken).toHaveBeenCalledWith({ projectId: PROJECT_ID })
+  })
+
+  it('gives up, loudly, when neither is', async () => {
+    constants.expoConfig = null
+    constants.easConfig = null
+    const calls = captureFetch()
+
+    await expect(registerForPush()).resolves.toBeNull()
+    expect(getToken).not.toHaveBeenCalled()
+    expect(calls).toEqual([])
+    // The point of #498: four exits that looked identical from outside.
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no-project-id'))
+  })
+})
+
+describe('saying which exit it took (#498)', () => {
+  it('names a refusal', async () => {
+    perms.mockResolvedValue({ granted: false, canAskAgain: false })
+    captureFetch()
+    await registerForPush()
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('permission'))
+  })
+
+  it('names a platform that would not issue a token', async () => {
+    getToken.mockRejectedValue(new Error('no push service'))
+    captureFetch()
+    await registerForPush()
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no-device-token'))
+  })
+
+  it('names a backend that refused, with its status', async () => {
+    captureFetch(() => Promise.resolve(new Response('{}', { status: 401 })))
+    await registerForPush()
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('HTTP 401'))
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('not-registered'))
   })
 })
 
