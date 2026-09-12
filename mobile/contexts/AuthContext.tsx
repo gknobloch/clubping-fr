@@ -22,6 +22,42 @@ import { forgetPush } from '@/utils/push'
 const SESSION_KEY = 'pp-club-session'
 const DEV_USER_KEY = 'clubping-user-id'
 
+/**
+ * The signed-in member, kept so a boot with no network can restore the session
+ * instead of showing the sign-in form (#513, mirroring the web's #387).
+ *
+ * Identity only — everything the app renders comes from DataContext's own
+ * cache. AsyncStorage rather than SecureStore because this is not a credential:
+ * it names who the session belongs to, and the offline cache next to it already
+ * holds far more about the same person. The token stays in SecureStore.
+ */
+const USER_KEY = 'pp-club-user'
+
+/**
+ * Did the server turn us away, or did we never reach it? Only the first should
+ * cost the member their session.
+ *
+ * `fetch` rejects with a bare TypeError when there is no network; an expired or
+ * revoked token comes back through `parse` as an ApiError carrying a status.
+ * Treating the two alike is what made an offline cold start sign a member out
+ * of an app they could no longer sign into — reconnecting needs a code by
+ * e-mail, and so does the network they do not have.
+ */
+function isServerRejection(err: unknown): boolean {
+  return typeof (err as { status?: number } | null)?.status === 'number'
+}
+
+async function readStoredUser(): Promise<User | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY)
+    if (!raw) return null
+    const user = JSON.parse(raw) as User
+    return user && typeof user.id === 'string' ? user : null
+  } catch {
+    return null
+  }
+}
+
 // Dev login ("pick any user") is available in dev builds (or when explicitly
 // enabled) so local dev doesn't need a real email/OAuth — but NEVER against
 // production, which is the one backend we must not even ask for a user list.
@@ -86,11 +122,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (!cancelled) {
               setUser(me)
               setRealToken(token)
+              await AsyncStorage.setItem(USER_KEY, JSON.stringify(me))
             }
             return
-          } catch {
+          } catch (err) {
+            if (!isServerRejection(err)) {
+              // Offline, not signed out. Dropping the token here meant a sports
+              // hall with no signal showed the sign-in form — and, through
+              // DataContext's logout handler, took the offline cache with it:
+              // the one thing that boot existed to read (#513).
+              const stored = await readStoredUser()
+              if (stored && !cancelled) {
+                setUser(stored)
+                setRealToken(token)
+                return
+              }
+              // No stored member to fall back on (an install that predates
+              // this, or storage that refused). The sign-in screen is all we
+              // can show — but the session is still not ours to destroy over a
+              // request that never arrived, and clearing the token holder here
+              // would reach DataContext's logout handler and wipe the cache for
+              // exactly the reason this change exists. Leave both alone; the
+              // next launch with a network settles it.
+              return
+            }
+            // A stated refusal — expired or revoked. Now it goes.
             setSessionToken(null)
-            await SecureStore.deleteItemAsync(SESSION_KEY) // expired / revoked
+            await SecureStore.deleteItemAsync(SESSION_KEY)
+            await AsyncStorage.removeItem(USER_KEY)
           }
         }
       } finally {
@@ -124,6 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // --- Real auth actions ---
   const applySession = useCallback(async (token: string, sessionUser: User) => {
     await SecureStore.setItemAsync(SESSION_KEY, token)
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(sessionUser))
     setSessionToken(token) // triggers a DataContext refetch with the session
     setRealToken(token)
     setUser(sessionUser)
@@ -169,6 +229,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (realToken) await apiLogout(realToken)
     setSessionToken(null)
     await SecureStore.deleteItemAsync(SESSION_KEY)
+    await AsyncStorage.removeItem(USER_KEY)
     await AsyncStorage.removeItem(DEV_USER_KEY)
     setUser(null)
     setRealToken(null)
