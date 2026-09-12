@@ -54,6 +54,12 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }))
 jest.mock('@/components/OfflineBanner', () => ({ OfflineBanner: () => null }))
+// Same reason, and the same non-subject: the version gate reads the insets
+// this file has just stubbed away, and asks the network for a floor (#508).
+jest.mock('@/components/VersionGate', () => ({
+  UpdateBanner: () => null,
+  UnsupportedOverlay: () => null,
+}))
 jest.mock('@/contexts/DataContext', () => ({
   DataProvider: ({ children }: { children: ReactNode }) => children,
 }))

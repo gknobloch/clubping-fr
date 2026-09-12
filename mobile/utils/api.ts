@@ -1,5 +1,5 @@
 import type { DevUser, User } from '@shared/types'
-import { apiUrl } from '@/constants/api'
+import { apiUrl, clientHeaders } from '@/constants/api'
 
 // ---------------------------------------------------------------------------
 // Session token holder — AuthContext sets it; DataContext reads it for the
@@ -29,6 +29,7 @@ export function onSessionTokenChange(listener: () => void): () => void {
 /** Headers for data/mutation requests, including the session token when set. */
 export function dataHeaders(extra?: Record<string, string>): Record<string, string> {
   return {
+    ...clientHeaders(),
     ...(extra ?? {}),
     ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
   }
@@ -53,6 +54,7 @@ async function postJson<T>(path: string, body: unknown, token?: string): Promise
   const res = await fetch(apiUrl(path), {
     method: 'POST',
     headers: {
+      ...clientHeaders(),
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
@@ -79,7 +81,7 @@ async function parse<T>(res: Response): Promise<T> {
 export function authFetch(path: string, init: RequestInit, token: string): Promise<Response> {
   return fetch(apiUrl(path), {
     ...init,
-    headers: { ...(init.headers ?? {}), Authorization: `Bearer ${token}` },
+    headers: { ...clientHeaders(), ...(init.headers ?? {}), Authorization: `Bearer ${token}` },
   })
 }
 
@@ -122,7 +124,7 @@ export async function logout(token: string): Promise<void> {
 
 /** The backend's own users, for the dev picker. Administrators come first. */
 export async function fetchDevUsers(): Promise<DevUser[]> {
-  const res = await fetch(apiUrl('/auth/dev/users'))
+  const res = await fetch(apiUrl('/auth/dev/users'), { headers: clientHeaders() })
   const { users } = await parse<{ users: DevUser[] }>(res)
   return users
 }

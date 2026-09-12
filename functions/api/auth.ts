@@ -47,6 +47,14 @@ export type Env = {
     // an env without the secret answers 404, so a preview cannot be made to
     // notify a whole club by guessing a URL. See notificationRoutes.ts.
     NOTIFY_SECRET?: string
+    // The version floor the store clients check themselves against (#508).
+    // Plain [vars] in wrangler.toml, not secrets: they are two version numbers
+    // every binary already contains, and keeping them there is what makes
+    // raising the floor a one-line change and a deploy rather than a release.
+    // UNSET MEANS NO FLOOR — every build is allowed, which is the right answer
+    // for a local server and for any environment nobody has configured.
+    CLIENT_MIN_VERSION?: string
+    CLIENT_LATEST_VERSION?: string
   }
   Variables: {
     user: UserRow

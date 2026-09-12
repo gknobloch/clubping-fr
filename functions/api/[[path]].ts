@@ -30,6 +30,7 @@ import {
 } from '../../src/lib/clubAdminRequests'
 import { sendEmails } from './email'
 import { notificationsApp, notifyAvailabilityChange } from './notificationRoutes'
+import { clientVersionApp } from './clientVersion'
 import {
   clubConfirmationEmail, decisionEmail, newRequestForAdminEmail, type RequestSummary,
 } from './onboardingEmails'
@@ -66,6 +67,9 @@ app.route('/auth', authApp)
 // Mobile push: device registration, the member's own switch, and the daily
 // sweep the scheduled workflow calls (#495).
 app.route('/notifications', notificationsApp)
+
+// The version floor the store clients check themselves against (#508).
+app.route('/client-version', clientVersionApp)
 
 // --- Helpers ---
 const bool = (v: unknown) => v === 1 || v === true

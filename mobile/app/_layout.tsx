@@ -17,6 +17,7 @@ import { OfflineBanner } from '@/components/OfflineBanner'
 import { DataProvider } from '@/contexts/DataContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { PushNotifications } from '@/components/PushNotifications'
+import { UnsupportedOverlay, UpdateBanner } from '@/components/VersionGate'
 
 // Hold the native splash until the persisted session has been restored —
 // otherwise the splash hides while expo-router is still mounting the right
@@ -107,9 +108,16 @@ export default function RootLayout() {
           {/* Banner sits above the navigator so it pushes screen headers down
               rather than overlapping them; it renders nothing when online. */}
           <View style={{ flex: 1 }}>
+            {/* Above the offline banner: "your app is out of date" outranks
+                "your data is", and the two are never both worth reading. */}
+            <UpdateBanner />
             <OfflineBanner />
             <AuthedRoutes fontsReady={loaded || error !== null} />
             <Push />
+            {/* Last, and absolutely positioned, so it covers the navigator
+                rather than replacing it — the screen underneath is what
+                dismisses the splash (#508). */}
+            <UnsupportedOverlay />
           </View>
           {/* Light content, not `auto` (#364): `auto` follows the colour
               scheme — dark text in light mode — but what sits behind the

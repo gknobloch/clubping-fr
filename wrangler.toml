@@ -52,6 +52,23 @@ database_id = "033f804f-e2d5-48e3-a5f5-8e3b34dd2411"
 # value here.
 [vars]
 RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
+# The version floor the store clients check themselves against (#508).
+#
+# They live here rather than in a binary because that is the whole point: the
+# floor can be raised with a one-line change and a deploy, without an app
+# release and without waiting on a store review. Neither is a secret — both
+# numbers already travel inside every published build.
+#
+#   CLIENT_LATEST_VERSION  The newest published build. Anything older gets a
+#                          dismissible "une mise à jour est disponible". Bump it
+#                          with mobile/app.json on each release; left stale it
+#                          simply stops nudging, which costs nothing.
+#   CLIENT_MIN_VERSION     Builds below this are refused outright. UNSET, and it
+#                          should stay unset: it is an interrupter, not an
+#                          update policy. Set it only for a named reason — a
+#                          published build that is actively wrong — and say
+#                          which in the commit.
+CLIENT_LATEST_VERSION = "1.3.0"
 # Comma-separated accepted OIDC audiences — fill in once OAuth clients exist (#100):
 #   GOOGLE_CLIENT_IDS = "web-id,ios-id,android-id"
 #   APPLE_CLIENT_IDS  = "fr.clubping.web,fr.clubping.app"
@@ -65,6 +82,11 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # `wrangler pages secret put RESEND_API_KEY --env preview`.
 [env.preview.vars]
 RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
+# Deliberately NOT repeated here, despite the rule above: CLIENT_LATEST_VERSION
+# and CLIENT_MIN_VERSION (#508). A preview exists to run a branch, and a floor
+# on it would gate the very build being tested. No floor means every build is
+# allowed. Set one here temporarily when the gate itself is what you are
+# testing.
 # Every e-mail the preview sends lands here instead of its real recipient,
 # carrying the intended address in an X-Original-Recipient header and at the top
 # of the body (#474). The onboarding flow writes to *clubs* — addresses read off

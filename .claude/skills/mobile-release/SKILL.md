@@ -119,6 +119,14 @@ far has run over. If the section does not fit, add a `### Play` subsection to it
 — the shorter text Play will show, written rather than truncated. `npm run
 test:run` fails on a version that fits neither, so this PR is where it surfaces.
 
+**Raise `CLIENT_LATEST_VERSION` in `wrangler.toml` to the same string** (#508).
+It is what tells builds already in members' hands that a newer one exists; left
+behind, it simply stops nudging, which costs nothing and is why this is a line
+in the release rather than an automation. `npm run test:run` fails if it ever
+runs *ahead* of `mobile/app.json` — a version nobody can install is a nag with
+no cure. Leave `CLIENT_MIN_VERSION` unset: it blocks, and a release is not a
+reason to block anybody.
+
 **Leave `versionCode` and `buildNumber` alone.** `eas.json` sets
 `appVersionSource: "remote"`, so EAS owns them and increments each on its own at
 build time. Writing them by hand puts the repo and EAS out of step, and the

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { compareVersions, parseVersion } from '@/lib/clientVersion'
 
 // #497 — nothing else in CI reads mobile/app.json.
 //
@@ -17,6 +18,7 @@ import { resolve } from 'node:path'
 
 const MOBILE = resolve(process.cwd(), 'mobile')
 const app = JSON.parse(readFileSync(resolve(MOBILE, 'app.json'), 'utf8')).expo as {
+  version?: string
   android?: { package?: string; googleServicesFile?: string }
   plugins?: unknown[]
 }
@@ -77,5 +79,52 @@ describe('mobile/app.json — Android push is wired or absent (#497)', () => {
       (c) => c.client_info.android_client_info.package_name,
     )
     expect(packages).toContain(app.android?.package)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The version floor against the version that exists (#508)
+//
+// Same failure shape as the rest of this file: nothing in CI compares
+// wrangler.toml to app.json, so a floor naming a version nobody can install
+// merges green and is only visible on a member's phone — as a nag with no
+// cure, or, for CLIENT_MIN_VERSION, as a wall in front of everybody including
+// whoever is holding the newest build.
+//
+// Only "ahead of app.json" is an error. Trailing behind is the normal state:
+// the bump PR merges before EAS has built anything, and a stale
+// CLIENT_LATEST_VERSION simply stops nudging, which costs nothing.
+// ---------------------------------------------------------------------------
+describe('wrangler.toml — the floor never outruns the app (#508)', () => {
+  const toml = readFileSync(resolve(process.cwd(), 'wrangler.toml'), 'utf8')
+
+  /** A [vars] assignment, or undefined when the line is absent or commented. */
+  const varValue = (name: string): string | undefined =>
+    new RegExp(`^${name}\\s*=\\s*"([^"]*)"`, 'm').exec(toml)?.[1]
+
+  const shipped = parseVersion(app.version)
+  const latest = varValue('CLIENT_LATEST_VERSION')
+  const min = varValue('CLIENT_MIN_VERSION')
+
+  it('knows what version the app declares', () => {
+    expect(shipped).not.toBeNull()
+  })
+
+  it('never advertises a version that does not exist yet', () => {
+    if (!latest) return
+    expect(parseVersion(latest)).not.toBeNull()
+    expect(compareVersions(parseVersion(latest)!, shipped!)).toBeLessThanOrEqual(0)
+  })
+
+  // The one that locks everybody out, newest build included.
+  it('never refuses every build there is', () => {
+    if (!min) return
+    expect(parseVersion(min)).not.toBeNull()
+    expect(compareVersions(parseVersion(min)!, shipped!)).toBeLessThanOrEqual(0)
+  })
+
+  it('never demands a minimum above the version it points people at', () => {
+    if (!min || !latest) return
+    expect(compareVersions(parseVersion(min)!, parseVersion(latest)!)).toBeLessThanOrEqual(0)
   })
 })
