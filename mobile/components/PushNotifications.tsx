@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
-import * as Notifications from 'expo-notifications'
+import { Notifications } from '@/utils/expoNotifications'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { gameIdOf, registerForPush } from '@/utils/push'
@@ -18,7 +18,7 @@ import { gameIdOf, registerForPush } from '@/utils/push'
 // A push arriving while the app is open should still be seen: without a
 // handler the OS hands it to the app and shows nothing, so a member reading
 // the Journées screen when a team-mate drops out sees nothing at all.
-Notifications.setNotificationHandler({
+Notifications?.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
@@ -40,7 +40,7 @@ export function PushNotifications() {
   }, [isAuthenticated])
 
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated || !Notifications) return
     // A tap on a notification that launched the app from cold is not delivered
     // to a listener — it is waiting to be asked for.
     void Notifications.getLastNotificationResponseAsync().then((r) => {

@@ -1,7 +1,8 @@
 import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
-import * as Notifications from 'expo-notifications'
+import type * as NotificationsModule from 'expo-notifications'
+import { Notifications } from '@/utils/expoNotifications'
 import { apiUrl } from '@/constants/api'
 import { dataHeaders } from '@/utils/api'
 
@@ -26,7 +27,7 @@ const TOKEN_KEY = 'pp-push-token'
  * French like the rest of the app; `default` is the id the API sends.
  */
 async function ensureAndroidChannel(): Promise<void> {
-  if (Platform.OS !== 'android') return
+  if (Platform.OS !== 'android' || !Notifications) return
   await Notifications.setNotificationChannelAsync('default', {
     name: 'Matchs et disponibilités',
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -62,6 +63,7 @@ export type PermissionOutcome = 'granted' | 'denied' | 'unavailable'
  * re-requested, and the caller registers on a grant instead of nagging.
  */
 async function ensurePermission(): Promise<PermissionOutcome> {
+  if (!Notifications) return 'unavailable'
   const current = await Notifications.getPermissionsAsync()
   if (current.granted) return 'granted'
   if (!current.canAskAgain) return 'denied'
@@ -75,6 +77,11 @@ async function ensurePermission(): Promise<PermissionOutcome> {
  * states, and they are indistinguishable from outside.
  */
 export type RegistrationSkip =
+  /**
+   * expo-notifications could not be loaded at all. Expo Go on Android since
+   * SDK 53 — see utils/expoNotifications.ts.
+   */
+  | 'unavailable'
   /** The member refused, or had already refused for good. */
   | 'permission'
   /** No EAS project id at runtime — see projectId(). */
@@ -105,8 +112,10 @@ export async function registerForPush(): Promise<string | null> {
     return null
   }
   try {
+    if (!Notifications) return skip('unavailable')
     await ensureAndroidChannel()
-    if ((await ensurePermission()) !== 'granted') return skip('permission')
+    const permission = await ensurePermission()
+    if (permission !== 'granted') return skip(permission === 'unavailable' ? 'unavailable' : 'permission')
     const id = projectId()
     if (!id) return skip('no-project-id')
     let token: string
@@ -173,7 +182,7 @@ export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
  * The id travels in `data`, never parsed out of the text — the body is written
  * for a human and is free to change.
  */
-export function gameIdOf(response: Notifications.NotificationResponse | null): string | null {
+export function gameIdOf(response: NotificationsModule.NotificationResponse | null): string | null {
   const data = response?.notification.request.content.data as { gameId?: unknown } | undefined
   return typeof data?.gameId === 'string' && data.gameId ? data.gameId : null
 }

@@ -519,18 +519,45 @@ nothing has to be added to `plugins/`. Check it landed before shipping:
 npx expo config --type introspect
 ```
 
-## Android — an FCM v1 service account
+## Android — two Firebase files, and they are not interchangeable
 
-Firebase console → the project for `fr.clubping.app` → *Project settings* → *Service
-accounts* → *Generate new private key*, then:
+Firebase hands out two things with similar names, and confusing them is the default
+outcome:
+
+| File | What it is | Where it goes |
+| --- | --- | --- |
+| `google-services.json` | Client configuration. Ships inside every APK and anyone can extract it — **not a secret**. Without it the app has no FCM sender configuration and never obtains a token. | Committed at `mobile/google-services.json`, named by `android.googleServicesFile` in `app.json` |
+| the service account key | A private key that can push to every installed copy of the app. | Uploaded to EAS, **never** committed (`mobile/.gitignore` covers it) |
+
+Both, or neither. With only the key, Expo's servers may send and no device is listening;
+with only the client file, devices register and nothing can reach them.
+
+### The client file
+
+Firebase console → the project → **Ajouter une application → Android**. The package name
+must be exactly `fr.clubping.app`. Reverse-DNS invites precisely one typo —
+`app.clubping.fr` — and FCM routes on this string, so a mismatch registers the app under
+an identity nothing can reach, with no error on either side. `src/test/mobileConfig.spec.ts`
+now fails the build on it, because #497 made that mistake and nothing noticed.
+
+Skip every "Ajouter le SDK Firebase" step the console then offers. Expo's config plugin
+adds the `com.google.gms:google-services` classpath and applies the plugin at prebuild;
+`android/` is generated and gitignored, so a hand edit there is erased by the next
+prebuild anyway.
+
+Download the file to `mobile/google-services.json` and commit it.
+
+### The service account key
+
+Firebase console → *Project settings* → *Service accounts* → *Generate new private key*,
+saved as `mobile/google-fcm-service-account.json`, then:
 
 ```
 eas credentials --platform android
 ```
 
 *Google Service Account* → *Manage your Google Service Account Key for Push
-Notifications (FCM V1)* → upload the JSON. Do **not** commit it — `*.json` keys are
-covered by `.gitignore`, and this one grants send rights on the Firebase project.
+Notifications (FCM V1)* → upload the JSON.
 
 ## The two server-side secrets
 
@@ -594,9 +621,26 @@ curl -X POST https://clubping.fr/api/notifications/dispatch \
   -H 'Content-Type: application/json' -d '{"today":"2026-02-01"}'
 ```
 
-It answers with what it did — `{"games":7,"due":44,"sent":12,"prunedTokens":0}` — and
-it is idempotent, so running it twice sends nothing the second time. `sent` well below
-`due` is normal and not a fault: it is everyone who has not installed the app.
+It answers with what it did, and the two halves mean different things:
+
+```json
+{"games":7,"due":44,"sent":12,"prunedTokens":0,
+ "receipts":{"checked":12,"delivered":11,"failed":1,"requeued":1,"pending":0,"expired":0}}
+```
+
+`sent` is **accepted by Expo**, which is not delivered. `receipts` is the verdict on
+what the *previous* run sent, because a worker cannot wait for it — Expo answers with a
+ticket immediately and a receipt minutes later, and APNs/FCM refusals only ever appear
+in the receipt.
+
+So `failed` is the number that matters, and each one is logged with the platform's own
+words. `requeued` is how many reminders were put back because they never arrived; the
+next run sends them again. `sent` well below `due` is normal and not a fault — it is
+everyone who has not installed the app.
+
+A whole run of `failed` equal to `sent` means a credentials problem, and the log line
+names it: a service account for the wrong Firebase project, an FCM API left disabled,
+an expired APNs key.
 
 **Expo Go cannot receive remote push** on Android since SDK 53, and the token call
 throws on a simulator. Testing this needs a development build on a real device.
