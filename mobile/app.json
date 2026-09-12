@@ -30,7 +30,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e293b"
       },
-      "package": "fr.clubping.app"
+      "package": "fr.clubping.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
