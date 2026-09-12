@@ -12,6 +12,20 @@
 # four elements for this flow alone; nothing else in the app reads them.
 appId: fr.clubping.app
 ---
+# `clearState` empties the app's data container — and on iOS the session token
+# is not in it. expo-secure-store keeps it in the Keychain, which survives a
+# state clear and an app reinstall both, so the app restored its session and
+# swapped the login screen away mid-flow: the email field was found and typed
+# into, and the button underneath it had already stopped existing.
+#
+# Android needs none of this: expo-secure-store is backed by SharedPreferences
+# there, which `clearState` does empty. Hence the platform guard rather than a
+# bare command that would fail on the emulator.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - clearKeychain
 - launchApp:
     clearState: true
 - tapOn:

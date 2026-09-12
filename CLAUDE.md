@@ -389,6 +389,14 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
+- **`clearState` ne vide pas le trousseau iOS.** `expo-secure-store` y garde le
+  jeton de session, et le trousseau survit à un effacement de données comme à
+  une désinstallation. Sans `clearKeychain`, l'app restaurait sa session en
+  pleine saisie : le champ e-mail était trouvé et rempli, puis l'écran de
+  connexion disparaissait sous le flow et le bouton en dessous n'existait plus.
+  Android n'en a pas besoin — `expo-secure-store` y passe par les
+  SharedPreferences, que `clearState` vide bien — d'où le garde `when:
+  platform: iOS` plutôt qu'une commande nue qui échouerait sur l'émulateur.
 - Manuel, et volontairement pas branché sur `mobile-release` : on recapture
   quand un écran a visiblement changé, pas à chaque version.
 
