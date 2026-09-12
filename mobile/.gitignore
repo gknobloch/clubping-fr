@@ -8,6 +8,10 @@ web-build/
 *.key
 *.mobileprovision
 google-play-service-account.json
+# The FCM v1 service account (#495). Not the same file as
+# google-services.json below: this one is a private key that can send a push
+# to every installed copy of the app, and it is only ever uploaded to EAS.
+google-fcm-service-account.json
 *.orig.*
 android/
 ios/

@@ -491,6 +491,83 @@ notice.
 
 ---
 
+# Push notifications (#495)
+
+The app talks to **Expo's push service**, not to APNs and FCM directly: the backend
+POSTs to `exp.host/--/api/v2/push/send`, and Expo holds the platform credentials. So
+the credentials are set up **once, in EAS**, and never appear in this repository or in
+Cloudflare.
+
+Neither platform is configured by building — a build with no push credential installs
+and runs perfectly, asks for permission, and silently never receives anything.
+
+## iOS — an APNs key
+
+```
+eas credentials --platform ios
+```
+
+Pick the production profile, then *Push Notifications: Manage your Apple Push
+Notifications Key*, and let EAS create one. An APNs key is per **Apple account**, not
+per app, and Apple allows two at a time — if one already exists elsewhere, reuse it
+rather than burning the second slot.
+
+`aps-environment` comes from the `expo-notifications` config plugin at prebuild;
+nothing has to be added to `plugins/`. Check it landed before shipping:
+
+```
+npx expo config --type introspect
+```
+
+## Android — an FCM v1 service account
+
+Firebase console → the project for `fr.clubping.app` → *Project settings* → *Service
+accounts* → *Generate new private key*, then:
+
+```
+eas credentials --platform android
+```
+
+*Google Service Account* → *Manage your Google Service Account Key for Push
+Notifications (FCM V1)* → upload the JSON. Do **not** commit it — `*.json` keys are
+covered by `.gitignore`, and this one grants send rights on the Firebase project.
+
+## The two server-side secrets
+
+| Where | Name | What it is |
+| --- | --- | --- |
+| Cloudflare Pages (production secret) | `NOTIFY_SECRET` | Authenticates `POST /api/notifications/dispatch`. Without it the endpoint answers **404**, which is what keeps previews inert. |
+| GitHub repository secret | `CLUBPING_FR_NOTIFY_SECRET` | The same value, for `.github/workflows/notify.yml`. |
+
+```
+npx wrangler pages secret put NOTIFY_SECRET
+gh secret set CLUBPING_FR_NOTIFY_SECRET
+```
+
+They must match, and nothing checks that they do: a mismatch shows up as the daily
+workflow failing on a 401 — which it does fail on, deliberately (`--fail-with-body`),
+rather than going quietly green while a whole club stops being asked for availabilities.
+
+`EXPO_ACCESS_TOKEN` is optional and unset: exp.host accepts unauthenticated sends until
+the Expo project turns push security on.
+
+## Testing it without waiting for 17:00 UTC
+
+The dispatcher takes `today`, so a match a week out is reachable from any day:
+
+```
+curl -X POST https://clubping.fr/api/notifications/dispatch \
+  -H "Authorization: Bearer $NOTIFY_SECRET" \
+  -H 'Content-Type: application/json' -d '{"today":"2026-02-01"}'
+```
+
+It answers with what it did — `{"games":7,"due":44,"sent":12,"prunedTokens":0}` — and
+it is idempotent, so running it twice sends nothing the second time. `sent` well below
+`due` is normal and not a fault: it is everyone who has not installed the app.
+
+**Expo Go cannot receive remote push** on Android since SDK 53, and the token call
+throws on a simulator. Testing this needs a development build on a real device.
+
 # Native config only fails in a real binary
 
 `app.json` and the plugins in `plugins/` decide what ends up in `Info.plist`,

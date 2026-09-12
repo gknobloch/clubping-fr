@@ -250,3 +250,42 @@ describe('workflows — database targets (#296, #313)', () => {
     expect(read('deploy.yml')).toContain('clubping-fr-prod')
   })
 })
+
+// #495 — the daily push sweep authenticates with a shared secret rather than a
+// session, because it is called by a scheduled workflow with nobody at the
+// keyboard. Two things have to stay true about that secret, and neither is
+// observable from the app: it must never be committed, and the production
+// environment must actually have one, or the endpoint 404s and a whole club
+// stops being asked for its availabilities with the job still green.
+describe('notifications — the dispatch secret (#495)', () => {
+  const toml = readFileSync(resolve(process.cwd(), 'wrangler.toml'), 'utf8')
+  const notify = read('notify.yml')
+
+  it('keeps NOTIFY_SECRET out of wrangler.toml', () => {
+    // [vars] is committed plain text. This one is a Pages *secret*, set in the
+    // dashboard, exactly like RESEND_API_KEY — a value in here is a value in
+    // the repository.
+    expect(toml).not.toMatch(/NOTIFY_SECRET\s*=/)
+  })
+
+  it('calls production, over https, with the secret as a bearer token', () => {
+    expect(notify).toContain('https://clubping.fr/api/notifications/dispatch')
+    expect(notify).toMatch(/Authorization: Bearer \$NOTIFY_SECRET/)
+  })
+
+  it('fails the run when the API refuses', () => {
+    // Without this the job is green whatever the endpoint answered, and a
+    // rotated secret means a silent week.
+    expect(notify).toMatch(/--fail-with-body/)
+  })
+
+  it('fails rather than calling with an empty secret', () => {
+    expect(notify).toMatch(/if \[ -z "\$NOTIFY_SECRET" \]/)
+  })
+
+  it('runs once a day, not once an hour', () => {
+    const crons = [...notify.matchAll(/cron:\s*'([^']+)'/g)].map((m) => m[1])
+    expect(crons).toHaveLength(1)
+    expect(crons[0]).toMatch(/^\d+ \d+ \* \* \*$/)
+  })
+})

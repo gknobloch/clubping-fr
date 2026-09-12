@@ -394,6 +394,16 @@ export interface User {
    * should read it — everywhere else it is uniformly absent, by design.
    */
   lastSeenAt?: string
+  /**
+   * Whether this member's devices may be notified (#495).
+   *
+   * Only ever filled in by the endpoints that answer about the person asking
+   * — `/auth/me` and the sign-in response — never by `GET /api/data`, which
+   * describes a club and not the preferences of the people in it. Absent
+   * therefore means "not asked", not "off"; the mobile switch reads it from
+   * the session's own user and nowhere else.
+   */
+  notificationsEnabled?: boolean
 }
 
 /**

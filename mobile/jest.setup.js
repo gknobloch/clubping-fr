@@ -43,3 +43,19 @@ jest.mock('expo-apple-authentication', () => ({
   signInAsync: jest.fn(),
   AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
 }))
+
+// expo-notifications is a native module, and importing it in a test
+// environment also trips its own auto-registration (which warns loudly about
+// Expo Go). The mock is permissive by default — permission granted, a token
+// returned — because that is the path the screens care about; a test that
+// wants a refusal overrides the call it needs. (#495)
+jest.mock('expo-notifications', () => ({
+  AndroidImportance: { DEFAULT: 3 },
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(async () => {}),
+  getPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true })),
+  getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[test]' })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+}))

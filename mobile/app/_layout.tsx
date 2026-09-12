@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { DataProvider } from '@/contexts/DataContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { PushNotifications } from '@/components/PushNotifications'
 
 // Hold the native splash until the persisted session has been restored —
 // otherwise the splash hides while expo-router is still mounting the right
@@ -65,6 +66,18 @@ function AuthedRoutes({ fontsReady }: { fontsReady: boolean }) {
   )
 }
 
+/**
+ * Push lives beside the navigator, not inside a screen (#495): a tap has to be
+ * able to route from wherever the app happens to be, including a cold start
+ * where no screen has mounted yet. It renders nothing, and only with a session
+ * — registering a device for nobody is what it must never do.
+ */
+function Push() {
+  const { isAuthenticated, loading } = useAuth()
+  if (loading || !isAuthenticated) return null
+  return <PushNotifications />
+}
+
 // ---------------------------------------------------------------------------
 // Root layout
 //
@@ -96,6 +109,7 @@ export default function RootLayout() {
           <View style={{ flex: 1 }}>
             <OfflineBanner />
             <AuthedRoutes fontsReady={loaded || error !== null} />
+            <Push />
           </View>
           {/* Light content, not `auto` (#364): `auto` follows the colour
               scheme — dark text in light mode — but what sits behind the

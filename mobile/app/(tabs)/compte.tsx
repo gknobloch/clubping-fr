@@ -1,7 +1,7 @@
 import {
   ScrollView, View, Text, StyleSheet,
   TouchableOpacity, Linking, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator,
+  ActivityIndicator, Switch,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
@@ -15,6 +15,7 @@ import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import type { Player } from '@shared/types'
 import { pointsFor } from '@shared/lib/phasePoints'
+import { setNotificationsEnabled } from '@/utils/push'
 import { fonts } from '@/constants/typography'
 
 type EditableFields = Required<Pick<Player, 'phone' | 'birthDate' | 'birthPlace'>> & { email: string }
@@ -25,6 +26,11 @@ export default function MonCompteScreen() {
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [form, setForm] = useState<EditableFields>({ email: '', phone: '', birthDate: '', birthPlace: '' })
+  // Seeded from the session's own user, which is the only payload that carries
+  // it (#495) — GET /api/data describes the club, not what its members want
+  // pushed to them. Absent reads as on, matching the column's default.
+  const [notify, setNotify] = useState(user?.notificationsEnabled !== false)
+  const [savingNotify, setSavingNotify] = useState(false)
 
   const player = user?.isPlayer ? players.find((p) => p.id === user.id) : null
   const club = player ? clubs.find((c) => c.id === player.clubId) : null
@@ -55,6 +61,21 @@ export default function MonCompteScreen() {
     if (form.birthPlace !== (player.birthPlace ?? '')) patch.birthPlace = form.birthPlace || undefined
     if (Object.keys(patch).length > 0) await updatePlayer(player.id, patch)
     setEditing(false)
+  }
+
+  // Optimistic, and put back on failure: a switch that stays where it was put
+  // while the server never heard is the one thing this must not do.
+  async function toggleNotifications(next: boolean) {
+    setNotify(next)
+    setSavingNotify(true)
+    try {
+      await setNotificationsEnabled(next)
+    } catch {
+      setNotify(!next)
+      Alert.alert('Erreur', "Impossible d'enregistrer ce réglage.")
+    } finally {
+      setSavingNotify(false)
+    }
   }
 
   async function applyAvatar(pick: () => Promise<ProcessedAvatar | null>) {
@@ -187,6 +208,26 @@ export default function MonCompteScreen() {
             ))}
           </View>
         )}
+
+        {/* Notifications — the member's own switch, not a club setting */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabels}>
+              <Text style={styles.switchTitle}>Rappels et changements</Text>
+              <Text style={styles.switchHint}>
+                Une demande de disponibilité une semaine avant chaque match, et —
+                si vous êtes capitaine — les dispos qui changent d'ici là.
+              </Text>
+            </View>
+            <Switch
+              value={notify}
+              disabled={savingNotify}
+              onValueChange={toggleNotifications}
+              trackColor={{ true: colors.accent, false: colors.border }}
+            />
+          </View>
+        </View>
 
         {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={confirmLogout}>
@@ -339,6 +380,10 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 14, color: colors.textSecondary },
   infoValue: { fontSize: 14, color: colors.textPrimary, fontFamily: fonts.medium, flexShrink: 1, textAlign: 'right' },
   phoneLink: { color: '#25D366' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  switchLabels: { flex: 1, gap: 2 },
+  switchTitle: { fontSize: 15, color: colors.textPrimary, fontFamily: fonts.medium },
+  switchHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
   teamRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
     borderTopWidth: 1, borderTopColor: colors.border,

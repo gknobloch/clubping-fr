@@ -13,6 +13,10 @@ const jobs = [
   ['icon.svg', '../icon.png', 1024],
   ['icon.svg', '../../ios/ClubPing/Images.xcassets/AppIcon.appiconset/App-Icon-1024x1024@1x.png', 1024],
   ['adaptive-icon.svg', '../adaptive-icon.png', 1024],
+  // Android status-bar icon (#495): a silhouette, so it is authored as a mask
+  // rather than as the coloured mark. 192 covers xxhdpi at 1:1 and downscales
+  // cleanly below that.
+  ['notification-icon.svg', '../notification-icon.png', 192],
   // Splash matches the login photo's native aspect (1600x1067) so cover-mode
   // crops sides on portrait devices but keeps the paddle/ball centered.
   ['splash-icon.svg', '../splash-icon.png', 1600, 1067],
