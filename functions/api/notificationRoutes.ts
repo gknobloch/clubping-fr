@@ -275,11 +275,13 @@ export async function notifyAvailabilityChange(
     if (!captains.length) return
 
     const team = context.teams.find((t) => t.playerIds.includes(args.playerId))
-    const labels = team ? context.labels.get(team.id) : undefined
+    if (!team) return
+    const labels = context.labels.get(team.id)
     if (!labels) return
 
     const name = await playerName(env.DB, args.playerId)
-    const message = availabilityChangePush(labels, name, args.from, args.to)
+    const selected = await isSelected(env.DB, args.gameId, team.id, args.playerId)
+    const message = availabilityChangePush(labels, name, args.from, args.to, selected)
     await pushTo(env, captains, message)
   } catch (e) {
     console.error('[push] changement de dispo non notifié', e)
@@ -330,6 +332,25 @@ async function gameContext(db: D1Database, gameId: string): Promise<GameContext 
     return { id: r.team_id, captainId: r.captain_id, playerIds: jsonParseIds(r.player_ids) }
   })
   return { date: rows.results[0].date, teams, labels }
+}
+
+/**
+ * Whether the line-up already saved for this team names the licensee.
+ *
+ * Read at the moment the change happens rather than left to the captain to go
+ * and check: the whole point of the alert is that nobody reopens the screen.
+ * A team with no line-up yet has no row at all, which is "not selected".
+ */
+async function isSelected(
+  db: D1Database,
+  gameId: string,
+  teamId: string,
+  playerId: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT player_ids FROM game_selections WHERE game_id = ? AND team_id = ?')
+    .bind(gameId, teamId).first<{ player_ids: string }>()
+  return row ? jsonParseIds(row.player_ids).includes(playerId) : false
 }
 
 async function playerName(db: D1Database, playerId: string): Promise<string> {

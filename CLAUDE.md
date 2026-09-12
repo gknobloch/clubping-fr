@@ -295,6 +295,17 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - **L'auteur du changement n'est jamais notifié.** Cela couvre le capitaine qui
   force la dispo de quelqu'un depuis la composition, sans que `captainsToAlert`
   ait à savoir si l'écriture est un override ou non.
+- **Le message dit si la composition nomme déjà l'intéressé**, parce que c'est
+  la différence entre « je trouverai quelqu'un » et « la feuille que j'ai
+  rendue est fausse » — la seule chose que le capitaine lit la notification
+  pour savoir. Énoncé comme un fait, jamais comme une conséquence : un
+  changement de dispo ne défait rien, la composition nomme toujours qui elle
+  nomme, donc « sera remplacé » serait un mensonge (même raison qu'en #482).
+  Dit dans les deux sens, y compris un retour à disponible : ne le dire que
+  quand ça empire supposerait un ordre entre les trois statuts qui n'existe
+  nulle part ailleurs dans l'app.
+- Pas de pronom dans ce texte : le français oblige à en choisir un, et on ne
+  sait rien du genre du licencié. « Figure dans la composition » s'en passe.
 - La notification ne porte **pas d'équipe**, seulement `gameId` : l'écran de
   match est la vue d'**une** équipe sur une rencontre, et la bonne équipe est
   celle dont l'effectif contient celui qui tape — réponse différente pour le

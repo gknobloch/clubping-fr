@@ -56,6 +56,8 @@ interface DbFixture {
   sent?: Array<{ user_id: string; game_id: string }>
   /** The availability a player had before the write, if any. */
   previousStatus?: string | null
+  /** The line-up saved for (gameId, teamId), if any. */
+  selection?: string[]
 }
 
 /** Enough D1 for the guard, the sweep and the captain hook, recording writes. */
@@ -82,6 +84,9 @@ function fakeDb(f: DbFixture) {
           }
           if (sql.includes('FROM game_availabilities')) {
             return f.previousStatus ? { status: f.previousStatus } : null
+          }
+          if (sql.includes('FROM game_selections')) {
+            return f.selection ? { player_ids: JSON.stringify(f.selection) } : null
           }
           return null
         },
@@ -368,6 +373,45 @@ describe('a change of mind reaches the captain', () => {
   const setAvailability = (db: D1Database, status: string) =>
     send(db, '/game-availabilities/set', 'POST',
       { gameId: 'g1', playerId: 'alice', status }, {})
+
+  it('says nothing about a line-up when there is none', async () => {
+    const expo = stubExpo()
+    const { db } = fakeDb({
+      users: [alice, cap], viewerId: 'alice',
+      fixtures: both, tokens, previousStatus: 'available',
+    })
+    vi.setSystemTime(new Date(`${TODAY}T09:00:00Z`))
+    await setAvailability(db, 'unavailable')
+    vi.useRealTimers()
+    expect(expo.sent()[0].body).not.toContain('composition')
+  })
+
+  it('says so when the line-up already names them', async () => {
+    // The urgent case: the sheet the captain submitted is now wrong.
+    const expo = stubExpo()
+    const { db } = fakeDb({
+      users: [alice, cap], viewerId: 'alice',
+      fixtures: both, tokens, previousStatus: 'available',
+      selection: ['alice', 'bob'],
+    })
+    vi.setSystemTime(new Date(`${TODAY}T09:00:00Z`))
+    await setAvailability(db, 'unavailable')
+    vi.useRealTimers()
+    expect(expo.sent()[0].body).toContain('Figure dans la composition.')
+  })
+
+  it('does not confuse a team-mate in the line-up for the one who changed', async () => {
+    const expo = stubExpo()
+    const { db } = fakeDb({
+      users: [alice, cap], viewerId: 'alice',
+      fixtures: both, tokens, previousStatus: 'available',
+      selection: ['bob', 'chloe'],
+    })
+    vi.setSystemTime(new Date(`${TODAY}T09:00:00Z`))
+    await setAvailability(db, 'unavailable')
+    vi.useRealTimers()
+    expect(expo.sent()[0].body).not.toContain('composition')
+  })
 
   it('names the player and both ends of the change', async () => {
     const expo = stubExpo()
