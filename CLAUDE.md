@@ -375,6 +375,15 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Les mots de la plateforme sont recopiés dans le log, jamais résumés : c'est
   la phrase de FCM nommant le projet qu'il attendait qui a transformé un
   après-midi de suppositions en un diagnostic d'une ligne.
+- **`expo-notifications` ne s'importe que depuis `utils/expoNotifications.ts`.**
+  Le module *lève à l'import* sur Android dans Expo Go depuis le SDK 53 — avant
+  qu'aucune de ses fonctions ne soit appelée, donc aucun garde autour d'un appel
+  n'y peut rien. Et `push.ts` est importé par `AuthContext`, que tous les écrans
+  importent : la levée ne désactivait pas les notifications, elle tuait l'app au
+  lancement. Le `require` est donc tenté une fois, dans un `try`, et son échec
+  devient « pas de module » (`Notifications === null`) au lieu de se propager.
+  Le push est un supplément ; une app qui ne peut pas enregistrer un appareil
+  doit quand même afficher le calendrier.
 - Les règles (fenêtre, destinataires, textes) sont dans
   `src/lib/pushNotifications.ts`, sans base ni réseau ; `functions/api/push.ts`
   est le transport Expo, et le seul à savoir purger un token qu'Expo déclare
