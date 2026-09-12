@@ -1,5 +1,9 @@
 # The five store screenshots, one platform-agnostic flow (#520).
 #
+# Tabs are tapped by testID, not by the word printed on them: the label is
+# exposed to accessibility again (see TabBar.tsx) but an id survives a rename
+# and an accent, and this flow has to still work in a year.
+#
 # One flow because the app has one bundle id on both platforms
 # (`fr.clubping.app` — see fastlane/Appfile) and the same five screens: only the
 # connected device decides whether Maestro drives the simulator or the
@@ -17,10 +21,12 @@ appId: fr.clubping.app
 
 - takeScreenshot: 01-accueil
 
-- tapOn: "Journées"
+- tapOn:
+    id: "tab-journees"
 - takeScreenshot: 02-journees
 
-- tapOn: "Accueil"
+- tapOn:
+    id: "tab-index"
 
 # "Composer l'équipe" only renders for a captain with an upcoming match
 # (mobile/components/NextMatchCard.tsx — `isCaptain`, and only inside the
@@ -45,8 +51,10 @@ appId: fr.clubping.app
       - tapOn:
           id: "composition-sheet-backdrop"
 
-- tapOn: "Équipes"
+- tapOn:
+    id: "tab-equipes"
 - takeScreenshot: 04-equipes
 
-- tapOn: "Joueurs"
+- tapOn:
+    id: "tab-joueurs"
 - takeScreenshot: 05-joueurs

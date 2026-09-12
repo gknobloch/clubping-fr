@@ -389,6 +389,14 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
+- **Les onglets se tapent par testID, et ils ont un nom.**
+  `accessibilityRole="button"` fait de chaque onglet UN élément
+  d'accessibilité et replie le `Text` qu'il contient : sans libellé propre,
+  VoiceOver annonçait cinq boutons sans nom, et aucune automatisation ne
+  pouvait trouver un onglet par le mot imprimé dessus. Le libellé retombe
+  désormais sur le titre visible — un vrai correctif d'accessibilité, trouvé
+  en écrivant le flow — et chaque onglet porte `tab-<route>`, qui survit à un
+  renommage comme à un accent.
 - **`clearState` ne vide pas le trousseau iOS.** `expo-secure-store` y garde le
   jeton de session, et le trousseau survit à un effacement de données comme à
   une désinstallation. Sans `clearKeychain`, l'app restaurait sa session en

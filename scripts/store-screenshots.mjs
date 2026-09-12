@@ -303,7 +303,15 @@ function runFlow(target, { email, code, deviceArg }) {
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
 
-  const args = ['test', FLOW, '-e', `EMAIL=${email}`, '-e', `CODE=${code}`]
+  // --debug-output pins where Maestro writes. `takeScreenshot` does NOT save
+  // into the working directory — it files images under
+  // <debug-output>/<flow>/takeScreenshot/, and by default that path carries a
+  // run timestamp (~/.maestro/tests/2026-09-13_001853/…), which is no use to
+  // a script that has to find them afterwards.
+  const args = [
+    'test', FLOW, '--debug-output', outDir,
+    '-e', `EMAIL=${email}`, '-e', `CODE=${code}`,
+  ]
   if (deviceArg) args.splice(1, 0, '--device', deviceArg)
   // Logged with the credential taken back out. The first run of this script
   // printed the review account's code to a terminal, and from there into a
@@ -321,9 +329,14 @@ function runFlow(target, { email, code, deviceArg }) {
     throw new Error(`maestro a échoué sur la cible ${target.id} — voir sa sortie ci-dessus.`)
   }
 
-  return readdirSync(outDir)
+  // Only the takeScreenshot folder: the same tree also holds a screenshot per
+  // failed command ("step-018-tapOnElement-…"), which is invaluable when a
+  // flow breaks and must never be mistaken for a store image.
+  const shots = path.join(outDir, 'capture', 'takeScreenshot')
+  if (!existsSync(shots)) return []
+  return readdirSync(shots)
     .filter((f) => f.endsWith('.png'))
-    .map((f) => ({ file: path.join(outDir, f), basename: path.basename(f, '.png') }))
+    .map((f) => ({ file: path.join(shots, f), basename: path.basename(f, '.png') }))
 }
 
 function validateAndInstall(target, captured) {
