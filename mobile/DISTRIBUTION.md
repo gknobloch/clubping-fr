@@ -551,6 +551,39 @@ rather than going quietly green while a whole club stops being asked for availab
 `EXPO_ACCESS_TOKEN` is optional and unset: exp.host accepts unauthenticated sends until
 the Expo project turns push security on.
 
+## A stale `ios/` silently skips every config plugin
+
+`expo run:ios` runs prebuild **only when `ios/` does not exist**. It always runs
+`pod install`, so a newly added native module is autolinked and its pod appears in the
+build log — which reads exactly like the package being configured. It is not: the
+config plugins that write `Info.plist`, `*.entitlements` and the Android manifest do
+not run at all.
+
+That is how #495 looked broken for an evening. `expo-notifications` was linked, the pod
+was in the build output, the permission prompt appeared on the device — and
+`ClubPing.entitlements` was still the empty `<dict/>` generated three weeks earlier, so
+iOS never issued an APNs token and nothing ever reached `push_tokens`. No error, on
+either side.
+
+After adding or changing anything in `plugins` or in the `ios`/`android` sections of
+`app.json`:
+
+```
+npx expo prebuild --clean -p ios
+```
+
+`ios/` and `android/` are gitignored and entirely generated, so `--clean` costs nothing.
+Then check what it produced before building:
+
+```
+cat mobile/ios/ClubPing/ClubPing.entitlements
+npx expo config --type introspect
+```
+
+For push specifically, `aps-environment` must be present. The plugin writes
+`development`, which is right for a locally signed build; a store build needs
+`production`, which EAS sets from the provisioning profile.
+
 ## Testing it without waiting for 17:00 UTC
 
 The dispatcher takes `today`, so a match a week out is reachable from any day:
