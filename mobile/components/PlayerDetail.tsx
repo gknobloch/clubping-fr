@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -14,6 +14,7 @@ import { categoryFor } from '@shared/lib/seasonCategories'
 import { categoryDisplay } from '@shared/lib/playerCategories'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
+import { EmailRow, PhoneRow } from '@/components/ContactRows'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -114,10 +115,10 @@ export function PlayerDetail({
           {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
           <InfoRow label="Catégorie" value={category || 'Inconnue'} />
           {phasePoints && <InfoRow label="Points" value={phasePoints} />}
-          {player.email && <InfoRow label="Email" value={player.email} />}
-          {player.phone && (
-            <PhoneRow phone={player.phone} />
-          )}
+          {/* Copiables, both of them (#503) — the tap on the number still
+              opens WhatsApp. */}
+          {player.email && <EmailRow email={player.email} />}
+          {player.phone && <PhoneRow phone={player.phone} />}
         </View>
 
         {/* Active phase teams — list style, aligned with the team detail roster */}
@@ -177,19 +178,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function PhoneRow({ phone }: { phone: string }) {
-  const digits = phone.replace(/[^\d+]/g, '')
-  const waUrl = `https://wa.me/${digits.startsWith('+') ? digits.slice(1) : digits}`
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>Téléphone</Text>
-      <TouchableOpacity onPress={() => Linking.openURL(waUrl)}>
-        <Text style={[styles.infoValue, styles.phoneLink]}>{phone}</Text>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   scroll: { gap: 12, paddingTop: 16, paddingBottom: 32 },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
@@ -239,7 +227,6 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   infoLabel: { fontSize: 14, color: colors.textSecondary },
   infoValue: { fontSize: 14, color: colors.textPrimary, fontFamily: fonts.medium, flexShrink: 1, textAlign: 'right' },
-  phoneLink: { color: '#25D366' },
   teamRow: {
     flexDirection: 'row',
     alignItems: 'center',

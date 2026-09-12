@@ -35,6 +35,8 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   seul un changement d'avis remonte.
 - Une notification ouvre directement le match concerné.
 - Mon compte : un interrupteur pour tout couper.
+- L'email et le téléphone d'un joueur se copient d'un geste, sur sa fiche comme
+  sur Mon compte. Le numéro ouvre toujours WhatsApp quand on tape dessus.
 
 ## 1.3.0 — 9 septembre 2026
 

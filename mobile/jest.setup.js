@@ -59,3 +59,11 @@ jest.mock('expo-notifications', () => ({
   getLastNotificationResponseAsync: jest.fn(async () => null),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
 }))
+
+// expo-clipboard is a native module too. In-memory, and the spy is what the
+// contact rows are asserted on — what lands in the clipboard is the whole
+// point of that button. (#503)
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(async () => true),
+  getStringAsync: jest.fn(async () => ''),
+}))
