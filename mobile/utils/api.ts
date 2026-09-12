@@ -2,27 +2,40 @@ import type { DevUser, User } from '@shared/types'
 import { apiUrl, clientHeaders } from '@/constants/api'
 
 // ---------------------------------------------------------------------------
-// Session token holder — AuthContext sets it; DataContext reads it for the
+// Session holder — AuthContext sets it; DataContext reads it for the
 // Authorization header and subscribes to changes to refetch after login.
 // (DataProvider wraps AuthProvider, so a module holder decouples them.)
+//
+// It carries the member alongside the token, because DataContext has to key its
+// offline cache to somebody and cannot reach `useAuth()` from outside the
+// provider (#509). One setter for both, so a token can never be published
+// without saying whose it is — the cache would then be written under nobody,
+// which is how it came to be shared in the first place.
 // ---------------------------------------------------------------------------
 let currentToken: string | null = null
-const tokenListeners = new Set<() => void>()
+let currentUserId: string | null = null
+const sessionListeners = new Set<() => void>()
 
-export function setSessionToken(token: string | null): void {
-  if (token === currentToken) return
+export function setSession(token: string | null, userId: string | null): void {
+  if (token === currentToken && userId === currentUserId) return
   currentToken = token
-  tokenListeners.forEach((l) => l())
+  currentUserId = userId
+  sessionListeners.forEach((l) => l())
 }
 
 export function getSessionToken(): string | null {
   return currentToken
 }
 
-export function onSessionTokenChange(listener: () => void): () => void {
-  tokenListeners.add(listener)
+/** The signed-in member's id, or null before one is known. */
+export function getSessionUserId(): string | null {
+  return currentUserId
+}
+
+export function onSessionChange(listener: () => void): () => void {
+  sessionListeners.add(listener)
   return () => {
-    tokenListeners.delete(listener)
+    sessionListeners.delete(listener)
   }
 }
 
