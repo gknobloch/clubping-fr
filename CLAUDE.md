@@ -360,6 +360,38 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
   bloque, et ne se relève que pour une raison nommée dans le commit.
 
+### Captures d'écran des stores (#520)
+- **Maestro, pas `snapshot`/`screengrab`.** Les outils de capture de fastlane
+  exigent une cible de test *dans* le projet natif — XCUITest dans `ios/`,
+  Espresso dans `android/`. Ces deux dossiers sont ignorés par git et
+  régénérés par `expo prebuild`, qu'on relance systématiquement depuis #495 :
+  une cible ajoutée là ne survit pas au prebuild suivant. Maestro pilote l'app
+  installée depuis l'extérieur, donc il n'a rien à y perdre. fastlane garde la
+  moitié qu'il fait bien : `deliver` et `supply` téléversent ce que Maestro a
+  capturé.
+- **Les simulateurs sont résolus par nom, à l'exécution.** Un UDID appartient
+  au Mac qui l'a créé ; en stocker un ferait marcher le script sur une seule
+  machine. Même raison pour l'AVD Android, cherché par préfixe.
+- **Les deux tailles iOS partagent un seul dossier de locale**, parce que
+  `deliver` classe une capture iOS d'après ses **dimensions en pixels** et non
+  d'après son dossier — d'où le préfixe `iphone_` / `ipad_` dans les noms de
+  fichiers, sans lequel la seconde cible écraserait la première.
+- **`03-composition` est conditionnelle**, et c'est un bloc `runFlow: when:`,
+  pas trois commandes `optional`. `takeScreenshot` réussit toujours : un tap
+  sauté laisserait la capture enregistrer l'écran Accueil sous le nom de la
+  composition — une mauvaise image qui ressemble exactement à une bonne. Les
+  trois étapes passent ensemble ou pas du tout.
+- Le script vérifie qu'un PNG est en portrait et de taille plausible ; il ne
+  sait pas distinguer une bonne capture d'une capture montrant un bandeau
+  d'erreur ou une saison vide. **Quelqu'un les regarde avant de commiter.**
+- `LANG`/`LC_ALL` en UTF-8 : CocoaPods appelle `String#unicode_normalize` sur
+  un chemin, ce que Ruby refuse sous la locale « C » — celle de tout shell non
+  interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
+  erreur Ruby qui ne parle pas de locale. Même correctif que pour
+  `store:fastlane`.
+- Manuel, et volontairement pas branché sur `mobile-release` : on recapture
+  quand un écran a visiblement changé, pas à chaque version.
+
 ### Notifications push (#495)
 - **Un registre d'envois, pas un calcul de date.** La règle n'est pas « les
   matchs qui sont à J-7 aujourd'hui » mais « qui, dans l'effectif d'un match à

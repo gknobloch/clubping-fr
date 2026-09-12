@@ -21,25 +21,29 @@ appId: fr.clubping.app
 - takeScreenshot: 02-journees
 
 - tapOn: "Accueil"
+
 # "Composer l'équipe" only renders for a captain with an upcoming match
 # (mobile/components/NextMatchCard.tsx — `isCaptain`, and only inside the
-# window a match is shown at all). Optional rather than required: which club
-# member the review account happens to be is a fact about the production
-# database, not about this flow, and a season between matches must not fail
-# the other four screenshots for it.
-- tapOn:
-    text: "Composer l'équipe"
-    optional: true
-- takeScreenshot:
-    path: 03-composition
-    optional: true
-# It is a Modal (mobile/components/Sheet.tsx) — it swallows every touch behind
-# it, so the tab bar below stays unreachable until this closes it. Optional
-# for the same reason the two steps above are: nothing to close when the sheet
-# never opened.
-- tapOn:
-    id: "composition-sheet-backdrop"
-    optional: true
+# window a match is shown at all). Which club member the review account
+# happens to be is a fact about the production database, not about this flow,
+# and a season between matches must not fail the other four screenshots.
+#
+# The three steps are ONE conditional block, not three optional commands:
+# `takeScreenshot` always succeeds, so a skipped tap would leave it capturing
+# the Accueil screen and filing it under 03-composition — a wrong screenshot
+# that looks exactly like a right one. All three run, or none do.
+#
+# Closing it is part of the block for the same reason: the sheet is a Modal
+# (mobile/components/Sheet.tsx) and swallows every touch behind it, so the tab
+# bar stays unreachable until the backdrop dismisses it.
+- runFlow:
+    when:
+      visible: "Composer l'équipe"
+    commands:
+      - tapOn: "Composer l'équipe"
+      - takeScreenshot: 03-composition
+      - tapOn:
+          id: "composition-sheet-backdrop"
 
 - tapOn: "Équipes"
 - takeScreenshot: 04-equipes

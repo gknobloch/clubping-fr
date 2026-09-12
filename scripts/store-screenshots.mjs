@@ -127,8 +127,17 @@ export function missingRequiredScreens(presentBasenames) {
 // Device resolution — never a stored id (see TARGETS above)
 // ---------------------------------------------------------------------------
 
+// CocoaPods (invoked by `expo prebuild`) calls String#unicode_normalize on a
+// path, which Ruby refuses under the "C" locale — the default for a shell
+// with no LANG set, which is every non-interactive one. Without this,
+// prebuild dies mid-pod-install with "Unicode Normalization not appropriate
+// for ASCII-8BIT", a Ruby error with nothing about locales in it. Already
+// worked around once for `store:fastlane` (see mobile/package.json); this is
+// the same fix for the other command that shells out to CocoaPods.
+const UTF8_ENV = { ...process.env, LANG: 'fr_FR.UTF-8', LC_ALL: 'fr_FR.UTF-8' }
+
 function sh(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, { encoding: 'utf8', ...opts })
+  return execFileSync(cmd, args, { encoding: 'utf8', env: UTF8_ENV, ...opts })
 }
 
 /**
@@ -212,6 +221,11 @@ function buildFor(platform) {
   sh('npx', ['expo', 'prebuild', '--clean', '-p', platform], { cwd: MOBILE, stdio: 'inherit' })
 }
 
+/** UTF8_ENV, plus whatever the caller adds — ANDROID_HOME, a custom PATH. */
+function envWith(extra) {
+  return { ...UTF8_ENV, ...extra }
+}
+
 function installAndLaunchIos(udid) {
   bootIosSimulator(udid)
   console.log(`→ expo run:ios --configuration Release --device ${udid}`)
@@ -222,11 +236,10 @@ function installAndLaunchIos(udid) {
 
 function installAndLaunchAndroid(avdNamePrefix) {
   const home = androidHome()
-  const env = {
-    ...process.env,
+  const env = envWith({
     ANDROID_HOME: home,
     PATH: `${path.join(home, 'platform-tools')}:${path.join(home, 'emulator')}:${process.env.PATH}`,
-  }
+  })
   if (!runningAndroidSerial()) {
     const avds = sh('emulator', ['-list-avds'], { env }).split('\n').map((s) => s.trim()).filter(Boolean)
     const avd = avds.find((a) => a.startsWith(avdNamePrefix))
