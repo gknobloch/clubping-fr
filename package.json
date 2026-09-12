@@ -22,6 +22,7 @@
     "db:refresh:dev": "bash scripts/refresh-dev-db.sh",
     "store:notes": "node scripts/store-notes.mjs",
     "store:notes:check": "node scripts/store-notes.mjs --check",
+    "store:screenshots": "node scripts/store-screenshots.mjs",
     "store:fastlane": "npm --prefix mobile run store:fastlane --"
   },
   "dependencies": {

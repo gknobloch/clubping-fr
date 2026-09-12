@@ -1,0 +1,48 @@
+# The five store screenshots, one platform-agnostic flow (#520).
+#
+# One flow because the app has one bundle id on both platforms
+# (`fr.clubping.app` — see fastlane/Appfile) and the same five screens: only the
+# connected device decides whether Maestro drives the simulator or the
+# emulator. scripts/store-screenshots.mjs runs this once per target and moves
+# each PNG to wherever `deliver` (iOS) or `supply` (Android) expects it — this
+# file only ever writes 01..05 into its working directory.
+#
+# Order and names match the screenshots already in the repo (01-accueil …
+# 05-joueurs), which is deliberate: an App Store / Play listing is a set, and
+# keeping the five in place is what makes a refresh a refresh rather than a
+# resubmission from scratch.
+appId: fr.clubping.app
+---
+- runFlow: login.yaml
+
+- takeScreenshot: 01-accueil
+
+- tapOn: "Journées"
+- takeScreenshot: 02-journees
+
+- tapOn: "Accueil"
+# "Composer l'équipe" only renders for a captain with an upcoming match
+# (mobile/components/NextMatchCard.tsx — `isCaptain`, and only inside the
+# window a match is shown at all). Optional rather than required: which club
+# member the review account happens to be is a fact about the production
+# database, not about this flow, and a season between matches must not fail
+# the other four screenshots for it.
+- tapOn:
+    text: "Composer l'équipe"
+    optional: true
+- takeScreenshot:
+    path: 03-composition
+    optional: true
+# It is a Modal (mobile/components/Sheet.tsx) — it swallows every touch behind
+# it, so the tab bar below stays unreachable until this closes it. Optional
+# for the same reason the two steps above are: nothing to close when the sheet
+# never opened.
+- tapOn:
+    id: "composition-sheet-backdrop"
+    optional: true
+
+- tapOn: "Équipes"
+- takeScreenshot: 04-equipes
+
+- tapOn: "Joueurs"
+- takeScreenshot: 05-joueurs

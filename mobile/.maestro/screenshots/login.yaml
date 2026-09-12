@@ -1,0 +1,49 @@
+# Signs into the review account and waits for the tab bar (#520).
+#
+# A subflow rather than the top of capture.yaml: it is the one part of the
+# capture that touches a real credential, so it is the one file worth being
+# able to read on its own. ${EMAIL} and ${CODE} are passed with `maestro test
+# -e EMAIL=… -e CODE=…` — never written here, and never the OTP an ordinary
+# member gets by mail. auth.ts accepts REVIEW_LOGIN_CODE in place of the
+# emailed code for exactly this one address (App Store / Play review), which is
+# what lets this run with no inbox to read from.
+#
+# `id:` selects by testID — mobile/app/login.tsx carries one on each of these
+# four elements for this flow alone; nothing else in the app reads them.
+appId: fr.clubping.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "login-email-input"
+- inputText: ${EMAIL}
+- tapOn:
+    id: "login-request-code-button"
+# The review account's code never goes to an inbox, so there is no delay to
+# wait out — but the screen transition (email step → code step) still needs a
+# moment, and `tapOn` already retries until its target exists.
+- tapOn:
+    id: "login-code-input"
+- inputText: ${CODE}
+- tapOn:
+    id: "login-verify-button"
+# The tab bar is the one thing every landing state shares — a session token
+# saved from a previous run, DEV_LOGIN off, and this member's own club/team all
+# lead here, but a wrong email or a rejected code does not.
+- assertVisible:
+    id: "tab-bar"
+    timeout: 15000
+
+# `<Push>` mounts the instant a session exists and asks the OS for permission
+# (utils/push.ts#registerForPush) — a system dialog outside the RN tree, in the
+# simulator's own device language rather than the app's French, and on a
+# simulator that has never granted it before it can land mid-screenshot. Both
+# wordings are tried, both optional: a device where the prompt was already
+# settled by an earlier run shows neither, and that is the common case, not a
+# failure.
+- tapOn:
+    text: "Allow|Autoriser"
+    optional: true
+- tapOn:
+    text: "Allow Once|Une fois"
+    optional: true
