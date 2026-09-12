@@ -195,11 +195,32 @@ describe('what the notifications say', () => {
   })
 
   it("states the captain's message as a change, both values spelled out", () => {
-    const push = availabilityChangePush(labels, 'Alice Martin', 'available', 'unavailable')
+    const push = availabilityChangePush(labels, 'Alice Martin', 'available', 'unavailable', false)
     expect(push.title).toBe('Alice Martin — indisponible')
     expect(push.body).toBe(
       'disponible → indisponible pour PPA Rixheim 3 reçoit Mulhouse ASPTT 2 vendredi 18 septembre.',
     )
     expect(push.data.gameId).toBe('g1')
+  })
+
+  it('says so when the line-up already names them', () => {
+    // The difference between "I will find someone" and "the sheet I submitted
+    // is now wrong" — which is what a captain reads the notification for.
+    const push = availabilityChangePush(labels, 'Alice Martin', 'available', 'unavailable', true)
+    expect(push.body.endsWith('Figure dans la composition.')).toBe(true)
+  })
+
+  it('says it on the way back up too', () => {
+    // Ranking the three statuses so this only appears when things get worse is
+    // an ordering that exists nowhere else in the app. Good news is short.
+    const push = availabilityChangePush(labels, 'Alice Martin', 'unavailable', 'available', true)
+    expect(push.title).toBe('Alice Martin — disponible')
+    expect(push.body).toContain('Figure dans la composition.')
+  })
+
+  it('never guesses a gender', () => {
+    // French makes you pick one for a pronoun, and this does not know.
+    const push = availabilityChangePush(labels, 'Alice Martin', 'available', 'maybe', true)
+    expect(push.body).not.toMatch(/\bIl\b|\bElle\b/)
   })
 })
