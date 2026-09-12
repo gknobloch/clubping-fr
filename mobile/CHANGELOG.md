@@ -27,6 +27,10 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.4.0 — 12 septembre 2026
+
+Être prévenu, et une application qui tient sans réseau.
+
 - L'application prévient désormais sur votre téléphone. Une semaine avant chaque
   match, chaque joueur de l'équipe reçoit une demande de disponibilité — et
   ceux qui rejoignent l'effectif entre-temps la reçoivent aussi.
@@ -35,8 +39,27 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   seul un changement d'avis remonte.
 - Une notification ouvre directement le match concerné.
 - Mon compte : un interrupteur pour tout couper.
+- Ouvrir l'application sans réseau ne vous déconnecte plus. Elle affiche ce
+  qu'elle a en mémoire — ce qui est précisément l'usage en salle, où il n'y a
+  pas de signal.
+- Composer une équipe ne propose plus que les joueurs que la compétition admet,
+  sur la matrice des journées comme sur la feuille de match, et signale ceux
+  qu'un effectif retient déjà sans qu'ils y soient éligibles.
 - L'email et le téléphone d'un joueur se copient d'un geste, sur sa fiche comme
   sur Mon compte. Le numéro ouvre toujours WhatsApp quand on tape dessus.
+- L'application signale qu'une mise à jour est disponible.
+
+### Play
+
+Être prévenu, et une application qui tient sans réseau.
+
+- Une demande de disponibilité arrive sur votre téléphone une semaine avant
+  chaque match, et les capitaines sont prévenus quand une disponibilité change.
+  Un interrupteur dans Mon compte coupe tout.
+- Ouvrir l'application sans réseau ne vous déconnecte plus : elle affiche ce
+  qu'elle a en mémoire.
+- Composer une équipe ne propose que les joueurs que la compétition admet.
+- L'email et le téléphone d'un joueur se copient d'un geste.
 
 ## 1.3.0 — 9 septembre 2026
 

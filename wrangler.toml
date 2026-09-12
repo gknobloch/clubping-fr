@@ -68,7 +68,7 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 #                          update policy. Set it only for a named reason — a
 #                          published build that is actively wrong — and say
 #                          which in the commit.
-CLIENT_LATEST_VERSION = "1.3.0"
+CLIENT_LATEST_VERSION = "1.4.0"
 # Comma-separated accepted OIDC audiences — fill in once OAuth clients exist (#100):
 #   GOOGLE_CLIENT_IDS = "web-id,ios-id,android-id"
 #   APPLE_CLIENT_IDS  = "fr.clubping.web,fr.clubping.app"
