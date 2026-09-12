@@ -5,6 +5,10 @@ dist
 .DS_Store
 tsconfig.tsbuildinfo
 
+# IDE. JetBrains rewrites .idea/ constantly and it is one developer's local
+# state, not the project's.
+.idea/
+
 # Test
 coverage
 test-results

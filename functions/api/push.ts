@@ -17,14 +17,36 @@ import type { PushMessage } from '../../src/lib/pushNotifications'
  */
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send'
+const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts'
 
 /** Expo's own cap on one request. Exceeded, it rejects the whole batch. */
 const CHUNK_SIZE = 100
+
+/**
+ * What a delivery was for, carried through the transport untouched.
+ *
+ * The transport has no use for it; it exists so that when a receipt comes back
+ * in error a day later, the caller can find the `notifications_sent` row that
+ * delivery was supposed to honour and take it back.
+ */
+export interface PushRef {
+  kind: string
+  userId: string
+  gameId: string
+}
 
 /** One message, addressed. */
 export interface OutgoingPush extends PushMessage {
   /** An Expo push token — `ExponentPushToken[…]`. */
   to: string
+  ref?: PushRef
+}
+
+/** An accepted message, and the handle its verdict will arrive under. */
+export interface PushTicket {
+  id: string
+  to: string
+  ref?: PushRef
 }
 
 export interface PushDelivery {
@@ -36,10 +58,16 @@ export interface PushDelivery {
    * every day until the season ends.
    */
   invalidTokens: string[]
+  /**
+   * Handles for every accepted message. Accepted is NOT delivered — see
+   * fetchReceipts — so these are what the next run follows up on.
+   */
+  tickets: PushTicket[]
 }
 
 interface ExpoTicket {
   status: 'ok' | 'error'
+  id?: string
   message?: string
   details?: { error?: string }
 }
@@ -56,7 +84,7 @@ export async function sendPushes(
   env: Env['Bindings'],
   messages: OutgoingPush[],
 ): Promise<PushDelivery> {
-  const delivery: PushDelivery = { accepted: 0, invalidTokens: [] }
+  const delivery: PushDelivery = { accepted: 0, invalidTokens: [], tickets: [] }
   if (!messages.length) return delivery
 
   for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
@@ -67,6 +95,9 @@ export async function sendPushes(
         const ticket = tickets[n]
         if (!ticket || ticket.status === 'ok') {
           delivery.accepted += 1
+          if (ticket?.id) {
+            delivery.tickets.push({ id: ticket.id, to: message.to, ref: message.ref })
+          }
           return
         }
         if (ticket.details?.error === 'DeviceNotRegistered') {
@@ -116,4 +147,95 @@ async function sendChunk(env: Env['Bindings'], chunk: OutgoingPush[]): Promise<E
 /** Shape of an Expo push token, as the register endpoint checks it. */
 export function isExpoPushToken(value: unknown): value is string {
   return typeof value === 'string' && /^Expo(nent)?PushToken\[[^\]]+\]$/.test(value)
+}
+
+// ---------------------------------------------------------------------------
+// Receipts — what actually happened
+// ---------------------------------------------------------------------------
+
+/**
+ * Expo's verdict on one delivery, once the platform has had its say.
+ *
+ * `pending` is not an outcome: Expo simply has nothing yet, or no longer has
+ * anything (receipts are kept about a day). The caller waits, then gives up.
+ */
+export type ReceiptVerdict =
+  | { status: 'ok' }
+  | { status: 'error'; error?: string; message?: string; platform?: string }
+  | { status: 'pending' }
+
+interface ExpoReceipt {
+  status: 'ok' | 'error'
+  message?: string
+  details?: { error?: string; fcm?: { response?: string }; apns?: unknown }
+}
+
+/** Expo's cap on one receipts request. */
+const RECEIPTS_CHUNK = 1000
+
+/**
+ * Ask what became of a batch of accepted messages.
+ *
+ * This is the call whose absence let a whole afternoon's pushes report success
+ * while FCM refused every one of them: `sendPushes` only ever sees a ticket,
+ * which means "queued", and the platform's refusal — a service account for the
+ * wrong project, a disabled API, a revoked token — arrives only here.
+ *
+ * Never throws. A receipts endpoint that is down must not stop the sweep that
+ * calls it; the ids stay on file and are asked about again next time.
+ */
+export async function fetchReceipts(
+  env: Env['Bindings'],
+  ids: string[],
+): Promise<Map<string, ReceiptVerdict>> {
+  const verdicts = new Map<string, ReceiptVerdict>()
+  for (let i = 0; i < ids.length; i += RECEIPTS_CHUNK) {
+    const chunk = ids.slice(i, i + RECEIPTS_CHUNK)
+    try {
+      const res = await fetch(EXPO_RECEIPTS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${env.EXPO_ACCESS_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({ ids: chunk }),
+      })
+      if (!res.ok) {
+        console.error('[push] reçus indisponibles', res.status, await res.text())
+        continue
+      }
+      const body = (await res.json()) as { data?: Record<string, ExpoReceipt> }
+      for (const [id, receipt] of Object.entries(body.data ?? {})) {
+        verdicts.set(id, readReceipt(receipt))
+      }
+    } catch (e) {
+      console.error('[push] relevé des reçus impossible', e)
+    }
+  }
+  // Anything Expo did not mention has no verdict yet.
+  for (const id of ids) if (!verdicts.has(id)) verdicts.set(id, { status: 'pending' })
+  return verdicts
+}
+
+/**
+ * One receipt, reduced to what is worth acting on and worth logging.
+ *
+ * The platform's own words are kept because they are the only thing that ever
+ * names the cause: FCM answers a misfiled service account with a paragraph
+ * naming the project it expected, which is what turned an afternoon of
+ * guessing into a one-line diagnosis.
+ */
+function readReceipt(receipt: ExpoReceipt): ReceiptVerdict {
+  if (receipt.status === 'ok') return { status: 'ok' }
+  const fcm = receipt.details?.fcm?.response
+  const platform = typeof fcm === 'string'
+    ? (fcm.match(/"message":\s*"([^"]{0,300})/)?.[1] ?? fcm.slice(0, 300))
+    : undefined
+  return {
+    status: 'error',
+    error: receipt.details?.error,
+    message: receipt.message,
+    ...(platform ? { platform } : {}),
+  }
 }

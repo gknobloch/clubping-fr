@@ -58,6 +58,12 @@ interface DbFixture {
   previousStatus?: string | null
   /** The line-up saved for (gameId, teamId), if any. */
   selection?: string[]
+  /** Rows of push_receipts awaiting a verdict. */
+  pending?: Array<{
+    ticket_id: string; token: string
+    kind?: string | null; user_id?: string | null; game_id?: string | null
+    queued_at?: number
+  }>
 }
 
 /** Enough D1 for the guard, the sweep and the captain hook, recording writes. */
@@ -107,6 +113,13 @@ function fakeDb(f: DbFixture) {
               : (f.tokens ?? [])
             return { results: scoped.filter((t) => notifiable.has(t.user_id)) }
           }
+          if (sql.includes('FROM push_receipts')) {
+            return {
+              results: (f.pending ?? []).map((r) => ({
+                kind: null, user_id: null, game_id: null, queued_at: Date.now(), ...r,
+              })),
+            }
+          }
           if (sql.includes('FROM notifications_sent')) {
             const games = params.slice(1)
             return { results: (f.sent ?? []).filter((s) => games.includes(s.game_id)) }
@@ -150,6 +163,33 @@ const send = (
     }),
     { DB: db, ...env },
   )
+
+/** Answer Expo's receipts endpoint with these verdicts, keyed by ticket id. */
+function stubExpoWithReceipts(
+  receipts: Record<string, unknown>,
+  tickets?: (to: string) => unknown,
+) {
+  const batches: Array<Array<{ to: string; title: string; body: string }>> = []
+  const asked: string[][] = []
+  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body))
+    if (url.endsWith('/getReceipts')) {
+      asked.push(body.ids)
+      const data: Record<string, unknown> = {}
+      for (const id of body.ids) if (receipts[id]) data[id] = receipts[id]
+      return new Response(JSON.stringify({ data }), { status: 200 })
+    }
+    batches.push(body)
+    return new Response(
+      JSON.stringify({
+        data: body.map((m: { to: string }, i: number) =>
+          tickets ? tickets(m.to) : { status: 'ok', id: `ticket-${i}` }),
+      }),
+      { status: 200 },
+    )
+  })
+  return { asked, sent: () => batches.flat() }
+}
 
 /** Capture what would have gone to Expo, and answer as Expo does. */
 function stubExpo(tickets?: (to: string) => unknown) {
@@ -352,12 +392,121 @@ describe('the daily sweep', () => {
     expect(pruned.params).toEqual(['ExponentPushToken[bob]'])
   })
 
+  it('files a handle for every message Expo accepted', async () => {
+    // Accepted is not delivered. The handle is what makes tomorrow able to
+    // tell the difference.
+    stubExpoWithReceipts({})
+    const { db, writes } = fakeDb({ users: [alice, bob], fixtures: squad, tokens })
+    await dispatch(db, { NOTIFY_SECRET: 's3cret' })
+
+    const filed = writesTo(writes, /INSERT INTO push_receipts/)
+    expect(filed).toHaveLength(2)
+    expect(filed[0].params[0]).toMatch(/^ticket-/)
+    // The ledger row it backs travels with it, so a failure can undo it.
+    expect(filed[0].params.slice(2, 5)).toEqual(['availability_request', 'alice', 'g1'])
+  })
+
   it('sends nothing when no fixture falls in the window', async () => {
     const expo = stubExpo()
     const { db } = fakeDb({ users: [alice], fixtures: [], tokens })
     const res = await dispatch(db, { NOTIFY_SECRET: 's3cret' })
     expect(await res.json()).toMatchObject({ games: 0, sent: 0 })
     expect(expo.sent()).toEqual([])
+  })
+})
+
+describe('reading what was actually delivered (#495)', () => {
+  const alice = member({ id: 'alice' })
+  const pending = [
+    { ticket_id: 't-ok', token: 'ExponentPushToken[alice]', kind: 'availability_request', user_id: 'alice', game_id: 'g1' },
+  ]
+  const dispatch = (db: D1Database) =>
+    send(db, '/notifications/dispatch', 'POST', { today: TODAY },
+      { NOTIFY_SECRET: 's3cret' }, 'Bearer s3cret')
+
+  it('clears a handle the platform accepted, and touches nothing else', async () => {
+    stubExpoWithReceipts({ 't-ok': { status: 'ok' } })
+    const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending })
+    const res = await dispatch(db)
+
+    expect(await res.json()).toMatchObject({
+      receipts: { checked: 1, delivered: 1, failed: 0, requeued: 0 },
+    })
+    expect(writesTo(writes, /DELETE FROM push_receipts/)).toHaveLength(1)
+    expect(writesTo(writes, /DELETE FROM notifications_sent/)).toEqual([])
+  })
+
+  it('puts a reminder back when the platform refused it', async () => {
+    // The case that cost an afternoon: Expo said ok, FCM said 403, and the
+    // ledger row meant the member was never asked again.
+    stubExpoWithReceipts({
+      't-ok': {
+        status: 'error',
+        message: 'The request was malformed',
+        details: {
+          error: 'DeveloperError',
+          fcm: { response: '{"error":{"message":"Firebase Cloud Messaging API has not been used in project club-ping"}}' },
+        },
+      },
+    })
+    const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending })
+    const res = await dispatch(db)
+
+    expect(await res.json()).toMatchObject({
+      receipts: { checked: 1, delivered: 0, failed: 1, requeued: 1 },
+    })
+    const undone = writesTo(writes, /DELETE FROM notifications_sent/)[0]
+    expect(undone.params).toEqual(['availability_request', 'alice', 'g1'])
+    // A configuration fault is not the device's fault: the token stays.
+    expect(writesTo(writes, /DELETE FROM push_tokens/)).toEqual([])
+  })
+
+  it('deletes the token when the app is gone from the device', async () => {
+    stubExpoWithReceipts({
+      't-ok': { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } },
+    })
+    const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending })
+    await dispatch(db)
+
+    expect(writesTo(writes, /DELETE FROM push_tokens/)[0].params)
+      .toEqual(['ExponentPushToken[alice]'])
+  })
+
+  it('leaves a verdict Expo does not have yet alone', async () => {
+    stubExpoWithReceipts({})
+    const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending })
+    const res = await dispatch(db)
+
+    expect(await res.json()).toMatchObject({
+      receipts: { checked: 0, pending: 1, expired: 0 },
+    })
+    expect(writesTo(writes, /DELETE FROM push_receipts/)).toEqual([])
+  })
+
+  it('gives up on a handle older than Expo keeps receipts', async () => {
+    stubExpoWithReceipts({})
+    const old = [{ ...pending[0], queued_at: Date.now() - 48 * 60 * 60 * 1000 }]
+    const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending: old })
+    const res = await dispatch(db)
+
+    expect(await res.json()).toMatchObject({ receipts: { pending: 0, expired: 1 } })
+    expect(writesTo(writes, /DELETE FROM push_receipts/)).toHaveLength(1)
+    // Nothing is concluded from silence — the ledger stands.
+    expect(writesTo(writes, /DELETE FROM notifications_sent/)).toEqual([])
+  })
+
+  it('has nothing to put back for a captain alert, which keeps no ledger', async () => {
+    stubExpoWithReceipts({
+      't-cap': { status: 'error', message: 'refused', details: { error: 'DeveloperError' } },
+    })
+    const { db, writes } = fakeDb({
+      users: [alice], fixtures: [],
+      pending: [{ ticket_id: 't-cap', token: 'ExponentPushToken[cap]' }],
+    })
+    const res = await dispatch(db)
+
+    expect(await res.json()).toMatchObject({ receipts: { failed: 1, requeued: 0 } })
+    expect(writesTo(writes, /DELETE FROM notifications_sent/)).toEqual([])
   })
 })
 
