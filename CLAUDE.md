@@ -230,6 +230,32 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   (`exclude` / `include` / `reset` / `none`). Never re-derive "can this be
   clicked?" at a call site — `none` is exactly the locked competition a club may
   not widen, and it must read the same everywhere.
+- **There are four ways to field somebody, and all four ask**: the roster picker
+  (`TeamsPage`), the match sheet (`MatchDayDetailPage`), the accueil's next-match
+  sheet, and the **journées matrix** — whose compo dropdown offers no team the
+  competition refuses, and whose "Autres joueurs du club" lists nobody no team
+  could field. The bite is always on what can be *added*: a team its roster
+  already holds stays on the list, and so does one a line-up already names.
+- **`teamEligibility(teams, ctx)` is that rule, and the only copy of it.** A
+  factory, not a bare function, because a team reaches its competition through
+  its division — two lookups — and every caller asks it of a whole club against
+  every team. `admits` is the competition's verdict; `mayField` is what a picker
+  offers, which is `admits` OR a roster that already holds them. Never rebuild
+  the pair at a call site.
+- **The mobile app asks the same question** (#498): the journées matrix, the
+  captain's line-up sheet and the roster picker all go through
+  `@shared/lib/competitionEligibility`, so the verdict cannot depend on which
+  screen you are holding. `competitions` and `competitionEligibilities` ride in
+  its `DataState`, and `withDefaults` empties them for a cache written before
+  #498 — which restricts nobody, the right answer for a payload that never
+  carried the tables.
+- **`EligiblePlayer.category` is required, and may be undefined.** A licensee
+  carries no category of their own, so it has to be resolved
+  (`withSeasonCategory`, the active season) before the rule is called. When the
+  field was optional a raw `User` satisfied the shape, every screen that forgot
+  read "sans catégorie", and a competition naming its categories admitted nobody
+  at all — silently, because the empty-list case (the senior championship) is
+  the one that still worked. Never loosen it back.
 
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove

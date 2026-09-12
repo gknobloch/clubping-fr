@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
+import type { PlayerCategory } from '@/lib/playerCategories'
 import {
   mockClubs,
   mockDivisions,
@@ -225,5 +226,45 @@ describe('HomePage — the next-match card carries the team (#461)', () => {
 
     const mine = within(list).getByText('Enzo Lotz').closest('li')!
     expect(within(mine).getByRole('button', { name: 'OUI' })).toBeInTheDocument()
+  })
+})
+
+// #482 — the rule reads the category off the licensee it is handed, and a
+// category is a fact about a season, not about the person. The three screens
+// that let a captain reach past the roster passed the licensee straight through
+// instead, so everyone read as "sans catégorie": a competition that names its
+// categories then admitted nobody, and "Autres joueurs" came back empty.
+describe('HomePage — les renforts et la catégorie de la saison (#482)', () => {
+  /** team-1 plays `comp-seniors`, which lists no category in the mock data. */
+  function narrowSeniorsTo(categories: PlayerCategory[]) {
+    return mockCompetitions.map((c) =>
+      c.id === 'comp-seniors' ? { ...c, categories } : c,
+    )
+  }
+
+  function openSheetWith(competitions: typeof mockCompetitions) {
+    authState.user = { id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: CLUB_ID }
+    render(
+      <MemoryRouter>
+        <DataProvider initialData={{ ...testData, competitions }}>
+          <HomePage />
+        </DataProvider>
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Composer l'équipe/ }))
+  }
+
+  it('offers the seniors of the club when the competition is reserved to them', () => {
+    openSheetWith(narrowSeniorsTo(['S']))
+
+    expect(screen.getByText('Autres joueurs')).toBeInTheDocument()
+  })
+
+  it('offers none of them when the competition admits another category entirely', () => {
+    // The other half of the same reading: the categories are honoured, not
+    // ignored. Nobody in the club is a poussin.
+    openSheetWith(narrowSeniorsTo(['P']))
+
+    expect(screen.queryByText('Autres joueurs')).not.toBeInTheDocument()
   })
 })

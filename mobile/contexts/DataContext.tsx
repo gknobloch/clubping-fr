@@ -27,6 +27,8 @@ import type {
   GameSelection,
   AvailabilityOverriddenBy,
   AvailabilityStatus,
+  Competition,
+  CompetitionEligibility,
   PlayerSeasonCategory,
   PlayerSeasonLicence,
   User,
@@ -49,6 +51,8 @@ interface DataState {
   playerPhasePoints: PlayerPhasePoints[]
   playerSeasonCategories: PlayerSeasonCategory[]
   playerSeasonLicences: PlayerSeasonLicence[]
+  competitions: Competition[]
+  competitionEligibilities: CompetitionEligibility[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -67,6 +71,8 @@ const emptyState: DataState = {
   playerPhasePoints: [],
   playerSeasonCategories: [],
   playerSeasonLicences: [],
+  competitions: [],
+  competitionEligibilities: [],
   matchDays: [],
   games: [],
   gameAvailabilities: [],
@@ -77,15 +83,21 @@ const emptyState: DataState = {
 /**
  * A payload — from the API or from the offline cache — brought up to the
  * current shape. An offline cache written before #384 has no
- * `playerPhasePoints`, and one written before #482/#488 has neither category
- * nor licence; a cold start hydrates from it before the first fetch, so the
- * screens would read them off `undefined`.
+ * `playerPhasePoints`, one written before #482/#488 has neither category
+ * nor licence, and one written before #498 knows nothing of competitions; a
+ * cold start hydrates from it before the first fetch, so the screens would read
+ * them off `undefined`.
+ *
+ * An empty `competitions` is the right answer for such a cache, and harmless:
+ * a team whose division belongs to no competition is restricted by nobody.
  */
 const withDefaults = (data: DataState): DataState => ({
   ...data,
   playerPhasePoints: data.playerPhasePoints ?? [],
   playerSeasonCategories: data.playerSeasonCategories ?? [],
   playerSeasonLicences: data.playerSeasonLicences ?? [],
+  competitions: data.competitions ?? [],
+  competitionEligibilities: data.competitionEligibilities ?? [],
 })
 
 // ---------------------------------------------------------------------------

@@ -25,6 +25,8 @@ import {
 } from '@/lib/playerSearch'
 import { pointsFor } from '@/lib/phasePoints'
 import { activeSeasonId } from '@/lib/season'
+import { categoryFromIndex, seasonCategoryIndex } from '@/lib/seasonCategories'
+import { teamEligibility } from '@/lib/competitionEligibility'
 import { unlicensedIds } from '@/lib/seasonLicences'
 import { orderPhases, defaultPhase } from '@/lib/phases'
 import { PageHeader } from '@/components/PageHeader'
@@ -172,9 +174,12 @@ export function MatchDaysPage() {
     teams,
     clubs,
     players,
+    competitions,
+    competitionEligibilities,
     gameAvailabilities,
     gameSelections,
     playerPhasePoints,
+    playerSeasonCategories,
     playerSeasonLicences,
     seasons,
     setGameAvailability,
@@ -227,6 +232,52 @@ export function MatchDaysPage() {
       })
   }, [teams, clubs, selectedPhaseId, userClubId])
 
+  // --- Competition eligibility (#482) ----------------------------------------
+  //
+  // The matrix is the third way a club fields somebody — the roster picker and
+  // the match sheet are the other two, and both already ask — so it has to ask
+  // the same question or the answer means nothing: a licensee the club has
+  // excluded from a championship was still offered here, and still listed under
+  // "Autres joueurs du club".
+  //
+  // A category is a fact about a season and eligibility is a question about
+  // now, so the season being played is the one that decides (#482).
+  const eligibilitySeasonId = activeSeasonId(seasons)
+  const categoryIndex = useMemo(
+    () => seasonCategoryIndex(playerSeasonCategories),
+    [playerSeasonCategories],
+  )
+
+  /** This club's amendments only: GET /api/data carries every club's, and one
+   *  club's exception must not decide another's line-ups. */
+  const myEligibilities = useMemo(
+    () => competitionEligibilities.filter((e) => e.clubId === userClubId),
+    [competitionEligibilities, userClubId],
+  )
+
+  /** The shared rule, bound to this club's teams so each one's competition is
+   *  resolved once rather than once per cell. */
+  const eligibility = useMemo(
+    () => teamEligibility(myClubTeamsInPhase, {
+      divisions, competitions, overrides: myEligibilities,
+    }),
+    [myClubTeamsInPhase, divisions, competitions, myEligibilities],
+  )
+
+  /** A licensee as the rule reads them: the category comes off the season. */
+  const asEligible = useCallback(
+    (playerId: string) => ({
+      id: playerId,
+      category: categoryFromIndex(categoryIndex, eligibilitySeasonId, playerId),
+    }),
+    [categoryIndex, eligibilitySeasonId],
+  )
+
+  const teamAdmits = useCallback(
+    (teamId: string, playerId: string) => eligibility.mayField(teamId, asEligible(playerId)),
+    [eligibility, asEligible],
+  )
+
   /** Match-days for a given team (its group). */
   const getMatchDaysForTeam = useCallback(
     (teamId: string) => {
@@ -262,15 +313,28 @@ export function MatchDaysPage() {
   const otherPlayers = useMemo(() => {
     if (!userClubId) return []
     const inRoster = new Set(myClubTeamsInPhase.flatMap((t) => t.playerIds ?? []))
+    // Already named on a line-up of the phase. Such a player stays listed even
+    // when no competition admits them any more: the table is the only place
+    // either app lets you take them back out, and an exclusion decided after
+    // the fact never erases a line-up already made (#482).
+    const teamIdsInPhase = new Set(myClubTeamsInPhase.map((t) => t.id))
+    const alreadyPicked = new Set(
+      gameSelections
+        .filter((s) => teamIdsInPhase.has(s.teamId))
+        .flatMap((s) => s.playerIds),
+    )
     return sortByName(
       players.filter(
         (p) =>
           p.clubId === userClubId &&
           p.status === 'active' &&
-          !inRoster.has(p.id),
+          !inRoster.has(p.id) &&
+          // Nobody the club could field: this table is nothing but the
+          // "équipe retenue" picker, so a name no team may take is noise.
+          (alreadyPicked.has(p.id) || myClubTeamsInPhase.some((t) => teamAdmits(t.id, p.id))),
       ),
     )
-  }, [players, userClubId, myClubTeamsInPhase])
+  }, [players, userClubId, myClubTeamsInPhase, gameSelections, teamAdmits])
 
   // Name filter for "Autres joueurs du club": that table is the whole club
   // minus the rosters, so in a big club it is the longest list on the page (#454).
@@ -353,8 +417,16 @@ export function MatchDaysPage() {
     teams.find((t) => t.id === teamId)?.color
 
   /** Team options for selection: player's team first (if any), then empty, then all other club teams.
-   *  Filters out teams the player is not eligible for (brûlage) on the given match-day. */
-  const orderedTeamOptionIds = (playerTeamId: string | null, playerId?: string, matchDayId?: string): (string | null)[] => {
+   *  Filters out teams the player is not eligible for — brûlage on the given
+   *  match-day, and the competition the team's division belongs to (#482).
+   *  `selectedTeamId` is whatever this cell already holds: a line-up made before
+   *  an exclusion stays on the list, so clearing it by accident is not final. */
+  const orderedTeamOptionIds = (
+    playerTeamId: string | null,
+    playerId?: string,
+    matchDayId?: string,
+    selectedTeamId?: string | null,
+  ): (string | null)[] => {
     let all = myClubTeamsInPhase.map((t) => t.id)
     if (matchDayId) {
       // Only include teams that actually have a game on this round
@@ -368,6 +440,9 @@ export function MatchDaysPage() {
         const t = teams.find((x) => x.id === tid)
         return t ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId) : false
       })
+    }
+    if (playerId) {
+      all = all.filter((tid) => tid === selectedTeamId || teamAdmits(tid, playerId))
     }
     if (playerTeamId && all.includes(playerTeamId)) {
       const rest = all.filter((id) => id !== playerTeamId)
@@ -1316,7 +1391,7 @@ export function MatchDaysPage() {
                                           onChange={(v) =>
                                             setPlayerSelectedForMatchDay(md.id, player.id, v)
                                           }
-                                          optionIds={orderedTeamOptionIds(team.id, player.id, md.id)}
+                                          optionIds={orderedTeamOptionIds(team.id, player.id, md.id, selectedTeamId)}
                                           getLabel={getTeamSelectLabel}
                                           getColor={getTeamColor}
                                         />
@@ -1365,7 +1440,7 @@ export function MatchDaysPage() {
                                         onChange={(v) =>
                                           setPlayerSelectedForMatchDay(md.id, player.id, v)
                                         }
-                                        optionIds={orderedTeamOptionIds(team.id, player.id, md.id)}
+                                        optionIds={orderedTeamOptionIds(team.id, player.id, md.id, selectedTeamId)}
                                         getLabel={getTeamSelectLabel}
                                         getColor={getTeamColor}
                                       />
@@ -1648,7 +1723,7 @@ export function MatchDaysPage() {
                                   onChange={(v) =>
                                     setPlayerSelectedForMatchDay(md.id, player.id, v)
                                   }
-                                  optionIds={orderedTeamOptionIds(null, player.id, md.id)}
+                                  optionIds={orderedTeamOptionIds(null, player.id, md.id, selectedTeamId)}
                                   getLabel={getTeamSelectLabel}
                                   getColor={getTeamColor}
                                 />

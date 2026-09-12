@@ -17,6 +17,8 @@ import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhase
 import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
 import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
+import { activeSeasonId } from '@/lib/season'
+import { withSeasonCategory } from '@/lib/seasonCategories'
 
 export function TeamsPage() {
   const { user } = useAuth()
@@ -28,6 +30,8 @@ export function TeamsPage() {
     groups,
     players,
     playerPhasePoints,
+    playerSeasonCategories,
+    seasons,
     competitions,
     competitionEligibilities,
     updateTeam,
@@ -131,9 +135,18 @@ export function TeamsPage() {
     : []
   const selectedClub = form.clubId ? clubs.find((c) => c.id === form.clubId) : undefined
   const addressesForClub = selectedClub?.addresses ?? []
+  // Carrying the category of the season being played: eligibility reads it off
+  // the licensee, and a category is a fact about a season, not about the person
+  // (#482). Without it every licensee reads as "sans catégorie" and a
+  // competition that names its categories would admit nobody at all.
+  const eligibilitySeasonId = activeSeasonId(seasons)
   const playersInClub = form.clubId
-    ? players.filter(
-        (p) => p.clubId === form.clubId && p.status === 'active' && p.clubId !== ''
+    ? withSeasonCategory(
+        players.filter(
+          (p) => p.clubId === form.clubId && p.status === 'active' && p.clubId !== ''
+        ),
+        playerSeasonCategories,
+        eligibilitySeasonId,
       )
     : []
 

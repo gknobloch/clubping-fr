@@ -3,6 +3,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import type { Phase, PlayerPhasePoints } from '@/types'
+import type { PlayerCategory } from '@/lib/playerCategories'
 import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate } from '@/lib/matchdays'
 import {
   mockClubs,
@@ -274,5 +275,78 @@ describe('MatchDaysPage — filtrer « Autres joueurs du club » (#454)', () => 
     })
 
     expect(within(section).getByText(/Aucun joueur ne correspond/)).toBeInTheDocument()
+  })
+})
+
+// #482 — the matrix is the third way a club fields somebody, and it was the one
+// screen that never asked the competition. A licensee the club had excluded was
+// still offered here, and still listed under "Autres joueurs du club".
+describe('MatchDaysPage — l\'éligibilité aux compétitions dans la matrice (#482)', () => {
+  /** Every club team of the phase plays `comp-seniors` in the mock data. */
+  const COMPETITION_ID = 'comp-seniors'
+
+  function renderWith(overrides: Partial<ReturnType<typeof baseData>>) {
+    render(
+      <MemoryRouter initialEntries={['/journees']}>
+        <DataProvider initialData={{ ...baseData(), ...overrides }}>
+          <MatchDaysPage />
+        </DataProvider>
+      </MemoryRouter>,
+    )
+    return document.getElementById('other-players')
+  }
+
+  const excluded = {
+    clubId: CLUB_ID, competitionId: COMPETITION_ID, playerId: OTHER_PLAYER.id,
+    effect: 'excluded' as const,
+  }
+
+  it('drops from « Autres joueurs du club » someone no team may field', () => {
+    const section = renderWith({
+      competitionEligibilities: [...mockCompetitionEligibilities, excluded],
+    })
+
+    // The section itself survives — the club has other unrostered players.
+    expect(section).not.toBeNull()
+    expect(within(section!).queryByText(new RegExp(fullName))).not.toBeInTheDocument()
+  })
+
+  it('leaves them listed when a line-up already names them', () => {
+    // An exclusion decided after the fact never erases a composition already
+    // made, and this table is the only place either app lets you undo one.
+    const game = mockGames.find(
+      (g) => mockTeams.some(
+        (t) => t.id === g.homeTeamId && t.clubId === CLUB_ID && t.phaseId === PHASE_ID,
+      ),
+    )!
+    const teamId = game.homeTeamId
+
+    const section = renderWith({
+      competitionEligibilities: [...mockCompetitionEligibilities, excluded],
+      gameSelections: [
+        ...mockGameSelections,
+        { gameId: game.id, teamId, playerIds: [OTHER_PLAYER.id] },
+      ],
+    })
+
+    expect(within(section!).getByText(new RegExp(fullName))).toBeInTheDocument()
+  })
+
+  it('reads the category off the season, so a competition that names one still admits its own', () => {
+    // Guards the bug the shared rule cannot see: a licensee handed over without
+    // their season category reads as "sans catégorie", and a competition that
+    // lists categories would then admit nobody at all.
+    const category = mockPlayerSeasonCategories.find((c) => c.playerId === OTHER_PLAYER.id)
+    expect(category).toBeDefined()
+
+    const section = renderWith({
+      competitions: mockCompetitions.map((c) =>
+        c.id === COMPETITION_ID
+          ? { ...c, categories: [category!.category as PlayerCategory] }
+          : c,
+      ),
+    })
+
+    expect(within(section!).getByText(new RegExp(fullName))).toBeInTheDocument()
   })
 })

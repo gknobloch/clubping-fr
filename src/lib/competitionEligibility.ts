@@ -42,11 +42,21 @@ export const ELIGIBILITY_REASON_LABELS: Record<EligibilityReason, string> = {
   no_category: 'Sans catégorie',
 }
 
-/** The subset of a member this module reads. */
+/**
+ * The subset of a member this module reads.
+ *
+ * `category` is required, and may be undefined — deliberately not optional. A
+ * licensee carries no category of their own since #482: it belongs to a season,
+ * and has to be resolved (`src/lib/seasonCategories.ts`) before the rule can
+ * read it. Made optional, a raw `User` satisfied this shape and every caller
+ * that forgot silently read "sans catégorie", so a competition naming its
+ * categories admitted nobody at all. Spelling it out makes the omission a
+ * compile error instead.
+ */
 export interface EligiblePlayer {
   id: string
-  /** Raw FFTT category code; normalized here. */
-  category?: string
+  /** Raw FFTT category code; normalized here. Undefined = none on file. */
+  category: string | undefined
 }
 
 const overrideFor = (
@@ -244,4 +254,67 @@ export function competitionOfDivision(
   const competition = competitions.find((c) => c.id === division.competitionId)
   if (!competition || competition.isArchived) return undefined
   return division.categories ? { ...competition, categories: division.categories } : competition
+}
+
+/** The subset of a team the rule below reads. */
+export interface EligibilityTeam {
+  id: string
+  divisionId?: string
+  playerIds?: string[]
+}
+
+/** Everything the rule needs besides the team and the licensee. */
+export interface TeamEligibilityContext {
+  divisions: Array<{ id: string; competitionId?: string; categories?: PlayerCategory[] }>
+  competitions: Competition[]
+  /** This club's own overrides — never every club's (see `GET /api/data`). */
+  overrides: CompetitionEligibility[]
+}
+
+export interface TeamEligibility {
+  /** The competition's own verdict, whatever a team already holds. */
+  admits(teamId: string, player: EligiblePlayer): boolean
+  /**
+   * Whether a picker may offer this team for this licensee: `admits`, or a
+   * roster that already holds them.
+   *
+   * Eligibility bites on what can be *added*, never on what exists — a
+   * competition edited after the fact must not empty a squad — so someone on
+   * the roster stays fieldable for their own team, and their exclusion shows
+   * as the ⚠ on the club's Compétitions grid rather than as a silent removal.
+   */
+  mayField(teamId: string, player: EligiblePlayer): boolean
+}
+
+/**
+ * The rule for "which of a club's teams may field this licensee?", bound to one
+ * set of teams.
+ *
+ * A factory rather than a bare function because a team reaches its competition
+ * through its division — two lookups — and the callers ask this of every
+ * licensee against every team: the journées matrix on both apps, a roster
+ * picker, a line-up sheet. Resolving each team's competition once is the same
+ * move `assignmentsByPlayer` makes for the grid (#482).
+ */
+export function teamEligibility(
+  teams: EligibilityTeam[],
+  ctx: TeamEligibilityContext,
+): TeamEligibility {
+  const byId = new Map(teams.map((t) => [t.id, t]))
+  const competitionByTeamId = new Map(
+    teams.map((t) => [t.id, competitionOfDivision(t.divisionId, ctx.divisions, ctx.competitions)]),
+  )
+  const admits = (teamId: string, player: EligiblePlayer): boolean => {
+    const competition = competitionByTeamId.get(teamId)
+    // A division filed under no competition — every division until a general
+    // admin says otherwise — restricts nobody. So does a team we know nothing
+    // about: silence is not a refusal.
+    if (!competition) return true
+    return isPlayerEligible(player, competition, ctx.overrides)
+  }
+  return {
+    admits,
+    mayField: (teamId, player) =>
+      byId.get(teamId)?.playerIds?.includes(player.id) === true || admits(teamId, player),
+  }
 }

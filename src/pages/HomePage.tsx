@@ -21,6 +21,7 @@ import { sortByName } from '@/lib/sortByName'
 import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
+import { withSeasonCategory } from '@/lib/seasonCategories'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingRounds } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
@@ -42,7 +43,7 @@ export function HomePage() {
   const {
     clubs, seasons, teams, players, phases, divisions, groups,
     matchDays, games, gameAvailabilities, gameSelections,
-    competitions, competitionEligibilities, playerSeasonLicences,
+    competitions, competitionEligibilities, playerSeasonCategories, playerSeasonLicences,
     setGameAvailability, clearGameAvailability, setGameSelection,
   } = useAppData()
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
@@ -226,13 +227,20 @@ export function HomePage() {
                 const short = availableCount < playersPerGame
                 // Brûlage, then the competition the team's division belongs
                 // to (#482): a renfort has to be admitted by both.
+                // The category is resolved first: it hangs off the season, not
+                // off the licensee (#482), and the rule reads it from the
+                // player it is handed.
                 const eligibleOthers = eligiblePlayers(
-                  players.filter(
-                    (p) =>
-                      p.clubId === myActiveTeam.clubId &&
-                      p.status === 'active' &&
-                      !myActiveTeam.playerIds.includes(p.id) &&
-                      isEligibleForTeam(p.id, myActiveTeam.id, md.id),
+                  withSeasonCategory(
+                    players.filter(
+                      (p) =>
+                        p.clubId === myActiveTeam.clubId &&
+                        p.status === 'active' &&
+                        !myActiveTeam.playerIds.includes(p.id) &&
+                        isEligibleForTeam(p.id, myActiveTeam.id, md.id),
+                    ),
+                    playerSeasonCategories,
+                    activeSeasonId(seasons),
                   ),
                   competitionOfDivision(myActiveTeam.divisionId, divisions, competitions),
                   competitionEligibilities.filter((e) => e.clubId === myActiveTeam.clubId),

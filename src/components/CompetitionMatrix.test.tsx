@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type { Competition, CompetitionEligibility, Player } from '@/types'
+import type { CategorizedPlayer } from '@/lib/seasonCategories'
 import { CompetitionMatrix, type AssignmentIndex } from './CompetitionMatrix'
 
 // #482 — the desktop grid. The rule itself is tested in
@@ -12,9 +13,13 @@ import { CompetitionMatrix, type AssignmentIndex } from './CompetitionMatrix'
 
 const CLUB = 'club-1'
 
-const player = (id: string, first: string, last: string, category?: string): Player => ({
+// The grid is handed licensees whose category has already been resolved for the
+// season (#482), so the key is always there — undefined when none is on file.
+const player = (
+  id: string, first: string, last: string, category?: string,
+): CategorizedPlayer<Player> => ({
   id, firstName: first, lastName: last, licenseNumber: '1', phone: '',
-  status: 'active', clubId: CLUB, ...(category ? { category } : {}),
+  status: 'active', clubId: CLUB, category,
 })
 
 const youth: Competition = {

@@ -290,6 +290,29 @@ test.describe('Club admin — amending the default mapping (#482)', () => {
       .toHaveAccessibleName(/Exclu par le club — Déjà dans l'équipe/)
   })
 
+  // The journées matrix is the third way a club fields somebody, after the
+  // roster picker and the match sheet, and it was the one that never asked. An
+  // exclusion made here has to reach it, or it means nothing.
+  test('takes an excluded licensee out of the journées matrix', async ({ page }) => {
+    await page.goto('/journees')
+    const others = page.locator('#other-players')
+    await expect(others.getByText('Jordan Pesenti')).toBeVisible()
+
+    // In-app navigation throughout: without the API the club's amendment lives
+    // in DataContext, and a reload would drop it.
+    await page.getByRole('link', { name: 'Compétitions' }).click()
+    await cell(page, 'Jordan Pesenti', 'Championnat par équipes').click()
+    await expect(cell(page, 'Jordan Pesenti', 'Championnat par équipes'))
+      .toHaveAccessibleName(/Exclu par le club/)
+
+    await page.getByRole('link', { name: 'Journées' }).click()
+    // Every team of the phase plays that championship, so there is nothing left
+    // to field them in — and the table is nothing but the "équipe retenue"
+    // picker.
+    await expect(page.locator('#other-players').getByText('Jordan Pesenti')).toHaveCount(0)
+    await expect(page.locator('#other-players')).toBeVisible()
+  })
+
   test('filters the club by category, from the column header', async ({ page }) => {
     await page.goto('/competitions')
     // The filters live in the headers, each above the column it narrows.

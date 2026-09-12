@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -27,6 +27,8 @@ import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/play
 import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { unlicensedIds } from '@shared/lib/seasonLicences'
+import { categoryFromIndex, seasonCategoryIndex } from '@shared/lib/seasonCategories'
+import { teamEligibility } from '@shared/lib/competitionEligibility'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
@@ -103,6 +105,7 @@ export default function JourneesScreen() {
   const {
     clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
+    playerSeasonCategories, competitions, competitionEligibilities,
     setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
   } = useAppData()
 
@@ -132,6 +135,40 @@ export default function JourneesScreen() {
   const clubTeams = useMemo(
     () => (phase ? teams.filter((t) => t.clubId === myClubId && t.phaseId === phase.id) : []),
     [phase, teams, myClubId],
+  )
+
+  // --- Competition eligibility (#498) ----------------------------------------
+  //
+  // The app fields people too, so it asks the same question the web does: a
+  // licensee the club has excluded from a championship is not offered for a
+  // team that plays it. Same rule, same module — the verdict must not depend on
+  // which screen you happen to be holding.
+  //
+  // A category is a fact about a season, and the season being played is the one
+  // that decides (#482).
+  const eligibilitySeasonId = seasons.find((se) => se.status === 'active')?.id
+  const categoryIndex = useMemo(
+    () => seasonCategoryIndex(playerSeasonCategories),
+    [playerSeasonCategories],
+  )
+  /** This club's own amendments: the payload carries every club's. */
+  const myEligibilities = useMemo(
+    () => competitionEligibilities.filter((e) => e.clubId === myClubId),
+    [competitionEligibilities, myClubId],
+  )
+  const eligibility = useMemo(
+    () => teamEligibility(clubTeams, { divisions, competitions, overrides: myEligibilities }),
+    [clubTeams, divisions, competitions, myEligibilities],
+  )
+  /** A licensee as the rule reads them — the category resolved for the season.
+   *  Memoised because `otherPlayers` depends on it: rebuilt every render, it
+   *  would make that memo run every render too. */
+  const asEligible = useCallback(
+    (playerId: string) => ({
+      id: playerId,
+      category: categoryFromIndex(categoryIndex, eligibilitySeasonId, playerId),
+    }),
+    [categoryIndex, eligibilitySeasonId],
   )
 
   // Scoped to the club's teams and their games' own dates: the switcher's
@@ -316,10 +353,23 @@ export default function JourneesScreen() {
   const otherPlayers = useMemo(() => {
     if (!myClubId) return [] as Player[]
     const inRoster = new Set(clubTeams.flatMap((t) => t.playerIds ?? []))
-    return sortByName(
-      players.filter((p) => p.clubId === myClubId && p.status === 'active' && !inRoster.has(p.id)),
+    // Already named on a line-up of the phase: such a player stays listed even
+    // when no competition admits them any more, because this section is the
+    // only place either app lets you take them back out (#498).
+    const teamIds = new Set(clubTeams.map((t) => t.id))
+    const alreadyPicked = new Set(
+      gameSelections.filter((sel) => teamIds.has(sel.teamId)).flatMap((sel) => sel.playerIds),
     )
-  }, [players, myClubId, clubTeams])
+    return sortByName(
+      players.filter(
+        (p) => p.clubId === myClubId && p.status === 'active' && !inRoster.has(p.id)
+          // Nobody the club could field: this section is nothing but the
+          // "équipe retenue" picker, so a name no team may take is noise.
+          && (alreadyPicked.has(p.id)
+            || clubTeams.some((t) => eligibility.mayField(t.id, asEligible(p.id)))),
+      ),
+    )
+  }, [players, myClubId, clubTeams, gameSelections, eligibility, asEligible])
 
   /** The club minus the rosters is the longest list here; filter it past ten. */
   const searchOtherPlayers = otherPlayers.length > PLAYER_SEARCH_THRESHOLD
@@ -411,9 +461,13 @@ export default function JourneesScreen() {
       .flatMap((t) => {
         const { matchDay, game } = teamGame(t, group.matchDays)
         if (!game || !matchDay) return []
+        // `t.id === current` keeps whatever this round already holds on the
+        // list, for the brûlage and the competition alike: a line-up made
+        // before an exclusion stays undoable rather than becoming a dead end.
         const eligible =
           t.id === current ||
-          isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id)
+          (isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id)
+            && eligibility.mayField(t.id, asEligible(playerId)))
         if (!eligible) return []
         const isHome = game.homeTeamId === t.id
         const opp = teams.find((x) => x.id === (isHome ? game.awayTeamId : game.homeTeamId))
