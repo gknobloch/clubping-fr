@@ -61,3 +61,11 @@ REVIEW_LOGIN_CODE=
 # Set it to 'true' only as an escape hatch, e.g. a local database with no users
 # to sign in as. Nothing deployed may ever set it: keep it out of wrangler.toml.
 # AUTH_GUARD_DISABLED=true
+
+# --- Client version floor (#508) ---
+# Unset here on purpose. A local server should never gate the build you are
+# working on, and "unset" is the same thing every unconfigured environment
+# says: no floor, every client allowed. Set them (as plain wrangler.toml
+# [vars] in a deployed environment) only to exercise the gate itself.
+#   CLIENT_LATEST_VERSION=1.3.0   # older builds get a dismissible nudge
+#   CLIENT_MIN_VERSION=1.3.0      # older builds are refused outright

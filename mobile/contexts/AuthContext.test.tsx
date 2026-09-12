@@ -13,7 +13,11 @@ import { AuthProvider, useAuth } from './AuthContext'
 
 // Dev login is gated on the app targeting a local backend; the module's default
 // is the production host, which would switch it off in tests.
+// Spread the real module rather than replace it: this mock only ever meant to
+// point the base URL at a local server, and a hand-listed stub silently loses
+// whatever the module gains next (it lost `clientHeaders`, #508).
 jest.mock('@/constants/api', () => ({
+  ...jest.requireActual('@/constants/api'),
   API_BASE_URL: 'http://127.0.0.1:8788',
   IS_PRODUCTION_API: false,
   apiUrl: (path: string) => `http://127.0.0.1:8788/api${path}`,

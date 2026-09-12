@@ -37,6 +37,12 @@ const PUBLIC_CONFIRM_PATH = /^\/api\/onboarding\/confirm$/
 // is a longer-lived credential for a narrower need.
 const PUBLIC_DISPATCH_PATH = /^\/api\/notifications\/dispatch$/
 
+// The version floor (#508). Sessionless on purpose, and in both directions: a
+// build below the floor may be precisely the one that can no longer sign in,
+// and the check runs at boot, before there is any session to carry. It answers
+// two version numbers that already travel inside every published binary.
+const PUBLIC_CLIENT_VERSION_PATH = /^\/api\/client-version$/
+
 // Image endpoints are served to <img> / <Image> tags, which cannot attach an
 // Authorization header — so GETs to them are public (read-only, non-sensitive
 // logos / avatars). Writes still require a session.
@@ -54,5 +60,6 @@ export function needsSession(method: string, path: string): boolean {
   if (method === 'POST' && PUBLIC_ONBOARDING_PATH.test(path)) return false
   if ((method === 'GET' || method === 'POST') && PUBLIC_CONFIRM_PATH.test(path)) return false
   if (method === 'POST' && PUBLIC_DISPATCH_PATH.test(path)) return false
+  if (method === 'GET' && PUBLIC_CLIENT_VERSION_PATH.test(path)) return false
   return true
 }

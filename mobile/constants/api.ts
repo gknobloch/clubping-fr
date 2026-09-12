@@ -36,3 +36,29 @@ export const IS_PRODUCTION_API = PRODUCTION_API_HOSTS.includes(apiHost)
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}/api${path}`
 }
+
+/**
+ * This build's version, as published — "1.3.0" (#508).
+ *
+ * `expoConfig` is typed `| null`, and with expo-updates configured it is read
+ * off the embedded update manifest: a build made locally rather than by EAS can
+ * have no manifest, and then the whole of app.json is absent at runtime. Every
+ * binary that reaches a store is an EAS build and does carry it. When it is
+ * missing the version check simply has nothing to compare and allows the build
+ * through, which is the same fail-open rule the rest of the feature follows.
+ */
+export const CLIENT_VERSION: string | undefined = Constants.expoConfig?.version ?? undefined
+
+/**
+ * What the client tells the server about itself, on every request (#508).
+ *
+ * Today nothing server-side reads it — the floor is published, not enforced —
+ * but it is what makes "which builds are actually out there?" answerable at
+ * all, and what a later hard refusal would have to be built on. It cannot be
+ * added retroactively to a binary already in the wild, which is the whole
+ * reason it ships before it is needed.
+ */
+export const CLIENT_VERSION_HEADER = 'X-Client-Version'
+
+export const clientHeaders = (): Record<string, string> =>
+  CLIENT_VERSION ? { [CLIENT_VERSION_HEADER]: CLIENT_VERSION } : {}

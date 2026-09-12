@@ -300,6 +300,46 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   and throws on one. A PDF with no text layer goes through
   `renderPdfPages` first — that is the whole scanned-calendar path.
 
+### Version des clients (#508)
+- **Le serveur publie un plancher, jamais un verdict.** `GET
+  /api/client-version` répond deux chaînes ; c'est le client qui compare. Un
+  build trop vieux pour qu'on lui fasse confiance est aussi trop vieux pour
+  qu'on lui demande une décision — mais l'inverse coûterait plus cher : une
+  route qui dit « toi, dehors » doit connaître chaque client, et la seule façon
+  de relever le plancher sans rien publier est qu'il soit une donnée, pas du
+  code.
+- **Tout échoue ouvert.** Pas de réponse, une réponse illisible, une version
+  qu'on n'arrive pas à lire : `ok`. L'app est ouverte dans des gymnases en
+  sous-sol sans réseau (#387) ; un contrôle qui prendrait le silence pour un
+  refus fermerait la porte précisément là où on vient lire une composition.
+  `versionVerdict` (`src/lib/clientVersion.ts`) est la règle, sans réseau ni
+  base, et c'est le seul endroit qui la porte.
+- Une version avec suffixe (`1.4.0-beta.1`) est **illisible** exprès : l'ordonner
+  supposerait de choisir une convention, et se tromper ici bloque des gens.
+  Illisible est une réponse sûre ; mal ordonné, non.
+- **Deux visages, délibérément dissemblables** : une barre qu'on écarte d'un
+  geste au-dessus d'une app qui marche, et un mur. Les dire pareil ferait du mur
+  une notification de plus. Le mur recouvre l'écran de connexion aussi — un
+  build que le serveur n'admet plus ne se connecte pas davantage.
+- Le mur est une **surimpression**, pas un remplacement du navigateur : c'est
+  l'écran dessous qui retire le splash, et une porte qui le démonterait
+  garderait le splash pour toujours par-dessus son propre message.
+- **L'en-tête `X-Client-Version` part sur toutes les requêtes**, et rien ne le
+  lit encore. C'est le seul moyen de savoir un jour ce qui tourne réellement, et
+  il ne peut pas être ajouté après coup à un binaire déjà distribué — d'où le
+  fait qu'il parte avant d'être utile. C'est aussi toute la raison d'être de
+  l'interrupteur : on ne peut pas livrer le correctif au build qui est le
+  problème, donc le garde-fou doit exister *avant*.
+- **Une mise à jour OTA ne rattrape jamais une version précédente.** EAS Update
+  est configuré, mais `runtimeVersion.policy` vaut `appVersion` : un OTA ne
+  touche que les builds portant déjà la version pour laquelle il est publié. Le
+  seul recours est le magasin, et c'est là que les deux écrans renvoient.
+- `CLIENT_LATEST_VERSION` suit `mobile/app.json` à chaque release ; en retard
+  elle cesse simplement de proposer, ce qui ne coûte rien. **En avance, elle
+  devient un rappel sans remède** — `src/test/mobileConfig.spec.ts` casse le
+  build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
+  bloque, et ne se relève que pour une raison nommée dans le commit.
+
 ### Notifications push (#495)
 - **Un registre d'envois, pas un calcul de date.** La règle n'est pas « les
   matchs qui sont à J-7 aujourd'hui » mais « qui, dans l'effectif d'un match à
