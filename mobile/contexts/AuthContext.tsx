@@ -11,7 +11,7 @@ import {
   logout as apiLogout,
   oauthLogin,
   requestEmailCode,
-  setSessionToken,
+  setSession,
   verifyEmailCode,
 } from '@/utils/api'
 import { IS_PRODUCTION_API } from '@/constants/api'
@@ -116,12 +116,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const token = await SecureStore.getItemAsync(SESSION_KEY)
         if (token) {
-          setSessionToken(token) // let DataContext authenticate its fetch
+          // Who we last knew this session to belong to, published before the
+          // network is consulted: DataContext keys its offline cache on it
+          // (#509), and on a boot with no signal there will be no later answer.
+          const stored = await readStoredUser()
+          setSession(token, stored?.id ?? null) // let DataContext authenticate its fetch
           try {
             const me = await fetchMe(token)
             if (!cancelled) {
               setUser(me)
               setRealToken(token)
+              setSession(token, me.id)
               await AsyncStorage.setItem(USER_KEY, JSON.stringify(me))
             }
             return
@@ -131,7 +136,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
               // hall with no signal showed the sign-in form — and, through
               // DataContext's logout handler, took the offline cache with it:
               // the one thing that boot existed to read (#513).
-              const stored = await readStoredUser()
               if (stored && !cancelled) {
                 setUser(stored)
                 setRealToken(token)
@@ -147,7 +151,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               return
             }
             // A stated refusal — expired or revoked. Now it goes.
-            setSessionToken(null)
+            setSession(null, null)
             await SecureStore.deleteItemAsync(SESSION_KEY)
             await AsyncStorage.removeItem(USER_KEY)
           }
@@ -184,7 +188,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const applySession = useCallback(async (token: string, sessionUser: User) => {
     await SecureStore.setItemAsync(SESSION_KEY, token)
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(sessionUser))
-    setSessionToken(token) // triggers a DataContext refetch with the session
+    setSession(token, sessionUser.id) // triggers a DataContext refetch with the session
     setRealToken(token)
     setUser(sessionUser)
   }, [])
@@ -227,7 +231,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // matches of whoever was signed in (#495). Never fails the logout.
     await forgetPush()
     if (realToken) await apiLogout(realToken)
-    setSessionToken(null)
+    setSession(null, null)
     await SecureStore.deleteItemAsync(SESSION_KEY)
     await AsyncStorage.removeItem(USER_KEY)
     await AsyncStorage.removeItem(DEV_USER_KEY)

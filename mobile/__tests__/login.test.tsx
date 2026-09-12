@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native'
 import type { DevUser } from '@shared/types'
 import { AuthProvider } from '@/contexts/AuthContext'
-import { setSessionToken } from '@/utils/api'
+import { setSession } from '@/utils/api'
 import LoginScreen from '@/app/login'
 
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  setSessionToken(null)
+  setSession(null, null)
 })
 
 it('shows the brand mark', async () => {
