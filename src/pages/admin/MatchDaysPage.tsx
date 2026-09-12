@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import type { Competition, MatchDay, AvailabilityStatus, Player } from '@/types'
+import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
@@ -26,7 +26,7 @@ import {
 import { pointsFor } from '@/lib/phasePoints'
 import { activeSeasonId } from '@/lib/season'
 import { categoryFromIndex, seasonCategoryIndex } from '@/lib/seasonCategories'
-import { competitionOfDivision, isPlayerEligible } from '@/lib/competitionEligibility'
+import { teamEligibility } from '@/lib/competitionEligibility'
 import { unlicensedIds } from '@/lib/seasonLicences'
 import { orderPhases, defaultPhase } from '@/lib/phases'
 import { PageHeader } from '@/components/PageHeader'
@@ -255,46 +255,27 @@ export function MatchDaysPage() {
     [competitionEligibilities, userClubId],
   )
 
-  /** The competition behind each of the club's teams — through its division,
-   *  never through the team. Computed once per team rather than once per cell:
-   *  this grid asks the question for every player on every round on screen. */
-  const competitionByTeamId = useMemo(() => {
-    const out = new Map<string, Competition | undefined>()
-    for (const t of myClubTeamsInPhase) {
-      out.set(t.id, competitionOfDivision(t.divisionId, divisions, competitions))
-    }
-    return out
-  }, [myClubTeamsInPhase, divisions, competitions])
-
-  /** The competition's own verdict on a player, whatever a team already holds.
-   *  A division filed under no competition restricts nobody. */
-  const competitionAdmits = useCallback(
-    (teamId: string, playerId: string): boolean => {
-      const competition = competitionByTeamId.get(teamId)
-      if (!competition) return true
-      return isPlayerEligible(
-        { id: playerId, category: categoryFromIndex(categoryIndex, eligibilitySeasonId, playerId) },
-        competition,
-        myEligibilities,
-      )
-    },
-    [competitionByTeamId, categoryIndex, eligibilitySeasonId, myEligibilities],
+  /** The shared rule, bound to this club's teams so each one's competition is
+   *  resolved once rather than once per cell. */
+  const eligibility = useMemo(
+    () => teamEligibility(myClubTeamsInPhase, {
+      divisions, competitions, overrides: myEligibilities,
+    }),
+    [myClubTeamsInPhase, divisions, competitions, myEligibilities],
   )
 
-  /** Whether this team may be offered for this player.
-   *
-   *  Eligibility bites on what can be *added*, never on what already exists
-   *  (#482): a squad is not emptied by a competition edited afterwards, so a
-   *  player the roster already holds keeps their own team on the list. The
-   *  contradiction stays visible on the club's Compétitions grid, which is the
-   *  screen that answers "who am I fielding that I say is not eligible?". */
+  /** A licensee as the rule reads them: the category comes off the season. */
+  const asEligible = useCallback(
+    (playerId: string) => ({
+      id: playerId,
+      category: categoryFromIndex(categoryIndex, eligibilitySeasonId, playerId),
+    }),
+    [categoryIndex, eligibilitySeasonId],
+  )
+
   const teamAdmits = useCallback(
-    (teamId: string, playerId: string): boolean => {
-      const team = myClubTeamsInPhase.find((t) => t.id === teamId)
-      if (team?.playerIds?.includes(playerId)) return true
-      return competitionAdmits(teamId, playerId)
-    },
-    [myClubTeamsInPhase, competitionAdmits],
+    (teamId: string, playerId: string) => eligibility.mayField(teamId, asEligible(playerId)),
+    [eligibility, asEligible],
   )
 
   /** Match-days for a given team (its group). */

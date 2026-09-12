@@ -42,6 +42,7 @@ export default function MatchDetailScreen() {
   const {
     clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
+    playerSeasonCategories, competitions, competitionEligibilities,
     setAvailability, clearAvailability, setGameSelection,
   } = useAppData()
 
@@ -350,6 +351,11 @@ export default function MatchDetailScreen() {
             gameSelections,
             playerSeasonLicences,
             seasonId: seasons.find((s) => s.status === 'active')?.id,
+            // What this team's competition admits (#498).
+            divisions,
+            competitions,
+            competitionEligibilities,
+            playerSeasonCategories,
           }}
           onSave={(ids) => setGameSelection(team.id, game.id, ids)}
           onClose={() => setShowCompose(false)}

@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
-import type { Club, MatchDay, Player, Team } from '@shared/types'
+import type {
+  Club, Competition, CompetitionEligibility, Division, MatchDay, Player,
+  PlayerSeasonCategory, Team,
+} from '@shared/types'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 
 // ---------------------------------------------------------------------------
@@ -50,11 +53,21 @@ const others = [
   player('o10', 'Abdelaziz', 'Arif'),
 ]
 
+/** What the team's competition admits (#498); empty means nothing restricted. */
+type Eligibility = {
+  divisions?: Division[]
+  competitions?: Competition[]
+  competitionEligibilities?: CompetitionEligibility[]
+  playerSeasonCategories?: PlayerSeasonCategory[]
+  seasonId?: string
+}
+
 function renderSheet({
   teamPlayers = roster,
   clubPlayers = others,
   initialSelection = [] as string[],
   onSave = jest.fn(),
+  eligibility = {} as Eligibility,
 } = {}) {
   render(
     <CaptainSelectionSheet
@@ -71,6 +84,7 @@ function renderSheet({
         matchDays: [matchDay],
         games: [],
         gameSelections: [],
+        ...eligibility,
       }}
       onSave={onSave}
       onClose={jest.fn()}
@@ -143,5 +157,69 @@ describe('Feuille de sélection — filtrer par nom (#454)', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Rechercher un joueur'), 'zzz')
 
     expect(screen.getByText(/Aucun joueur ne correspond/)).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// L'éligibilité aux compétitions (#498)
+//
+// The sheet is one of the four ways a club fields somebody, and it now asks the
+// same question as the other three.
+// ---------------------------------------------------------------------------
+describe('Feuille de sélection — l’éligibilité aux compétitions (#498)', () => {
+  const division: Division = {
+    id: 'd1', phaseId: 'ph1', displayName: 'GE 5', rank: 5,
+    playersPerGame: 4, isArchived: false, competitionId: 'comp1',
+  }
+  const competition: Competition = {
+    id: 'comp1', displayName: 'Championnat par équipes',
+    categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+  }
+  const base = { divisions: [division], competitions: [competition] }
+
+  const excluded = (playerId: string): CompetitionEligibility => ({
+    clubId: 'c1', competitionId: 'comp1', playerId, effect: 'excluded',
+  })
+
+  it('n’offre pas un licencié que le club a exclu de la compétition', () => {
+    renderSheet({ eligibility: { ...base, competitionEligibilities: [excluded('o3')] } })
+
+    expect(screen.queryByText('Pascal Afflard')).toBeNull()
+    expect(screen.getByText('Ryan Alves')).toBeTruthy()
+  })
+
+  it('le garde quand la composition ouverte le nomme déjà', () => {
+    // The exclusion came after the line-up, and this sheet is where a captain
+    // would take him back out: hiding the row would strand him on it.
+    renderSheet({
+      initialSelection: ['o3'],
+      eligibility: { ...base, competitionEligibilities: [excluded('o3')] },
+    })
+
+    expect(screen.getByText('Pascal Afflard')).toBeTruthy()
+  })
+
+  it('lit la catégorie sur la saison, pas sur le licencié', () => {
+    // A competition that names its categories admits the licensees who hold
+    // one. Read off the player instead of the season, everyone would be «sans
+    // catégorie» and the section would come back empty.
+    renderSheet({
+      eligibility: {
+        ...base,
+        competitions: [{ ...competition, categories: ['S'] }],
+        playerSeasonCategories: [{ seasonId: 's1', playerId: 'o4', category: 'S' }],
+        seasonId: 's1',
+      },
+    })
+
+    expect(screen.getByText('Ryan Alves')).toBeTruthy()
+    // Nobody else has a category on file for the season.
+    expect(screen.queryByText('Pascal Afflard')).toBeNull()
+  })
+
+  it('ne restreint personne quand la division n’a pas de compétition', () => {
+    renderSheet({ eligibility: { divisions: [{ ...division, competitionId: undefined }] } })
+
+    expect(screen.getByText('Pascal Afflard')).toBeTruthy()
   })
 })

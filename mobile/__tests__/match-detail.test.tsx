@@ -35,6 +35,10 @@ const mockData = {
   // Per-season facts about a licensee (#482, #488) — none in these fixtures.
   seasons: [],
   playerSeasonLicences: [],
+  playerSeasonCategories: [],
+  // Nothing restricted: a division under no competition restricts nobody (#498).
+  competitions: [],
+  competitionEligibilities: [],
   setAvailability: jest.fn(),
   clearAvailability: jest.fn(),
   setGameSelection: jest.fn(),

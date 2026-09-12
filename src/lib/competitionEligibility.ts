@@ -255,3 +255,66 @@ export function competitionOfDivision(
   if (!competition || competition.isArchived) return undefined
   return division.categories ? { ...competition, categories: division.categories } : competition
 }
+
+/** The subset of a team the rule below reads. */
+export interface EligibilityTeam {
+  id: string
+  divisionId?: string
+  playerIds?: string[]
+}
+
+/** Everything the rule needs besides the team and the licensee. */
+export interface TeamEligibilityContext {
+  divisions: Array<{ id: string; competitionId?: string; categories?: PlayerCategory[] }>
+  competitions: Competition[]
+  /** This club's own overrides — never every club's (see `GET /api/data`). */
+  overrides: CompetitionEligibility[]
+}
+
+export interface TeamEligibility {
+  /** The competition's own verdict, whatever a team already holds. */
+  admits(teamId: string, player: EligiblePlayer): boolean
+  /**
+   * Whether a picker may offer this team for this licensee: `admits`, or a
+   * roster that already holds them.
+   *
+   * Eligibility bites on what can be *added*, never on what exists — a
+   * competition edited after the fact must not empty a squad — so someone on
+   * the roster stays fieldable for their own team, and their exclusion shows
+   * as the ⚠ on the club's Compétitions grid rather than as a silent removal.
+   */
+  mayField(teamId: string, player: EligiblePlayer): boolean
+}
+
+/**
+ * The rule for "which of a club's teams may field this licensee?", bound to one
+ * set of teams.
+ *
+ * A factory rather than a bare function because a team reaches its competition
+ * through its division — two lookups — and the callers ask this of every
+ * licensee against every team: the journées matrix on both apps, a roster
+ * picker, a line-up sheet. Resolving each team's competition once is the same
+ * move `assignmentsByPlayer` makes for the grid (#482).
+ */
+export function teamEligibility(
+  teams: EligibilityTeam[],
+  ctx: TeamEligibilityContext,
+): TeamEligibility {
+  const byId = new Map(teams.map((t) => [t.id, t]))
+  const competitionByTeamId = new Map(
+    teams.map((t) => [t.id, competitionOfDivision(t.divisionId, ctx.divisions, ctx.competitions)]),
+  )
+  const admits = (teamId: string, player: EligiblePlayer): boolean => {
+    const competition = competitionByTeamId.get(teamId)
+    // A division filed under no competition — every division until a general
+    // admin says otherwise — restricts nobody. So does a team we know nothing
+    // about: silence is not a refusal.
+    if (!competition) return true
+    return isPlayerEligible(player, competition, ctx.overrides)
+  }
+  return {
+    admits,
+    mayField: (teamId, player) =>
+      byId.get(teamId)?.playerIds?.includes(player.id) === true || admits(teamId, player),
+  }
+}

@@ -23,6 +23,8 @@ import { gameDate } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
 import { LicenceTag } from '@/components/LicenceTag'
 import { unlicensedIds } from '@shared/lib/seasonLicences'
+import { categoryFromIndex, seasonCategoryIndex } from '@shared/lib/seasonCategories'
+import { teamEligibility } from '@shared/lib/competitionEligibility'
 import { Screen, contentWidth } from '@/components/Screen'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
@@ -60,7 +62,8 @@ export function TeamDetail({
   const id = teamId
   const {
     teams, players, clubs, seasons, phases, divisions, matchDays, games, gameSelections,
-    playerPhasePoints, playerSeasonLicences, updateTeam,
+    playerPhasePoints, playerSeasonLicences, playerSeasonCategories,
+    competitions, competitionEligibilities, updateTeam,
   } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
@@ -114,8 +117,11 @@ export function TeamDetail({
   )
 
   // Players available to join this team: active, same club, not on another team
-  // in the same phase. An archived player already on the roster stays listed,
-  // otherwise the captain could not take them off it (#454).
+  // in the same phase, and admitted by the competition its division belongs to
+  // (#482, #498). An archived player already on the roster stays listed,
+  // otherwise the captain could not take them off it (#454) — and so does one
+  // the competition no longer admits, for the same reason: the roster is where
+  // the restriction belongs, but it never empties a squad already picked.
   const eligiblePlayers = useMemo(() => {
     if (!team) return []
     const takenElsewhere = new Set(
@@ -123,13 +129,28 @@ export function TeamDetail({
         .filter((t) => t.phaseId === team.phaseId && t.id !== team.id)
         .flatMap((t) => t.playerIds),
     )
+    const eligibility = teamEligibility([team], {
+      divisions,
+      competitions,
+      overrides: competitionEligibilities.filter((e) => e.clubId === team.clubId),
+    })
+    // The season being played decides: a category is a fact about a season.
+    const seasonId = seasons.find((se) => se.status === 'active')?.id
+    const categoryIndex = seasonCategoryIndex(playerSeasonCategories)
     return sortByName(
       selectablePlayers(
-        players.filter((p) => p.clubId === team.clubId && !takenElsewhere.has(p.id)),
+        players.filter(
+          (p) => p.clubId === team.clubId && !takenElsewhere.has(p.id)
+            && eligibility.mayField(team.id, {
+              id: p.id,
+              category: categoryFromIndex(categoryIndex, seasonId, p.id),
+            }),
+        ),
         team.playerIds,
       ),
     )
-  }, [team, teams, players])
+  }, [team, teams, players, divisions, competitions, competitionEligibilities,
+      seasons, playerSeasonCategories])
 
   // Past a dozen licenciés this is the whole club to scroll through (#454).
   const rosterSearchable = eligiblePlayers.length > PLAYER_SEARCH_THRESHOLD

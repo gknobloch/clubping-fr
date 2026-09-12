@@ -12,10 +12,13 @@ import {
 } from '@shared/lib/playerSearch'
 import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { clubLicences } from '@shared/lib/seasonLicences'
+import { categoryFromIndex, seasonCategoryIndex } from '@shared/lib/seasonCategories'
+import { teamEligibility } from '@shared/lib/competitionEligibility'
 import { LicenceTag } from '@/components/LicenceTag'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
 import type {
   AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection, PlayerSeasonLicence,
+  Division, Competition, CompetitionEligibility, PlayerSeasonCategory,
 } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -29,6 +32,17 @@ export interface SelectionData {
   /** Licences the FFTT listed, and the season to read them for (#488). */
   playerSeasonLicences?: PlayerSeasonLicence[]
   seasonId?: string
+  /**
+   * What the team's competition admits (#498). A team reaches its competition
+   * through its division, and the categories through the season — so all four
+   * travel together. Absent, nothing is restricted, which is what an offline
+   * cache written before #498 hands over.
+   */
+  divisions?: Division[]
+  competitions?: Competition[]
+  /** This club's own amendments: the payload carries every club's. */
+  competitionEligibilities?: CompetitionEligibility[]
+  playerSeasonCategories?: PlayerSeasonCategory[]
 }
 
 // Bottom-sheet line-up picker for captains: this team's roster plus other
@@ -61,6 +75,8 @@ export function CaptainSelectionSheet({
   const {
     matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections,
     playerSeasonLicences = [], seasonId,
+    divisions = [], competitions = [], competitionEligibilities = [],
+    playerSeasonCategories = [],
   } = selectionData
 
   // Not a filter: an unvalidated licence is usually a renewal in flight, so the
@@ -87,13 +103,37 @@ export function CaptainSelectionSheet({
     [teamPlayers, initialSelection],
   )
 
+  // Who the team's competition admits (#498), on top of the brûlage. Ineligible
+  // licensees are left out rather than shown disabled: this sheet is the
+  // line-up itself, not a browse of the club. Someone already picked stays —
+  // `selectablePlayers` keeps the current selection, and `mayField` keeps the
+  // roster, so an exclusion decided afterwards never empties a squad.
+  const eligibility = useMemo(
+    () => teamEligibility([team], {
+      divisions,
+      competitions,
+      overrides: competitionEligibilities.filter((e) => e.clubId === team.clubId),
+    }),
+    [team, divisions, competitions, competitionEligibilities],
+  )
+  const categoryIndex = useMemo(
+    () => seasonCategoryIndex(playerSeasonCategories),
+    [playerSeasonCategories],
+  )
+
   const eligibleOthers = useMemo(() => {
     const teamPlayerIds = new Set(teamPlayers.map((p) => p.id))
     return selectablePlayers(allClubPlayers, initialSelection).filter((p) => {
       if (teamPlayerIds.has(p.id)) return false
+      if (initialSelection.includes(p.id)) return true
+      if (!eligibility.mayField(team.id, {
+        id: p.id,
+        category: categoryFromIndex(categoryIndex, seasonId, p.id),
+      })) return false
       return isPlayerEligibleForTeam(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId)
     })
-  }, [allClubPlayers, teamPlayers, initialSelection, team, clubTeams, matchDays, games, gameSelections, matchDayId])
+  }, [allClubPlayers, teamPlayers, initialSelection, team, clubTeams, matchDays, games,
+      gameSelections, matchDayId, eligibility, categoryIndex, seasonId])
 
   // The filter earns its row of screen and its keyboard only on a long list,
   // so it is the whole sheet that is counted, not one section (#454).
