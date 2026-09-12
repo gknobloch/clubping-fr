@@ -30,8 +30,12 @@ appId: fr.clubping.app
 # The tab bar is the one thing every landing state shares — a session token
 # saved from a previous run, DEV_LOGIN off, and this member's own club/team all
 # lead here, but a wrong email or a rejected code does not.
-- assertVisible:
-    id: "tab-bar"
+# extendedWaitUntil, not assertVisible: only this one takes a timeout, and the
+# wait is the point — the verify round trip trades a code for a session over
+# the network before any tab exists.
+- extendedWaitUntil:
+    visible:
+      id: "tab-bar"
     timeout: 15000
 
 # `<Push>` mounts the instant a session exists and asks the OS for permission

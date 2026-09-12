@@ -185,7 +185,10 @@ function resolveIosSimulator(name) {
 
 function bootIosSimulator(udid) {
   try {
-    sh('xcrun', ['simctl', 'boot', udid])
+    // stderr captured rather than inherited: booting an already-booted
+    // simulator is the normal case under --skip-build, and simctl's error
+    // about it is noise the operator should not have to learn to ignore.
+    sh('xcrun', ['simctl', 'boot', udid], { stdio: ['ignore', 'ignore', 'pipe'] })
   } catch (e) {
     // "Unable to boot device in current state: Booted" — already running is
     // success, not a failure worth stopping for.
@@ -307,7 +310,16 @@ function runFlow(target, { email, code, deviceArg }) {
   // chat log — a one-line convenience that leaked a production credential.
   const shown = args.map((a) => (a.startsWith('CODE=') ? 'CODE=***' : a))
   console.log(`→ maestro ${shown.join(' ')}  (cwd: ${outDir})`)
-  sh(maestroBin(), args, { cwd: outDir, stdio: 'inherit' })
+  try {
+    sh(maestroBin(), args, { cwd: outDir, stdio: 'inherit' })
+  } catch {
+    // Node puts the whole failed command line into the Error it throws, code
+    // and all — and a failure is exactly when that output gets pasted into a
+    // terminal, an issue, or a chat. Masking the log line was not enough:
+    // this rethrows without ever touching the original message. Maestro has
+    // already printed what actually went wrong, on stdio: 'inherit'.
+    throw new Error(`maestro a échoué sur la cible ${target.id} — voir sa sortie ci-dessus.`)
+  }
 
   return readdirSync(outDir)
     .filter((f) => f.endsWith('.png'))
