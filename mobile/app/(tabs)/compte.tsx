@@ -1,6 +1,6 @@
 import {
   ScrollView, View, Text, StyleSheet,
-  TouchableOpacity, Linking, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
+  TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
   ActivityIndicator, Switch,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -16,6 +16,7 @@ import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/
 import type { Player } from '@shared/types'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { setNotificationsEnabled } from '@/utils/push'
+import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { fonts } from '@/constants/typography'
 
 type EditableFields = Required<Pick<Player, 'phone' | 'birthDate' | 'birthPlace'>> & { email: string }
@@ -177,7 +178,7 @@ export default function MonCompteScreen() {
                 <Text style={styles.editLink}>Modifier</Text>
               </TouchableOpacity>
             </View>
-            {player.email ? <InfoRow label="Email" value={player.email} /> : null}
+            {player.email ? <EmailRow email={player.email} /> : null}
             {player.phone ? <PhoneRow phone={player.phone} /> : null}
             {player.birthDate ? <InfoRow label="Date de naissance" value={player.birthDate} /> : null}
             {player.birthPlace ? <InfoRow label="Lieu de naissance" value={player.birthPlace} /> : null}
@@ -301,19 +302,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function PhoneRow({ phone }: { phone: string }) {
-  const digits = phone.replace(/[^\d+]/g, '')
-  const waUrl = `https://wa.me/${digits.startsWith('+') ? digits.slice(1) : digits}`
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>Téléphone</Text>
-      <TouchableOpacity onPress={() => Linking.openURL(waUrl)}>
-        <Text style={[styles.infoValue, styles.phoneLink]}>{phone}</Text>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
 function Field({
   label, value, onChangeText, keyboardType, autoCapitalize, placeholder,
 }: {
@@ -379,7 +367,6 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   infoLabel: { fontSize: 14, color: colors.textSecondary },
   infoValue: { fontSize: 14, color: colors.textPrimary, fontFamily: fonts.medium, flexShrink: 1, textAlign: 'right' },
-  phoneLink: { color: '#25D366' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   switchLabels: { flex: 1, gap: 2 },
   switchTitle: { fontSize: 15, color: colors.textPrimary, fontFamily: fonts.medium },

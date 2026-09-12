@@ -91,6 +91,13 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
+- **A licensee's coordinates are `EmailRow` / `PhoneRow`** in the app
+  (`mobile/components/ContactRows.tsx`, #503) — the fiche joueur and Mon compte
+  had drifted into two identical copies of them, wa.me URL included. Copying is
+  an explicit button, never a long-press: the gesture has to be findable on
+  someone else's phone. Tapping the number still opens WhatsApp — the club
+  already has that one in its fingers, and a second affordance must not move the
+  first.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
