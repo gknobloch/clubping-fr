@@ -206,9 +206,14 @@ below.
 ## Captures d'écran (#520)
 
 ```
-npm run store:screenshots            # les trois cibles
-npm run store:screenshots -- iphone  # une seule, pour itérer
+npm run store:screenshots                          # les trois cibles
+npm run store:screenshots -- iphone                # une seule, pour itérer
+npm run store:screenshots -- iphone --skip-build   # rejouer le flow seul
 ```
+
+`--skip-build` réutilise l'app déjà installée. Sans lui, chaque essai repasse
+par `expo prebuild --clean`, donc par une compilation complète d'une vingtaine
+de minutes — ce qui est absurde quand c'est un sélecteur Maestro qui a lâché.
 
 Manual, and deliberately not part of a release: re-run it when a captured screen has
 visibly changed, not every version. It signs in as the **review account** — the same

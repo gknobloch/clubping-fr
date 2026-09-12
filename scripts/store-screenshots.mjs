@@ -136,6 +136,23 @@ export function missingRequiredScreens(presentBasenames) {
 // the same fix for the other command that shells out to CocoaPods.
 const UTF8_ENV = { ...process.env, LANG: 'fr_FR.UTF-8', LC_ALL: 'fr_FR.UTF-8' }
 
+/**
+ * Where maestro actually is.
+ *
+ * Its installer drops the binary in ~/.maestro/bin and appends that to
+ * .zshrc / .bash_profile — neither of which a non-interactive child process
+ * reads. So a shell where `maestro` works by hand still spawns ENOENT from
+ * here, which is exactly how this failed the first time it ran.
+ */
+function maestroBin() {
+  const candidates = [
+    process.env.MAESTRO_BIN,
+    path.join(process.env.HOME ?? '', '.maestro/bin/maestro'),
+  ].filter(Boolean)
+  for (const c of candidates) if (existsSync(c)) return c
+  return 'maestro' // already on PATH, or about to fail with a clear message
+}
+
 function sh(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf8', env: UTF8_ENV, ...opts })
 }
@@ -229,7 +246,10 @@ function envWith(extra) {
 function installAndLaunchIos(udid) {
   bootIosSimulator(udid)
   console.log(`→ expo run:ios --configuration Release --device ${udid}`)
-  sh('npx', ['expo', 'run:ios', '--configuration', 'Release', '--device', udid], {
+  // --no-bundler: a Release build carries its own bundle, and leaving Metro
+  // running invites the app to be pointed at it instead — which would decide
+  // what the screenshots show from outside the binary being shipped.
+  sh('npx', ['expo', 'run:ios', '--configuration', 'Release', '--no-bundler', '--device', udid], {
     cwd: MOBILE, stdio: 'inherit',
   })
 }
@@ -266,7 +286,9 @@ function installAndLaunchAndroid(avdNamePrefix) {
     if (!serial || !androidFullyBooted(serial)) throw new Error("L'émulateur n'a pas démarré à temps.")
   }
   console.log('→ expo run:android --variant release')
-  sh('npx', ['expo', 'run:android', '--variant', 'release'], { cwd: MOBILE, stdio: 'inherit', env })
+  sh('npx', ['expo', 'run:android', '--variant', 'release', '--no-bundler'], {
+    cwd: MOBILE, stdio: 'inherit', env,
+  })
 }
 
 /**
@@ -280,8 +302,12 @@ function runFlow(target, { email, code, deviceArg }) {
 
   const args = ['test', FLOW, '-e', `EMAIL=${email}`, '-e', `CODE=${code}`]
   if (deviceArg) args.splice(1, 0, '--device', deviceArg)
-  console.log(`→ maestro ${args.join(' ')}  (cwd: ${outDir})`)
-  sh('maestro', args, { cwd: outDir, stdio: 'inherit' })
+  // Logged with the credential taken back out. The first run of this script
+  // printed the review account's code to a terminal, and from there into a
+  // chat log — a one-line convenience that leaked a production credential.
+  const shown = args.map((a) => (a.startsWith('CODE=') ? 'CODE=***' : a))
+  console.log(`→ maestro ${shown.join(' ')}  (cwd: ${outDir})`)
+  sh(maestroBin(), args, { cwd: outDir, stdio: 'inherit' })
 
   return readdirSync(outDir)
     .filter((f) => f.endsWith('.png'))
@@ -320,9 +346,15 @@ function main(argv) {
     )
     process.exit(1)
   }
+  // Rebuilding is the expensive half: `expo prebuild --clean` throws away
+  // ios/ and android/, so a retry is a fresh twenty-minute compile even when
+  // the only thing that failed was a Maestro selector. --skip-build reuses
+  // whatever is already installed on the device, which is what iterating on a
+  // flow actually needs.
+  const skipBuild = argv.includes('--skip-build')
   // A named target ("npm run store:screenshots -- iphone") for iterating on
   // one flow without rebuilding the other two.
-  const only = argv[0]
+  const only = argv.find((a) => !a.startsWith('--'))
   const targets = only ? TARGETS.filter((t) => t.id === only) : TARGETS
   if (only && !targets.length) {
     console.error(`Cible inconnue « ${only} » — attendu : ${TARGETS.map((t) => t.id).join(', ')}`)
@@ -332,17 +364,18 @@ function main(argv) {
   const iosTargets = targets.filter((t) => t.platform === 'ios')
   const androidTargets = targets.filter((t) => t.platform === 'android')
 
-  if (iosTargets.length) buildFor('ios')
-  if (androidTargets.length) buildFor('android')
+  if (!skipBuild && iosTargets.length) buildFor('ios')
+  if (!skipBuild && androidTargets.length) buildFor('android')
 
   for (const target of iosTargets) {
     const udid = resolveIosSimulator(target.simulatorName)
-    installAndLaunchIos(udid)
+    if (skipBuild) bootIosSimulator(udid)
+    else installAndLaunchIos(udid)
     const captured = runFlow(target, { email, code, deviceArg: udid })
     validateAndInstall(target, captured)
   }
   for (const target of androidTargets) {
-    installAndLaunchAndroid(target.avdNamePrefix)
+    if (!skipBuild) installAndLaunchAndroid(target.avdNamePrefix)
     const serial = runningAndroidSerial()
     const captured = runFlow(target, { email, code, deviceArg: serial })
     validateAndInstall(target, captured)
