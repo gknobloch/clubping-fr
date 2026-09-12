@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { act, renderHook, waitFor } from '@testing-library/react-native'
 import type { DevUser } from '@shared/types'
@@ -63,6 +64,7 @@ beforeEach(async () => {
   // SecureStore is in-memory for the whole file (jest.setup.js): without this
   // a session written by one test is restored by the next one's first mount.
   await SecureStore.deleteItemAsync('pp-club-session')
+  await AsyncStorage.removeItem('pp-club-user')
   mockFetch.mockReset()
   global.fetch = mockFetch as unknown as typeof fetch
 })
@@ -175,5 +177,143 @@ describe('AuthProvider — devLoginAs', () => {
     await waitFor(() => expect(second.result.current.isAuthenticated).toBe(true))
     expect(second.result.current.user).toEqual(captain)
     expect(getSessionToken()).toBe('dev-session')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Restoring a session at cold start (#513)
+//
+// The restore path used to catch everything and treat it as a revocation. A
+// gymnasium basement has no signal, so opening the app there deleted the
+// session token — signing the member out of an app they could no longer sign
+// into, since a new code arrives by e-mail — and, through DataContext's
+// logout handler, took the offline cache down with it: the one thing that boot
+// existed to read.
+//
+// The discriminator is the shape of the failure, so each case below fails the
+// way the real thing does: a bare TypeError for no network, an ApiError with a
+// status for a refusal.
+// ---------------------------------------------------------------------------
+const NETWORK_DOWN = new TypeError('Network request failed')
+
+/** A stored session, plus the member it belongs to. */
+async function signedInPreviously(user: DevUser = captain) {
+  await SecureStore.setItemAsync('pp-club-session', 'stored-token')
+  await AsyncStorage.setItem('pp-club-user', JSON.stringify(user))
+}
+
+describe('cold start with no network (#513)', () => {
+  it('keeps the member signed in, from what was stored', async () => {
+    await signedInPreviously()
+    mockFetch.mockRejectedValue(NETWORK_DOWN)
+
+    const { result } = render()
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.isAuthenticated).toBe(true)
+    expect(result.current.user).toEqual(captain)
+  })
+
+  it('keeps the session token, which is what makes the next launch work', async () => {
+    await signedInPreviously()
+    mockFetch.mockRejectedValue(NETWORK_DOWN)
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(await SecureStore.getItemAsync('pp-club-session')).toBe('stored-token')
+  })
+
+  // The token holder going null is what DataContext reads as a logout, and a
+  // logout is what empties the cache. It must not move here.
+  it('never signals a logout, so the offline cache survives', async () => {
+    await signedInPreviously()
+    mockFetch.mockRejectedValue(NETWORK_DOWN)
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(getSessionToken()).toBe('stored-token')
+  })
+
+  // An install from before this change, or storage that refused to answer.
+  // Nothing can be shown, but nothing is destroyed either.
+  it('leaves the session alone when it has no stored member to fall back on', async () => {
+    await SecureStore.setItemAsync('pp-club-session', 'stored-token')
+    mockFetch.mockRejectedValue(NETWORK_DOWN)
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.isAuthenticated).toBe(false)
+    expect(await SecureStore.getItemAsync('pp-club-session')).toBe('stored-token')
+    expect(getSessionToken()).toBe('stored-token')
+  })
+})
+
+describe('cold start against a refusal (#513)', () => {
+  // The other half: a session the server has actually rejected still goes.
+  // Keeping it would leave a member staring at stale data with no way back.
+  it.each([401, 403])('drops a session the server refuses with %i', async (status) => {
+    await signedInPreviously()
+    mockFetch.mockResolvedValue(errorResponse(status, 'unauthorized'))
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.isAuthenticated).toBe(false)
+    expect(await SecureStore.getItemAsync('pp-club-session')).toBeNull()
+    expect(await AsyncStorage.getItem('pp-club-user')).toBeNull()
+    // And this is a real logout, so DataContext is told to empty the cache.
+    expect(getSessionToken()).toBeNull()
+  })
+})
+
+describe('the stored member (#513)', () => {
+  it('is written on sign-in, so the first offline launch has something to read', async () => {
+    mockFetch.mockResolvedValue(okResponse({ token: 'new-session', user: captain }))
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(async () => {
+      await result.current.verifyCode('bo@example.org', '123456')
+    })
+
+    expect(JSON.parse((await AsyncStorage.getItem('pp-club-user'))!)).toEqual(captain)
+  })
+
+  it('is refreshed by a successful restore', async () => {
+    await signedInPreviously(admin)
+    mockFetch.mockResolvedValue(okResponse({ user: captain }))
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true))
+
+    expect(JSON.parse((await AsyncStorage.getItem('pp-club-user'))!)).toEqual(captain)
+  })
+
+  it('is forgotten on sign-out', async () => {
+    await signedInPreviously()
+    mockFetch.mockResolvedValue(okResponse({ user: captain }))
+    const { result } = render()
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true))
+
+    await act(async () => {
+      await result.current.logout()
+    })
+
+    expect(await AsyncStorage.getItem('pp-club-user')).toBeNull()
+  })
+
+  // Garbage in storage must not take the boot down with it.
+  it('is ignored when it cannot be read', async () => {
+    await SecureStore.setItemAsync('pp-club-session', 'stored-token')
+    await AsyncStorage.setItem('pp-club-user', 'not json')
+    mockFetch.mockRejectedValue(NETWORK_DOWN)
+
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.isAuthenticated).toBe(false)
   })
 })

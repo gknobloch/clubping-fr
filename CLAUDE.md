@@ -77,6 +77,26 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Cache lookups pass `ignoreVary: true`. Vite marks module scripts
   `crossorigin`, so they carry an `Origin` the precached copy lacks, and any
   server answering `Vary: Origin` otherwise makes every asset miss.
+- **Une requête qui n'aboutit pas n'est pas un refus** (#387 sur le web, #513
+  sur mobile). `fetch` rejette avec un `TypeError` nu quand il n'y a pas de
+  réseau ; une session expirée ou révoquée revient avec un *statut*. C'est le
+  seul discriminant, et `isServerRejection` est la question posée des deux
+  côtés. Les confondre a coûté exactement ce que le cache existait pour
+  éviter : un démarrage en sous-sol supprimait le jeton, donc déconnectait
+  d'une app où l'on ne peut plus entrer (le code arrive par email), et ce
+  `setSessionToken(null)` atteignait le gestionnaire de déconnexion de
+  `DataContext`, qui vidait le cache.
+- **L'identité du membre est gardée localement** (`pp-club-user`), séparément de
+  la donnée : un démarrage sans réseau doit savoir *qui* est connecté sans le
+  demander à `/auth/me`. Identité seulement — tout ce qui s'affiche vient du
+  cache de `DataContext`.
+- Quand rien n'est connu — un install antérieur au changement, un stockage qui
+  refuse — on montre l'écran de connexion mais **on ne détruit rien** : ni le
+  jeton dans SecureStore, ni le holder, dont le passage à `null` serait lu comme
+  une déconnexion. Le prochain lancement avec du réseau tranche.
+- Le cache n'est vidé que sur une déconnexion **réelle** : le membre s'est
+  déconnecté, ou le serveur a refusé sa session. Les clubs partagent des
+  téléphones, donc ce vidage-là doit rester.
 
 ### Mobile UI
 - **Page-header actions use `HeaderAction`** (`src/components/Button.tsx`) — icon
