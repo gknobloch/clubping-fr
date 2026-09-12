@@ -621,9 +621,26 @@ curl -X POST https://clubping.fr/api/notifications/dispatch \
   -H 'Content-Type: application/json' -d '{"today":"2026-02-01"}'
 ```
 
-It answers with what it did — `{"games":7,"due":44,"sent":12,"prunedTokens":0}` — and
-it is idempotent, so running it twice sends nothing the second time. `sent` well below
-`due` is normal and not a fault: it is everyone who has not installed the app.
+It answers with what it did, and the two halves mean different things:
+
+```json
+{"games":7,"due":44,"sent":12,"prunedTokens":0,
+ "receipts":{"checked":12,"delivered":11,"failed":1,"requeued":1,"pending":0,"expired":0}}
+```
+
+`sent` is **accepted by Expo**, which is not delivered. `receipts` is the verdict on
+what the *previous* run sent, because a worker cannot wait for it — Expo answers with a
+ticket immediately and a receipt minutes later, and APNs/FCM refusals only ever appear
+in the receipt.
+
+So `failed` is the number that matters, and each one is logged with the platform's own
+words. `requeued` is how many reminders were put back because they never arrived; the
+next run sends them again. `sent` well below `due` is normal and not a fault — it is
+everyone who has not installed the app.
+
+A whole run of `failed` equal to `sent` means a credentials problem, and the log line
+names it: a service account for the wrong Firebase project, an FCM API left disabled,
+an expired APNs key.
 
 **Expo Go cannot receive remote push** on Android since SDK 53, and the token call
 throws on a simulator. Testing this needs a development build on a real device.

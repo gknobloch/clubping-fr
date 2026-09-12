@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Env } from './auth'
-import { isExpoPushToken, sendPushes, type OutgoingPush } from './push'
+import { fetchReceipts, isExpoPushToken, sendPushes, type OutgoingPush, type PushTicket } from './push'
 import { jsonParseIds } from './rows'
 import type { AvailabilityStatus } from '../../src/types'
 import {
@@ -111,6 +111,21 @@ interface DispatchReport {
   due: number
   sent: number
   prunedTokens: number
+  /** What the PREVIOUS run turned out to have actually delivered. */
+  receipts: ReceiptReport
+}
+
+interface ReceiptReport {
+  /** Handles Expo gave a verdict on. */
+  checked: number
+  delivered: number
+  /** Refused by the platform — each one logged with the reason it gave. */
+  failed: number
+  /** Reminders put back on the table because they never arrived. */
+  requeued: number
+  /** Still waiting on Expo, or abandoned after a day of waiting. */
+  pending: number
+  expired: number
 }
 
 /**
@@ -161,6 +176,11 @@ export async function dispatchAvailabilityRequests(
   const db = env.DB
   const until = addDays(today, AVAILABILITY_WINDOW_DAYS)
 
+  // Before deciding anything new, find out what the last run actually did.
+  // This is deliberately first: a reminder it turns out never arrived is put
+  // back on the table in time for the sweep below to send it again today.
+  const receipts = await collectReceipts(env)
+
   // One query for the whole window: every fixture whose date falls in it, once
   // per side, with both team names resolved. A team's own club may field both
   // sides of a fixture, and both squads are then asked — they are two squads.
@@ -187,7 +207,7 @@ export async function dispatchAvailabilityRequests(
     date: r.date,
     playerIds: jsonParseIds(r.player_ids),
   }))
-  if (!squads.length) return { games: 0, due: 0, sent: 0, prunedTokens: 0 }
+  if (!squads.length) return { games: 0, due: 0, sent: 0, prunedTokens: 0, receipts }
 
   // What each (member, match) pair should say, indexed once rather than
   // searched per recipient — a club with eight teams reaches this table often.
@@ -209,7 +229,7 @@ export async function dispatchAvailabilityRequests(
   const gameIds = [...new Set(squads.map((s) => s.gameId))]
   const alreadySent = await sentLedger(db, AVAILABILITY_REQUEST, gameIds)
   const due = availabilityRequestsDue(squads, today, alreadySent)
-  if (!due.length) return { games: gameIds.length, due: 0, sent: 0, prunedTokens: 0 }
+  if (!due.length) return { games: gameIds.length, due: 0, sent: 0, prunedTokens: 0, receipts }
 
   const tokens = await tokensByUser(db)
   const messages: OutgoingPush[] = []
@@ -223,18 +243,23 @@ export async function dispatchAvailabilityRequests(
     const labels = teamId ? labelsByGameTeam.get(`${d.gameId}:${teamId}`) : undefined
     if (!labels) continue
     const message = availabilityRequestPush(labels, today)
-    for (const to of deviceTokens) messages.push({ to, ...message })
+    const ref = { kind: AVAILABILITY_REQUEST, userId: d.userId, gameId: d.gameId }
+    for (const to of deviceTokens) messages.push({ to, ...message, ref })
     notified.push(d)
   }
 
   const delivery = await sendPushes(env, messages)
   await recordSent(db, AVAILABILITY_REQUEST, notified)
   await pruneTokens(db, delivery.invalidTokens)
+  // "sent" still means accepted by Expo, which is not delivered — tomorrow's
+  // run is what turns these handles into a verdict.
+  await recordTickets(db, delivery.tickets)
   return {
     games: gameIds.length,
     due: due.length,
     sent: notified.length,
     prunedTokens: delivery.invalidTokens.length,
+    receipts,
   }
 }
 
@@ -370,6 +395,9 @@ async function pushTo(env: Env['Bindings'], userIds: string[], message: PushMess
   if (!messages.length) return
   const delivery = await sendPushes(env, messages)
   await pruneTokens(env.DB, delivery.invalidTokens)
+  // No ref: a captain alert keeps no ledger, so a failed receipt has nothing
+  // to put back — but it is still worth knowing it failed.
+  await recordTickets(env.DB, delivery.tickets)
 }
 
 // ---------------------------------------------------------------------------
@@ -452,6 +480,129 @@ async function recordSent(
         ).bind(kind, n.userId, n.gameId, now),
       ),
     )
+  }
+}
+
+/**
+ * How long a handle is worth asking about. Expo keeps receipts roughly a day;
+ * past that the answer will never come, and the row is dead weight.
+ */
+const RECEIPT_TTL_MS = 36 * 60 * 60 * 1000
+
+/** File the handles a send came back with, for the next run to follow up on. */
+async function recordTickets(db: D1Database, tickets: PushTicket[]) {
+  if (!tickets.length) return
+  const now = Date.now()
+  for (const chunk of chunked(tickets, 25)) {
+    await db.batch(
+      chunk.map((t) =>
+        db.prepare(
+          `INSERT INTO push_receipts (ticket_id, token, kind, user_id, game_id, queued_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(ticket_id) DO NOTHING`,
+        ).bind(t.id, t.to, t.ref?.kind ?? null, t.ref?.userId ?? null, t.ref?.gameId ?? null, now),
+      ),
+    )
+  }
+}
+
+interface PendingRow {
+  ticket_id: string
+  token: string
+  kind: string | null
+  user_id: string | null
+  game_id: string | null
+  queued_at: number
+}
+
+/**
+ * Read the verdicts on everything the previous runs accepted.
+ *
+ * The three outcomes are acted on differently, and the difference is the whole
+ * point:
+ *
+ * - **ok** — the row has served its purpose and goes.
+ * - **error** — logged with the platform's own words, because that sentence is
+ *   the only thing that ever names the cause. If the delivery was backing a
+ *   ledger row, that row is deleted: the member was never told, so the
+ *   reminder is owed again, and today's sweep — which runs after this — will
+ *   send it. A token the platform says is gone is deleted too, which is what
+ *   stops a permanently dead device from being retried for seven days.
+ * - **pending** — Expo has nothing yet. Left alone, and abandoned once it is
+ *   older than the window Expo keeps receipts in.
+ */
+async function collectReceipts(env: Env['Bindings']): Promise<ReceiptReport> {
+  const db = env.DB
+  const report: ReceiptReport = {
+    checked: 0, delivered: 0, failed: 0, requeued: 0, pending: 0, expired: 0,
+  }
+  const rows = await db.prepare(
+    'SELECT ticket_id, token, kind, user_id, game_id, queued_at FROM push_receipts ORDER BY queued_at LIMIT 1000',
+  ).all<PendingRow>()
+  if (!rows.results.length) return report
+
+  const verdicts = await fetchReceipts(env, rows.results.map((r) => r.ticket_id))
+  const settled: string[] = []
+  const deadTokens = new Set<string>()
+  const requeue: Array<{ kind: string; userId: string; gameId: string }> = []
+  const cutoff = Date.now() - RECEIPT_TTL_MS
+
+  for (const row of rows.results) {
+    const verdict = verdicts.get(row.ticket_id) ?? { status: 'pending' as const }
+    if (verdict.status === 'pending') {
+      if (row.queued_at < cutoff) {
+        report.expired += 1
+        settled.push(row.ticket_id)
+      } else {
+        report.pending += 1
+      }
+      continue
+    }
+    report.checked += 1
+    settled.push(row.ticket_id)
+    if (verdict.status === 'ok') {
+      report.delivered += 1
+      continue
+    }
+    report.failed += 1
+    console.error(
+      `[push] non livré (${verdict.error ?? 'sans code'}) : ${verdict.platform ?? verdict.message ?? 'sans détail'}`,
+    )
+    if (verdict.error === 'DeviceNotRegistered') deadTokens.add(row.token)
+    if (row.kind && row.user_id && row.game_id) {
+      requeue.push({ kind: row.kind, userId: row.user_id, gameId: row.game_id })
+    }
+  }
+
+  await forgetLedger(db, requeue)
+  report.requeued = requeue.length
+  await pruneTokens(db, [...deadTokens])
+  await settleReceipts(db, settled)
+  return report
+}
+
+/** Take back the "already told them" for a reminder that never arrived. */
+async function forgetLedger(
+  db: D1Database,
+  entries: Array<{ kind: string; userId: string; gameId: string }>,
+) {
+  if (!entries.length) return
+  for (const chunk of chunked(entries, 25)) {
+    await db.batch(
+      chunk.map((e) =>
+        db.prepare(
+          'DELETE FROM notifications_sent WHERE kind = ? AND user_id = ? AND game_id = ?',
+        ).bind(e.kind, e.userId, e.gameId),
+      ),
+    )
+  }
+}
+
+async function settleReceipts(db: D1Database, ticketIds: string[]) {
+  if (!ticketIds.length) return
+  for (const chunk of chunked(ticketIds)) {
+    const holes = chunk.map(() => '?').join(',')
+    await db.prepare(`DELETE FROM push_receipts WHERE ticket_id IN (${holes})`).bind(...chunk).run()
   }
 }
 
