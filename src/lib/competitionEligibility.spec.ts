@@ -45,7 +45,9 @@ const override = (
 const cadet = { id: 'p-cadet', category: 'C1' }
 const senior = { id: 'p-senior', category: 'S' }
 const veteran = { id: 'p-veteran', category: 'V55' }
-const unknown = { id: 'p-unknown' }
+// Resolved, and found none — not the same as never resolved, which the type
+// no longer lets a caller express.
+const unknown = { id: 'p-unknown', category: undefined }
 
 describe('playerEligibility — the default mapping (#482)', () => {
   it('admits everyone to a competition that lists no category', () => {

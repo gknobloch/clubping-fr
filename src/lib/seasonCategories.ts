@@ -18,7 +18,7 @@ import type { PlayerSeasonCategory } from '../types'
  * to reason about "this player, this season" resolves it first and passes the
  * pair around. The eligibility rules read exactly this shape.
  */
-export type CategorizedPlayer<T> = T & { category?: string }
+export type CategorizedPlayer<T> = T & { category: string | undefined }
 
 /** The category a player held in a season, or undefined when none is recorded. */
 export function categoryFor(
@@ -71,8 +71,8 @@ export function withSeasonCategory<T extends { id: string }>(
   seasonId: string | undefined,
 ): CategorizedPlayer<T>[] {
   const index = seasonCategoryIndex(rows)
-  return players.map((p) => {
-    const category = categoryFromIndex(index, seasonId, p.id)
-    return category ? { ...p, category } : { ...p }
-  })
+  // The key is always set, undefined included: the eligibility rule asks for it
+  // by name, so that a caller who never resolved a category cannot pass for one
+  // who resolved it and found none.
+  return players.map((p) => ({ ...p, category: categoryFromIndex(index, seasonId, p.id) }))
 }

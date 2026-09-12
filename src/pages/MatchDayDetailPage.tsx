@@ -11,6 +11,7 @@ import { pointsFor } from '@/lib/phasePoints'
 import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
+import { withSeasonCategory } from '@/lib/seasonCategories'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
@@ -38,7 +39,7 @@ export function MatchDayDetailPage() {
   const {
     teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
     competitions, competitionEligibilities, setGameSelection,
-    playerSeasonLicences, seasons,
+    playerSeasonCategories, playerSeasonLicences, seasons,
   } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
@@ -100,13 +101,20 @@ export function MatchDayDetailPage() {
   // round (brûlage), and admitted by the competition its division belongs to
   // (#482). Ineligible ones are left out here rather than shown disabled: this
   // sheet is the line-up itself, not a browse of the club.
+  // The category comes off the season, not off the licensee (#482), so it has
+  // to be resolved before the rule can read it — otherwise everyone here is
+  // "sans catégorie" and a competition that names its categories admits nobody.
   const eligibleOthers = eligiblePlayers(
-    players.filter(
-      (p) =>
-        p.clubId === team.clubId &&
-        p.status === 'active' &&
-        !rosterIds.has(p.id) &&
-        isEligibleForTeam(p.id, team.id, matchDay.id),
+    withSeasonCategory(
+      players.filter(
+        (p) =>
+          p.clubId === team.clubId &&
+          p.status === 'active' &&
+          !rosterIds.has(p.id) &&
+          isEligibleForTeam(p.id, team.id, matchDay.id),
+      ),
+      playerSeasonCategories,
+      activeSeasonId(seasons),
     ),
     competitionOfDivision(team.divisionId, divisions, competitions),
     competitionEligibilities.filter((e) => e.clubId === team.clubId),

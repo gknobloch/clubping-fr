@@ -52,8 +52,12 @@ describe('withSeasonCategory', () => {
     ])
   })
 
-  it('attaches nothing at all when no season is in view', () => {
-    expect(withSeasonCategory(players, rows, undefined).every((p) => !('category' in p))).toBe(true)
+  it('says "none on file" rather than leaving the question unanswered', () => {
+    // The key is always set, undefined included: the eligibility rule asks for
+    // it by name, so that a caller who never resolved a category cannot pass
+    // for one who resolved it and found none (#482).
+    const out = withSeasonCategory(players, rows, undefined)
+    expect(out.every((p) => 'category' in p && p.category === undefined)).toBe(true)
   })
 
   it('copies rather than mutating what it was handed', () => {

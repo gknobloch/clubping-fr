@@ -42,11 +42,21 @@ export const ELIGIBILITY_REASON_LABELS: Record<EligibilityReason, string> = {
   no_category: 'Sans catégorie',
 }
 
-/** The subset of a member this module reads. */
+/**
+ * The subset of a member this module reads.
+ *
+ * `category` is required, and may be undefined — deliberately not optional. A
+ * licensee carries no category of their own since #482: it belongs to a season,
+ * and has to be resolved (`src/lib/seasonCategories.ts`) before the rule can
+ * read it. Made optional, a raw `User` satisfied this shape and every caller
+ * that forgot silently read "sans catégorie", so a competition naming its
+ * categories admitted nobody at all. Spelling it out makes the omission a
+ * compile error instead.
+ */
 export interface EligiblePlayer {
   id: string
-  /** Raw FFTT category code; normalized here. */
-  category?: string
+  /** Raw FFTT category code; normalized here. Undefined = none on file. */
+  category: string | undefined
 }
 
 const overrideFor = (
