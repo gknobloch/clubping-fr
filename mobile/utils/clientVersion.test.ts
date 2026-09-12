@@ -1,5 +1,5 @@
 import { clientVersionFloor, resetClientVersionFloor } from './clientVersion'
-import { dataHeaders, setSessionToken } from './api'
+import { dataHeaders, setSession } from './api'
 
 // The transport half of #508: what the client says about itself, and what it
 // does with an answer it does not get. The rule that turns a floor into a
@@ -23,7 +23,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  setSessionToken(null)
+  setSession(null, null)
 })
 
 describe('the client names itself (#508)', () => {
@@ -31,7 +31,7 @@ describe('the client names itself (#508)', () => {
   // before anything reads it.
   it('sends its version on data requests, signed in or not', () => {
     expect(dataHeaders()['X-Client-Version']).toBe('1.3.0')
-    setSessionToken('tok')
+    setSession('tok', 'u-member')
     expect(dataHeaders()['X-Client-Version']).toBe('1.3.0')
   })
 
