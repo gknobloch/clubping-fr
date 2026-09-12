@@ -519,18 +519,45 @@ nothing has to be added to `plugins/`. Check it landed before shipping:
 npx expo config --type introspect
 ```
 
-## Android — an FCM v1 service account
+## Android — two Firebase files, and they are not interchangeable
 
-Firebase console → the project for `fr.clubping.app` → *Project settings* → *Service
-accounts* → *Generate new private key*, then:
+Firebase hands out two things with similar names, and confusing them is the default
+outcome:
+
+| File | What it is | Where it goes |
+| --- | --- | --- |
+| `google-services.json` | Client configuration. Ships inside every APK and anyone can extract it — **not a secret**. Without it the app has no FCM sender configuration and never obtains a token. | Committed at `mobile/google-services.json`, named by `android.googleServicesFile` in `app.json` |
+| the service account key | A private key that can push to every installed copy of the app. | Uploaded to EAS, **never** committed (`mobile/.gitignore` covers it) |
+
+Both, or neither. With only the key, Expo's servers may send and no device is listening;
+with only the client file, devices register and nothing can reach them.
+
+### The client file
+
+Firebase console → the project → **Ajouter une application → Android**. The package name
+must be exactly `fr.clubping.app`. Reverse-DNS invites precisely one typo —
+`app.clubping.fr` — and FCM routes on this string, so a mismatch registers the app under
+an identity nothing can reach, with no error on either side. `src/test/mobileConfig.spec.ts`
+now fails the build on it, because #497 made that mistake and nothing noticed.
+
+Skip every "Ajouter le SDK Firebase" step the console then offers. Expo's config plugin
+adds the `com.google.gms:google-services` classpath and applies the plugin at prebuild;
+`android/` is generated and gitignored, so a hand edit there is erased by the next
+prebuild anyway.
+
+Download the file to `mobile/google-services.json` and commit it.
+
+### The service account key
+
+Firebase console → *Project settings* → *Service accounts* → *Generate new private key*,
+saved as `mobile/google-fcm-service-account.json`, then:
 
 ```
 eas credentials --platform android
 ```
 
 *Google Service Account* → *Manage your Google Service Account Key for Push
-Notifications (FCM V1)* → upload the JSON. Do **not** commit it — `*.json` keys are
-covered by `.gitignore`, and this one grants send rights on the Firebase project.
+Notifications (FCM V1)* → upload the JSON.
 
 ## The two server-side secrets
 

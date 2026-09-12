@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "314350523248",
+    "project_id": "clubping-fr",
+    "storage_bucket": "clubping-fr.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:314350523248:android:f321ba2a8bcb271f1a35b5",
+        "android_client_info": {
+          "package_name": "fr.clubping.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCUXLgt-TEbrj-O22k-LkC1oAnZ3BhlG88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
