@@ -266,6 +266,11 @@ a `iphone_` / `ipad_` prefix. Without it the second target would overwrite the f
 The script resolves each simulator **by name at run time**. A UDID belongs to the Mac
 that created it, so a stored one would work on exactly one machine.
 
+**Every selector is a `testID`.** The app exposes almost no text to the accessibility
+tree — dumping the hierarchy on the home screen returns no member name, no fixture, no
+availability buttons and no "Composer l'équipe", only ids. A selector written against a
+visible label will not match, however it is spelled.
+
 **`03-composition` is conditional.** It only exists for a captain with an upcoming match
 (`NextMatchCard`'s `isCaptain`), which is why `demo:refresh` makes the review account
 captain of `demo-team-1` — as a club_admin on no roster it had no next match to show and

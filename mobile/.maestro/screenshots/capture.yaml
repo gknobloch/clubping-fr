@@ -28,7 +28,7 @@ appId: fr.clubping.app
 - tapOn:
     id: "tab-index"
 
-# "Composer l'équipe" only renders for a captain with an upcoming match
+# `compose-team` only renders for a captain with an upcoming match
 # (mobile/components/NextMatchCard.tsx — `isCaptain`, and only inside the
 # window a match is shown at all). Which club member the review account
 # happens to be is a fact about the production database, not about this flow,
@@ -44,9 +44,11 @@ appId: fr.clubping.app
 # bar stays unreachable until the backdrop dismisses it.
 - runFlow:
     when:
-      visible: "Composer l'équipe"
+      visible:
+        id: "compose-team"
     commands:
-      - tapOn: "Composer l'équipe"
+      - tapOn:
+          id: "compose-team"
       - takeScreenshot: 03-composition
       - tapOn:
           id: "composition-sheet-backdrop"

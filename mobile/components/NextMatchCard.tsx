@@ -232,7 +232,12 @@ export function NextMatchCard({
   ) : null
 
   const compose = isCaptain ? (
-    <TouchableOpacity style={s.compose} onPress={onCompose}>
+    // testID, not the label: this app exposes almost no text to the
+    // accessibility tree, so "Composer l'équipe" is unfindable from outside
+    // even though it is plainly on screen. The screenshot flow (#520) keys on
+    // this id, and its presence is also what tells that flow whether the
+    // member is a captain at all.
+    <TouchableOpacity testID="compose-team" style={s.compose} onPress={onCompose}>
       <View style={s.composeLeft}>
         <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
         <Text style={s.composeTxt}>Composer l&apos;équipe</Text>

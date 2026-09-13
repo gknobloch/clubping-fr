@@ -389,6 +389,13 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
+- **Tout se sélectionne par `testID` — le texte n'existe pas.** L'app n'expose
+  presque aucun texte à l'arbre d'accessibilité : un vidage de la hiérarchie
+  sur l'écran d'accueil ne rend ni le nom du membre, ni la rencontre, ni les
+  boutons de disponibilité, ni « Composer l'équipe » — seulement des `testID`
+  et quelques `0%`. Un sélecteur par texte ne marchera donc jamais ici, quelle
+  que soit la graphie ou l'accent. Deux échecs successifs du flow venaient de
+  là avant que la cause commune apparaisse.
 - **Les onglets se tapent par testID, et ils ont un nom.**
   `accessibilityRole="button"` fait de chaque onglet UN élément
   d'accessibilité et replie le `Text` qu'il contient : sans libellé propre,
