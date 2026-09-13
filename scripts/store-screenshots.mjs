@@ -34,7 +34,13 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const MOBILE = path.join(ROOT, 'mobile')
 const FLOW = path.join(MOBILE, '.maestro/screenshots/capture.yaml')
 
-// Names match the five files already in the repo — see capture.yaml for why.
+// The set, in the order a store page lists it — see capture.yaml for the
+// thread it walks.
+//
+// The images themselves are NOT in git: `fastlane/screenshots/` has been
+// ignored since #492, alongside the generated metadata, because `deliver` and
+// `supply` read them off the machine that runs the release. So a fresh clone
+// has none, and re-running this script is how you get them back.
 export const REQUIRED_SCREENS = [
   '01-accueil',
   '02-composition',
