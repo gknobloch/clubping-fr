@@ -200,7 +200,174 @@ The icon and the feature graphic are rendered from SVG by `assets/logo/render.mj
 (`node mobile/assets/logo/render.mjs`, from the repo root, where playwright lives) —
 change the SVG and re-run it rather than resizing a PNG. Both come out opaque on
 purpose: Play applies its own rounded mask to the icon, and transparent corners look
-wrong under it. The screenshots are captured from the running app, not generated.
+wrong under it. The screenshots are captured from the running app, not generated — see
+below.
+
+## Captures d'écran (#520)
+
+```
+npm run store:screenshots                          # les trois cibles
+npm run store:screenshots -- iphone                # une seule, pour itérer
+npm run store:screenshots -- iphone --skip-build   # rejouer le flow seul
+```
+
+`--skip-build` réutilise l'app **déjà installée**. Sans lui, chaque essai repasse par
+`expo prebuild --clean`, donc par une compilation complète d'une vingtaine de minutes —
+absurde quand c'est un sélecteur Maestro qui a lâché.
+
+Mais il ne sert qu'à ça. Toute modification du code de l'app — un `testID`, un écran —
+exige un vrai build : sans lui, le flow tourne contre le binaire précédent et cherche
+des éléments que ce binaire ne contient pas. C'est exactement comme ça que
+`tab-journees` est resté introuvable après avoir été ajouté.
+
+Manual, and deliberately not part of a release: re-run it when a captured screen has
+visibly changed, not every version.
+
+**Re-anchor the demo club first**, or the screenshots show a season that is over:
+
+```
+npm run demo:refresh            # affiche le plan, n'écrit rien
+npm run demo:refresh -- --apply
+```
+
+The demo club's fixtures used to carry fixed dates, which go stale by definition — it
+had a journée on 18 May 2030, a date somebody picked to stop "prochaines journées"
+emptying. What is stored now are offsets recomputed from today: one journée just played,
+one in the coming week, one a fortnight out. That is also worth running **before a store
+review**, so a reviewer opening the app in November does not find a season that ended in
+September.
+
+It also settles who the account **is**: `Julien Mercier`, a player (not merely a
+club_admin — that gets a different Accueil entirely, see #522) and captain of
+`demo-team-1`. It was called "Démo App Store", which is a label rather than a person and
+read as test data wherever the app printed a member's name. Change the name in one place,
+`DEMO_IDENTITY` in the script.
+
+It writes to production and refuses to touch any id outside the demo club. It signs in as the **review account** — the same
+`REVIEW_LOGIN_EMAIL` / `REVIEW_LOGIN_CODE` pair the App Store and Play reviewers use,
+which `auth.ts` accepts in place of the emailed code — so nothing needs reading from an
+inbox. Both must be in the environment; they are Cloudflare Pages secrets and are never
+committed:
+
+```
+REVIEW_LOGIN_EMAIL=… REVIEW_LOGIN_CODE=… npm run store:screenshots
+```
+
+| Cible | Appareil | Sens | Où l'image atterrit |
+| --- | --- | --- | --- |
+| `iphone` | iPhone 17 Pro Max (classe 6,9") | portrait | `fastlane/screenshots/fr-FR/iphone_*.png` |
+| `ipad` | iPad Pro 13-inch (M5) | paysage | `fastlane/screenshots/fr-FR/ipad_*.png` |
+| `android` | AVD `Medium_Phone*` | portrait | `fastlane/metadata/android/fr-FR/images/phoneScreenshots/*.png` |
+
+Both iOS sizes share one locale folder on purpose — `deliver` files an iOS screenshot by
+its **pixel dimensions**, not by its directory — which is exactly why the filenames carry
+a `iphone_` / `ipad_` prefix. Without it the second target would overwrite the first.
+
+The script resolves each simulator **by name at run time**. A UDID belongs to the Mac
+that created it, so a stored one would work on exactly one machine.
+
+**Every selector is a `testID`.** The app exposes almost no text to the accessibility
+tree — dumping the hierarchy on the home screen returns no member name, no fixture, no
+availability buttons and no "Composer l'équipe", only ids. A selector written against a
+visible label will not match, however it is spelled.
+
+**The set is eight screens**, one thread rather than a tour of the tabs: Accueil, the
+line-up sheet, the feuille de match, the club's teams, one team in full, a player's quick
+view, her profile, and the calendar. The match screen itself is not in it — it is the way
+to the two sheets that are.
+
+| | |
+| --- | --- |
+| `01-accueil` | the hero card — the match, the answers, the line-up |
+| `02-composition` | the captain's line-up sheet |
+| `03-feuille` | the feuille de match, read-only and open to everyone |
+| `04-equipes` | the club's teams |
+| `05-equipe` | team 1 in full |
+| `06-joueur-apercu` | Camille Durand, quick view |
+| `07-joueur-profil` | her profile, carrying the brûlage badge |
+| `08-journees` | the calendar |
+
+**#8 is deliberately a different screen per device.** A phone shows the journées as a
+list; a tablet shows the availability matrix instead — `journees/index.tsx` branches on
+`isTablet`, so the matrix simply does not exist on an iPhone. That is not a gap to work
+around: they are different screens, and each device's listing should show its own.
+
+**`02-composition` is the one screen behind a guard** — a `runFlow: when:` block on the
+match screen's compose button, which exists for a captain on a match still to come. The
+three steps go together or not at all: a skipped tap must never leave `takeScreenshot`
+filing the match screen under the composition's name. The guard does not make the screen
+optional — it is still required, and its absence means `demo:refresh` has not run or the
+review account has stopped being captain of `demo-team-1`.
+
+`demo:refresh` is what makes all of this true: it makes the review account captain of
+`demo-team-1` and fills the line-up, which is what makes the Accueil card read 4/4 rather
+than 0/4 and what burns Camille Durand into team 1 for screens 6 and 7.
+
+**Both sheets are closed by their own footer button** — `match-sheet-close`,
+`selection-cancel` — never by a tap on the backdrop. The backdrop's free area is the top
+12% of a phone, but on a tablet `Sheet` becomes a 520pt dialog centred in a 1032pt
+window, so a coordinate that is backdrop on one is the panel on the other. `selection-cancel`
+rather than the save button, so a capture run cannot rewrite the line-up `demo:refresh`
+just put there.
+
+**The iPad set is landscape, and one screen shorter.** A slab gets held sideways, and
+that is the shape #447 drew the app for: the five destinations become a rail down the
+left edge and the journées matrix gets the width it needs. The orientation is passed to
+the flow (`-e ORIENTATION=…`) rather than left to whatever the simulator was last set to,
+and it is **asserted** on the way out — a target that asked to be turned sideways and came
+back upright has shot a whole set in the wrong shape, and that is a warning, not a pass.
+
+**The simulator does not actually turn, and that has two consequences.**
+`setOrientation` rotates the app's interface inside a framebuffer that stays portrait. So:
+
+1. `takeScreenshot` returns a **portrait PNG with sideways content**, which the script
+   turns upright with `sips -r -90`. The rotation is exact rather than a fudge — the
+   pixels are already a landscape render, only the container is on its side.
+2. The accessibility hierarchy keeps reporting **portrait bounds**. In-app taps still land
+   (verified: tapping `login-email-input` and typing into it works sideways), but
+   **SpringBoard's own alerts stop receiving them** — the identical `tapOn` that does
+   nothing in landscape dismisses the notification prompt in portrait. Hence the flow
+   signs in upright and turns the device only afterwards, and `login.yaml` settles the
+   prompt while it still can.
+
+**The capture device is denied notifications**, via `permissions` on `launchApp`. Not a
+tidiness measure: the review account is a captain with a match six days out, so the
+nightly dispatch (#495) would land a real push banner across a store screenshot. A prompt
+left un-answered by an earlier run survives `clearState` and `clearKeychain` both — it
+belongs to SpringBoard, not the app — and comes back over the next launch owning the
+hierarchy, hiding every element under it. That is what a stuck iPad run looks like.
+
+**Two shots are dropped from the iPad set**, both because everything is two panes above
+the tablet threshold (#447). `04-equipes` is the teams list beside *"Choisissez une équipe
+pour afficher sa fiche."* — a placeholder with an icon in it, where `05-equipe` shows the
+same list with a team actually in the right pane. `06-joueur-apercu` has no tablet
+equivalent at all: a player is picked from the **Joueurs** tab, so the club's list stays
+beside her fiche and there is no quick-view sheet to photograph.
+
+That last one is the only genuine fork in the flow — `TWO_PANE`, passed by the target the
+way `ORIENTATION` is, rather than sniffed from a tablet-only element. A phone walks squad
+row → quick view → profile; a tablet goes to the Joueurs tab and selects Camille there.
+
+The flow still captures every screen its branch reaches; `dropScreens` on the target
+decides what ships, which is why the numbering has a gap rather than a reshuffle:
+`05-equipe` has to be the same screen in every set.
+
+**Look at every image before committing.** The script checks that a PNG is portrait and
+full-size; it cannot tell a good screenshot from one showing an error banner, an empty
+season, or somebody's real name.
+
+### Why Maestro and not `snapshot`/`screengrab`
+
+fastlane's own capture tools need a test target *inside* the native project — XCUITest in
+`ios/`, Espresso in `android/`. Both directories are gitignored and regenerated by
+`expo prebuild`, which this script runs itself and which #495 established as routine. A
+test target added there does not survive the next prebuild. Maestro drives the installed
+app from outside, so it has nothing to lose. fastlane keeps the half it is good at:
+`deliver` and `supply` upload what Maestro captured.
+
+Uploading is still switched off (`skip_screenshots`, `skip_upload_screenshots`) — the
+guard that stops an empty metadata folder from wiping a live listing. Turning it on is a
+deliberate edit to the Fastfile, made once there are verified images to send.
 
 Two URLs the listing points at, both public routes of the web app and both outside the
 auth guard so a reviewer can fetch them anonymously:

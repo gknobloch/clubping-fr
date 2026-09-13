@@ -316,6 +316,7 @@ export function TeamDetail({
           {members.map((p) => (
             <TouchableOpacity
               key={p.id}
+              testID={`squad-player-${p.id}`}
               style={styles.playerRow}
               onPress={() => setSelectedPlayer(p)}
             >
@@ -614,6 +615,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
     backgroundColor: colors.bg,
+    // iOS renders TextInput placeholders with stray letter-spacing unless an
+    // explicit value is set; pin it to 0 so they track normally (#118).
+    letterSpacing: 0,
   },
   searchInput: {
     borderWidth: 1,
@@ -625,6 +629,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     backgroundColor: colors.bg,
     marginTop: 4,
+    // iOS renders TextInput placeholders with stray letter-spacing unless an
+    // explicit value is set; pin it to 0 so they track normally (#118).
+    letterSpacing: 0,
   },
   pickerEmpty: {
     fontSize: 13,

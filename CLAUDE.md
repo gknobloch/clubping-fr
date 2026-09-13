@@ -108,6 +108,15 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `desktopOnly` when it has no usable mobile form yet.
 - Interactive targets are 44px below `md:`; the shared button classes already
   handle it. See `src/components/Button.tsx`.
+- **Tout style de `TextInput` fixe son `letterSpacing`.** iOS invente un
+  interlettrage sur le *placeholder* si le style n'en déclare pas :
+  « R e c h e r c h e r   u n   j o u e u r » à la place de « Rechercher un
+  joueur ». Invisible partout sauf sur un appareil, et invisible à tout test de
+  rendu — la chaîne est correcte, ce sont les glyphes qui sont mal posés.
+  Corrigé en #118 sur `login.tsx`, puis oublié sur quatre champs de recherche
+  ajoutés depuis, dont un repéré sur une capture de store (#520).
+  `mobile/__tests__/text-input-letter-spacing.test.ts` lit les sources et
+  casse le build sur le suivant.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -359,6 +368,157 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   devient un rappel sans remède** — `src/test/mobileConfig.spec.ts` casse le
   build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
   bloque, et ne se relève que pour une raison nommée dans le commit.
+
+### Captures d'écran des stores (#520)
+- **Maestro, pas `snapshot`/`screengrab`.** Les outils de capture de fastlane
+  exigent une cible de test *dans* le projet natif — XCUITest dans `ios/`,
+  Espresso dans `android/`. Ces deux dossiers sont ignorés par git et
+  régénérés par `expo prebuild`, qu'on relance systématiquement depuis #495 :
+  une cible ajoutée là ne survit pas au prebuild suivant. Maestro pilote l'app
+  installée depuis l'extérieur, donc il n'a rien à y perdre. fastlane garde la
+  moitié qu'il fait bien : `deliver` et `supply` téléversent ce que Maestro a
+  capturé.
+- **Les simulateurs sont résolus par nom, à l'exécution.** Un UDID appartient
+  au Mac qui l'a créé ; en stocker un ferait marcher le script sur une seule
+  machine. Même raison pour l'AVD Android, cherché par préfixe.
+- **Les deux tailles iOS partagent un seul dossier de locale**, parce que
+  `deliver` classe une capture iOS d'après ses **dimensions en pixels** et non
+  d'après son dossier — d'où le préfixe `iphone_` / `ipad_` dans les noms de
+  fichiers, sans lequel la seconde cible écraserait la première.
+- **Le simulateur ne tourne pas vraiment.** `setOrientation` fait pivoter
+  l'interface de l'app dans un tampon d'affichage qui, lui, reste en portrait.
+  D'où deux conséquences, et elles commandent l'ordre du flow :
+  `takeScreenshot` rend un PNG **portrait au contenu couché**, que le script
+  redresse (`sips -r -90`) — une rotation exacte et non un bricolage : les
+  pixels sont déjà un rendu paysage, seul le cadre est de travers ; et
+  l'arbre d'accessibilité continue d'annoncer des **coordonnées portrait**.
+  Les taps *dans l'app* atterrissent quand même (vérifié), mais **les alertes
+  de SpringBoard cessent de les recevoir** : le même `tapOn` qui ne fait rien
+  en paysage referme la demande de notifications en portrait. On se connecte
+  donc à l'endroit, et on ne tourne l'appareil qu'ensuite.
+- **L'appareil de capture se voit refuser les notifications**
+  (`permissions` sur `launchApp`). Pas par hygiène : le compte de revue est
+  capitaine d'un match à six jours, donc le balayage nocturne (#495) poserait
+  une vraie bannière en travers d'une capture de store. Et une demande laissée
+  sans réponse par une exécution précédente survit à `clearState` comme à
+  `clearKeychain` — elle appartient à SpringBoard, pas à l'app — puis revient
+  au lancement suivant en tenant toute la hiérarchie, masquant chaque élément
+  en dessous. C'est à ça que ressemble une exécution iPad bloquée.
+- **L'iPad se capture en paysage, et il lui manque un écran.** Une tablette se
+  tient en travers, et c'est la forme pour laquelle #447 a dessiné l'app : les
+  cinq destinations deviennent un rail à gauche et la matrice des journées a
+  enfin sa largeur. Le sens est **passé au flow** (`-e ORIENTATION=…`) plutôt
+  que laissé à ce que le simulateur avait gardé de la dernière fois, et il est
+  **vérifié** à la sortie : une cible qui demande le paysage et revient en
+  portrait a shooté tout un jeu de travers, ce qui doit s'entendre.
+  Deux captures sautent, les deux parce que tout est en deux volets au-dessus
+  du seuil tablette (#447). `04-equipes` est la liste à côté de « Choisissez
+  une équipe pour afficher sa fiche », là où `05-equipe` montre la même liste
+  avec une fiche dedans. `06-joueur-apercu` n'a tout bonnement pas
+  d'équivalent : sur tablette la joueuse se choisit dans l'onglet **Joueurs**,
+  donc la liste du club reste à côté de sa fiche et il n'y a aucune feuille
+  d'aperçu à photographier. C'est la seule vraie bifurcation du flow —
+  `TWO_PANE`, passé par la cible comme `ORIENTATION`, plutôt que deviné sur un
+  élément propre aux tablettes. Le flow capture tout ce que sa branche
+  traverse ; c'est `dropScreens` sur la cible qui décide de ce qui part, d'où
+  un trou dans la numérotation plutôt qu'un décalage : `05-equipe` doit
+  désigner le même écran dans tous les jeux.
+- **Le jeu est de huit écrans, et le n° 8 n'est pas le même selon l'appareil.**
+  Un téléphone liste les journées, une tablette affiche la matrice de
+  disponibilités à la place — `journees/index.tsx` bifurque sur `isTablet`,
+  donc la matrice n'existe tout simplement pas sur iPhone. Ce n'est pas un
+  manque à contourner : ce sont deux écrans différents, et la fiche de chaque
+  appareil doit montrer le sien.
+- **`02-composition` est sous garde**, et c'est un bloc `runFlow: when:`, pas
+  trois commandes `optional`. `takeScreenshot` réussit toujours : un tap sauté
+  laisserait la capture enregistrer l'écran du match sous le nom de la
+  composition — une mauvaise image qui ressemble exactement à une bonne. Les
+  trois étapes passent ensemble ou pas du tout. La garde n'autorise pas pour
+  autant un jeu incomplet : l'écran reste requis, et son absence dit que la
+  donnée de démo est fausse.
+- Le script vérifie qu'un PNG est en portrait et de taille plausible ; il ne
+  sait pas distinguer une bonne capture d'une capture montrant un bandeau
+  d'erreur ou une saison vide. **Quelqu'un les regarde avant de commiter.**
+- `LANG`/`LC_ALL` en UTF-8 : CocoaPods appelle `String#unicode_normalize` sur
+  un chemin, ce que Ruby refuse sous la locale « C » — celle de tout shell non
+  interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
+  erreur Ruby qui ne parle pas de locale. Même correctif que pour
+  `store:fastlane`.
+- **Une feuille se ferme par son propre bouton, jamais par son fond.** Le
+  `Pressable` du fond *enveloppe* le panneau : son centre — ce que vise
+  `tapOn: id:` — tombe dans le panneau, où `onStartShouldSetResponder` avale
+  délibérément le toucher. Et viser un point ne marche que sur un téléphone :
+  au-dessus du seuil tablette, `Sheet` devient un dialogue de 520 pt centré
+  dans une fenêtre de 1032, donc le point qui est du fond sur l'un est le
+  panneau sur l'autre. `match-sheet-close` et `selection-cancel` répondent aux
+  deux. *Annuler*, pas *Enregistrer* : une session de captures ne doit pas
+  réécrire la composition que `demo:refresh` vient de poser.
+- **Tout se sélectionne par `testID` — le texte n'existe pas.** L'app n'expose
+  presque aucun texte à l'arbre d'accessibilité : un vidage de la hiérarchie
+  sur l'écran d'accueil ne rend ni le nom du membre, ni la rencontre, ni les
+  boutons de disponibilité, ni « Composer l'équipe » — seulement des `testID`
+  et quelques `0%`. Un sélecteur par texte ne marchera donc jamais ici, quelle
+  que soit la graphie ou l'accent. Deux échecs successifs du flow venaient de
+  là avant que la cause commune apparaisse.
+- **Les onglets se tapent par testID, et ils ont un nom.**
+  `accessibilityRole="button"` fait de chaque onglet UN élément
+  d'accessibilité et replie le `Text` qu'il contient : sans libellé propre,
+  VoiceOver annonçait cinq boutons sans nom, et aucune automatisation ne
+  pouvait trouver un onglet par le mot imprimé dessus. Le libellé retombe
+  désormais sur le titre visible — un vrai correctif d'accessibilité, trouvé
+  en écrivant le flow — et chaque onglet porte `tab-<route>`, qui survit à un
+  renommage comme à un accent.
+- **`clearState` ne vide pas le trousseau iOS.** `expo-secure-store` y garde le
+  jeton de session, et le trousseau survit à un effacement de données comme à
+  une désinstallation. Sans `clearKeychain`, l'app restaurait sa session en
+  pleine saisie : le champ e-mail était trouvé et rempli, puis l'écran de
+  connexion disparaissait sous le flow et le bouton en dessous n'existait plus.
+  Android n'en a pas besoin — `expo-secure-store` y passe par les
+  SharedPreferences, que `clearState` vide bien — d'où le garde `when:
+  platform: iOS` plutôt qu'une commande nue qui échouerait sur l'émulateur.
+- **Le calendrier du club de démo est fait d'écarts, pas de dates.** Des dates
+  fixes se périment par construction : le club de démo portait une journée au
+  18 mai 2030, une date choisie pour que « prochaines journées » cesse de se
+  vider — le problème rustiné plutôt que résolu. `scripts/demo-data.mjs`
+  recalcule tout depuis aujourd'hui : une journée qui vient d'être jouée, une
+  dans la semaine qui vient, une quinze jours plus tard. À relancer avant une
+  session de captures **et avant une revue de store** : un examinateur qui
+  ouvre l'app en novembre ne doit pas tomber sur une saison finie en septembre.
+- Le compte de revue s'appelle **Julien Mercier** : un nom inventé et
+  ordinaire, pas « Démo App Store », qui est une étiquette et se lisait comme
+  de la donnée de test partout où l'app imprime le nom d'un membre. Ses dix
+  coéquipiers portaient déjà des noms crédibles ; c'était le seul intrus.
+- Le compte de revue est **joueur** et capitaine de `demo-team-1`. Les deux
+  comptent : `isPlayer` décide de quel accueil on obtient, et avec
+  `is_player = 0` le compte tombait sur la vue générique — celle qui liste les
+  journées de tous les clubs de la base (#522), et c'est ce qui a été capturé
+  en premier, avec les dates de quatre vrais clubs dessus. Capitaine décide
+  ensuite de la présence de « Composer l'équipe ».
+- **Les dispos du match à venir sont peuplées** : trois oui, un peut-être, un
+  non, un sans réponse. Un panneau vide — « 0 disponibles · 6 sans réponse » —
+  est ce à quoi ressemble l'écran quand personne ne s'est servi de la
+  fonctionnalité, soit l'inverse de ce qu'une fiche de store doit montrer. Le
+  sixième est délibérément absent de la table : « sans réponse » est
+  l'**absence** de ligne, pas une valeur, et c'est ce qui donne son sens au
+  compteur que lit le capitaine. Les lignes sont réécrites, jamais fusionnées,
+  pour qu'une réexécution ne fabrique pas un état que personne n'a choisi.
+- **Le compte de revue a un classement** (1491). Les dix joueurs de démo en
+  portent un (905 à 1520) et lui n'en avait pas : c'était la seule ligne de
+  l'écran avec un blanc là où va un nombre, sur sa propre carte d'accueil comme
+  en tête de l'effectif qu'il capitaine. Les points se déclarent par **phase**
+  (0038), donc la ligne est clavée sur la phase de `demo-team-1`, lue sur
+  l'équipe et non supposée active.
+- **La fiche de Camille Durand est remplie**, parce que deux des huit captures
+  sont ses écrans à elle : une catégorie (V40, saison active — une catégorie
+  appartient à une saison, #482) et un numéro de téléphone, sans lequel
+  `PhoneRow` et son bouton de copie (#503) n'apparaissent pas du tout. Le
+  numéro est pris dans la plage réservée à la fiction par l'ARCEP
+  (07 99 98 xx xx) : la capture part sur une fiche publique, et « qui a l'air
+  inventé » n'est pas « qui n'est attribué à personne ».
+- Ce script écrit en **production**, et refuse tout identifiant hors du club de
+  démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
+- Manuel, et volontairement pas branché sur `mobile-release` : on recapture
+  quand un écran a visiblement changé, pas à chaque version.
 
 ### Notifications push (#495)
 - **Un registre d'envois, pas un calcul de date.** La règle n'est pas « les

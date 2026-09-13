@@ -141,7 +141,7 @@ export function MatchSheet({
         )}
       </ScrollView>
 
-      <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+      <TouchableOpacity testID="match-sheet-close" style={s.closeBtn} onPress={onClose}>
         <Text style={s.closeTxt}>Fermer</Text>
       </TouchableOpacity>
     </Sheet>

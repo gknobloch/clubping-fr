@@ -464,6 +464,9 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: colors.textPrimary,
+    // iOS renders TextInput placeholders with stray letter-spacing unless an
+    // explicit value is set; pin it to 0 so they track normally (#118).
+    letterSpacing: 0,
     // The phone's 44pt target: a text field is a text field whatever the slab.
     minHeight: 44,
   },

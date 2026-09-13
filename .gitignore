@@ -23,6 +23,11 @@ playwright/.cache
 d1-backup*.sql
 *.d1-export.sql
 
+# Store screenshots (#520) — the working directory
+# scripts/store-screenshots.mjs moves each PNG out of; nothing here is meant
+# to survive past one run.
+.screenshots-tmp/
+
 # Env (local secrets / overrides — *.local also covers .env.local)
 .env
 !.env.example

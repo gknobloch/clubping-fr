@@ -69,9 +69,16 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     return (
       <TouchableOpacity
         key={route.key}
+        testID={`tab-${route.name}`}
         accessibilityRole="button"
         accessibilityState={isActive ? { selected: true } : {}}
-        accessibilityLabel={options.tabBarAccessibilityLabel}
+        // Falls back to the visible label. `accessibilityRole="button"` makes
+        // this one accessibility element and collapses the Text inside it, so
+        // without a label of its own a screen reader announced five buttons
+        // with no names — and nothing could find a tab by the word printed on
+        // it (#520). tabBarAccessibilityLabel is unset on every tab, so the
+        // fallback is what actually runs.
+        accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
         onPress={() => {
           const event = navigation.emit({
             type: 'tabPress',

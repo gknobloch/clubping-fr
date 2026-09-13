@@ -53,6 +53,7 @@ function renderCard({
   wide = false,
   canEdit = (() => false) as (playerId: string) => boolean,
   isCaptain = false,
+  onCompose = jest.fn(),
 } = {}) {
   render(
     <NextMatchCard
@@ -76,7 +77,7 @@ function renderCard({
       playersPerGame={4}
       selectedCount={0}
       isCaptain={isCaptain}
-      onCompose={jest.fn()}
+      onCompose={onCompose}
       onOpenDetail={jest.fn()}
       onAddToCalendar={jest.fn()}
       wide={wide}
@@ -124,6 +125,29 @@ describe('split', () => {
 
     expect(screen.getByText('Ma disponibilité')).toBeTruthy()
     expect(screen.getByText('Oui')).toBeTruthy()
+  })
+})
+
+// The screenshot flow keys on this id (#520) — and so does its decision about
+// whether this member is a captain at all. The label beside it cannot be used:
+// the app exposes almost no text to the accessibility tree, so "Composer
+// l'équipe" is unfindable from outside the app even while it is on screen.
+describe('the compose button carries a handle', () => {
+  it('is there for a captain', () => {
+    renderCard({ wide: true, canEdit: () => true, isCaptain: true })
+    expect(screen.getByTestId('compose-team')).toBeTruthy()
+  })
+
+  it('is absent for everybody else, which is how the flow knows to skip', () => {
+    renderCard({ wide: true, canEdit: () => true, isCaptain: false })
+    expect(screen.queryByTestId('compose-team')).toBeNull()
+  })
+
+  it('still opens the composition when pressed', () => {
+    const onCompose = jest.fn()
+    renderCard({ wide: true, canEdit: () => true, isCaptain: true, onCompose })
+    fireEvent.press(screen.getByTestId('compose-team'))
+    expect(onCompose).toHaveBeenCalled()
   })
 })
 

@@ -1,0 +1,144 @@
+# The store screenshots, one platform-agnostic flow (#520).
+#
+# One flow because the app has one bundle id on both platforms
+# (`fr.clubping.app` — see fastlane/Appfile) and the same screens: only the
+# connected device decides whether Maestro drives the simulator or the
+# emulator. scripts/store-screenshots.mjs runs this once per target and moves
+# each PNG to wherever `deliver` (iOS) or `supply` (Android) expects it — this
+# file only ever writes 01..08 into its own debug output.
+#
+# Everything is selected by `testID`. This app exposes almost no text to the
+# accessibility tree: dumping the hierarchy on the Accueil screen returns no
+# member name, no fixture, no availability buttons — only ids. A selector
+# written against a visible label does not match, however it is spelled.
+#
+# The set walks one thread rather than touring the tabs: a captain opens the
+# app, opens the coming match, composes the line-up, reads the feuille de
+# match, then goes to his team, looks a player up, opens her profile, and
+# ends on the calendar. Screens 6 and 7 are Camille Durand, who has played
+# twice and is therefore burned into team 1 — a rule this app explains and its
+# competitors do not.
+#
+# Both sheets are closed by their OWN footer button, never by a tap on the
+# backdrop. The backdrop's free area is the top 12% of a phone, but on a tablet
+# `Sheet` becomes a 520pt dialog centred in a 1032pt window — so the point that
+# is backdrop on one is the panel on the other, and no single coordinate works
+# for both targets.
+appId: fr.clubping.app
+---
+# Sign in upright, whatever the simulator was left as. A device still sideways
+# from a previous run would hand the login a screen whose system alerts cannot
+# be tapped (see below), and the notification prompt is exactly the thing that
+# turns up there.
+- setOrientation: PORTRAIT
+- runFlow: login.yaml
+
+# Which way up, decided by the target rather than by whatever the simulator
+# was last left as (scripts/store-screenshots.mjs passes `-e ORIENTATION=…`).
+# A phone's listing is portrait; the iPad's is landscape, which is how a slab
+# is held and what #447 drew the app for — the five destinations become a rail
+# down the left edge and the journées matrix gets its width.
+#
+# AFTER the login, and that order is load-bearing in both directions. The
+# simulator does not actually turn: `setOrientation` rotates the app's
+# interface inside a framebuffer that stays portrait, so `takeScreenshot`
+# returns a portrait PNG with sideways content and the hierarchy keeps
+# reporting portrait bounds. In-app taps still land — verified — but
+# SpringBoard's own alerts stop receiving them, which is why login.yaml
+# settles the notification prompt before this line.
+#
+# The sideways PNG is turned the right way up by the script
+# (`sips -r -90` on a landscape target), which is exact: the pixels are
+# already a landscape render, only the container is on its side.
+- setOrientation: ${ORIENTATION}
+
+# 1 — the first thing anybody sees: the coming match, who has answered, and
+# the line-up already made.
+- takeScreenshot: 01-accueil
+
+# The match screen itself is not in the set — it is the way to the two sheets
+# that are. The Accueil card's header opens it.
+- tapOn:
+    id: "next-match-open"
+
+# 2 — the captain's line-up sheet.
+#
+# A `runFlow: when:` block rather than three `optional:` commands, because
+# `takeScreenshot` ALWAYS succeeds: a tap silently skipped would file the match
+# screen under the composition's name — a wrong image that looks exactly like a
+# right one. The steps go together or not at all, and a missing
+# 02-composition is then caught by the script's required-screens check instead
+# of shipping.
+#
+# The button only exists for a captain on a match still to come, which is what
+# `visible:` is really asking.
+- runFlow:
+    when:
+      visible:
+        id: "match-compose"
+    commands:
+      - tapOn:
+          id: "match-compose"
+      - takeScreenshot: 02-composition
+      # Annuler, not Enregistrer: a screenshot run must not rewrite the line-up
+      # that scripts/demo-data.mjs put there.
+      - tapOn:
+          id: "selection-cancel"
+
+# 3 — the feuille de match, the read-only sheet every member can open, captain
+# or not.
+- tapOn:
+    id: "match-sheet-open"
+- takeScreenshot: 03-feuille
+- tapOn:
+    id: "match-sheet-close"
+
+# 4 and 5 — the club's teams, then one of them in full.
+- tapOn:
+    id: "tab-equipes"
+- takeScreenshot: 04-equipes
+- tapOn:
+    id: "team-row-demo-team-1"
+- takeScreenshot: 05-equipe
+
+# 6 and 7 — Camille Durand, who carries the brûlage badge. How you get to her
+# is the one place the two devices genuinely want different screens, so this is
+# a branch rather than one path that reads badly on both.
+#
+# On a PHONE, twice over: the quick view that opens from a squad row, then the
+# full profile behind it. A phone has room for one of them at a time, which is
+# what makes the pair worth showing.
+- runFlow:
+    when:
+      true: ${TWO_PANE == 'false'}
+    commands:
+      - tapOn:
+          id: "squad-player-demo-player-2"
+      - takeScreenshot: 06-joueur-apercu
+      - tapOn:
+          id: "player-sheet-profile"
+      - takeScreenshot: 07-joueur-profil
+
+# On a TABLET, once, from the Joueurs tab: selecting her there keeps the club's
+# whole list beside her fiche (`isTwoPane`, #447), which is the thing a slab
+# does that a phone cannot — and a better picture than a sheet drawn over a
+# squad. There is no quick view to capture here, so 06 is dropped for that
+# target rather than faked.
+- runFlow:
+    when:
+      true: ${TWO_PANE == 'true'}
+    commands:
+      - tapOn:
+          id: "tab-joueurs"
+      - tapOn:
+          id: "player-row-demo-player-2"
+      - takeScreenshot: 07-joueur-profil
+
+# 8 — the calendar, and the way back out of the detail stack. A phone shows
+# the journées as a list; a tablet shows the availability matrix instead
+# (journees/index.tsx branches on `isTablet`), so this one screenshot is
+# deliberately a different screen per device. That is the honest picture: they
+# ARE different screens.
+- tapOn:
+    id: "tab-journees"
+- takeScreenshot: 08-journees

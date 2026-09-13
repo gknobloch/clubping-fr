@@ -44,6 +44,13 @@ sees on the web, not what is installed on their phone.
 change still costs an App Store review and asks every tester to download the
 same app again. Let the user decide whether it is worth it.
 
+**Screenshots are not part of this.** `npm run store:screenshots` (#520)
+recaptures the store images, and it is deliberately manual: it needs a
+simulator, an emulator and the review account, and most releases change nothing
+a screenshot shows. If this release visibly changes one of the five captured
+screens — Accueil, Journées, Composition, Équipes, Joueurs — say so and let the
+user decide; do not run it as part of the release.
+
 ### A store release, or an `eas update`?
 
 This project can also ship over the air: `app.json` has `updates.url`, the

@@ -182,3 +182,86 @@ describe('the tab bar on a tablet', () => {
     expect(navigate).toHaveBeenCalledWith('journees')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Each destination has a name, and a handle (#520)
+//
+// `accessibilityRole="button"` makes a tab ONE accessibility element and
+// collapses the Text inside it. With no label of its own, VoiceOver announced
+// five buttons called nothing, and no automation could find a tab by the word
+// printed on it — which is how the screenshot flow discovered this.
+//
+// The testID is the flow's own handle: it survives a rename and an accent,
+// neither of which a French label does.
+// ---------------------------------------------------------------------------
+describe('the tab bar names its destinations', () => {
+  afterEach(resetWindowSize)
+
+  const TITLES: Record<string, string> = {
+    index: 'Accueil',
+    club: 'Club',
+    equipes: 'Équipes',
+    journees: 'Journées',
+    joueurs: 'Joueurs',
+  }
+
+  const navigate = jest.fn()
+
+  function props(): BottomTabBarProps {
+    const routes = [...Object.keys(TITLES), '(detail)'].map((name) => ({ key: `key-${name}`, name }))
+    const descriptors = Object.fromEntries(
+      routes.map((r) => [
+        r.key,
+        {
+          options:
+            r.name === '(detail)'
+              ? { tabBarItemStyle: { display: 'none' } }
+              : { title: TITLES[r.name], tabBarIcon: () => null },
+        },
+      ]),
+    )
+    return {
+      state: { index: 2, routes },
+      descriptors,
+      navigation: { emit: () => ({ defaultPrevented: false }), navigate },
+    } as unknown as BottomTabBarProps
+  }
+
+  const renderBar = () => {
+    setWindowSize(PHONE_WIDTH)
+    return render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, ...PHONE_WIDTH },
+          insets: { top: 47, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <TabBar {...props()} />
+      </SafeAreaProvider>,
+    )
+  }
+
+  it.each(Object.entries(TITLES))('announces %s as "%s"', (route, title) => {
+    renderBar()
+    expect(screen.getByTestId(`tab-${route}`).props.accessibilityLabel).toBe(title)
+  })
+
+  it('gives every visible tab a handle of its own', () => {
+    renderBar()
+    for (const route of Object.keys(TITLES)) {
+      expect(screen.getByTestId(`tab-${route}`)).toBeTruthy()
+    }
+  })
+
+  it('renders no handle for a hidden tab', () => {
+    // The (detail) stack is a tab the navigator knows and nobody can press.
+    renderBar()
+    expect(screen.queryByTestId('tab-(detail)')).toBeNull()
+  })
+
+  it('still navigates when the tab is pressed', () => {
+    renderBar()
+    fireEvent.press(screen.getByTestId('tab-journees'))
+    expect(navigate).toHaveBeenCalledWith('journees')
+  })
+})
