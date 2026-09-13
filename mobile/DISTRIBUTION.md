@@ -366,6 +366,31 @@ accumulates two of every screen.
 full-size; it cannot tell a good screenshot from one showing an error banner, an empty
 season, or somebody's real name.
 
+### The Android target needs a JDK 17, named
+
+React Native's Gradle plugin asks for `jvmToolchain(17)` on every module and on the app.
+With no JDK 17 that Gradle can *see*, it falls through to auto-provisioning one — and the
+foojay resolver `@react-native/gradle-plugin` pins at `0.5.0` references
+`JvmVendorSpec.IBM_SEMERU`, a field Gradle 9 removed. The build then dies on:
+
+```
+Class org.gradle.jvm.toolchain.JvmVendorSpec does not have member field '… IBM_SEMERU'
+```
+
+which names neither Java, nor a version, nor anything to install. Installing the JDK is
+only half of it — Homebrew's `openjdk@17` is keg-only, so it lands in neither
+`/Library/Java/JavaVirtualMachines` nor on `PATH`, and Gradle still cannot find it:
+
+```bash
+brew install openjdk@17
+echo 'org.gradle.java.installations.paths=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home' >> ~/.gradle/gradle.properties
+```
+
+`store-screenshots.mjs` checks for it before starting the build, looking in the three
+places Gradle itself looks — the current JVM and `JAVA_HOME`, macOS's JDK folder, and
+that `installations.paths` list — and says both commands when it comes up empty. A
+12-minute build should not be how you find out.
+
 ### Why Maestro and not `snapshot`/`screengrab`
 
 fastlane's own capture tools need a test target *inside* the native project — XCUITest in
