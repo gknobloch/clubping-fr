@@ -8,6 +8,7 @@ import {
   javaMajorFromRelease,
   gradleInstallationPaths,
   parseDevVars,
+  withGradleMemory,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -191,5 +192,34 @@ describe('reading the review credentials out of .dev.vars', () => {
 
   it('ignores a line that is not KEY=value', () => {
     expect(parseDevVars('not a variable\n=novalue\nBAD KEY=1')).toEqual({})
+  })
+})
+
+describe('the Android build’s Gradle memory', () => {
+  // KSP exhausts the 512m metaspace the generated file asks for, and the build
+  // dies four minutes in on the single word "Metaspace" — nothing about a
+  // limit, nothing to act on.
+
+  it('replaces the line the template wrote', () => {
+    const out = withGradleMemory(
+      'android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m\nnewArch=true',
+      '-Xmx6g -XX:MaxMetaspaceSize=2g',
+    )
+    expect(out).toContain('org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g')
+    expect(out).not.toContain('512m')
+    // The rest of the file is untouched — it carries the whole Expo config.
+    expect(out).toContain('android.useAndroidX=true')
+    expect(out).toContain('newArch=true')
+  })
+
+  it('appends when there is no line to replace', () => {
+    expect(withGradleMemory('a=1', '-Xmx6g')).toBe('a=1\norg.gradle.jvmargs=-Xmx6g\n')
+  })
+
+  it('leaves exactly one such line', () => {
+    const once = withGradleMemory('org.gradle.jvmargs=-Xmx1g', '-Xmx6g')
+    const twice = withGradleMemory(once, '-Xmx6g')
+    expect(twice).toBe(once)
+    expect(twice.match(/org\.gradle\.jvmargs/g)).toHaveLength(1)
   })
 })

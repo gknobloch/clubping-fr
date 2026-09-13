@@ -26,7 +26,9 @@
 // ---------------------------------------------------------------------------
 
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, copyFileSync, rmSync, existsSync } from 'node:fs'
+import {
+  mkdirSync, readFileSync, readdirSync, copyFileSync, rmSync, existsSync, writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -428,11 +430,64 @@ function androidFullyBooted(serial) {
 // ---------------------------------------------------------------------------
 
 function androidHome() {
-  const home = process.env.ANDROID_HOME || path.join(process.env.HOME, 'Library/Android/sdk')
+  // ANDROID_HOME first: it is the one AGP recommends, and the one every other
+  // path in this file is built from. ANDROID_SDK_ROOT is deprecated but still
+  // the only variable some setups export — a Homebrew
+  // `android-commandlinetools` install sets it and nothing else.
+  const home =
+    process.env.ANDROID_HOME ||
+    process.env.ANDROID_SDK_ROOT ||
+    path.join(process.env.HOME, 'Library/Android/sdk')
   if (!existsSync(home)) {
     throw new Error(`ANDROID_HOME introuvable (${home}). SDK Android requis pour la cible android.`)
   }
   return home
+}
+
+/**
+ * The child's environment with exactly ONE Android SDK in it.
+ *
+ * A machine that has both Android Studio and Homebrew's
+ * `android-commandlinetools` ends up exporting two different paths, and AGP
+ * refuses to guess: *"Several environment variables and/or system properties
+ * contain different paths to the SDK."* It stops the build outright, and the
+ * message never says which one it would have preferred.
+ *
+ * So the deprecated variable is dropped rather than left to argue with the
+ * recommended one. Same reasoning as the forced UTF-8 locale above: this
+ * script owns the environment it hands to the build, and an operator's shell
+ * having accumulated two SDKs over the years is not a thing to make them fix
+ * before they can take a screenshot.
+ */
+function androidEnv(home) {
+  const env = envWith({
+    ANDROID_HOME: home,
+    PATH: `${path.join(home, 'platform-tools')}:${path.join(home, 'emulator')}:${process.env.PATH}`,
+  })
+  const other = process.env.ANDROID_SDK_ROOT
+  if (other && path.resolve(other) !== path.resolve(home)) {
+    console.log(`→ ANDROID_SDK_ROOT (${other}) ignoré au profit de ANDROID_HOME (${home})`)
+  }
+  // Deleted, not blanked: an empty string is still "set" to AGP.
+  delete env.ANDROID_SDK_ROOT
+  return env
+}
+
+/**
+ * What the Gradle daemon needs to get through `:expo-updates:kspReleaseKotlin`.
+ *
+ * The generated file asks for `-Xmx2048m -XX:MaxMetaspaceSize=512m`, and KSP
+ * exhausts that metaspace: the build dies four minutes in with the single word
+ * "Metaspace" and nothing about memory limits anywhere in the message.
+ */
+const GRADLE_JVMARGS = '-Xmx6g -XX:MaxMetaspaceSize=2g'
+
+/** That value written into a gradle.properties, replacing any line already there. */
+export function withGradleMemory(propertiesText, jvmargs = GRADLE_JVMARGS) {
+  const line = `org.gradle.jvmargs=${jvmargs}`
+  const existing = /^[ \t]*org\.gradle\.jvmargs[ \t]*=.*$/m
+  if (existing.test(propertiesText)) return propertiesText.replace(existing, line)
+  return `${propertiesText.replace(/\n*$/, '')}\n${line}\n`
 }
 
 /**
@@ -443,6 +498,19 @@ function androidHome() {
 function buildFor(platform) {
   console.log(`→ expo prebuild --clean -p ${platform}`)
   sh('npx', ['expo', 'prebuild', '--clean', '-p', platform], { cwd: MOBILE, stdio: 'inherit' })
+  if (platform !== 'android') return
+
+  // Patched here, after prebuild, rather than committed: `--clean` rewrites
+  // android/ from scratch every run, so a value put in that file by hand
+  // survives exactly until the next capture. This script owns both steps, so
+  // it is the one place the edit can live and still be there at build time.
+  //
+  // A `gradle.properties` in GRADLE_USER_HOME outranks the project's, so a
+  // machine that sets its own smaller value still wins — which is correct
+  // (somebody said so deliberately) and worth knowing when this looks ignored.
+  const props = path.join(MOBILE, 'android/gradle.properties')
+  writeFileSync(props, withGradleMemory(readFileSync(props, 'utf8')))
+  console.log(`→ gradle.properties : org.gradle.jvmargs=${GRADLE_JVMARGS}`)
 }
 
 /** UTF8_ENV, plus whatever the caller adds — ANDROID_HOME, a custom PATH. */
@@ -463,10 +531,7 @@ function installAndLaunchIos(udid) {
 
 function installAndLaunchAndroid(avdNamePrefix) {
   const home = androidHome()
-  const env = envWith({
-    ANDROID_HOME: home,
-    PATH: `${path.join(home, 'platform-tools')}:${path.join(home, 'emulator')}:${process.env.PATH}`,
-  })
+  const env = androidEnv(home)
   if (!runningAndroidSerial()) {
     const avds = sh('emulator', ['-list-avds'], { env }).split('\n').map((s) => s.trim()).filter(Boolean)
     const avd = avds.find((a) => a.startsWith(avdNamePrefix))

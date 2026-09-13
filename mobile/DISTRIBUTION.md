@@ -407,6 +407,27 @@ places Gradle itself looks — the current JVM and `JAVA_HOME`, macOS's JDK fold
 that `installations.paths` list — and says both commands when it comes up empty. A
 12-minute build should not be how you find out.
 
+### Two more things the Android build needs
+
+**One SDK path, not two.** A machine with both Android Studio and Homebrew's
+`android-commandlinetools` exports `ANDROID_HOME` and `ANDROID_SDK_ROOT` pointing at
+different directories, and AGP refuses to choose: *"Several environment variables and/or
+system properties contain different paths to the SDK."* The script drops the deprecated
+`ANDROID_SDK_ROOT` from the environment it hands the build and says which one it kept —
+same reasoning as the forced UTF-8 locale, and a shell that has accumulated two SDKs over
+the years is not something to fix before you can take a screenshot.
+
+**More metaspace than the template asks for.** The generated `gradle.properties` says
+`-Xmx2048m -XX:MaxMetaspaceSize=512m`, and `:expo-updates:kspReleaseKotlin` exhausts it:
+the build dies four minutes in on the single word `Metaspace`, with nothing about memory
+limits in the message. The script rewrites that line after `prebuild` — not in git,
+because `--clean` regenerates the file on every run, so a committed value would survive
+exactly until the next capture.
+
+One caveat if this ever looks ignored: a `gradle.properties` in `GRADLE_USER_HOME`
+(`~/.gradle/`) **outranks** the project's. That is the right precedence — somebody set it
+deliberately — but it means a smaller value there wins.
+
 ### Why Maestro and not `snapshot`/`screengrab`
 
 fastlane's own capture tools need a test target *inside* the native project — XCUITest in
