@@ -517,8 +517,19 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   inventé » n'est pas « qui n'est attribué à personne ».
 - Ce script écrit en **production**, et refuse tout identifiant hors du club de
   démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
-- Manuel, et volontairement pas branché sur `mobile-release` : on recapture
-  quand un écran a visiblement changé, pas à chaque version.
+- **La capture reste manuelle ; le téléversement, non.** On recapture quand un
+  écran a visiblement changé, pas à chaque version — mais `store:fastlane --
+  notes` envoie ce qui se trouve dans `fastlane/screenshots/` et dans les
+  `phoneScreenshots` d'Android, et remplace ce que la fiche montre. Trois
+  états, parce qu'un téléversement écrase : rien de capturé laisse les images
+  en place (le cas ordinaire) ; un jeu complet les remplace ; **une moitié de
+  jeu arrête la lane**, parce qu'une exécution qui n'a fait que `iphone`
+  ressemble exactement à une qui a fait les deux, jusqu'à ce qu'une fiche App
+  Store n'ait plus ses images iPad. `overwrite_screenshots` suit la même
+  réponse et n'est pas une option à part : laissé à `false`, deliver *ajoute*
+  et la fiche accumule deux versions de chaque écran.
+- `demo:refresh` est dans la compétence `mobile-release`, **à chaque version**
+  et pas seulement avant une capture : un examinateur ouvre l'app en vrai.
 
 ### Notifications push (#495)
 - **Un registre d'envois, pas un calcul de date.** La règle n'est pas « les

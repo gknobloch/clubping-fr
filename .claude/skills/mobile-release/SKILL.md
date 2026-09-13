@@ -44,12 +44,22 @@ sees on the web, not what is installed on their phone.
 change still costs an App Store review and asks every tester to download the
 same app again. Let the user decide whether it is worth it.
 
-**Screenshots are not part of this.** `npm run store:screenshots` (#520)
-recaptures the store images, and it is deliberately manual: it needs a
-simulator, an emulator and the review account, and most releases change nothing
-a screenshot shows. If this release visibly changes one of the five captured
-screens — Accueil, Journées, Composition, Équipes, Joueurs — say so and let the
-user decide; do not run it as part of the release.
+**Capturing screenshots is not part of this; uploading them is.**
+`npm run store:screenshots` (#520) recaptures the store images and stays
+deliberately manual — it needs a simulator, an emulator and the review account,
+and most releases change nothing a screenshot shows. The eight screens it
+captures are Accueil, la composition, la feuille de match, les équipes, une
+équipe, l'aperçu d'une joueuse, son profil et les journées. If this release
+visibly changes one of those, say so and let the user decide; do not run it as
+part of the release.
+
+What *is* automatic: `store:fastlane -- notes` uploads whatever is sitting in
+`mobile/fastlane/screenshots/` and in the Android `phoneScreenshots` folder,
+replacing what the listing shows. Nothing there means the live images are left
+alone, which is the ordinary case. **Half a set stops the lane** — a run that
+captured only `iphone` would otherwise swap a complete App Store page for an
+iPhone-only one. The images are gitignored, so a fresh clone has none and a
+capture has to happen on the machine that runs the release.
 
 ### A store release, or an `eas update`?
 
@@ -228,6 +238,26 @@ state, so `ios_notes` run after submission fails with *"The version number has
 been previously used"* — deliver finding no editable record and being refused a
 new one. That text then costs another version and another review. That is deliberate — a Play changelog named for the wrong
 `versionCode` uploads nothing and reports success.
+
+### Re-anchor the demo club before anyone reviews it
+
+```bash
+npm run demo:refresh          # prints its plan, writes nothing
+npm run demo:refresh -- --apply
+```
+
+Run this **every release**, before handing over for review — not only when
+screenshots are being recaptured. A store reviewer signs into the live app with
+the review account, and the demo club's calendar is built from offsets rather
+than dates precisely so it can be re-anchored: one journée just played, one in
+the coming week, one a fortnight out. Skip it and somebody opening the app in
+November finds a season that ended in September, with an empty "prochaines
+journées" — which is what the screenshots were showing before #520.
+
+It writes to **production**, so run the plan first and read it. It refuses any
+id outside the demo club (`assertDemoOnly`) and changes nothing without
+`--apply`; it only ever touches `demo-*` and the review account, never a real
+licensee.
 
 Two things still need a human, and both belong in the report: pressing **Submit
 for review** in App Store Connect, and promoting off the Play `internal` track.

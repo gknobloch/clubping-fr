@@ -352,6 +352,16 @@ The flow still captures every screen its branch reaches; `dropScreens` on the ta
 decides what ships, which is why the numbering has a gap rather than a reshuffle:
 `05-equipe` has to be the same screen in every set.
 
+**The upload is automatic, the capture is not.** `npm run store:fastlane -- notes`
+sends whatever is in `fastlane/screenshots/` (iOS) and in the Android
+`phoneScreenshots` folder, and *replaces* what the listing shows. Three states, because
+an upload overwrites: nothing captured leaves the live images alone, which is the
+ordinary case; a full set replaces them; and **half a set stops the lane** — a run that
+did only `iphone` looks exactly like one that did both, right up until an App Store page
+has lost its iPad images. `overwrite_screenshots` follows the same answer rather than
+being a switch of its own: left `false`, deliver *adds* to what is there and the listing
+accumulates two of every screen.
+
 **Look at every image before committing.** The script checks that a PNG is portrait and
 full-size; it cannot tell a good screenshot from one showing an error banner, an empty
 season, or somebody's real name.
