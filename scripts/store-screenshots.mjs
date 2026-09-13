@@ -402,6 +402,42 @@ function assertAndroidJdk() {
   )
 }
 
+/** The app's own id, read rather than repeated — app.json is where it is decided. */
+export function androidPackage(appJsonText) {
+  const pkg = JSON.parse(appJsonText)?.expo?.android?.package
+  if (!pkg) throw new Error("app.json ne déclare pas expo.android.package.")
+  return pkg
+}
+
+/**
+ * Take the app off the emulator before installing the one just built.
+ *
+ * `eas.json` sets `appVersionSource: "remote"`, so EAS owns the versionCode
+ * and app.json declares none — a local `prebuild` therefore produces
+ * versionCode 1. An emulator that has ever run an EAS build is holding
+ * something far higher (13, at the time of writing), and Android refuses the
+ * install outright: `INSTALL_FAILED_VERSION_DOWNGRADE`. `adb install -d`, which
+ * expo already passes, only waives that for debuggable builds — and this one
+ * is Release, deliberately (#520: a screenshot must show the binary that
+ * ships, not a dev build).
+ *
+ * So the old app goes. Nothing is lost that the flow was not going to discard:
+ * login.yaml launches with `clearState: true` anyway.
+ */
+function uninstallAndroidApp(env) {
+  const serial = runningAndroidSerial()
+  if (!serial) return
+  const pkg = androidPackage(readFileSync(path.join(MOBILE, 'app.json'), 'utf8'))
+  try {
+    // stderr piped: "Unknown package" on a device that never had it is the
+    // ordinary case, not something to make the operator read past.
+    sh(adbPath(), ['-s', serial, 'uninstall', pkg], { env, stdio: ['ignore', 'pipe', 'pipe'] })
+    console.log(`→ ${pkg} désinstallé de ${serial}`)
+  } catch {
+    /* absent, which is what we wanted anyway */
+  }
+}
+
 function adbPath() {
   return process.env.ANDROID_HOME
     ? path.join(process.env.ANDROID_HOME, 'platform-tools/adb')
@@ -558,6 +594,7 @@ function installAndLaunchAndroid(avdNamePrefix) {
     if (!serial || !androidFullyBooted(serial)) throw new Error("L'émulateur n'a pas démarré à temps.")
   }
   assertAndroidJdk()
+  uninstallAndroidApp(env)
   console.log('→ expo run:android --variant release')
   sh('npx', ['expo', 'run:android', '--variant', 'release', '--no-bundler'], {
     cwd: MOBILE, stdio: 'inherit', env,
