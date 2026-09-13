@@ -26,6 +26,11 @@
 # for both targets.
 appId: fr.clubping.app
 ---
+# Sign in upright, whatever the simulator was left as. A device still sideways
+# from a previous run would hand the login a screen whose system alerts cannot
+# be tapped (see below), and the notification prompt is exactly the thing that
+# turns up there.
+- setOrientation: PORTRAIT
 - runFlow: login.yaml
 
 # Which way up, decided by the target rather than by whatever the simulator
@@ -34,9 +39,17 @@ appId: fr.clubping.app
 # is held and what #447 drew the app for — the five destinations become a rail
 # down the left edge and the journées matrix gets its width.
 #
-# Rotating AFTER the login so the whole set is shot in one shape: the flow
-# takes no screenshot before this line, and the app is `orientation: default`,
-# so it follows the device without a relaunch.
+# AFTER the login, and that order is load-bearing in both directions. The
+# simulator does not actually turn: `setOrientation` rotates the app's
+# interface inside a framebuffer that stays portrait, so `takeScreenshot`
+# returns a portrait PNG with sideways content and the hierarchy keeps
+# reporting portrait bounds. In-app taps still land — verified — but
+# SpringBoard's own alerts stop receiving them, which is why login.yaml
+# settles the notification prompt before this line.
+#
+# The sideways PNG is turned the right way up by the script
+# (`sips -r -90` on a landscape target), which is exact: the pixels are
+# already a landscape render, only the container is on its side.
 - setOrientation: ${ORIENTATION}
 
 # 1 — the first thing anybody sees: the coming match, who has answered, and

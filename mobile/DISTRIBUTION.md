@@ -317,6 +317,26 @@ the flow (`-e ORIENTATION=…`) rather than left to whatever the simulator was l
 and it is **asserted** on the way out — a target that asked to be turned sideways and came
 back upright has shot a whole set in the wrong shape, and that is a warning, not a pass.
 
+**The simulator does not actually turn, and that has two consequences.**
+`setOrientation` rotates the app's interface inside a framebuffer that stays portrait. So:
+
+1. `takeScreenshot` returns a **portrait PNG with sideways content**, which the script
+   turns upright with `sips -r -90`. The rotation is exact rather than a fudge — the
+   pixels are already a landscape render, only the container is on its side.
+2. The accessibility hierarchy keeps reporting **portrait bounds**. In-app taps still land
+   (verified: tapping `login-email-input` and typing into it works sideways), but
+   **SpringBoard's own alerts stop receiving them** — the identical `tapOn` that does
+   nothing in landscape dismisses the notification prompt in portrait. Hence the flow
+   signs in upright and turns the device only afterwards, and `login.yaml` settles the
+   prompt while it still can.
+
+**The capture device is denied notifications**, via `permissions` on `launchApp`. Not a
+tidiness measure: the review account is a captain with a match six days out, so the
+nightly dispatch (#495) would land a real push banner across a store screenshot. A prompt
+left un-answered by an earlier run survives `clearState` and `clearKeychain` both — it
+belongs to SpringBoard, not the app — and comes back over the next launch owning the
+hierarchy, hiding every element under it. That is what a stuck iPad run looks like.
+
 `04-equipes` is dropped from the iPad set: above the tablet threshold `equipes/index.tsx`
 is two panes, so that shot is the teams list beside *"Choisissez une équipe pour afficher
 sa fiche."* — a placeholder with an icon in it, where `05-equipe` shows the same list with

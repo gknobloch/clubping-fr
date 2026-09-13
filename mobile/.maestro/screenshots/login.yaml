@@ -26,8 +26,14 @@ appId: fr.clubping.app
       platform: iOS
     commands:
       - clearKeychain
+# `permissions` decides the notification prompt before it can be asked, and
+# DENY rather than allow: this device must never hold a push token. The review
+# account is a captain with a match six days out, so the nightly dispatch
+# (#495) would happily land a real banner across a store screenshot.
 - launchApp:
     clearState: true
+    permissions:
+      notifications: deny
 - tapOn:
     id: "login-email-input"
 - inputText: ${EMAIL}
@@ -52,16 +58,20 @@ appId: fr.clubping.app
       id: "tab-bar"
     timeout: 15000
 
-# `<Push>` mounts the instant a session exists and asks the OS for permission
-# (utils/push.ts#registerForPush) — a system dialog outside the RN tree, in the
-# simulator's own device language rather than the app's French, and on a
-# simulator that has never granted it before it can land mid-screenshot. Both
-# wordings are tried, both optional: a device where the prompt was already
-# settled by an earlier run shows neither, and that is the common case, not a
-# failure.
+# A prompt left un-answered by an earlier run survives `clearState` and
+# `clearKeychain` both — it is SpringBoard's, not the app's — and it comes back
+# over the next launch, where it owns the accessibility hierarchy and hides
+# every element underneath it. That is what a stuck iPad run looks like.
+#
+# It has to be settled HERE, before capture.yaml turns the device sideways: a
+# system alert cannot be tapped once `setOrientation` has been used. The
+# hierarchy keeps reporting the portrait frame while the screen draws rotated,
+# and SpringBoard's own alert stops receiving the taps Maestro aims at it —
+# verified: the identical `tapOn` that does nothing in landscape dismisses the
+# alert in portrait. In-app elements are unaffected.
+#
+# `Don.t Allow` because iOS writes a typographic apostrophe (Don’t), and a
+# straight one in the pattern matches nothing at all.
 - tapOn:
-    text: "Allow|Autoriser"
-    optional: true
-- tapOn:
-    text: "Allow Once|Une fois"
+    text: "Don.t Allow|Ne pas autoriser|Refuser"
     optional: true

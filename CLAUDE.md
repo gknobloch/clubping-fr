@@ -385,6 +385,25 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `deliver` classe une capture iOS d'après ses **dimensions en pixels** et non
   d'après son dossier — d'où le préfixe `iphone_` / `ipad_` dans les noms de
   fichiers, sans lequel la seconde cible écraserait la première.
+- **Le simulateur ne tourne pas vraiment.** `setOrientation` fait pivoter
+  l'interface de l'app dans un tampon d'affichage qui, lui, reste en portrait.
+  D'où deux conséquences, et elles commandent l'ordre du flow :
+  `takeScreenshot` rend un PNG **portrait au contenu couché**, que le script
+  redresse (`sips -r -90`) — une rotation exacte et non un bricolage : les
+  pixels sont déjà un rendu paysage, seul le cadre est de travers ; et
+  l'arbre d'accessibilité continue d'annoncer des **coordonnées portrait**.
+  Les taps *dans l'app* atterrissent quand même (vérifié), mais **les alertes
+  de SpringBoard cessent de les recevoir** : le même `tapOn` qui ne fait rien
+  en paysage referme la demande de notifications en portrait. On se connecte
+  donc à l'endroit, et on ne tourne l'appareil qu'ensuite.
+- **L'appareil de capture se voit refuser les notifications**
+  (`permissions` sur `launchApp`). Pas par hygiène : le compte de revue est
+  capitaine d'un match à six jours, donc le balayage nocturne (#495) poserait
+  une vraie bannière en travers d'une capture de store. Et une demande laissée
+  sans réponse par une exécution précédente survit à `clearState` comme à
+  `clearKeychain` — elle appartient à SpringBoard, pas à l'app — puis revient
+  au lancement suivant en tenant toute la hiérarchie, masquant chaque élément
+  en dessous. C'est à ça que ressemble une exécution iPad bloquée.
 - **L'iPad se capture en paysage, et il lui manque un écran.** Une tablette se
   tient en travers, et c'est la forme pour laquelle #447 a dessiné l'app : les
   cinq destinations deviennent un rail à gauche et la matrice des journées a

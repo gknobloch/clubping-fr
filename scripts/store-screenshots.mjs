@@ -409,6 +409,24 @@ function findTakeScreenshotDir(root) {
   return found.sort().pop() ?? null
 }
 
+/**
+ * Turn a sideways capture the right way up, in place.
+ *
+ * Maestro's `setOrientation` rotates the app's interface but not the
+ * simulator's display: after it, `takeScreenshot` hands back a PORTRAIT PNG
+ * whose content is a landscape render lying on its side. Rotating the
+ * container is therefore not a fudge — it is the only thing still wrong with
+ * the image, and the rotation is lossless.
+ *
+ * `sips` ships with macOS, and the only targets that ask for this are iOS
+ * simulators, which do not run anywhere else.
+ */
+function uprightLandscape(file) {
+  // -90 = counter-clockwise, which is what LANDSCAPE_LEFT needs: the status
+  // bar comes back along the right edge, and that edge is the top.
+  sh('sips', ['-r', '-90', file], { stdio: ['ignore', 'ignore', 'pipe'] })
+}
+
 function validateAndInstall(target, captured) {
   const wanted = screensFor(target)
   const missing = missingRequiredScreens(captured.map((c) => c.basename), wanted)
@@ -425,6 +443,7 @@ function validateAndInstall(target, captured) {
       console.log(`  — ${target.id}/${basename} : hors du jeu de cette cible.`)
       continue
     }
+    if (target.orientation !== 'PORTRAIT') uprightLandscape(file)
     const dims = pngDimensions(readFileSync(file))
     if (!isPlausibleScreenshot(dims, target.orientation)) {
       console.warn(
