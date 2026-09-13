@@ -272,13 +272,13 @@ availability buttons and no "Composer l'équipe", only ids. A selector written a
 visible label will not match, however it is spelled.
 
 **The set is eight screens**, one thread rather than a tour of the tabs: Accueil, the
-coming match, the line-up sheet, the club's teams, one team in full, a player's quick
+feuille de match, the line-up sheet, the club's teams, one team in full, a player's quick
 view, her profile, and the calendar.
 
 | | |
 | --- | --- |
 | `01-accueil` | the hero card — the match, the answers, the line-up |
-| `02-match` | the match screen, reached from the card's header |
+| `02-feuille` | the feuille de match, two taps in from the card's header |
 | `03-composition` | the captain's line-up sheet |
 | `04-equipes` | the club's teams |
 | `05-equipe` | team 1 in full |
@@ -301,6 +301,13 @@ review account has stopped being captain of `demo-team-1`.
 `demo:refresh` is what makes all of this true: it makes the review account captain of
 `demo-team-1` and fills the line-up, which is what makes the Accueil card read 4/4 rather
 than 0/4 and what burns Camille Durand into team 1 for screens 6 and 7.
+
+**Both sheets are closed by their own footer button** — `match-sheet-close`,
+`selection-cancel` — never by a tap on the backdrop. The backdrop's free area is the top
+12% of a phone, but on a tablet `Sheet` becomes a 520pt dialog centred in a 1032pt
+window, so a coordinate that is backdrop on one is the panel on the other. `selection-cancel`
+rather than the save button, so a capture run cannot rewrite the line-up `demo:refresh`
+just put there.
 
 **Look at every image before committing.** The script checks that a PNG is portrait and
 full-size; it cannot tell a good screenshot from one showing an error banner, an empty

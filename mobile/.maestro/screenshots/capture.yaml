@@ -13,10 +13,17 @@
 # written against a visible label does not match, however it is spelled.
 #
 # The set walks one thread rather than touring the tabs: a captain opens the
-# app, opens the coming match, composes the line-up, then goes to his team,
-# looks a player up, opens her profile, and ends on the calendar. Screens 6
-# and 7 are Camille Durand, who has played twice and is therefore burned into
-# team 1 — a rule this app explains and its competitors do not.
+# app, opens the coming match, reads the feuille de match, composes the
+# line-up, then goes to his team, looks a player up, opens her profile, and
+# ends on the calendar. Screens 6 and 7 are Camille Durand, who has played
+# twice and is therefore burned into team 1 — a rule this app explains and its
+# competitors do not.
+#
+# Both sheets are closed by their OWN footer button, never by a tap on the
+# backdrop. The backdrop's free area is the top 12% of a phone, but on a tablet
+# `Sheet` becomes a 520pt dialog centred in a 1032pt window — so the point that
+# is backdrop on one is the panel on the other, and no single coordinate works
+# for both targets.
 appId: fr.clubping.app
 ---
 - runFlow: login.yaml
@@ -25,19 +32,23 @@ appId: fr.clubping.app
 # the line-up already made.
 - takeScreenshot: 01-accueil
 
-# 2 — the match itself. The Accueil card's header is the way in; `tapOn: id:`
-# rather than the date or the opponent, neither of which exists outside the
-# render.
+# 2 — the feuille de match, the read-only sheet every member can open. The
+# match screen is only passed through on the way: the Accueil card's header
+# opens it, and the feuille is one tap further in.
 - tapOn:
     id: "next-match-open"
-- takeScreenshot: 02-match
+- tapOn:
+    id: "match-sheet-open"
+- takeScreenshot: 02-feuille
+- tapOn:
+    id: "match-sheet-close"
 
-# 3 — the line-up sheet, opened from the match screen.
+# 3 — the line-up sheet, opened from the same screen.
 #
 # A `runFlow: when:` block rather than three `optional:` commands, because
 # `takeScreenshot` ALWAYS succeeds: a tap silently skipped would file the match
 # screen under the composition's name — a wrong image that looks exactly like a
-# right one. The three steps go together or not at all, and a missing
+# right one. The steps go together or not at all, and a missing
 # 03-composition is then caught by the script's required-screens check instead
 # of shipping.
 #
@@ -51,14 +62,10 @@ appId: fr.clubping.app
       - tapOn:
           id: "match-compose"
       - takeScreenshot: 03-composition
-      # A sheet closes by a POINT, not by its backdrop's id. The backdrop
-      # Pressable wraps the panel and fills the screen, so its centre — what
-      # `tapOn: id:` aims at — lands inside the panel, where
-      # `onStartShouldSetResponder` deliberately swallows the touch. The panel
-      # is capped at 85% of the window and pinned to the bottom, so the top of
-      # the screen is always backdrop.
+      # Annuler, not Enregistrer: a screenshot run must not rewrite the line-up
+      # that scripts/demo-data.mjs put there.
       - tapOn:
-          point: "50%,6%"
+          id: "selection-cancel"
 
 # 4 and 5 — the club's teams, then one of them in full.
 - tapOn:

@@ -406,11 +406,15 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
-- **Une feuille se ferme par un point, pas par son fond.** Le `Pressable` du
-  fond *enveloppe* le panneau et occupe tout l'écran : son centre — ce que vise
-  `tapOn: id:` — tombe donc dans le panneau, où `onStartShouldSetResponder`
-  avale délibérément le toucher. Le panneau est plafonné à 85 % de la fenêtre
-  et collé au bas, donc le haut de l'écran est toujours du fond.
+- **Une feuille se ferme par son propre bouton, jamais par son fond.** Le
+  `Pressable` du fond *enveloppe* le panneau : son centre — ce que vise
+  `tapOn: id:` — tombe dans le panneau, où `onStartShouldSetResponder` avale
+  délibérément le toucher. Et viser un point ne marche que sur un téléphone :
+  au-dessus du seuil tablette, `Sheet` devient un dialogue de 520 pt centré
+  dans une fenêtre de 1032, donc le point qui est du fond sur l'un est le
+  panneau sur l'autre. `match-sheet-close` et `selection-cancel` répondent aux
+  deux. *Annuler*, pas *Enregistrer* : une session de captures ne doit pas
+  réécrire la composition que `demo:refresh` vient de poser.
 - **Tout se sélectionne par `testID` — le texte n'existe pas.** L'app n'expose
   presque aucun texte à l'arbre d'accessibilité : un vidage de la hiérarchie
   sur l'écran d'accueil ne rend ni le nom du membre, ni la rencontre, ni les
@@ -460,6 +464,12 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   l'**absence** de ligne, pas une valeur, et c'est ce qui donne son sens au
   compteur que lit le capitaine. Les lignes sont réécrites, jamais fusionnées,
   pour qu'une réexécution ne fabrique pas un état que personne n'a choisi.
+- **Le compte de revue a un classement** (1491). Les dix joueurs de démo en
+  portent un (905 à 1520) et lui n'en avait pas : c'était la seule ligne de
+  l'écran avec un blanc là où va un nombre, sur sa propre carte d'accueil comme
+  en tête de l'effectif qu'il capitaine. Les points se déclarent par **phase**
+  (0038), donc la ligne est clavée sur la phase de `demo-team-1`, lue sur
+  l'équipe et non supposée active.
 - **La fiche de Camille Durand est remplie**, parce que deux des huit captures
   sont ses écrans à elle : une catégorie (V40, saison active — une catégorie
   appartient à une saison, #482) et un numéro de téléphone, sans lequel

@@ -308,7 +308,7 @@ export default function MatchDetailScreen() {
         )}
 
         {/* Feuille de match — read-only, for everyone */}
-        <TouchableOpacity style={styles.compose} onPress={() => setShowSheet(true)}>
+        <TouchableOpacity testID="match-sheet-open" style={styles.compose} onPress={() => setShowSheet(true)}>
           <View style={styles.composeLeft}>
             <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.composeTxt}>Feuille de match</Text>

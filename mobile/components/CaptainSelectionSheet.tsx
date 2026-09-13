@@ -244,7 +244,7 @@ export function CaptainSelectionSheet({
         )}
       </ScrollView>
       <View style={sel.actions}>
-        <TouchableOpacity style={sel.cancelBtn} onPress={onClose}>
+        <TouchableOpacity testID="selection-cancel" style={sel.cancelBtn} onPress={onClose}>
           <Text style={sel.cancelTxt}>Annuler</Text>
         </TouchableOpacity>
         <TouchableOpacity style={sel.saveBtn} onPress={() => { onSave(selection); onClose() }}>

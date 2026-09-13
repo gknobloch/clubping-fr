@@ -9,6 +9,7 @@ import {
   DEMO_USER,
   DEMO_AVAILABILITY,
   DEMO_PROFILE,
+  DEMO_IDENTITY,
 } from './demo-data.mjs'
 import { normalizeCategory } from '../src/lib/playerCategories'
 
@@ -167,5 +168,21 @@ describe('what Camille Durand’s fiche shows', () => {
     for (const [, { phone }] of entries) {
       expect(phone.replace(/\D/g, '')).toMatch(/^3379998\d{4}$/)
     }
+  })
+})
+
+describe('the review account’s own line', () => {
+  it('carries a classement, like every one of its team-mates', () => {
+    // The ten demo players run 905 to 1520; a blank here is the one gap on the
+    // Accueil card and at the head of the squad it captains.
+    const points = Number(DEMO_IDENTITY.points)
+    expect(points).toBeGreaterThan(900)
+    expect(points).toBeLessThan(1600)
+  })
+
+  it('states it as text, which is what the column holds', () => {
+    // FFTT sends a string and nothing here does arithmetic on it; a number
+    // would be coerced on the way in and read back differently.
+    expect(typeof DEMO_IDENTITY.points).toBe('string')
   })
 })

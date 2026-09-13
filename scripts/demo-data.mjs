@@ -52,6 +52,18 @@ export const DEMO_IDENTITY = {
   firstName: 'Julien',
   lastName: 'Mercier',
   licenseNumber: '99990011',
+  /**
+   * His classement. Every one of the ten demo players carries one (905 to
+   * 1520) and the review account carried none — so the member reading his own
+   * Accueil, and the captain at the head of his own squad, were the one line
+   * on screen with a blank where a number goes.
+   *
+   * Points are stated per PHASE (#482's sibling rule, migration 0038), so the
+   * row is keyed on the phase demo-team-1 actually plays in, read off the team
+   * rather than assumed. Stored as text, as the column is: FFTT sends a string
+   * and nothing here does arithmetic on it.
+   */
+  points: '1491',
 }
 
 /** The team it captains — the one whose next match the Accueil screen shows. */
@@ -234,7 +246,7 @@ function main(argv) {
   )
   const matchDays = query("SELECT id, number FROM match_days WHERE id LIKE 'demo-%'")
   const team = query(
-    `SELECT id, captain_id, player_ids FROM teams WHERE id = ${sqlStr(DEMO_TEAM)}`,
+    `SELECT id, phase_id, captain_id, player_ids FROM teams WHERE id = ${sqlStr(DEMO_TEAM)}`,
   )[0]
   if (!team) throw new Error(`${DEMO_TEAM} introuvable.`)
 
@@ -289,6 +301,11 @@ function main(argv) {
       `last_name = ${sqlStr(DEMO_IDENTITY.lastName)}, ` +
       `license_number = ${sqlStr(DEMO_IDENTITY.licenseNumber)} ` +
       `WHERE id = ${sqlStr(DEMO_USER)}`,
+    // Keyed (phase_id, player_id) since 0038 — the team's own phase, not the
+    // active one: they are the same today and need not be forever.
+    `INSERT INTO player_phase_points (phase_id, player_id, points) ` +
+      `VALUES (${sqlStr(team.phase_id)}, ${sqlStr(DEMO_USER)}, ${sqlStr(DEMO_IDENTITY.points)}) ` +
+      `ON CONFLICT(phase_id, player_id) DO UPDATE SET points = excluded.points`,
     // Rewritten rather than merged, so re-running cannot accumulate a state
     // nobody chose — and so the member left silent stays silent.
     `DELETE FROM game_availabilities WHERE game_id = ${sqlStr(upcoming.id)}`,
@@ -319,7 +336,7 @@ function main(argv) {
   }
   console.log(
     `  ${DEMO_USER} → ${DEMO_IDENTITY.firstName} ${DEMO_IDENTITY.lastName}, joueur et ` +
-      `capitaine de ${DEMO_TEAM}` +
+      `capitaine de ${DEMO_TEAM}, ${DEMO_IDENTITY.points} points (${team.phase_id})` +
       (roster.includes(DEMO_USER) ? ' (déjà dans l’effectif)' : ', ajouté à l’effectif'),
   )
   const counts = Object.values(DEMO_AVAILABILITY).reduce(

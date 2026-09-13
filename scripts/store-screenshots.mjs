@@ -37,7 +37,7 @@ const FLOW = path.join(MOBILE, '.maestro/screenshots/capture.yaml')
 // Names match the five files already in the repo — see capture.yaml for why.
 export const REQUIRED_SCREENS = [
   '01-accueil',
-  '02-match',
+  '02-feuille',
   '03-composition',
   '04-equipes',
   '05-equipe',
