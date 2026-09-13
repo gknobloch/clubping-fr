@@ -293,7 +293,7 @@ export default function MatchDetailScreen() {
 
         {/* Compose (captain / club-admin) */}
         {canManage && !gameDatePast && (
-          <TouchableOpacity style={styles.compose} onPress={() => setShowCompose(true)}>
+          <TouchableOpacity testID="match-compose" style={styles.compose} onPress={() => setShowCompose(true)}>
             <View style={styles.composeLeft}>
               <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
               <Text style={styles.composeTxt}>Composer l'équipe</Text>

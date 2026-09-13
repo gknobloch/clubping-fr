@@ -116,8 +116,10 @@ export function NextMatchCard({
   // above it — the same elements either way, so nothing is styled twice.
   const gameSide = (
     <>
-      {/* Tappable top → match detail */}
-      <TouchableOpacity activeOpacity={0.7} onPress={onOpenDetail}>
+      {/* Tappable top → match detail. testID because the screenshot flow (#520)
+          walks Accueil → match → composition, and nothing here is findable by
+          its label: the header's text never reaches the accessibility tree. */}
+      <TouchableOpacity testID="next-match-open" activeOpacity={0.7} onPress={onOpenDetail}>
         <MatchHeader
           matchDayNumber={matchDayNumber}
           divisionLabel={divisionLabel}
@@ -234,9 +236,7 @@ export function NextMatchCard({
   const compose = isCaptain ? (
     // testID, not the label: this app exposes almost no text to the
     // accessibility tree, so "Composer l'équipe" is unfindable from outside
-    // even though it is plainly on screen. The screenshot flow (#520) keys on
-    // this id, and its presence is also what tells that flow whether the
-    // member is a captain at all.
+    // even though it is plainly on screen — by a test here as by Maestro.
     <TouchableOpacity testID="compose-team" style={s.compose} onPress={onCompose}>
       <View style={s.composeLeft}>
         <Ionicons name="people-outline" size={16} color={colors.textSecondary} />

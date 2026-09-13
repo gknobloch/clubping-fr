@@ -5,7 +5,7 @@
 # connected device decides whether Maestro drives the simulator or the
 # emulator. scripts/store-screenshots.mjs runs this once per target and moves
 # each PNG to wherever `deliver` (iOS) or `supply` (Android) expects it — this
-# file only ever writes 01..07 into its own debug output.
+# file only ever writes 01..08 into its own debug output.
 #
 # Everything is selected by `testID`. This app exposes almost no text to the
 # accessibility tree: dumping the hierarchy on the Accueil screen returns no
@@ -13,10 +13,10 @@
 # written against a visible label does not match, however it is spelled.
 #
 # The set walks one thread rather than touring the tabs: a captain opens the
-# app, sees the coming match, checks the calendar, goes to his team, looks a
-# player up, opens her profile, and ends on the club's roster. Screens 5 and 6
-# are Camille Durand, who has played twice and is therefore burned into team 1
-# — a rule this app explains and its competitors do not.
+# app, opens the coming match, composes the line-up, then goes to his team,
+# looks a player up, opens her profile, and ends on the calendar. Screens 6
+# and 7 are Camille Durand, who has played twice and is therefore burned into
+# team 1 — a rule this app explains and its competitors do not.
 appId: fr.clubping.app
 ---
 - runFlow: login.yaml
@@ -25,33 +25,64 @@ appId: fr.clubping.app
 # the line-up already made.
 - takeScreenshot: 01-accueil
 
-# 2 — the calendar. A phone shows the journées as a list; a tablet shows the
-# availability matrix instead (journees/index.tsx branches on `isTablet`), so
-# this one screenshot is deliberately a different screen per device. That is
-# the honest picture: they ARE different screens.
+# 2 — the match itself. The Accueil card's header is the way in; `tapOn: id:`
+# rather than the date or the opponent, neither of which exists outside the
+# render.
 - tapOn:
-    id: "tab-journees"
-- takeScreenshot: 02-journees
+    id: "next-match-open"
+- takeScreenshot: 02-match
 
-# 3 and 4 — the club's teams, then one of them in full.
+# 3 — the line-up sheet, opened from the match screen.
+#
+# A `runFlow: when:` block rather than three `optional:` commands, because
+# `takeScreenshot` ALWAYS succeeds: a tap silently skipped would file the match
+# screen under the composition's name — a wrong image that looks exactly like a
+# right one. The three steps go together or not at all, and a missing
+# 03-composition is then caught by the script's required-screens check instead
+# of shipping.
+#
+# The button only exists for a captain on a match still to come, which is what
+# `visible:` is really asking.
+- runFlow:
+    when:
+      visible:
+        id: "match-compose"
+    commands:
+      - tapOn:
+          id: "match-compose"
+      - takeScreenshot: 03-composition
+      # A sheet closes by a POINT, not by its backdrop's id. The backdrop
+      # Pressable wraps the panel and fills the screen, so its centre — what
+      # `tapOn: id:` aims at — lands inside the panel, where
+      # `onStartShouldSetResponder` deliberately swallows the touch. The panel
+      # is capped at 85% of the window and pinned to the bottom, so the top of
+      # the screen is always backdrop.
+      - tapOn:
+          point: "50%,6%"
+
+# 4 and 5 — the club's teams, then one of them in full.
 - tapOn:
     id: "tab-equipes"
-- takeScreenshot: 03-equipes
+- takeScreenshot: 04-equipes
 - tapOn:
     id: "team-row-demo-team-1"
-- takeScreenshot: 04-equipe
+- takeScreenshot: 05-equipe
 
-# 5 and 6 — a player, twice over: the quick view that opens from a squad row,
+# 6 and 7 — a player, twice over: the quick view that opens from a squad row,
 # then the full profile behind it. Camille Durand by name, because she is the
 # one carrying the brûlage badge.
 - tapOn:
     id: "squad-player-demo-player-2"
-- takeScreenshot: 05-joueur-apercu
+- takeScreenshot: 06-joueur-apercu
 - tapOn:
     id: "player-sheet-profile"
-- takeScreenshot: 06-joueur-profil
+- takeScreenshot: 07-joueur-profil
 
-# 7 — the club's roster, which is also the way back out of the detail stack.
+# 8 — the calendar, and the way back out of the detail stack. A phone shows
+# the journées as a list; a tablet shows the availability matrix instead
+# (journees/index.tsx branches on `isTablet`), so this one screenshot is
+# deliberately a different screen per device. That is the honest picture: they
+# ARE different screens.
 - tapOn:
-    id: "tab-joueurs"
-- takeScreenshot: 07-joueurs
+    id: "tab-journees"
+- takeScreenshot: 08-journees

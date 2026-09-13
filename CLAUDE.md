@@ -385,11 +385,19 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `deliver` classe une capture iOS d'après ses **dimensions en pixels** et non
   d'après son dossier — d'où le préfixe `iphone_` / `ipad_` dans les noms de
   fichiers, sans lequel la seconde cible écraserait la première.
-- **`03-composition` est conditionnelle**, et c'est un bloc `runFlow: when:`,
-  pas trois commandes `optional`. `takeScreenshot` réussit toujours : un tap
-  sauté laisserait la capture enregistrer l'écran Accueil sous le nom de la
+- **Le jeu est de huit écrans, et le n° 8 n'est pas le même selon l'appareil.**
+  Un téléphone liste les journées, une tablette affiche la matrice de
+  disponibilités à la place — `journees/index.tsx` bifurque sur `isTablet`,
+  donc la matrice n'existe tout simplement pas sur iPhone. Ce n'est pas un
+  manque à contourner : ce sont deux écrans différents, et la fiche de chaque
+  appareil doit montrer le sien.
+- **`03-composition` est sous garde**, et c'est un bloc `runFlow: when:`, pas
+  trois commandes `optional`. `takeScreenshot` réussit toujours : un tap sauté
+  laisserait la capture enregistrer l'écran du match sous le nom de la
   composition — une mauvaise image qui ressemble exactement à une bonne. Les
-  trois étapes passent ensemble ou pas du tout.
+  trois étapes passent ensemble ou pas du tout. La garde n'autorise pas pour
+  autant un jeu incomplet : l'écran reste requis, et son absence dit que la
+  donnée de démo est fausse.
 - Le script vérifie qu'un PNG est en portrait et de taille plausible ; il ne
   sait pas distinguer une bonne capture d'une capture montrant un bandeau
   d'erreur ou une saison vide. **Quelqu'un les regarde avant de commiter.**

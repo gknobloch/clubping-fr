@@ -67,16 +67,16 @@ describe('missingRequiredScreens', () => {
   })
 
   it('names exactly what a partial run is missing', () => {
-    const partial = REQUIRED_SCREENS.filter((s: string) => s !== '02-journees')
-    expect(missingRequiredScreens(partial)).toEqual(['02-journees'])
+    const partial = REQUIRED_SCREENS.filter((s: string) => s !== '03-composition')
+    expect(missingRequiredScreens(partial)).toEqual(['03-composition'])
   })
 
   it('expects the whole set, in order', () => {
     // The numbers are the listing's order on the store page, so a gap is a
     // reordering nobody asked for.
-    expect(REQUIRED_SCREENS).toHaveLength(7)
+    expect(REQUIRED_SCREENS).toHaveLength(8)
     expect(REQUIRED_SCREENS.map((s: string) => s.slice(0, 2))).toEqual([
-      '01', '02', '03', '04', '05', '06', '07',
+      '01', '02', '03', '04', '05', '06', '07', '08',
     ])
   })
 

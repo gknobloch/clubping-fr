@@ -37,15 +37,20 @@ const FLOW = path.join(MOBILE, '.maestro/screenshots/capture.yaml')
 // Names match the five files already in the repo — see capture.yaml for why.
 export const REQUIRED_SCREENS = [
   '01-accueil',
-  '02-journees',
-  '03-equipes',
-  '04-equipe',
-  '05-joueur-apercu',
-  '06-joueur-profil',
-  '07-joueurs',
+  '02-match',
+  '03-composition',
+  '04-equipes',
+  '05-equipe',
+  '06-joueur-apercu',
+  '07-joueur-profil',
+  '08-journees',
 ]
-// Every screen in the set is now reached by a fixed path, so none is
-// conditional: demo:refresh guarantees the data each one needs.
+// Nothing is optional. 03-composition is the only screen the flow guards
+// (`runFlow: when:` on the compose button, which exists for a captain on a
+// match still to come) — and it is guarded so that a skipped tap cannot file
+// the match screen under the composition's name, not so that the set may ship
+// without it. If it is missing, the demo data is wrong and someone has to
+// look: `npm run demo:refresh`.
 export const OPTIONAL_SCREENS = []
 
 /**

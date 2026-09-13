@@ -271,19 +271,36 @@ tree — dumping the hierarchy on the home screen returns no member name, no fix
 availability buttons and no "Composer l'équipe", only ids. A selector written against a
 visible label will not match, however it is spelled.
 
-**The set is seven screens, and #2 is deliberately different per device.** A phone shows
-the journées as a list; a tablet shows the availability matrix instead — `journees/
-index.tsx` branches on `isTablet`, so the matrix simply does not exist on an iPhone.
-That is not a gap to work around: they are different screens, and each device's
-screenshot should show its own.
+**The set is eight screens**, one thread rather than a tour of the tabs: Accueil, the
+coming match, the line-up sheet, the club's teams, one team in full, a player's quick
+view, her profile, and the calendar.
 
-**`03-composition` was dropped** from the set. `demo:refresh` still makes the review
-account captain of `demo-team-1` and fills the line-up: that is what makes the Accueil
-card read 4/4 rather than 0/4, and what burns Camille Durand into team 1 for screens 5
-and 6. The flow captures all three of its steps or
-none: a skipped tap must never leave `takeScreenshot` filing the Accueil screen under
-the composition's name. When it is skipped the previously committed image simply stays,
-and the run says so.
+| | |
+| --- | --- |
+| `01-accueil` | the hero card — the match, the answers, the line-up |
+| `02-match` | the match screen, reached from the card's header |
+| `03-composition` | the captain's line-up sheet |
+| `04-equipes` | the club's teams |
+| `05-equipe` | team 1 in full |
+| `06-joueur-apercu` | Camille Durand, quick view |
+| `07-joueur-profil` | her profile, carrying the brûlage badge |
+| `08-journees` | the calendar |
+
+**#8 is deliberately a different screen per device.** A phone shows the journées as a
+list; a tablet shows the availability matrix instead — `journees/index.tsx` branches on
+`isTablet`, so the matrix simply does not exist on an iPhone. That is not a gap to work
+around: they are different screens, and each device's listing should show its own.
+
+**`03-composition` is the one screen behind a guard** — a `runFlow: when:` block on the
+match screen's compose button, which exists for a captain on a match still to come. The
+three steps go together or not at all: a skipped tap must never leave `takeScreenshot`
+filing the match screen under the composition's name. The guard does not make the screen
+optional — it is still required, and its absence means `demo:refresh` has not run or the
+review account has stopped being captain of `demo-team-1`.
+
+`demo:refresh` is what makes all of this true: it makes the review account captain of
+`demo-team-1` and fills the line-up, which is what makes the Accueil card read 4/4 rather
+than 0/4 and what burns Camille Durand into team 1 for screens 6 and 7.
 
 **Look at every image before committing.** The script checks that a PNG is portrait and
 full-size; it cannot tell a good screenshot from one showing an error banner, an empty
