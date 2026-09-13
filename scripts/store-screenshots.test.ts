@@ -7,6 +7,7 @@ import {
   screensFor,
   javaMajorFromRelease,
   gradleInstallationPaths,
+  parseDevVars,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -159,5 +160,36 @@ describe('finding the JDK the Android build needs', () => {
   it('is empty when nothing names one', () => {
     expect(gradleInstallationPaths('org.gradle.jvmargs=-Xmx2g')).toEqual([])
     expect(gradleInstallationPaths('')).toEqual([])
+  })
+})
+
+describe('reading the review credentials out of .dev.vars', () => {
+  // Not a new place to keep a secret — the one that already exists. The two
+  // are Cloudflare Pages secrets, so `wrangler pages dev` reads them from this
+  // very file, and it is gitignored.
+
+  it('reads plain and quoted values', () => {
+    expect(parseDevVars('REVIEW_LOGIN_EMAIL=a@b.fr\nREVIEW_LOGIN_CODE="123456"')).toEqual({
+      REVIEW_LOGIN_EMAIL: 'a@b.fr',
+      REVIEW_LOGIN_CODE: '123456',
+    })
+  })
+
+  it('splits on the first = only, so a value may contain one', () => {
+    expect(parseDevVars("K='x=y=z'")).toEqual({ K: 'x=y=z' })
+  })
+
+  it('skips comments and blank lines', () => {
+    expect(parseDevVars('# secret\n\n  \nA=1')).toEqual({ A: '1' })
+  })
+
+  it('never expands anything', () => {
+    // A value is what the file says. Interpolating would turn a literal into
+    // something nobody wrote, in a file holding credentials.
+    expect(parseDevVars('A=${B}')).toEqual({ A: '${B}' })
+  })
+
+  it('ignores a line that is not KEY=value', () => {
+    expect(parseDevVars('not a variable\n=novalue\nBAD KEY=1')).toEqual({})
   })
 })
