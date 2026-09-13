@@ -337,11 +337,19 @@ left un-answered by an earlier run survives `clearState` and `clearKeychain` bot
 belongs to SpringBoard, not the app — and comes back over the next launch owning the
 hierarchy, hiding every element under it. That is what a stuck iPad run looks like.
 
-`04-equipes` is dropped from the iPad set: above the tablet threshold `equipes/index.tsx`
-is two panes, so that shot is the teams list beside *"Choisissez une équipe pour afficher
-sa fiche."* — a placeholder with an icon in it, where `05-equipe` shows the same list with
-a team actually in the right pane. The flow still captures all eight; `dropScreens` on the
-target decides what ships, which is why the numbering has a gap rather than a reshuffle:
+**Two shots are dropped from the iPad set**, both because everything is two panes above
+the tablet threshold (#447). `04-equipes` is the teams list beside *"Choisissez une équipe
+pour afficher sa fiche."* — a placeholder with an icon in it, where `05-equipe` shows the
+same list with a team actually in the right pane. `06-joueur-apercu` has no tablet
+equivalent at all: a player is picked from the **Joueurs** tab, so the club's list stays
+beside her fiche and there is no quick-view sheet to photograph.
+
+That last one is the only genuine fork in the flow — `TWO_PANE`, passed by the target the
+way `ORIENTATION` is, rather than sniffed from a tablet-only element. A phone walks squad
+row → quick view → profile; a tablet goes to the Joueurs tab and selects Camille there.
+
+The flow still captures every screen its branch reaches; `dropScreens` on the target
+decides what ships, which is why the numbering has a gap rather than a reshuffle:
 `05-equipe` has to be the same screen in every set.
 
 **Look at every image before committing.** The script checks that a PNG is portrait and

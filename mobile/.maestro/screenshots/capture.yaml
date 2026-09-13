@@ -101,15 +101,38 @@ appId: fr.clubping.app
     id: "team-row-demo-team-1"
 - takeScreenshot: 05-equipe
 
-# 6 and 7 — a player, twice over: the quick view that opens from a squad row,
-# then the full profile behind it. Camille Durand by name, because she is the
-# one carrying the brûlage badge.
-- tapOn:
-    id: "squad-player-demo-player-2"
-- takeScreenshot: 06-joueur-apercu
-- tapOn:
-    id: "player-sheet-profile"
-- takeScreenshot: 07-joueur-profil
+# 6 and 7 — Camille Durand, who carries the brûlage badge. How you get to her
+# is the one place the two devices genuinely want different screens, so this is
+# a branch rather than one path that reads badly on both.
+#
+# On a PHONE, twice over: the quick view that opens from a squad row, then the
+# full profile behind it. A phone has room for one of them at a time, which is
+# what makes the pair worth showing.
+- runFlow:
+    when:
+      true: ${TWO_PANE == 'false'}
+    commands:
+      - tapOn:
+          id: "squad-player-demo-player-2"
+      - takeScreenshot: 06-joueur-apercu
+      - tapOn:
+          id: "player-sheet-profile"
+      - takeScreenshot: 07-joueur-profil
+
+# On a TABLET, once, from the Joueurs tab: selecting her there keeps the club's
+# whole list beside her fiche (`isTwoPane`, #447), which is the thing a slab
+# does that a phone cannot — and a better picture than a sheet drawn over a
+# squad. There is no quick view to capture here, so 06 is dropped for that
+# target rather than faked.
+- runFlow:
+    when:
+      true: ${TWO_PANE == 'true'}
+    commands:
+      - tapOn:
+          id: "tab-joueurs"
+      - tapOn:
+          id: "player-row-demo-player-2"
+      - takeScreenshot: 07-joueur-profil
 
 # 8 — the calendar, and the way back out of the detail stack. A phone shows
 # the journées as a list; a tablet shows the availability matrix instead

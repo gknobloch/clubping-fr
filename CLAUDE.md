@@ -411,12 +411,18 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   que laissé à ce que le simulateur avait gardé de la dernière fois, et il est
   **vérifié** à la sortie : une cible qui demande le paysage et revient en
   portrait a shooté tout un jeu de travers, ce qui doit s'entendre.
-  `04-equipes` saute — au-dessus du seuil tablette `equipes/index.tsx` est en
-  deux volets, donc cette capture est la liste à côté de « Choisissez une
-  équipe pour afficher sa fiche », là où `05-equipe` montre la même liste avec
-  une fiche dedans. Le flow capture toujours les huit ; c'est `dropScreens` sur
-  la cible qui décide de ce qui part, d'où un trou dans la numérotation plutôt
-  qu'un décalage : `05-equipe` doit désigner le même écran dans tous les jeux.
+  Deux captures sautent, les deux parce que tout est en deux volets au-dessus
+  du seuil tablette (#447). `04-equipes` est la liste à côté de « Choisissez
+  une équipe pour afficher sa fiche », là où `05-equipe` montre la même liste
+  avec une fiche dedans. `06-joueur-apercu` n'a tout bonnement pas
+  d'équivalent : sur tablette la joueuse se choisit dans l'onglet **Joueurs**,
+  donc la liste du club reste à côté de sa fiche et il n'y a aucune feuille
+  d'aperçu à photographier. C'est la seule vraie bifurcation du flow —
+  `TWO_PANE`, passé par la cible comme `ORIENTATION`, plutôt que deviné sur un
+  élément propre aux tablettes. Le flow capture tout ce que sa branche
+  traverse ; c'est `dropScreens` sur la cible qui décide de ce qui part, d'où
+  un trou dans la numérotation plutôt qu'un décalage : `05-equipe` doit
+  désigner le même écran dans tous les jeux.
 - **Le jeu est de huit écrans, et le n° 8 n'est pas le même selon l'appareil.**
   Un téléphone liste les journées, une tablette affiche la matrice de
   disponibilités à la place — `journees/index.tsx` bifurque sur `isTablet`,

@@ -84,6 +84,7 @@ const TARGETS = [
     // keeps working as new hardware ships.
     simulatorName: 'iPhone 17 Pro Max',
     orientation: 'PORTRAIT',
+    twoPane: false,
     destDir: path.join(MOBILE, 'fastlane/screenshots/fr-FR'),
     // Prefixed: the iPad target writes into the SAME locale folder (deliver
     // buckets iOS screenshots by pixel size, not by folder), so both cannot
@@ -105,7 +106,15 @@ const TARGETS = [
     // fiche." — a placeholder with an icon in it. 05-equipe shows the same
     // list with a team actually in the right pane, and says everything this
     // one says.
-    dropScreens: ['04-equipes'],
+    // Two panes everywhere above the tablet threshold (#447), which drops two
+    // shots rather than one. `04-equipes` is the teams list beside
+    // "Choisissez une équipe pour afficher sa fiche." — a placeholder with an
+    // icon in it, where `05-equipe` shows the same list with a team in the
+    // right pane. `06-joueur-apercu` has no tablet equivalent at all: the
+    // player is selected from the Joueurs tab, so her fiche IS the pane and
+    // there is no quick-view sheet to photograph.
+    twoPane: true,
+    dropScreens: ['04-equipes', '06-joueur-apercu'],
     destDir: path.join(MOBILE, 'fastlane/screenshots/fr-FR'),
     filePrefix: 'ipad_',
   },
@@ -118,6 +127,7 @@ const TARGETS = [
     // Android tablet target here.
     avdNamePrefix: 'Medium_Phone',
     orientation: 'PORTRAIT',
+    twoPane: false,
     destDir: path.join(MOBILE, 'fastlane/metadata/android/fr-FR/images/phoneScreenshots'),
     filePrefix: '',
   },
@@ -361,6 +371,11 @@ function runFlow(target, { email, code, deviceArg }) {
     'test', FLOW, '--debug-output', outDir,
     '-e', `EMAIL=${email}`, '-e', `CODE=${code}`,
     '-e', `ORIENTATION=${target.orientation}`,
+    // Which of the two player paths the flow walks. Passed by the target
+    // rather than sniffed from a tablet-only element: the device class is
+    // something this script already knows, and a flow guessing at it would be
+    // one more thing that can be wrong quietly.
+    '-e', `TWO_PANE=${target.twoPane}`,
   ]
   if (deviceArg) args.splice(1, 0, '--device', deviceArg)
   // Logged with the credential taken back out. The first run of this script

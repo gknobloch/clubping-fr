@@ -105,15 +105,17 @@ describe('screensFor', () => {
   it('drops what a target names, and renumbers nothing', () => {
     // The gap is the point: 05-equipe must be the same screen in every set,
     // so an omission reads as an omission rather than a reshuffle.
-    const set = screensFor({ id: 'ipad', dropScreens: ['04-equipes'] })
-    expect(set).not.toContain('04-equipes')
-    expect(set).toEqual(REQUIRED_SCREENS.filter((s: string) => s !== '04-equipes'))
+    const dropScreens = ['04-equipes', '06-joueur-apercu']
+    const set = screensFor({ id: 'ipad', dropScreens })
+    expect(set).toEqual(REQUIRED_SCREENS.filter((s: string) => !dropScreens.includes(s)))
+    expect(set[set.length - 1]).toBe('08-journees')
   })
 
   it('measures a run against that target’s set, not the full one', () => {
-    const set = screensFor({ id: 'ipad', dropScreens: ['04-equipes'] })
+    const set = screensFor({ id: 'ipad', dropScreens: ['04-equipes', '06-joueur-apercu'] })
     expect(missingRequiredScreens(set, set)).toEqual([])
-    // …while the same capture is short one screen for a target that wants it.
-    expect(missingRequiredScreens(set)).toEqual(['04-equipes'])
+    // …while the same capture is short two screens for a target that wants
+    // them, which is what stops a tablet run from passing as a phone one.
+    expect(missingRequiredScreens(set)).toEqual(['04-equipes', '06-joueur-apercu'])
   })
 })
