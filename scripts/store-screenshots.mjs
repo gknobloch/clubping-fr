@@ -37,15 +37,15 @@ const FLOW = path.join(MOBILE, '.maestro/screenshots/capture.yaml')
 // Names match the five files already in the repo — see capture.yaml for why.
 export const REQUIRED_SCREENS = [
   '01-accueil',
-  '02-feuille',
-  '03-composition',
+  '02-composition',
+  '03-feuille',
   '04-equipes',
   '05-equipe',
   '06-joueur-apercu',
   '07-joueur-profil',
   '08-journees',
 ]
-// Nothing is optional. 03-composition is the only screen the flow guards
+// Nothing is optional. 02-composition is the only screen the flow guards
 // (`runFlow: when:` on the compose button, which exists for a captain on a
 // match still to come) — and it is guarded so that a skipped tap cannot file
 // the match screen under the composition's name, not so that the set may ship
@@ -307,8 +307,8 @@ function installAndLaunchAndroid(avdNamePrefix) {
 }
 
 /**
- * Run capture.yaml on one target, returning the basenames it actually wrote
- * (03-composition may be absent — see OPTIONAL_SCREENS).
+ * Run capture.yaml on one target, returning the basenames it actually wrote —
+ * which is every REQUIRED_SCREENS entry, or the run is not shippable.
  */
 function runFlow(target, { email, code, deviceArg }) {
   const outDir = path.join(ROOT, '.screenshots-tmp', target.id)

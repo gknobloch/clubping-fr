@@ -391,7 +391,7 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   donc la matrice n'existe tout simplement pas sur iPhone. Ce n'est pas un
   manque à contourner : ce sont deux écrans différents, et la fiche de chaque
   appareil doit montrer le sien.
-- **`03-composition` est sous garde**, et c'est un bloc `runFlow: when:`, pas
+- **`02-composition` est sous garde**, et c'est un bloc `runFlow: when:`, pas
   trois commandes `optional`. `takeScreenshot` réussit toujours : un tap sauté
   laisserait la capture enregistrer l'écran du match sous le nom de la
   composition — une mauvaise image qui ressemble exactement à une bonne. Les

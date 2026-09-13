@@ -13,8 +13,8 @@
 # written against a visible label does not match, however it is spelled.
 #
 # The set walks one thread rather than touring the tabs: a captain opens the
-# app, opens the coming match, reads the feuille de match, composes the
-# line-up, then goes to his team, looks a player up, opens her profile, and
+# app, opens the coming match, composes the line-up, reads the feuille de
+# match, then goes to his team, looks a player up, opens her profile, and
 # ends on the calendar. Screens 6 and 7 are Camille Durand, who has played
 # twice and is therefore burned into team 1 — a rule this app explains and its
 # competitors do not.
@@ -32,24 +32,18 @@ appId: fr.clubping.app
 # the line-up already made.
 - takeScreenshot: 01-accueil
 
-# 2 — the feuille de match, the read-only sheet every member can open. The
-# match screen is only passed through on the way: the Accueil card's header
-# opens it, and the feuille is one tap further in.
+# The match screen itself is not in the set — it is the way to the two sheets
+# that are. The Accueil card's header opens it.
 - tapOn:
     id: "next-match-open"
-- tapOn:
-    id: "match-sheet-open"
-- takeScreenshot: 02-feuille
-- tapOn:
-    id: "match-sheet-close"
 
-# 3 — the line-up sheet, opened from the same screen.
+# 2 — the captain's line-up sheet.
 #
 # A `runFlow: when:` block rather than three `optional:` commands, because
 # `takeScreenshot` ALWAYS succeeds: a tap silently skipped would file the match
 # screen under the composition's name — a wrong image that looks exactly like a
 # right one. The steps go together or not at all, and a missing
-# 03-composition is then caught by the script's required-screens check instead
+# 02-composition is then caught by the script's required-screens check instead
 # of shipping.
 #
 # The button only exists for a captain on a match still to come, which is what
@@ -61,11 +55,19 @@ appId: fr.clubping.app
     commands:
       - tapOn:
           id: "match-compose"
-      - takeScreenshot: 03-composition
+      - takeScreenshot: 02-composition
       # Annuler, not Enregistrer: a screenshot run must not rewrite the line-up
       # that scripts/demo-data.mjs put there.
       - tapOn:
           id: "selection-cancel"
+
+# 3 — the feuille de match, the read-only sheet every member can open, captain
+# or not.
+- tapOn:
+    id: "match-sheet-open"
+- takeScreenshot: 03-feuille
+- tapOn:
+    id: "match-sheet-close"
 
 # 4 and 5 — the club's teams, then one of them in full.
 - tapOn:

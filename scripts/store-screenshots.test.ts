@@ -67,8 +67,8 @@ describe('missingRequiredScreens', () => {
   })
 
   it('names exactly what a partial run is missing', () => {
-    const partial = REQUIRED_SCREENS.filter((s: string) => s !== '03-composition')
-    expect(missingRequiredScreens(partial)).toEqual(['03-composition'])
+    const partial = REQUIRED_SCREENS.filter((s: string) => s !== '02-composition')
+    expect(missingRequiredScreens(partial)).toEqual(['02-composition'])
   })
 
   it('expects the whole set, in order', () => {

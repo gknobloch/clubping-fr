@@ -272,14 +272,15 @@ availability buttons and no "Composer l'équipe", only ids. A selector written a
 visible label will not match, however it is spelled.
 
 **The set is eight screens**, one thread rather than a tour of the tabs: Accueil, the
-feuille de match, the line-up sheet, the club's teams, one team in full, a player's quick
-view, her profile, and the calendar.
+line-up sheet, the feuille de match, the club's teams, one team in full, a player's quick
+view, her profile, and the calendar. The match screen itself is not in it — it is the way
+to the two sheets that are.
 
 | | |
 | --- | --- |
 | `01-accueil` | the hero card — the match, the answers, the line-up |
-| `02-feuille` | the feuille de match, two taps in from the card's header |
-| `03-composition` | the captain's line-up sheet |
+| `02-composition` | the captain's line-up sheet |
+| `03-feuille` | the feuille de match, read-only and open to everyone |
 | `04-equipes` | the club's teams |
 | `05-equipe` | team 1 in full |
 | `06-joueur-apercu` | Camille Durand, quick view |
@@ -291,7 +292,7 @@ list; a tablet shows the availability matrix instead — `journees/index.tsx` br
 `isTablet`, so the matrix simply does not exist on an iPhone. That is not a gap to work
 around: they are different screens, and each device's listing should show its own.
 
-**`03-composition` is the one screen behind a guard** — a `runFlow: when:` block on the
+**`02-composition` is the one screen behind a guard** — a `runFlow: when:` block on the
 match screen's compose button, which exists for a captain on a match still to come. The
 three steps go together or not at all: a skipped tap must never leave `takeScreenshot`
 filing the match screen under the composition's name. The guard does not make the screen
