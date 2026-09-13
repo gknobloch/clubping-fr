@@ -329,14 +329,34 @@ function runFlow(target, { email, code, deviceArg }) {
     throw new Error(`maestro a échoué sur la cible ${target.id} — voir sa sortie ci-dessus.`)
   }
 
-  // Only the takeScreenshot folder: the same tree also holds a screenshot per
-  // failed command ("step-018-tapOnElement-…"), which is invaluable when a
-  // flow breaks and must never be mistaken for a store image.
-  const shots = path.join(outDir, 'capture', 'takeScreenshot')
-  if (!existsSync(shots)) return []
+  // --debug-output is a ROOT, not the folder: Maestro still builds
+  // .maestro/tests/<timestamp>/<flow>/ underneath it. So the takeScreenshot
+  // directory is found rather than assumed.
+  //
+  // Only that directory: the same tree also holds a screenshot per FAILED
+  // command ("step-018-tapOnElement-…"), which is what diagnosed every
+  // failure here so far and must never be mistaken for a store image.
+  const shots = findTakeScreenshotDir(outDir)
+  if (!shots) return []
   return readdirSync(shots)
     .filter((f) => f.endsWith('.png'))
     .map((f) => ({ file: path.join(shots, f), basename: path.basename(f, '.png') }))
+}
+
+/** The newest `takeScreenshot/` anywhere under `root`, or null. */
+function findTakeScreenshotDir(root) {
+  const found = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const full = path.join(dir, entry.name)
+      if (entry.name === 'takeScreenshot') found.push(full)
+      else walk(full)
+    }
+  }
+  if (!existsSync(root)) return null
+  walk(root)
+  return found.sort().pop() ?? null
 }
 
 function validateAndInstall(target, captured) {
@@ -377,6 +397,13 @@ function main(argv) {
   // whatever is already installed on the device, which is what iterating on a
   // flow actually needs.
   const skipBuild = argv.includes('--skip-build')
+  if (skipBuild) {
+    console.warn(
+      "⚠ --skip-build : l'app déjà installée est réutilisée telle quelle. Une " +
+        'modification du code de l\'app (un testID, un écran) n\'y est PAS. ' +
+        'Ne gardez ce drapeau que pour itérer sur un flow Maestro.',
+    )
+  }
   // A named target ("npm run store:screenshots -- iphone") for iterating on
   // one flow without rebuilding the other two.
   const only = argv.find((a) => !a.startsWith('--'))

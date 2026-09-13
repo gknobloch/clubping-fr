@@ -211,9 +211,14 @@ npm run store:screenshots -- iphone                # une seule, pour itérer
 npm run store:screenshots -- iphone --skip-build   # rejouer le flow seul
 ```
 
-`--skip-build` réutilise l'app déjà installée. Sans lui, chaque essai repasse
-par `expo prebuild --clean`, donc par une compilation complète d'une vingtaine
-de minutes — ce qui est absurde quand c'est un sélecteur Maestro qui a lâché.
+`--skip-build` réutilise l'app **déjà installée**. Sans lui, chaque essai repasse par
+`expo prebuild --clean`, donc par une compilation complète d'une vingtaine de minutes —
+absurde quand c'est un sélecteur Maestro qui a lâché.
+
+Mais il ne sert qu'à ça. Toute modification du code de l'app — un `testID`, un écran —
+exige un vrai build : sans lui, le flow tourne contre le binaire précédent et cherche
+des éléments que ce binaire ne contient pas. C'est exactement comme ça que
+`tab-journees` est resté introuvable après avoir été ajouté.
 
 Manual, and deliberately not part of a release: re-run it when a captured screen has
 visibly changed, not every version.
