@@ -460,6 +460,13 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   l'**absence** de ligne, pas une valeur, et c'est ce qui donne son sens au
   compteur que lit le capitaine. Les lignes sont réécrites, jamais fusionnées,
   pour qu'une réexécution ne fabrique pas un état que personne n'a choisi.
+- **La fiche de Camille Durand est remplie**, parce que deux des huit captures
+  sont ses écrans à elle : une catégorie (V40, saison active — une catégorie
+  appartient à une saison, #482) et un numéro de téléphone, sans lequel
+  `PhoneRow` et son bouton de copie (#503) n'apparaissent pas du tout. Le
+  numéro est pris dans la plage réservée à la fiction par l'ARCEP
+  (07 99 98 xx xx) : la capture part sur une fiche publique, et « qui a l'air
+  inventé » n'est pas « qui n'est attribué à personne ».
 - Ce script écrit en **production**, et refuse tout identifiant hors du club de
   démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
 - Manuel, et volontairement pas branché sur `mobile-release` : on recapture

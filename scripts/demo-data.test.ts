@@ -8,7 +8,9 @@ import {
   assertDemoOnly,
   DEMO_USER,
   DEMO_AVAILABILITY,
+  DEMO_PROFILE,
 } from './demo-data.mjs'
+import { normalizeCategory } from '../src/lib/playerCategories'
 
 // ---------------------------------------------------------------------------
 // The demo club's calendar (#520)
@@ -137,5 +139,33 @@ describe('the squad’s answers for the coming match', () => {
 
   it('uses only statuses the app understands', () => {
     for (const s of statuses) expect(['available', 'maybe', 'unavailable']).toContain(s)
+  })
+})
+
+describe('what Camille Durand’s fiche shows', () => {
+  const entries = Object.entries(
+    DEMO_PROFILE as Record<string, { category: string; phone: string }>,
+  )
+
+  it('names only demo rows', () => {
+    expect(() => assertDemoOnly(entries.map(([id]) => id))).not.toThrow()
+  })
+
+  it('uses a category the app can read back', () => {
+    // Stored verbatim and normalised on read (#482): a code nothing recognises
+    // normalises to undefined, and the fiche prints nothing at all — which is
+    // exactly the empty screen this is here to avoid.
+    for (const [, { category }] of entries) {
+      expect(normalizeCategory(category)).toBe(category)
+    }
+  })
+
+  it('uses a phone number nobody can answer', () => {
+    // ARCEP reserves 07 99 98 xx xx for fiction, the way +1 555-0100 is
+    // reserved. This one goes on a public store listing, so "looks invented"
+    // is not enough — it has to be unallocated.
+    for (const [, { phone }] of entries) {
+      expect(phone.replace(/\D/g, '')).toMatch(/^3379998\d{4}$/)
+    }
   })
 })

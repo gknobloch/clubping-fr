@@ -102,6 +102,30 @@ export const DEMO_LINEUP = [
   'demo-player-7', //      Hugo Girard — équipe 2, monté en équipe 1
 ]
 
+/**
+ * What screens 06 and 07 say about Camille Durand beyond her name.
+ *
+ * Her quick view and her full profile are two of the eight store screenshots,
+ * and an empty fiche does not demonstrate a fiche. The category is the field
+ * #482's whole eligibility rule hangs off, and it is what makes the profile
+ * print "Vétéran 40" instead of nothing; the phone number is what puts
+ * `PhoneRow` on the screen at all — copy button and WhatsApp both (#503), two
+ * affordances that are invisible on a licensee who has no number.
+ *
+ * The number is in ARCEP's range reserved for fiction (07 99 98 xx xx, the
+ * French equivalent of 555-0100): this image goes on a public store listing,
+ * and an invented-looking number is not the same thing as an unallocated one.
+ * Written with the spaces it should be read with — `PhoneRow` prints the
+ * string verbatim and strips non-digits itself for the wa.me link.
+ *
+ * A category belongs to a SEASON, not to a licensee (#482, migration 0050), so
+ * the row is keyed on the active season — looked up here rather than written
+ * down, since "27" is this August's answer and not next August's.
+ */
+export const DEMO_PROFILE = {
+  'demo-player-2': { category: 'V40', phone: '+33 7 99 98 12 34' },
+}
+
 /** The journée whose match the Accueil hero card shows: the one coming up. */
 export const UPCOMING_JOURNEE = 2
 
@@ -214,10 +238,17 @@ function main(argv) {
   )[0]
   if (!team) throw new Error(`${DEMO_TEAM} introuvable.`)
 
+  // A category is stated per season (#482), and everything unqualified in the
+  // app means the ACTIVE one. Read it: hard-coding the id would file next
+  // season's demo data under a season nobody is looking at.
+  const season = query("SELECT id FROM seasons WHERE status = 'active'")[0]
+  if (!season) throw new Error('Aucune saison active — la catégorie n’a pas de saison où aller.')
+
   assertDemoOnly([
     ...games.map((g) => g.id),
     ...matchDays.map((m) => m.id),
     ...Object.keys(DEMO_AVAILABILITY),
+    ...Object.keys(DEMO_PROFILE),
     ...DEMO_LINEUP,
     team.id,
     DEMO_USER,
@@ -270,6 +301,15 @@ function main(argv) {
     `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
       `VALUES (${sqlStr(upcoming.id)}, ${sqlStr(DEMO_TEAM)}, ${sqlStr(JSON.stringify(DEMO_LINEUP))}) ` +
       `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
+    // What the player screens show — see DEMO_PROFILE.
+    ...Object.entries(DEMO_PROFILE).flatMap(([playerId, { category, phone }]) => [
+      `UPDATE users SET phone = ${sqlStr(phone)} WHERE id = ${sqlStr(playerId)}`,
+      // Keyed (season_id, player_id) since 0050 — upserted, so re-running is
+      // a no-op rather than a duplicate the PRIMARY KEY would reject.
+      `INSERT INTO player_season_categories (season_id, player_id, category) ` +
+        `VALUES (${sqlStr(season.id)}, ${sqlStr(playerId)}, ${sqlStr(category)}) ` +
+        `ON CONFLICT(season_id, player_id) DO UPDATE SET category = excluded.category`,
+    ]),
   ]
 
   console.log(`Aujourd'hui : ${today}`)
@@ -293,6 +333,9 @@ function main(argv) {
       `peut-être, ${counts.unavailable ?? 0} non, ${silent} sans réponse`,
   )
   console.log(`  composition → ${DEMO_LINEUP.length} joueurs, coup d'envoi ${KICK_OFF}`)
+  for (const [playerId, { category, phone }] of Object.entries(DEMO_PROFILE)) {
+    console.log(`  ${playerId} → catégorie ${category} (saison ${season.id}), ${phone}`)
+  }
   console.log(`\n${statements.length} instructions.`)
 
   if (!apply) {
