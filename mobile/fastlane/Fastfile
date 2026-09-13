@@ -46,6 +46,42 @@ def build_context
   JSON.parse(File.read(CONTEXT))
 end
 
+SCREENSHOTS_DIR = File.join(FASTLANE_DIR, "screenshots")
+
+# Whether there is a set of store screenshots to upload, and a hard stop when
+# there is half of one (#520).
+#
+# Three states, because uploading screenshots OVERWRITES what the listing
+# already shows. Nothing captured is the ordinary case on a machine that only
+# ever ships notes — we leave the live images alone and say so. A full set
+# replaces them, which is the point. But one device class on its own is the
+# dangerous middle: `overwrite_screenshots` would swap a complete listing for
+# half a listing, and a run that captured only `iphone` looks exactly like a
+# run that captured both until an App Store page is missing its iPad images.
+#
+# `*.png` only: Finder drops .DS_Store into any folder somebody has opened, and
+# deliver reads whatever it finds.
+def ios_screenshots_ready?
+  names = Dir[File.join(SCREENSHOTS_DIR, "*", "*.png")].map { |f| File.basename(f) }
+  return false if names.empty?
+
+  missing = %w[iphone_ ipad_].reject { |p| names.any? { |n| n.start_with?(p) } }
+  unless missing.empty?
+    UI.user_error!(
+      "Captures incomplètes dans #{SCREENSHOTS_DIR} : aucune image #{missing.join(' ni ')}. " \
+      "Téléverser celles-ci remplacerait la fiche complète par une moitié. " \
+      "Lancez `npm run store:screenshots -- iphone` et `-- ipad`, ou videz le dossier."
+    )
+  end
+  true
+end
+
+# Play's side of the same question. No pairing to check — one device class, and
+# supply only touches the locales and types it actually finds.
+def android_screenshots_ready?(metadata_path)
+  !Dir[File.join(metadata_path, "*", "images", "phoneScreenshots", "*.png")].empty?
+end
+
 def read_notes(file)
   UI.user_error!("#{file} absent. Relancez `npm run store:notes`.") unless File.exist?(file)
   File.read(file).strip
@@ -79,14 +115,29 @@ end
 desc "Nouveautés de cette version — App Store, par version"
 lane :ios_notes do
   context = build_context
+  shots = ios_screenshots_ready?
+  unless shots
+    UI.important(
+      "Aucune capture dans #{SCREENSHOTS_DIR} — la fiche garde ses images actuelles. " \
+      "`npm run store:screenshots -- iphone|ipad` si un écran a changé."
+    )
+  end
   deliver(
     api_key: asc_key,
     app_version: context["version"],
     metadata_path: context["metadataPath"],
     # EAS already uploaded the binary; deliver is here for the text alone.
     skip_binary_upload: true,
-    skip_screenshots: true,
-    overwrite_screenshots: false,
+    # The images, when there are any (#520). `metadata_path` points at the
+    # generated folder, which holds none, so the screenshots are named
+    # separately — they are captured, not generated, and they are not in git.
+    #
+    # `overwrite_screenshots` tracks the same answer rather than being an
+    # option of its own: left false, deliver ADDS to what is already there and
+    # a listing accumulates two versions of every screen.
+    screenshots_path: SCREENSHOTS_DIR,
+    skip_screenshots: !shots,
+    overwrite_screenshots: shots,
     # Nothing is sent to review from here: the version record is created and
     # filled, and a human presses the button in App Store Connect.
     submit_for_review: false,
@@ -94,7 +145,10 @@ lane :ios_notes do
     # No HTML preview to confirm — this has to run unattended.
     force: true,
   )
-  UI.success("Notes App Store déposées sur la version #{context['version']} (pas soumise à la revue).")
+  UI.success(
+    "Notes App Store déposées sur la version #{context['version']}" \
+    "#{shots ? ', captures comprises' : ''} (pas soumise à la revue)."
+  )
 end
 
 desc "Éléments à tester — TestFlight, par build"
@@ -162,6 +216,13 @@ end
 desc "Notes de version — Play Console, canal internal"
 lane :android_notes do
   context = build_context
+  shots = android_screenshots_ready?(context["androidMetadataPath"])
+  unless shots
+    UI.important(
+      "Aucune capture Android — la fiche garde ses images actuelles. " \
+      "`npm run store:screenshots -- android` si un écran a changé."
+    )
+  end
   key = File.join(MOBILE_DIR, "google-play-service-account.json")
   UI.user_error!("#{key} absent. Voir mobile/DISTRIBUTION.md.") unless File.exist?(key)
   unless play_release_holding?(context["versionCode"], "internal", key)
@@ -173,18 +234,23 @@ lane :android_notes do
     # The build is already on `internal`, put there by `eas build --auto-submit`.
     track: "internal",
     version_code: context["versionCode"].to_i,
-    # Changelogs only. The listing — description, icon, feature graphic,
-    # screenshots — is not managed from here yet, and uploading a metadata
-    # folder that holds none of it over the live one would wipe it.
+    # Changelogs, and the screenshots when a capture has left some (#520).
+    # The rest of the listing — description, icon, feature graphic — is still
+    # not managed from here, and uploading a metadata folder that holds none of
+    # it over the live one would wipe it. Hence the flags stay off one by one
+    # rather than a blanket `skip_upload_metadata: false`.
     skip_upload_aab: true,
     skip_upload_apk: true,
     skip_upload_metadata: true,
     skip_upload_images: true,
-    skip_upload_screenshots: true,
+    skip_upload_screenshots: !shots,
     skip_upload_changelogs: false,
     metadata_path: context["androidMetadataPath"],
   )
-  UI.success("Notes de version déposées sur le versionCode #{context['versionCode']} (canal internal).")
+  UI.success(
+    "Notes de version déposées sur le versionCode #{context['versionCode']}" \
+    "#{shots ? ', captures comprises' : ''} (canal internal)."
+  )
 end
 
 desc "Les trois champs, une fois les deux builds terminés"
