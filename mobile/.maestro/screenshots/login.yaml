@@ -37,6 +37,20 @@ appId: fr.clubping.app
 - tapOn:
     id: "login-email-input"
 - inputText: ${EMAIL}
+# Android's soft keyboard covers the whole login card — the field AND the
+# button under it — and the button is then not in the hierarchy at all, so
+# `tapOn` fails rather than merely missing. iOS keeps the card above its
+# keyboard, which is why this only appeared the first time the flow ran on an
+# emulator.
+#
+# Guarded rather than unconditional: the iOS path is proven as it stands, and
+# `hideKeyboard` there would be a change to a run that works. Lift the guard if
+# iOS ever needs it too.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
 - tapOn:
     id: "login-request-code-button"
 # The review account's code never goes to an inbox, so there is no delay to
@@ -45,8 +59,33 @@ appId: fr.clubping.app
 - tapOn:
     id: "login-code-input"
 - inputText: ${CODE}
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
 - tapOn:
     id: "login-verify-button"
+
+# The notification prompt, dismissed BEFORE the tab bar is waited for.
+#
+# `<Push>` mounts the instant a session exists (utils/push.ts), so the OS asks
+# right here — and while it is up it owns the accessibility hierarchy: the tab
+# bar is drawn underneath and simply not visible to a query. Waiting first and
+# dismissing after, which is where this used to sit, therefore times out on a
+# screen that is perfectly fine.
+#
+# Denied, not allowed: this device must never hold a push token. The review
+# account is a captain with a match six days out, so the nightly dispatch
+# (#495) would land a real banner across a screenshot. `permissions:` on
+# launchApp asks for the same thing and does not get it on Android, where
+# POST_NOTIFICATIONS is a runtime permission the app requests for itself.
+#
+# Optional, and both spellings: a device where an earlier run already settled
+# the prompt shows nothing, and that is the common case rather than a failure.
+- tapOn:
+    text: "Don.t allow|Don.t Allow|Ne pas autoriser|Refuser"
+    optional: true
 # The tab bar is the one thing every landing state shares — a session token
 # saved from a previous run, DEV_LOGIN off, and this member's own club/team all
 # lead here, but a wrong email or a rejected code does not.
@@ -72,6 +111,8 @@ appId: fr.clubping.app
 #
 # `Don.t Allow` because iOS writes a typographic apostrophe (Don’t), and a
 # straight one in the pattern matches nothing at all.
+# Again, for a prompt that arrived late — after the tab bar rather than before
+# it. Costs nothing when there is nothing to tap.
 - tapOn:
-    text: "Don.t Allow|Ne pas autoriser|Refuser"
+    text: "Don.t allow|Don.t Allow|Ne pas autoriser|Refuser"
     optional: true
