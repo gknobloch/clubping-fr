@@ -385,6 +385,19 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `deliver` classe une capture iOS d'après ses **dimensions en pixels** et non
   d'après son dossier — d'où le préfixe `iphone_` / `ipad_` dans les noms de
   fichiers, sans lequel la seconde cible écraserait la première.
+- **L'iPad se capture en paysage, et il lui manque un écran.** Une tablette se
+  tient en travers, et c'est la forme pour laquelle #447 a dessiné l'app : les
+  cinq destinations deviennent un rail à gauche et la matrice des journées a
+  enfin sa largeur. Le sens est **passé au flow** (`-e ORIENTATION=…`) plutôt
+  que laissé à ce que le simulateur avait gardé de la dernière fois, et il est
+  **vérifié** à la sortie : une cible qui demande le paysage et revient en
+  portrait a shooté tout un jeu de travers, ce qui doit s'entendre.
+  `04-equipes` saute — au-dessus du seuil tablette `equipes/index.tsx` est en
+  deux volets, donc cette capture est la liste à côté de « Choisissez une
+  équipe pour afficher sa fiche », là où `05-equipe` montre la même liste avec
+  une fiche dedans. Le flow capture toujours les huit ; c'est `dropScreens` sur
+  la cible qui décide de ce qui part, d'où un trou dans la numérotation plutôt
+  qu'un décalage : `05-equipe` doit désigner le même écran dans tous les jeux.
 - **Le jeu est de huit écrans, et le n° 8 n'est pas le même selon l'appareil.**
   Un téléphone liste les journées, une tablette affiche la matrice de
   disponibilités à la place — `journees/index.tsx` bifurque sur `isTablet`,

@@ -54,6 +54,21 @@ export const REQUIRED_SCREENS = [
 export const OPTIONAL_SCREENS = []
 
 /**
+ * The screens a target keeps, which is every one of them unless it says
+ * otherwise.
+ *
+ * The flow always captures all eight — one file, one device deciding what it
+ * draws — and the target decides which of them ship. Dropping a shot here
+ * rather than branching the flow keeps the numbering fixed: `05-equipe` is the
+ * same screen in every set, and a missing number is a deliberate omission
+ * rather than a renumbering nobody can follow.
+ */
+export function screensFor(target) {
+  const dropped = new Set(target.dropScreens ?? [])
+  return REQUIRED_SCREENS.filter((name) => !dropped.has(name))
+}
+
+/**
  * A capture target: one platform, one device class, one destination.
  *
  * `resolveDevice` is looked up at run time rather than a stored id — a
@@ -68,6 +83,7 @@ const TARGETS = [
     // that is stays "Pro Max", so matching the name rather than a version
     // keeps working as new hardware ships.
     simulatorName: 'iPhone 17 Pro Max',
+    orientation: 'PORTRAIT',
     destDir: path.join(MOBILE, 'fastlane/screenshots/fr-FR'),
     // Prefixed: the iPad target writes into the SAME locale folder (deliver
     // buckets iOS screenshots by pixel size, not by folder), so both cannot
@@ -78,6 +94,18 @@ const TARGETS = [
     id: 'ipad',
     platform: 'ios',
     simulatorName: 'iPad Pro 13-inch (M5)',
+    // Sideways, which is how a slab gets held and what #447 designed the app
+    // for: the five destinations become a rail down the left edge, and the
+    // journées matrix gets the width it was drawn to need. Apple accepts
+    // landscape iPad screenshots; the portrait check below is per target for
+    // exactly this.
+    orientation: 'LANDSCAPE_LEFT',
+    // The équipes screen is two panes above the tablet threshold, so this
+    // shot is the teams list beside "Choisissez une équipe pour afficher sa
+    // fiche." — a placeholder with an icon in it. 05-equipe shows the same
+    // list with a team actually in the right pane, and says everything this
+    // one says.
+    dropScreens: ['04-equipes'],
     destDir: path.join(MOBILE, 'fastlane/screenshots/fr-FR'),
     filePrefix: 'ipad_',
   },
@@ -89,6 +117,7 @@ const TARGETS = [
     // way Apple requires iPad for a supportsTablet app, so there is no
     // Android tablet target here.
     avdNamePrefix: 'Medium_Phone',
+    orientation: 'PORTRAIT',
     destDir: path.join(MOBILE, 'fastlane/metadata/android/fr-FR/images/phoneScreenshots'),
     filePrefix: '',
   },
@@ -119,20 +148,28 @@ export function pngDimensions(buf) {
  * rather than a sliver, a blank frame, or a thumbnail — the cheap check that
  * catches a flow that "succeeded" against the wrong element.
  *
+ * The orientation is asserted, not merely allowed: a simulator remembers how
+ * it was last left, so a target that asked for landscape and got portrait has
+ * silently shot a whole set in the wrong shape. That has to be the loud case,
+ * which is why the parameter has no "either" value.
+ *
  * @param {{width: number, height: number}} dims
+ * @param {'PORTRAIT'|'LANDSCAPE_LEFT'|'LANDSCAPE_RIGHT'} [orientation]
  */
-export function isPlausibleScreenshot({ width, height }) {
-  return width >= 800 && height >= 800 && height > width
+export function isPlausibleScreenshot({ width, height }, orientation = 'PORTRAIT') {
+  if (width < 800 || height < 800) return false
+  return orientation === 'PORTRAIT' ? height > width : width > height
 }
 
 /**
- * Which of the required screens are missing from a captured set.
+ * Which of the expected screens are missing from a captured set.
  *
  * @param {string[]} presentBasenames — filenames without extension, e.g. "01-accueil"
+ * @param {string[]} [expected] — the target's own set; all of them by default
  */
-export function missingRequiredScreens(presentBasenames) {
+export function missingRequiredScreens(presentBasenames, expected = REQUIRED_SCREENS) {
   const present = new Set(presentBasenames)
-  return REQUIRED_SCREENS.filter((name) => !present.has(name))
+  return expected.filter((name) => !present.has(name))
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +360,7 @@ function runFlow(target, { email, code, deviceArg }) {
   const args = [
     'test', FLOW, '--debug-output', outDir,
     '-e', `EMAIL=${email}`, '-e', `CODE=${code}`,
+    '-e', `ORIENTATION=${target.orientation}`,
   ]
   if (deviceArg) args.splice(1, 0, '--device', deviceArg)
   // Logged with the credential taken back out. The first run of this script
@@ -372,15 +410,27 @@ function findTakeScreenshotDir(root) {
 }
 
 function validateAndInstall(target, captured) {
-  const missing = missingRequiredScreens(captured.map((c) => c.basename))
+  const wanted = screensFor(target)
+  const missing = missingRequiredScreens(captured.map((c) => c.basename), wanted)
   if (missing.length) {
     console.warn(`  ⚠ ${target.id} : ${missing.join(', ')} n'a pas été capturé.`)
   }
   mkdirSync(target.destDir, { recursive: true })
+  const keep = new Set(wanted)
   for (const { file, basename } of captured) {
+    // Captured but not wanted here — the flow is one file for every target.
+    // Said out loud rather than passed over: a silent drop and a silent
+    // failure look the same in a log.
+    if (!keep.has(basename)) {
+      console.log(`  — ${target.id}/${basename} : hors du jeu de cette cible.`)
+      continue
+    }
     const dims = pngDimensions(readFileSync(file))
-    if (!isPlausibleScreenshot(dims)) {
-      console.warn(`  ⚠ ${target.id}/${basename} : ${dims.width}x${dims.height}, ignoré.`)
+    if (!isPlausibleScreenshot(dims, target.orientation)) {
+      console.warn(
+        `  ⚠ ${target.id}/${basename} : ${dims.width}x${dims.height}, ` +
+          `attendu ${target.orientation.toLowerCase()}, ignoré.`,
+      )
       continue
     }
     const dest = path.join(target.destDir, `${target.filePrefix}${basename}.png`)

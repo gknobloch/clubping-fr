@@ -253,11 +253,11 @@ committed:
 REVIEW_LOGIN_EMAIL=… REVIEW_LOGIN_CODE=… npm run store:screenshots
 ```
 
-| Cible | Appareil | Où l'image atterrit |
-| --- | --- | --- |
-| `iphone` | iPhone 17 Pro Max (classe 6,9") | `fastlane/screenshots/fr-FR/iphone_*.png` |
-| `ipad` | iPad Pro 13-inch (M5) | `fastlane/screenshots/fr-FR/ipad_*.png` |
-| `android` | AVD `Medium_Phone*` | `fastlane/metadata/android/fr-FR/images/phoneScreenshots/*.png` |
+| Cible | Appareil | Sens | Où l'image atterrit |
+| --- | --- | --- | --- |
+| `iphone` | iPhone 17 Pro Max (classe 6,9") | portrait | `fastlane/screenshots/fr-FR/iphone_*.png` |
+| `ipad` | iPad Pro 13-inch (M5) | paysage | `fastlane/screenshots/fr-FR/ipad_*.png` |
+| `android` | AVD `Medium_Phone*` | portrait | `fastlane/metadata/android/fr-FR/images/phoneScreenshots/*.png` |
 
 Both iOS sizes share one locale folder on purpose — `deliver` files an iOS screenshot by
 its **pixel dimensions**, not by its directory — which is exactly why the filenames carry
@@ -309,6 +309,20 @@ than 0/4 and what burns Camille Durand into team 1 for screens 6 and 7.
 window, so a coordinate that is backdrop on one is the panel on the other. `selection-cancel`
 rather than the save button, so a capture run cannot rewrite the line-up `demo:refresh`
 just put there.
+
+**The iPad set is landscape, and one screen shorter.** A slab gets held sideways, and
+that is the shape #447 drew the app for: the five destinations become a rail down the
+left edge and the journées matrix gets the width it needs. The orientation is passed to
+the flow (`-e ORIENTATION=…`) rather than left to whatever the simulator was last set to,
+and it is **asserted** on the way out — a target that asked to be turned sideways and came
+back upright has shot a whole set in the wrong shape, and that is a warning, not a pass.
+
+`04-equipes` is dropped from the iPad set: above the tablet threshold `equipes/index.tsx`
+is two panes, so that shot is the teams list beside *"Choisissez une équipe pour afficher
+sa fiche."* — a placeholder with an icon in it, where `05-equipe` shows the same list with
+a team actually in the right pane. The flow still captures all eight; `dropScreens` on the
+target decides what ships, which is why the numbering has a gap rather than a reshuffle:
+`05-equipe` has to be the same screen in every set.
 
 **Look at every image before committing.** The script checks that a PNG is portrait and
 full-size; it cannot tell a good screenshot from one showing an error banner, an empty

@@ -4,6 +4,7 @@ import {
   pngDimensions,
   isPlausibleScreenshot,
   missingRequiredScreens,
+  screensFor,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -52,8 +53,19 @@ describe('isPlausibleScreenshot', () => {
     expect(isPlausibleScreenshot({ width: 2064, height: 2752 })).toBe(true)
   })
 
-  it('rejects landscape — every store screenshot here is portrait', () => {
+  it('rejects landscape where portrait was asked for', () => {
     expect(isPlausibleScreenshot({ width: 2868, height: 1320 })).toBe(false)
+  })
+
+  it('accepts landscape where landscape was asked for — the iPad set', () => {
+    expect(isPlausibleScreenshot({ width: 2752, height: 2064 }, 'LANDSCAPE_LEFT')).toBe(true)
+  })
+
+  it('rejects portrait where landscape was asked for', () => {
+    // A simulator remembers how it was last left. A target that asked to be
+    // turned sideways and came back upright has shot a whole set in the wrong
+    // shape, and that has to be loud rather than merely allowed.
+    expect(isPlausibleScreenshot({ width: 2064, height: 2752 }, 'LANDSCAPE_LEFT')).toBe(false)
   })
 
   it('rejects a thumbnail-sized capture — a flow that grabbed the wrong element', () => {
@@ -82,5 +94,26 @@ describe('missingRequiredScreens', () => {
 
   it('reports everything missing from an empty capture', () => {
     expect(missingRequiredScreens([])).toEqual(REQUIRED_SCREENS)
+  })
+})
+
+describe('screensFor', () => {
+  it('keeps every screen for a target that drops none', () => {
+    expect(screensFor({ id: 'iphone' })).toEqual(REQUIRED_SCREENS)
+  })
+
+  it('drops what a target names, and renumbers nothing', () => {
+    // The gap is the point: 05-equipe must be the same screen in every set,
+    // so an omission reads as an omission rather than a reshuffle.
+    const set = screensFor({ id: 'ipad', dropScreens: ['04-equipes'] })
+    expect(set).not.toContain('04-equipes')
+    expect(set).toEqual(REQUIRED_SCREENS.filter((s: string) => s !== '04-equipes'))
+  })
+
+  it('measures a run against that target’s set, not the full one', () => {
+    const set = screensFor({ id: 'ipad', dropScreens: ['04-equipes'] })
+    expect(missingRequiredScreens(set, set)).toEqual([])
+    // …while the same capture is short one screen for a target that wants it.
+    expect(missingRequiredScreens(set)).toEqual(['04-equipes'])
   })
 })
