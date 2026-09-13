@@ -270,6 +270,9 @@ const sel = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, borderRadius: 10,
     paddingHorizontal: 12, minHeight: 44, fontSize: 15,
     color: colors.textPrimary, backgroundColor: colors.bg, marginTop: 4,
+    // iOS renders TextInput placeholders with stray letter-spacing unless an
+    // explicit value is set; pin it to 0 so they track normally (#118).
+    letterSpacing: 0,
   },
   list: { marginBottom: 16 },
   empty: {

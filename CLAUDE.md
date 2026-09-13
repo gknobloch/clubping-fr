@@ -108,6 +108,15 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `desktopOnly` when it has no usable mobile form yet.
 - Interactive targets are 44px below `md:`; the shared button classes already
   handle it. See `src/components/Button.tsx`.
+- **Tout style de `TextInput` fixe son `letterSpacing`.** iOS invente un
+  interlettrage sur le *placeholder* si le style n'en déclare pas :
+  « R e c h e r c h e r   u n   j o u e u r » à la place de « Rechercher un
+  joueur ». Invisible partout sauf sur un appareil, et invisible à tout test de
+  rendu — la chaîne est correcte, ce sont les glyphes qui sont mal posés.
+  Corrigé en #118 sur `login.tsx`, puis oublié sur quatre champs de recherche
+  ajoutés depuis, dont un repéré sur une capture de store (#520).
+  `mobile/__tests__/text-input-letter-spacing.test.ts` lit les sources et
+  casse le build sur le suivant.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
