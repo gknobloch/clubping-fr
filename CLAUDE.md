@@ -398,6 +398,11 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
+- **Une feuille se ferme par un point, pas par son fond.** Le `Pressable` du
+  fond *enveloppe* le panneau et occupe tout l'écran : son centre — ce que vise
+  `tapOn: id:` — tombe donc dans le panneau, où `onStartShouldSetResponder`
+  avale délibérément le toucher. Le panneau est plafonné à 85 % de la fenêtre
+  et collé au bas, donc le haut de l'écran est toujours du fond.
 - **Tout se sélectionne par `testID` — le texte n'existe pas.** L'app n'expose
   presque aucun texte à l'arbre d'accessibilité : un vidage de la hiérarchie
   sur l'écran d'accueil ne rend ni le nom du membre, ni la rencontre, ni les

@@ -42,6 +42,11 @@ appId: fr.clubping.app
 # Closing it is part of the block for the same reason: the sheet is a Modal
 # (mobile/components/Sheet.tsx) and swallows every touch behind it, so the tab
 # bar stays unreachable until the backdrop dismisses it.
+#
+# The sheet on this screen is `selection-sheet` (CaptainSelectionSheet), not
+# `composition-sheet`: the Accueil button opens the line-up picker itself,
+# never the sheet that asks which team to compose. Two neighbouring names, one
+# of which is never here.
 - runFlow:
     when:
       visible:
@@ -50,8 +55,16 @@ appId: fr.clubping.app
       - tapOn:
           id: "compose-team"
       - takeScreenshot: 03-composition
+      # A point, not the element. The backdrop Pressable WRAPS the panel and
+      # fills the screen, so its centre — which is what `tapOn: id:` aims at —
+      # is inside the panel, where `onStartShouldSetResponder` deliberately
+      # swallows the touch (mobile/components/Sheet.tsx). The tap landed on the
+      # sheet and the sheet stayed open.
+      #
+      # The panel is capped at 85% of the window and anchored to the bottom
+      # edge, so the top of the screen is always backdrop.
       - tapOn:
-          id: "composition-sheet-backdrop"
+          point: "50%,6%"
 
 - tapOn:
     id: "tab-equipes"
