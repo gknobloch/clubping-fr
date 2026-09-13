@@ -1,75 +1,57 @@
-# The five store screenshots, one platform-agnostic flow (#520).
-#
-# Tabs are tapped by testID, not by the word printed on them: the label is
-# exposed to accessibility again (see TabBar.tsx) but an id survives a rename
-# and an accent, and this flow has to still work in a year.
+# The store screenshots, one platform-agnostic flow (#520).
 #
 # One flow because the app has one bundle id on both platforms
-# (`fr.clubping.app` — see fastlane/Appfile) and the same five screens: only the
+# (`fr.clubping.app` — see fastlane/Appfile) and the same screens: only the
 # connected device decides whether Maestro drives the simulator or the
 # emulator. scripts/store-screenshots.mjs runs this once per target and moves
 # each PNG to wherever `deliver` (iOS) or `supply` (Android) expects it — this
-# file only ever writes 01..05 into its working directory.
+# file only ever writes 01..07 into its own debug output.
 #
-# Order and names match the screenshots already in the repo (01-accueil …
-# 05-joueurs), which is deliberate: an App Store / Play listing is a set, and
-# keeping the five in place is what makes a refresh a refresh rather than a
-# resubmission from scratch.
+# Everything is selected by `testID`. This app exposes almost no text to the
+# accessibility tree: dumping the hierarchy on the Accueil screen returns no
+# member name, no fixture, no availability buttons — only ids. A selector
+# written against a visible label does not match, however it is spelled.
+#
+# The set walks one thread rather than touring the tabs: a captain opens the
+# app, sees the coming match, checks the calendar, goes to his team, looks a
+# player up, opens her profile, and ends on the club's roster. Screens 5 and 6
+# are Camille Durand, who has played twice and is therefore burned into team 1
+# — a rule this app explains and its competitors do not.
 appId: fr.clubping.app
 ---
 - runFlow: login.yaml
 
+# 1 — the first thing anybody sees: the coming match, who has answered, and
+# the line-up already made.
 - takeScreenshot: 01-accueil
 
+# 2 — the calendar. A phone shows the journées as a list; a tablet shows the
+# availability matrix instead (journees/index.tsx branches on `isTablet`), so
+# this one screenshot is deliberately a different screen per device. That is
+# the honest picture: they ARE different screens.
 - tapOn:
     id: "tab-journees"
 - takeScreenshot: 02-journees
 
-- tapOn:
-    id: "tab-index"
-
-# `compose-team` only renders for a captain with an upcoming match
-# (mobile/components/NextMatchCard.tsx — `isCaptain`, and only inside the
-# window a match is shown at all). Which club member the review account
-# happens to be is a fact about the production database, not about this flow,
-# and a season between matches must not fail the other four screenshots.
-#
-# The three steps are ONE conditional block, not three optional commands:
-# `takeScreenshot` always succeeds, so a skipped tap would leave it capturing
-# the Accueil screen and filing it under 03-composition — a wrong screenshot
-# that looks exactly like a right one. All three run, or none do.
-#
-# Closing it is part of the block for the same reason: the sheet is a Modal
-# (mobile/components/Sheet.tsx) and swallows every touch behind it, so the tab
-# bar stays unreachable until the backdrop dismisses it.
-#
-# The sheet on this screen is `selection-sheet` (CaptainSelectionSheet), not
-# `composition-sheet`: the Accueil button opens the line-up picker itself,
-# never the sheet that asks which team to compose. Two neighbouring names, one
-# of which is never here.
-- runFlow:
-    when:
-      visible:
-        id: "compose-team"
-    commands:
-      - tapOn:
-          id: "compose-team"
-      - takeScreenshot: 03-composition
-      # A point, not the element. The backdrop Pressable WRAPS the panel and
-      # fills the screen, so its centre — which is what `tapOn: id:` aims at —
-      # is inside the panel, where `onStartShouldSetResponder` deliberately
-      # swallows the touch (mobile/components/Sheet.tsx). The tap landed on the
-      # sheet and the sheet stayed open.
-      #
-      # The panel is capped at 85% of the window and anchored to the bottom
-      # edge, so the top of the screen is always backdrop.
-      - tapOn:
-          point: "50%,6%"
-
+# 3 and 4 — the club's teams, then one of them in full.
 - tapOn:
     id: "tab-equipes"
-- takeScreenshot: 04-equipes
+- takeScreenshot: 03-equipes
+- tapOn:
+    id: "team-row-demo-team-1"
+- takeScreenshot: 04-equipe
 
+# 5 and 6 — a player, twice over: the quick view that opens from a squad row,
+# then the full profile behind it. Camille Durand by name, because she is the
+# one carrying the brûlage badge.
+- tapOn:
+    id: "squad-player-demo-player-2"
+- takeScreenshot: 05-joueur-apercu
+- tapOn:
+    id: "player-sheet-profile"
+- takeScreenshot: 06-joueur-profil
+
+# 7 — the club's roster, which is also the way back out of the detail stack.
 - tapOn:
     id: "tab-joueurs"
-- takeScreenshot: 05-joueurs
+- takeScreenshot: 07-joueurs

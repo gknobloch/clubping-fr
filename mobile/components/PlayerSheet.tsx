@@ -171,7 +171,11 @@ export function PlayerSheet({
           <TouchableOpacity style={[s.footerBtn, s.footerClose]} onPress={onClose}>
             <Text style={s.footerCloseTxt}>Fermer</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.footerBtn, s.footerProfile]} onPress={openProfile}>
+          <TouchableOpacity
+            testID="player-sheet-profile"
+            style={[s.footerBtn, s.footerProfile]}
+            onPress={openProfile}
+          >
             <Text style={s.footerProfileTxt}>Profil</Text>
           </TouchableOpacity>
         </View>

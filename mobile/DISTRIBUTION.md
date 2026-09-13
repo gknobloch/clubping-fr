@@ -271,10 +271,16 @@ tree — dumping the hierarchy on the home screen returns no member name, no fix
 availability buttons and no "Composer l'équipe", only ids. A selector written against a
 visible label will not match, however it is spelled.
 
-**`03-composition` is conditional.** It only exists for a captain with an upcoming match
-(`NextMatchCard`'s `isCaptain`), which is why `demo:refresh` makes the review account
-captain of `demo-team-1` — as a club_admin on no roster it had no next match to show and
-no line-up to compose. The flow captures all three of its steps or
+**The set is seven screens, and #2 is deliberately different per device.** A phone shows
+the journées as a list; a tablet shows the availability matrix instead — `journees/
+index.tsx` branches on `isTablet`, so the matrix simply does not exist on an iPhone.
+That is not a gap to work around: they are different screens, and each device's
+screenshot should show its own.
+
+**`03-composition` was dropped** from the set. `demo:refresh` still makes the review
+account captain of `demo-team-1` and fills the line-up: that is what makes the Accueil
+card read 4/4 rather than 0/4, and what burns Camille Durand into team 1 for screens 5
+and 6. The flow captures all three of its steps or
 none: a skipped tap must never leave `takeScreenshot` filing the Accueil screen under
 the composition's name. When it is skipped the previously committed image simply stays,
 and the run says so.

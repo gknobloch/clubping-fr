@@ -79,6 +79,29 @@ export const DEMO_AVAILABILITY = {
   // demo-player-5: rien — sans réponse
 }
 
+/** Kick-off. Late afternoon reads better on a screenshot than late evening. */
+export const KICK_OFF = '16h00'
+
+/**
+ * The line-up the captain has already made for the coming match.
+ *
+ * The three who said yes, plus one borrowed from the second team — which is
+ * what "Autres joueurs du club" is for, and the only way a screenshot shows
+ * that the picker reaches beyond one squad.
+ *
+ * Camille Durand is the point of the fourth name being hers rather than
+ * anyone's: she also played journée 1, and two games across the club's teams
+ * is what `computeBrulage` counts as burned. Her player screens therefore
+ * carry the brûlage badge, which is a rule no other app in this niche
+ * explains, and worth a screenshot of its own.
+ */
+export const DEMO_LINEUP = [
+  'user-appstore-demo', // Julien Mercier — oui
+  'demo-player-1', //      Alex Martin — oui
+  'demo-player-2', //      Camille Durand — oui, et brûlée par la journée 1
+  'demo-player-7', //      Hugo Girard — équipe 2, monté en équipe 1
+]
+
 /** The journée whose match the Accueil hero card shows: the one coming up. */
 export const UPCOMING_JOURNEE = 2
 
@@ -195,6 +218,7 @@ function main(argv) {
     ...games.map((g) => g.id),
     ...matchDays.map((m) => m.id),
     ...Object.keys(DEMO_AVAILABILITY),
+    ...DEMO_LINEUP,
     team.id,
     DEMO_USER,
   ])
@@ -217,7 +241,7 @@ function main(argv) {
       .filter((g) => dates[g.journee])
       .map(
         (g) =>
-          `UPDATE games SET date = ${sqlStr(dates[g.journee])}, time = '20h00' WHERE id = ${sqlStr(g.id)}`,
+          `UPDATE games SET date = ${sqlStr(dates[g.journee])}, time = ${sqlStr(KICK_OFF)} WHERE id = ${sqlStr(g.id)}`,
       ),
     // The reviewer's account is a club_admin with no team, so the Accueil
     // screen had no match to show and no line-up to compose. Being captain of
@@ -242,6 +266,10 @@ function main(argv) {
         `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) ` +
         `VALUES (${sqlStr(upcoming.id)}, ${sqlStr(playerId)}, ${sqlStr(status)}, NULL)`,
     ),
+    // Upserted on (game_id, team_id), the table's own key since 0033.
+    `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
+      `VALUES (${sqlStr(upcoming.id)}, ${sqlStr(DEMO_TEAM)}, ${sqlStr(JSON.stringify(DEMO_LINEUP))}) ` +
+      `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
   ]
 
   console.log(`Aujourd'hui : ${today}`)
@@ -264,6 +292,7 @@ function main(argv) {
     `  dispos sur ${upcoming.id} → ${counts.available ?? 0} oui, ${counts.maybe ?? 0} ` +
       `peut-être, ${counts.unavailable ?? 0} non, ${silent} sans réponse`,
   )
+  console.log(`  composition → ${DEMO_LINEUP.length} joueurs, coup d'envoi ${KICK_OFF}`)
   console.log(`\n${statements.length} instructions.`)
 
   if (!apply) {

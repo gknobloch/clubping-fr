@@ -35,11 +35,18 @@ const MOBILE = path.join(ROOT, 'mobile')
 const FLOW = path.join(MOBILE, '.maestro/screenshots/capture.yaml')
 
 // Names match the five files already in the repo — see capture.yaml for why.
-export const REQUIRED_SCREENS = ['01-accueil', '02-journees', '04-equipes', '05-joueurs']
-// Only rendered for a captain with an upcoming match (NextMatchCard's
-// `isCaptain`) — which club member the review account happens to be is a fact
-// about the production database, not something this script controls.
-export const OPTIONAL_SCREENS = ['03-composition']
+export const REQUIRED_SCREENS = [
+  '01-accueil',
+  '02-journees',
+  '03-equipes',
+  '04-equipe',
+  '05-joueur-apercu',
+  '06-joueur-profil',
+  '07-joueurs',
+]
+// Every screen in the set is now reached by a fixed path, so none is
+// conditional: demo:refresh guarantees the data each one needs.
+export const OPTIONAL_SCREENS = []
 
 /**
  * A capture target: one platform, one device class, one destination.

@@ -316,6 +316,7 @@ export function TeamDetail({
           {members.map((p) => (
             <TouchableOpacity
               key={p.id}
+              testID={`squad-player-${p.id}`}
               style={styles.playerRow}
               onPress={() => setSelectedPlayer(p)}
             >
