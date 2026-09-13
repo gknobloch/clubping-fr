@@ -523,6 +523,19 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   le fichier, et pas l'inverse : une variable passée à la main est quelqu'un
   qui surcharge délibérément (un code qu'on vient de faire tourner), et un
   fichier prioritaire l'ignorerait en silence.
+- **Un seul chemin de SDK Android, pas deux.** Une machine qui a Android Studio
+  *et* le `android-commandlinetools` de Homebrew exporte `ANDROID_HOME` et
+  `ANDROID_SDK_ROOT` vers deux dossiers différents, et AGP refuse de trancher.
+  Le script retire la variable dépréciée de l'environnement qu'il passe à la
+  build et dit laquelle il garde — même raison que la locale UTF-8 forcée.
+- **Plus de métaspace que ce que le gabarit demande.** Le `gradle.properties`
+  généré dit `-Xmx2048m -XX:MaxMetaspaceSize=512m` et
+  `:expo-updates:kspReleaseKotlin` l'épuise : la build meurt au bout de quatre
+  minutes sur le mot « Metaspace », sans rien dire d'une limite mémoire. Le
+  script réécrit cette ligne **après** le prebuild, et pas dans git : `--clean`
+  régénère le fichier à chaque exécution, donc une valeur commitée survivrait
+  jusqu'à la capture suivante. Attention si ça semble sans effet : un
+  `gradle.properties` dans `GRADLE_USER_HOME` prime sur celui du projet.
 - **La cible Android exige un JDK 17, et il faut le *nommer*.** Le plugin Gradle
   de React Native demande `jvmToolchain(17)` ; sans JDK 17 visible, Gradle tente
   d'en **télécharger** un, et le résolveur foojay épinglé à `0.5.0` par
