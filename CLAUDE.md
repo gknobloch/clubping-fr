@@ -405,6 +405,20 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   Android n'en a pas besoin — `expo-secure-store` y passe par les
   SharedPreferences, que `clearState` vide bien — d'où le garde `when:
   platform: iOS` plutôt qu'une commande nue qui échouerait sur l'émulateur.
+- **Le calendrier du club de démo est fait d'écarts, pas de dates.** Des dates
+  fixes se périment par construction : le club de démo portait une journée au
+  18 mai 2030, une date choisie pour que « prochaines journées » cesse de se
+  vider — le problème rustiné plutôt que résolu. `scripts/demo-data.mjs`
+  recalcule tout depuis aujourd'hui : une journée qui vient d'être jouée, une
+  dans la semaine qui vient, une quinze jours plus tard. À relancer avant une
+  session de captures **et avant une revue de store** : un examinateur qui
+  ouvre l'app en novembre ne doit pas tomber sur une saison finie en septembre.
+- Le compte de revue est capitaine de `demo-team-1`. En tant que club_admin
+  sans effectif, il n'avait aucun prochain match à afficher et aucune
+  composition à faire — donc pas de carte héros sur le premier écran qu'un
+  examinateur voit.
+- Ce script écrit en **production**, et refuse tout identifiant hors du club de
+  démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
 - Manuel, et volontairement pas branché sur `mobile-release` : on recapture
   quand un écran a visiblement changé, pas à chaque version.
 

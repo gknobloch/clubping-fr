@@ -216,7 +216,23 @@ par `expo prebuild --clean`, donc par une compilation complète d'une vingtaine
 de minutes — ce qui est absurde quand c'est un sélecteur Maestro qui a lâché.
 
 Manual, and deliberately not part of a release: re-run it when a captured screen has
-visibly changed, not every version. It signs in as the **review account** — the same
+visibly changed, not every version.
+
+**Re-anchor the demo club first**, or the screenshots show a season that is over:
+
+```
+npm run demo:refresh            # affiche le plan, n'écrit rien
+npm run demo:refresh -- --apply
+```
+
+The demo club's fixtures used to carry fixed dates, which go stale by definition — it
+had a journée on 18 May 2030, a date somebody picked to stop "prochaines journées"
+emptying. What is stored now are offsets recomputed from today: one journée just played,
+one in the coming week, one a fortnight out. That is also worth running **before a store
+review**, so a reviewer opening the app in November does not find a season that ended in
+September.
+
+It writes to production and refuses to touch any id outside the demo club. It signs in as the **review account** — the same
 `REVIEW_LOGIN_EMAIL` / `REVIEW_LOGIN_CODE` pair the App Store and Play reviewers use,
 which `auth.ts` accepts in place of the emailed code — so nothing needs reading from an
 inbox. Both must be in the environment; they are Cloudflare Pages secrets and are never
@@ -240,8 +256,9 @@ The script resolves each simulator **by name at run time**. A UDID belongs to th
 that created it, so a stored one would work on exactly one machine.
 
 **`03-composition` is conditional.** It only exists for a captain with an upcoming match
-(`NextMatchCard`'s `isCaptain`), so whether it is captured depends on who the review
-account is and what the season is doing. The flow captures all three of its steps or
+(`NextMatchCard`'s `isCaptain`), which is why `demo:refresh` makes the review account
+captain of `demo-team-1` — as a club_admin on no roster it had no next match to show and
+no line-up to compose. The flow captures all three of its steps or
 none: a skipped tap must never leave `takeScreenshot` filing the Accueil screen under
 the composition's name. When it is skipped the previously committed image simply stays,
 and the run says so.
