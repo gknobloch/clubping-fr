@@ -536,6 +536,14 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   régénère le fichier à chaque exécution, donc une valeur commitée survivrait
   jusqu'à la capture suivante. Attention si ça semble sans effet : un
   `gradle.properties` dans `GRADLE_USER_HOME` prime sur celui du projet.
+- **L'app est désinstallée avant d'être installée.** `appVersionSource:
+  "remote"` fait d'EAS le propriétaire du versionCode, et `app.json` n'en
+  déclare aucun : un `prebuild` local produit donc le versionCode **1**. Tout
+  émulateur ayant déjà reçu un build EAS en porte un bien plus haut, et Android
+  refuse (`INSTALL_FAILED_VERSION_DOWNGRADE`). Le `-d` que passe expo ne lève
+  ça que pour un build *debuggable*, et celui-ci est Release exprès — une
+  capture doit montrer le binaire qui part. Rien n'est perdu : le flow démarre
+  avec `clearState: true` de toute façon.
 - **La cible Android exige un JDK 17, et il faut le *nommer*.** Le plugin Gradle
   de React Native demande `jvmToolchain(17)` ; sans JDK 17 visible, Gradle tente
   d'en **télécharger** un, et le résolveur foojay épinglé à `0.5.0` par

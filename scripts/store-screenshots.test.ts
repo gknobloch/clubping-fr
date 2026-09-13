@@ -9,6 +9,7 @@ import {
   gradleInstallationPaths,
   parseDevVars,
   withGradleMemory,
+  androidPackage,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -221,5 +222,23 @@ describe('the Android build’s Gradle memory', () => {
     const twice = withGradleMemory(once, '-Xmx6g')
     expect(twice).toBe(once)
     expect(twice.match(/org\.gradle\.jvmargs/g)).toHaveLength(1)
+  })
+})
+
+describe('the app id the emulator installs', () => {
+  // Read from app.json rather than repeated here: EAS owns the versionCode
+  // (`appVersionSource: "remote"`), so a local prebuild produces versionCode 1
+  // and Android refuses to install it over an EAS build —
+  // INSTALL_FAILED_VERSION_DOWNGRADE. The old app has to come off by name
+  // first, and a name written twice is a name that can disagree with itself.
+
+  it('reads expo.android.package', () => {
+    expect(androidPackage('{"expo":{"android":{"package":"fr.clubping.app"}}}')).toBe(
+      'fr.clubping.app',
+    )
+  })
+
+  it('refuses to guess when app.json does not say', () => {
+    expect(() => androidPackage('{"expo":{}}')).toThrow('expo.android.package')
   })
 })

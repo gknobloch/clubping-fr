@@ -428,6 +428,14 @@ One caveat if this ever looks ignored: a `gradle.properties` in `GRADLE_USER_HOM
 (`~/.gradle/`) **outranks** the project's. That is the right precedence — somebody set it
 deliberately — but it means a smaller value there wins.
 
+**The app is uninstalled before it is installed.** `eas.json` sets
+`appVersionSource: "remote"`, so EAS owns the versionCode and `app.json` declares none —
+a local `prebuild` therefore builds versionCode **1**. Any emulator that has ever run an
+EAS build holds something far higher, and Android refuses: `INSTALL_FAILED_VERSION_DOWNGRADE`.
+The `-d` flag expo already passes waives that for *debuggable* builds only, and this one
+is Release on purpose — a screenshot has to show the binary that ships. Nothing is lost:
+the flow launches with `clearState: true` anyway.
+
 ### Why Maestro and not `snapshot`/`screengrab`
 
 fastlane's own capture tools need a test target *inside* the native project — XCUITest in
