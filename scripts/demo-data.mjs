@@ -17,6 +17,10 @@
 // every time this runs, which is before a screenshot session and before a
 // store review.
 //
+// It also settles who the account IS: a player (not merely a club_admin, which
+// gets a different Accueil entirely — see #522), captain of demo-team-1, and
+// named like a person rather than "Démo App Store".
+//
 // It writes to PRODUCTION, so it refuses to touch anything that is not the
 // demo club: see assertDemoOnly. And it prints its plan and changes nothing
 // unless given --apply.
@@ -31,6 +35,25 @@ const DB = 'clubping-fr-prod'
 
 /** The review account, and the only user row this may touch. */
 export const DEMO_USER = 'user-appstore-demo'
+/**
+ * Who the review account is, on screen.
+ *
+ * It was "Démo App Store", which is a label rather than a person: it appeared
+ * as the member's own name on the Accueil card, in the line-up, and beside
+ * every availability — and a store listing showing a user called "Démo App
+ * Store" advertises test data. Its ten team-mates were always real-looking
+ * names (Alex Martin, Léa Moreau, Hugo Girard…); this one was the odd one out.
+ *
+ * Invented, and deliberately ordinary: it must not name anybody who plays in
+ * this league. The licence number continues the demo club's own 9999xxxx
+ * series, which no federation issues.
+ */
+export const DEMO_IDENTITY = {
+  firstName: 'Julien',
+  lastName: 'Mercier',
+  licenseNumber: '99990011',
+}
+
 /** The team it captains — the one whose next match the Accueil screen shows. */
 export const DEMO_TEAM = 'demo-team-1'
 
@@ -173,6 +196,11 @@ function main(argv) {
     // which lists upcoming journées from every club in the database — so the
     // first screenshot showed four other clubs' fixtures. See #522.
     `UPDATE users SET is_player = 1 WHERE id = ${sqlStr(DEMO_USER)}`,
+    // A name, not a label — see DEMO_IDENTITY.
+    `UPDATE users SET first_name = ${sqlStr(DEMO_IDENTITY.firstName)}, ` +
+      `last_name = ${sqlStr(DEMO_IDENTITY.lastName)}, ` +
+      `license_number = ${sqlStr(DEMO_IDENTITY.licenseNumber)} ` +
+      `WHERE id = ${sqlStr(DEMO_USER)}`,
   ]
 
   console.log(`Aujourd'hui : ${today}`)
@@ -181,7 +209,8 @@ function main(argv) {
     console.log(`  journée ${journee} → ${date}  (${when})`)
   }
   console.log(
-    `  ${DEMO_USER} → capitaine de ${DEMO_TEAM}` +
+    `  ${DEMO_USER} → ${DEMO_IDENTITY.firstName} ${DEMO_IDENTITY.lastName}, joueur et ` +
+      `capitaine de ${DEMO_TEAM}` +
       (roster.includes(DEMO_USER) ? ' (déjà dans l’effectif)' : ', ajouté à l’effectif'),
   )
   console.log(`\n${statements.length} instructions.`)

@@ -237,6 +237,12 @@ one in the coming week, one a fortnight out. That is also worth running **before
 review**, so a reviewer opening the app in November does not find a season that ended in
 September.
 
+It also settles who the account **is**: `Julien Mercier`, a player (not merely a
+club_admin — that gets a different Accueil entirely, see #522) and captain of
+`demo-team-1`. It was called "Démo App Store", which is a label rather than a person and
+read as test data wherever the app printed a member's name. Change the name in one place,
+`DEMO_IDENTITY` in the script.
+
 It writes to production and refuses to touch any id outside the demo club. It signs in as the **review account** — the same
 `REVIEW_LOGIN_EMAIL` / `REVIEW_LOGIN_CODE` pair the App Store and Play reviewers use,
 which `auth.ts` accepts in place of the emailed code — so nothing needs reading from an

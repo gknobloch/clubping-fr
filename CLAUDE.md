@@ -413,6 +413,10 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   dans la semaine qui vient, une quinze jours plus tard. À relancer avant une
   session de captures **et avant une revue de store** : un examinateur qui
   ouvre l'app en novembre ne doit pas tomber sur une saison finie en septembre.
+- Le compte de revue s'appelle **Julien Mercier** : un nom inventé et
+  ordinaire, pas « Démo App Store », qui est une étiquette et se lisait comme
+  de la donnée de test partout où l'app imprime le nom d'un membre. Ses dix
+  coéquipiers portaient déjà des noms crédibles ; c'était le seul intrus.
 - Le compte de revue est **joueur** et capitaine de `demo-team-1`. Les deux
   comptent : `isPlayer` décide de quel accueil on obtient, et avec
   `is_player = 0` le compte tombait sur la vue générique — celle qui liste les
