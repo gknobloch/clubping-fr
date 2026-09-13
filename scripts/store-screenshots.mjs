@@ -261,6 +261,89 @@ function bootIosSimulator(udid) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The JDK the Android build needs, and why it is worth checking first
+// ---------------------------------------------------------------------------
+
+/**
+ * React Native's Gradle plugin asks for `jvmToolchain(17)` — in
+ * @react-native/gradle-plugin, on every one of its modules and on the app.
+ */
+const ANDROID_JDK_MAJOR = 17
+
+/** The major version a JDK's own `release` file states. 17, or 8 for "1.8.0". */
+export function javaMajorFromRelease(text) {
+  const m = /^JAVA_VERSION="?([0-9._]+)/m.exec(text ?? '')
+  if (!m) return null
+  const parts = m[1].split('.')
+  // "1.8.0_292" is Java 8; everything since states its major first.
+  return Number(parts[0] === '1' ? parts[1] : parts[0]) || null
+}
+
+/** The JDKs named by `org.gradle.java.installations.paths`, comma-separated. */
+export function gradleInstallationPaths(propertiesText) {
+  const m = /^\s*org\.gradle\.java\.installations\.paths\s*=(.*)$/m.exec(propertiesText ?? '')
+  if (!m) return []
+  return m[1].split(',').map((p) => p.trim()).filter(Boolean)
+}
+
+/**
+ * Stop before a 12-minute build if the JDK it needs is not one Gradle can see.
+ *
+ * Worth its own check because the failure is unreadable. With no JDK 17
+ * available, Gradle falls through to AUTO-PROVISIONING one — and the foojay
+ * resolver that @react-native/gradle-plugin pins at 0.5.0 references
+ * `JvmVendorSpec.IBM_SEMERU`, a field Gradle 9 removed. What the operator sees
+ * is `NoSuchFieldError: ... does not have member field ... IBM_SEMERU`, which
+ * names neither Java nor a version nor anything to install.
+ *
+ * The three places checked are Gradle's own, not a guess: the current JVM and
+ * `JAVA_HOME`, the macOS location its MacOSInstallationSupplier reads, and the
+ * list in `~/.gradle/gradle.properties`. Homebrew's openjdk@17 is keg-only and
+ * lands in NONE of the first two, which is exactly how a machine ends up with
+ * the JDK installed and the build still unable to find it.
+ */
+function assertAndroidJdk() {
+  const homes = new Set()
+  if (process.env.JAVA_HOME) homes.add(process.env.JAVA_HOME)
+  try {
+    for (const entry of readdirSync('/Library/Java/JavaVirtualMachines')) {
+      homes.add(path.join('/Library/Java/JavaVirtualMachines', entry, 'Contents/Home'))
+    }
+  } catch { /* no such folder is not an error — it is a machine without one */ }
+  try {
+    const props = readFileSync(path.join(process.env.HOME ?? '', '.gradle/gradle.properties'), 'utf8')
+    for (const p of gradleInstallationPaths(props)) homes.add(p)
+  } catch { /* likewise */ }
+
+  for (const home of homes) {
+    try {
+      if (javaMajorFromRelease(readFileSync(path.join(home, 'release'), 'utf8')) === ANDROID_JDK_MAJOR) {
+        return
+      }
+    } catch { /* not a JDK home */ }
+  }
+
+  const brew = '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
+  const installed = existsSync(brew)
+  throw new Error(
+    `Aucun JDK ${ANDROID_JDK_MAJOR} visible par Gradle, et le plugin Gradle de React ` +
+      `Native en demande un (jvmToolchain(${ANDROID_JDK_MAJOR})).\n\n` +
+      (installed
+        ? `openjdk@17 est installé mais Homebrew le garde « keg-only » : Gradle ne le
+` +
+          `trouve pas tout seul. Nommez-le une fois pour toutes :\n\n` +
+          `  echo 'org.gradle.java.installations.paths=${brew}' >> ~/.gradle/gradle.properties\n`
+        : `  brew install openjdk@17\n` +
+          `  echo 'org.gradle.java.installations.paths=${brew}' >> ~/.gradle/gradle.properties\n`) +
+      `\nSans ça Gradle tente de télécharger un JDK, et le résolveur foojay épinglé
+` +
+      `par React Native échoue sur un NoSuchFieldError qui ne parle ni de Java ni de
+` +
+      `version.`,
+  )
+}
+
 function adbPath() {
   return process.env.ANDROID_HOME
     ? path.join(process.env.ANDROID_HOME, 'platform-tools/adb')
@@ -353,6 +436,7 @@ function installAndLaunchAndroid(avdNamePrefix) {
     }
     if (!serial || !androidFullyBooted(serial)) throw new Error("L'émulateur n'a pas démarré à temps.")
   }
+  assertAndroidJdk()
   console.log('→ expo run:android --variant release')
   sh('npx', ['expo', 'run:android', '--variant', 'release', '--no-bundler'], {
     cwd: MOBILE, stdio: 'inherit', env,

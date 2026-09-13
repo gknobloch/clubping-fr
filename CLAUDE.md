@@ -515,6 +515,17 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   numéro est pris dans la plage réservée à la fiction par l'ARCEP
   (07 99 98 xx xx) : la capture part sur une fiche publique, et « qui a l'air
   inventé » n'est pas « qui n'est attribué à personne ».
+- **La cible Android exige un JDK 17, et il faut le *nommer*.** Le plugin Gradle
+  de React Native demande `jvmToolchain(17)` ; sans JDK 17 visible, Gradle tente
+  d'en **télécharger** un, et le résolveur foojay épinglé à `0.5.0` par
+  `@react-native/gradle-plugin` référence `JvmVendorSpec.IBM_SEMERU`, champ
+  supprimé par Gradle 9. L'erreur ne parle alors ni de Java, ni de version, ni
+  de rien à installer. Et l'installer ne suffit pas : `openjdk@17` est
+  keg-only chez Homebrew, donc absent de `/Library/Java/JavaVirtualMachines`
+  comme du `PATH` — d'où la ligne `org.gradle.java.installations.paths` dans
+  `~/.gradle/gradle.properties`. Le script vérifie avant de lancer la build,
+  dans les trois endroits où Gradle regarde lui-même : douze minutes de build
+  ne sont pas une façon de l'apprendre.
 - Ce script écrit en **production**, et refuse tout identifiant hors du club de
   démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
 - **La capture reste manuelle ; le téléversement, non.** On recapture quand un

@@ -5,6 +5,8 @@ import {
   isPlausibleScreenshot,
   missingRequiredScreens,
   screensFor,
+  javaMajorFromRelease,
+  gradleInstallationPaths,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -117,5 +119,45 @@ describe('screensFor', () => {
     // …while the same capture is short two screens for a target that wants
     // them, which is what stops a tablet run from passing as a phone one.
     expect(missingRequiredScreens(set)).toEqual(['04-equipes', '06-joueur-apercu'])
+  })
+})
+
+describe('finding the JDK the Android build needs', () => {
+  // With no JDK 17 in sight Gradle tries to DOWNLOAD one, and the foojay
+  // resolver React Native pins at 0.5.0 dies on a field Gradle 9 removed. The
+  // operator gets "NoSuchFieldError: … IBM_SEMERU", which names neither Java
+  // nor a version. Hence a check that runs before the build, not after it.
+
+  it('reads a modern JDK’s major version', () => {
+    expect(javaMajorFromRelease('JAVA_VERSION="17.0.20.1"\nOS_ARCH="aarch64"')).toBe(17)
+    expect(javaMajorFromRelease('JAVA_VERSION="21.0.12"')).toBe(21)
+  })
+
+  it('reads Java 8, which states itself as 1.8', () => {
+    expect(javaMajorFromRelease('JAVA_VERSION="1.8.0_292"')).toBe(8)
+  })
+
+  it('says nothing rather than guessing', () => {
+    expect(javaMajorFromRelease('')).toBeNull()
+    expect(javaMajorFromRelease('OS_NAME="Darwin"')).toBeNull()
+  })
+
+  it('lists the installations gradle.properties names', () => {
+    // Homebrew's openjdk@17 is keg-only: it lands nowhere Gradle looks by
+    // itself, so this line is the whole reason the build can find it.
+    const props = [
+      '# a comment',
+      'org.gradle.jvmargs=-Xmx2g',
+      'org.gradle.java.installations.paths=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home, /other',
+    ].join('\n')
+    expect(gradleInstallationPaths(props)).toEqual([
+      '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home',
+      '/other',
+    ])
+  })
+
+  it('is empty when nothing names one', () => {
+    expect(gradleInstallationPaths('org.gradle.jvmargs=-Xmx2g')).toEqual([])
+    expect(gradleInstallationPaths('')).toEqual([])
   })
 })
