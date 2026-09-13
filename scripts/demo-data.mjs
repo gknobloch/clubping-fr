@@ -167,6 +167,12 @@ function main(argv) {
     // screen had no match to show and no line-up to compose. Being captain of
     // demo-team-1 is what puts the hero card on the first screen they see.
     `UPDATE teams SET player_ids = ${sqlStr(JSON.stringify(newRoster))}, captain_id = ${sqlStr(DEMO_USER)} WHERE id = ${sqlStr(DEMO_TEAM)}`,
+    // …and being a PLAYER is what decides which Accueil they get at all.
+    // `isPlayer` gates the whole hero-card view (app/(tabs)/index.tsx); with
+    // is_player = 0 the account fell through to the generic non-player screen,
+    // which lists upcoming journées from every club in the database — so the
+    // first screenshot showed four other clubs' fixtures. See #522.
+    `UPDATE users SET is_player = 1 WHERE id = ${sqlStr(DEMO_USER)}`,
   ]
 
   console.log(`Aujourd'hui : ${today}`)

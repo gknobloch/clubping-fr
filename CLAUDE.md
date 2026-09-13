@@ -413,10 +413,12 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   dans la semaine qui vient, une quinze jours plus tard. À relancer avant une
   session de captures **et avant une revue de store** : un examinateur qui
   ouvre l'app en novembre ne doit pas tomber sur une saison finie en septembre.
-- Le compte de revue est capitaine de `demo-team-1`. En tant que club_admin
-  sans effectif, il n'avait aucun prochain match à afficher et aucune
-  composition à faire — donc pas de carte héros sur le premier écran qu'un
-  examinateur voit.
+- Le compte de revue est **joueur** et capitaine de `demo-team-1`. Les deux
+  comptent : `isPlayer` décide de quel accueil on obtient, et avec
+  `is_player = 0` le compte tombait sur la vue générique — celle qui liste les
+  journées de tous les clubs de la base (#522), et c'est ce qui a été capturé
+  en premier, avec les dates de quatre vrais clubs dessus. Capitaine décide
+  ensuite de la présence de « Composer l'équipe ».
 - Ce script écrit en **production**, et refuse tout identifiant hors du club de
   démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
 - Manuel, et volontairement pas branché sur `mobile-release` : on recapture
