@@ -135,6 +135,7 @@ export default function LoginScreen() {
               {step === 'email' ? (
                 <>
                   <TextInput
+                    testID="login-email-input"
                     style={styles.input}
                     placeholder="Adresse e-mail"
                     placeholderTextColor={colors.textSecondary}
@@ -147,6 +148,7 @@ export default function LoginScreen() {
                     editable={!busy}
                   />
                   <TouchableOpacity
+                    testID="login-request-code-button"
                     style={[styles.primaryBtn, busy && styles.btnDisabled]}
                     onPress={handleRequestCode}
                     disabled={busy}
@@ -166,6 +168,7 @@ export default function LoginScreen() {
               ) : (
                 <>
                   <TextInput
+                    testID="login-code-input"
                     style={[styles.input, styles.codeInput]}
                     placeholder="123456"
                     placeholderTextColor={colors.textSecondary}
@@ -179,6 +182,7 @@ export default function LoginScreen() {
                   />
                   {devCode && <Text style={styles.devCode}>Code (dev) : {devCode}</Text>}
                   <TouchableOpacity
+                    testID="login-verify-button"
                     style={[styles.primaryBtn, (busy || code.length < 6) && styles.btnDisabled]}
                     onPress={handleVerify}
                     disabled={busy || code.length < 6}
@@ -288,6 +292,7 @@ function DevLogin() {
               {users.map((user) => (
                 <TouchableOpacity
                   key={user.id}
+                  testID="dev-user-card"
                   style={styles.card}
                   onPress={() => handleSelect(user)}
                   disabled={selecting === user.id}

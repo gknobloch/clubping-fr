@@ -1,0 +1,62 @@
+# The five store screenshots, one platform-agnostic flow (#520).
+#
+# Tabs are tapped by testID, not by the word printed on them: the label is
+# exposed to accessibility again (see TabBar.tsx) but an id survives a rename
+# and an accent, and this flow has to still work in a year.
+#
+# One flow because the app has one bundle id on both platforms
+# (`fr.clubping.app` — see fastlane/Appfile) and the same five screens: only the
+# connected device decides whether Maestro drives the simulator or the
+# emulator. scripts/store-screenshots.mjs runs this once per target and moves
+# each PNG to wherever `deliver` (iOS) or `supply` (Android) expects it — this
+# file only ever writes 01..05 into its working directory.
+#
+# Order and names match the screenshots already in the repo (01-accueil …
+# 05-joueurs), which is deliberate: an App Store / Play listing is a set, and
+# keeping the five in place is what makes a refresh a refresh rather than a
+# resubmission from scratch.
+appId: fr.clubping.app
+---
+- runFlow: login.yaml
+
+- takeScreenshot: 01-accueil
+
+- tapOn:
+    id: "tab-journees"
+- takeScreenshot: 02-journees
+
+- tapOn:
+    id: "tab-index"
+
+# `compose-team` only renders for a captain with an upcoming match
+# (mobile/components/NextMatchCard.tsx — `isCaptain`, and only inside the
+# window a match is shown at all). Which club member the review account
+# happens to be is a fact about the production database, not about this flow,
+# and a season between matches must not fail the other four screenshots.
+#
+# The three steps are ONE conditional block, not three optional commands:
+# `takeScreenshot` always succeeds, so a skipped tap would leave it capturing
+# the Accueil screen and filing it under 03-composition — a wrong screenshot
+# that looks exactly like a right one. All three run, or none do.
+#
+# Closing it is part of the block for the same reason: the sheet is a Modal
+# (mobile/components/Sheet.tsx) and swallows every touch behind it, so the tab
+# bar stays unreachable until the backdrop dismisses it.
+- runFlow:
+    when:
+      visible:
+        id: "compose-team"
+    commands:
+      - tapOn:
+          id: "compose-team"
+      - takeScreenshot: 03-composition
+      - tapOn:
+          id: "composition-sheet-backdrop"
+
+- tapOn:
+    id: "tab-equipes"
+- takeScreenshot: 04-equipes
+
+- tapOn:
+    id: "tab-joueurs"
+- takeScreenshot: 05-joueurs

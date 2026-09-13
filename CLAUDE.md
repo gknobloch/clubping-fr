@@ -108,6 +108,15 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `desktopOnly` when it has no usable mobile form yet.
 - Interactive targets are 44px below `md:`; the shared button classes already
   handle it. See `src/components/Button.tsx`.
+- **Tout style de `TextInput` fixe son `letterSpacing`.** iOS invente un
+  interlettrage sur le *placeholder* si le style n'en déclare pas :
+  « R e c h e r c h e r   u n   j o u e u r » à la place de « Rechercher un
+  joueur ». Invisible partout sauf sur un appareil, et invisible à tout test de
+  rendu — la chaîne est correcte, ce sont les glyphes qui sont mal posés.
+  Corrigé en #118 sur `login.tsx`, puis oublié sur quatre champs de recherche
+  ajoutés depuis, dont un repéré sur une capture de store (#520).
+  `mobile/__tests__/text-input-letter-spacing.test.ts` lit les sources et
+  casse le build sur le suivant.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -359,6 +368,89 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   devient un rappel sans remède** — `src/test/mobileConfig.spec.ts` casse le
   build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
   bloque, et ne se relève que pour une raison nommée dans le commit.
+
+### Captures d'écran des stores (#520)
+- **Maestro, pas `snapshot`/`screengrab`.** Les outils de capture de fastlane
+  exigent une cible de test *dans* le projet natif — XCUITest dans `ios/`,
+  Espresso dans `android/`. Ces deux dossiers sont ignorés par git et
+  régénérés par `expo prebuild`, qu'on relance systématiquement depuis #495 :
+  une cible ajoutée là ne survit pas au prebuild suivant. Maestro pilote l'app
+  installée depuis l'extérieur, donc il n'a rien à y perdre. fastlane garde la
+  moitié qu'il fait bien : `deliver` et `supply` téléversent ce que Maestro a
+  capturé.
+- **Les simulateurs sont résolus par nom, à l'exécution.** Un UDID appartient
+  au Mac qui l'a créé ; en stocker un ferait marcher le script sur une seule
+  machine. Même raison pour l'AVD Android, cherché par préfixe.
+- **Les deux tailles iOS partagent un seul dossier de locale**, parce que
+  `deliver` classe une capture iOS d'après ses **dimensions en pixels** et non
+  d'après son dossier — d'où le préfixe `iphone_` / `ipad_` dans les noms de
+  fichiers, sans lequel la seconde cible écraserait la première.
+- **`03-composition` est conditionnelle**, et c'est un bloc `runFlow: when:`,
+  pas trois commandes `optional`. `takeScreenshot` réussit toujours : un tap
+  sauté laisserait la capture enregistrer l'écran Accueil sous le nom de la
+  composition — une mauvaise image qui ressemble exactement à une bonne. Les
+  trois étapes passent ensemble ou pas du tout.
+- Le script vérifie qu'un PNG est en portrait et de taille plausible ; il ne
+  sait pas distinguer une bonne capture d'une capture montrant un bandeau
+  d'erreur ou une saison vide. **Quelqu'un les regarde avant de commiter.**
+- `LANG`/`LC_ALL` en UTF-8 : CocoaPods appelle `String#unicode_normalize` sur
+  un chemin, ce que Ruby refuse sous la locale « C » — celle de tout shell non
+  interactif. Sans ça, `expo prebuild` meurt en plein `pod install` sur une
+  erreur Ruby qui ne parle pas de locale. Même correctif que pour
+  `store:fastlane`.
+- **Tout se sélectionne par `testID` — le texte n'existe pas.** L'app n'expose
+  presque aucun texte à l'arbre d'accessibilité : un vidage de la hiérarchie
+  sur l'écran d'accueil ne rend ni le nom du membre, ni la rencontre, ni les
+  boutons de disponibilité, ni « Composer l'équipe » — seulement des `testID`
+  et quelques `0%`. Un sélecteur par texte ne marchera donc jamais ici, quelle
+  que soit la graphie ou l'accent. Deux échecs successifs du flow venaient de
+  là avant que la cause commune apparaisse.
+- **Les onglets se tapent par testID, et ils ont un nom.**
+  `accessibilityRole="button"` fait de chaque onglet UN élément
+  d'accessibilité et replie le `Text` qu'il contient : sans libellé propre,
+  VoiceOver annonçait cinq boutons sans nom, et aucune automatisation ne
+  pouvait trouver un onglet par le mot imprimé dessus. Le libellé retombe
+  désormais sur le titre visible — un vrai correctif d'accessibilité, trouvé
+  en écrivant le flow — et chaque onglet porte `tab-<route>`, qui survit à un
+  renommage comme à un accent.
+- **`clearState` ne vide pas le trousseau iOS.** `expo-secure-store` y garde le
+  jeton de session, et le trousseau survit à un effacement de données comme à
+  une désinstallation. Sans `clearKeychain`, l'app restaurait sa session en
+  pleine saisie : le champ e-mail était trouvé et rempli, puis l'écran de
+  connexion disparaissait sous le flow et le bouton en dessous n'existait plus.
+  Android n'en a pas besoin — `expo-secure-store` y passe par les
+  SharedPreferences, que `clearState` vide bien — d'où le garde `when:
+  platform: iOS` plutôt qu'une commande nue qui échouerait sur l'émulateur.
+- **Le calendrier du club de démo est fait d'écarts, pas de dates.** Des dates
+  fixes se périment par construction : le club de démo portait une journée au
+  18 mai 2030, une date choisie pour que « prochaines journées » cesse de se
+  vider — le problème rustiné plutôt que résolu. `scripts/demo-data.mjs`
+  recalcule tout depuis aujourd'hui : une journée qui vient d'être jouée, une
+  dans la semaine qui vient, une quinze jours plus tard. À relancer avant une
+  session de captures **et avant une revue de store** : un examinateur qui
+  ouvre l'app en novembre ne doit pas tomber sur une saison finie en septembre.
+- Le compte de revue s'appelle **Julien Mercier** : un nom inventé et
+  ordinaire, pas « Démo App Store », qui est une étiquette et se lisait comme
+  de la donnée de test partout où l'app imprime le nom d'un membre. Ses dix
+  coéquipiers portaient déjà des noms crédibles ; c'était le seul intrus.
+- Le compte de revue est **joueur** et capitaine de `demo-team-1`. Les deux
+  comptent : `isPlayer` décide de quel accueil on obtient, et avec
+  `is_player = 0` le compte tombait sur la vue générique — celle qui liste les
+  journées de tous les clubs de la base (#522), et c'est ce qui a été capturé
+  en premier, avec les dates de quatre vrais clubs dessus. Capitaine décide
+  ensuite de la présence de « Composer l'équipe ».
+- **Les dispos du match à venir sont peuplées** : trois oui, un peut-être, un
+  non, un sans réponse. Un panneau vide — « 0 disponibles · 6 sans réponse » —
+  est ce à quoi ressemble l'écran quand personne ne s'est servi de la
+  fonctionnalité, soit l'inverse de ce qu'une fiche de store doit montrer. Le
+  sixième est délibérément absent de la table : « sans réponse » est
+  l'**absence** de ligne, pas une valeur, et c'est ce qui donne son sens au
+  compteur que lit le capitaine. Les lignes sont réécrites, jamais fusionnées,
+  pour qu'une réexécution ne fabrique pas un état que personne n'a choisi.
+- Ce script écrit en **production**, et refuse tout identifiant hors du club de
+  démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
+- Manuel, et volontairement pas branché sur `mobile-release` : on recapture
+  quand un écran a visiblement changé, pas à chaque version.
 
 ### Notifications push (#495)
 - **Un registre d'envois, pas un calcul de date.** La règle n'est pas « les
