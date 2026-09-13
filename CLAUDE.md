@@ -515,6 +515,14 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   numéro est pris dans la plage réservée à la fiction par l'ARCEP
   (07 99 98 xx xx) : la capture part sur une fiche publique, et « qui a l'air
   inventé » n'est pas « qui n'est attribué à personne ».
+- **Les identifiants du compte de revue se lisent dans `.dev.vars`.**
+  `REVIEW_LOGIN_EMAIL` et `REVIEW_LOGIN_CODE` sont des secrets Cloudflare
+  Pages : ils sont déjà là sur toute machine qui a lancé l'API en local, dans
+  le fichier que `wrangler pages dev` lit et que git ignore. Pas un nouvel
+  endroit où ranger un secret — celui qui existe. L'environnement l'emporte sur
+  le fichier, et pas l'inverse : une variable passée à la main est quelqu'un
+  qui surcharge délibérément (un code qu'on vient de faire tourner), et un
+  fichier prioritaire l'ignorerait en silence.
 - **La cible Android exige un JDK 17, et il faut le *nommer*.** Le plugin Gradle
   de React Native demande `jvmToolchain(17)` ; sans JDK 17 visible, Gradle tente
   d'en **télécharger** un, et le résolveur foojay épinglé à `0.5.0` par

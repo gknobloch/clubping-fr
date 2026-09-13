@@ -366,6 +366,22 @@ accumulates two of every screen.
 full-size; it cannot tell a good screenshot from one showing an error banner, an empty
 season, or somebody's real name.
 
+### The review account's credentials come from `.dev.vars`
+
+`REVIEW_LOGIN_EMAIL` and `REVIEW_LOGIN_CODE` are Cloudflare Pages secrets, so they are
+already in `.dev.vars` at the repo root on any machine that has run the API locally —
+the file `wrangler pages dev` reads, and one git ignores. `store-screenshots.mjs` reads
+it too rather than asking for the same two values a second way.
+
+The environment still wins over the file, which is the right way round: an explicit
+`REVIEW_LOGIN_CODE=… npm run store:screenshots -- iphone` is somebody deliberately
+overriding it — testing a rotated code, say — and a file that won would ignore them
+silently.
+
+Nothing is interpolated and nothing is printed: the code is masked to `CODE=***` in the
+Maestro command line, and a failure rethrows a message that never carries the original
+arguments.
+
 ### The Android target needs a JDK 17, named
 
 React Native's Gradle plugin asks for `jvmToolchain(17)` on every module and on the app.

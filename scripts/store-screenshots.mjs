@@ -74,6 +74,62 @@ export function screensFor(target) {
   return REQUIRED_SCREENS.filter((name) => !dropped.has(name))
 }
 
+// ---------------------------------------------------------------------------
+// The review account's credentials
+// ---------------------------------------------------------------------------
+
+/**
+ * The variables a `.dev.vars` file declares — dotenv shape, no interpolation.
+ *
+ * Cloudflare's own format, and the file `wrangler pages dev` already reads:
+ * `REVIEW_LOGIN_EMAIL` and `REVIEW_LOGIN_CODE` are Pages secrets, so a
+ * developer who has ever run the API locally has them there already. Parsing
+ * it here is not a new place to keep a secret — it is the one that exists.
+ *
+ * A value may itself contain `=`, so the split is on the FIRST one only.
+ * Quotes are stripped because wrangler strips them; nothing else is
+ * interpreted, and `${...}` is left exactly as written rather than expanded
+ * into something the file did not say.
+ */
+export function parseDevVars(text) {
+  const out = {}
+  for (const line of (text ?? '').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) continue
+    const key = trimmed.slice(0, eq).trim()
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue
+    let value = trimmed.slice(eq + 1).trim()
+    const quote = value[0]
+    if ((quote === '"' || quote === "'") && value.endsWith(quote) && value.length > 1) {
+      value = value.slice(1, -1)
+    }
+    out[key] = value
+  }
+  return out
+}
+
+/**
+ * Fill in from `.dev.vars` whatever the environment has not already answered.
+ *
+ * That order, and not the other way round: an explicit
+ * `REVIEW_LOGIN_CODE=… npm run store:screenshots` is somebody deliberately
+ * overriding the file — to test a rotated code, say — and a file that won
+ * would silently ignore them.
+ */
+function loadDevVars() {
+  let text
+  try {
+    text = readFileSync(path.join(ROOT, '.dev.vars'), 'utf8')
+  } catch {
+    return // no file is the ordinary case on a machine that only captures
+  }
+  for (const [key, value] of Object.entries(parseDevVars(text))) {
+    if (!process.env[key]) process.env[key] = value
+  }
+}
+
 /**
  * A capture target: one platform, one device class, one destination.
  *
@@ -568,12 +624,16 @@ function validateAndInstall(target, captured) {
 // ---------------------------------------------------------------------------
 
 function main(argv) {
+  loadDevVars()
   const email = process.env.REVIEW_LOGIN_EMAIL
   const code = process.env.REVIEW_LOGIN_CODE
   if (!email || !code) {
     console.error(
-      'REVIEW_LOGIN_EMAIL et REVIEW_LOGIN_CODE doivent être dans l\'environnement — les ' +
-        'mêmes valeurs que le secret Cloudflare, jamais commitées. Voir DISTRIBUTION.md.',
+      'REVIEW_LOGIN_EMAIL et REVIEW_LOGIN_CODE manquants. Ils sont lus dans ' +
+        '.dev.vars à la racine du dépôt — le fichier que `wrangler pages dev` lit ' +
+        'déjà, ignoré par git — ou dans l\'environnement, qui l\'emporte :\n\n' +
+        '  REVIEW_LOGIN_EMAIL=… REVIEW_LOGIN_CODE=… npm run store:screenshots -- android\n\n' +
+        'Mêmes valeurs que les secrets Cloudflare, jamais commitées. Voir DISTRIBUTION.md.',
     )
     process.exit(1)
   }
