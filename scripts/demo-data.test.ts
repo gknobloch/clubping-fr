@@ -7,6 +7,7 @@ import {
   isDemoId,
   assertDemoOnly,
   DEMO_USER,
+  DEMO_AVAILABILITY,
 } from './demo-data.mjs'
 
 // ---------------------------------------------------------------------------
@@ -104,5 +105,37 @@ describe('the production guard', () => {
 
   it('passes a set that is entirely the demo club', () => {
     expect(() => assertDemoOnly(['demo-team-1', 'demo-g-1-2', DEMO_USER])).not.toThrow()
+  })
+})
+
+describe('the squad’s answers for the coming match', () => {
+  const statuses = Object.values(DEMO_AVAILABILITY) as string[]
+  const count = (s: string) => statuses.filter((v) => v === s).length
+
+  it('shows all three states at once', () => {
+    // An empty panel — "0 disponibles · 6 sans réponse" — is what the screen
+    // looks like when nobody uses the feature. A spread is the only way the
+    // three states, and the count a captain reads, appear at all.
+    expect(count('available')).toBe(3)
+    expect(count('maybe')).toBe(1)
+    expect(count('unavailable')).toBe(1)
+  })
+
+  it('leaves somebody silent, which is a state and not a value', () => {
+    // "Sans réponse" is the ABSENCE of a row. The squad is six; five answer.
+    expect(Object.keys(DEMO_AVAILABILITY)).toHaveLength(5)
+  })
+
+  it('has the captain answer for himself', () => {
+    // Otherwise "Ma disponibilité" is blank on the first screen anyone sees.
+    expect(DEMO_AVAILABILITY[DEMO_USER]).toBe('available')
+  })
+
+  it('names only demo rows', () => {
+    expect(() => assertDemoOnly(Object.keys(DEMO_AVAILABILITY))).not.toThrow()
+  })
+
+  it('uses only statuses the app understands', () => {
+    for (const s of statuses) expect(['available', 'maybe', 'unavailable']).toContain(s)
   })
 })

@@ -430,6 +430,14 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   journées de tous les clubs de la base (#522), et c'est ce qui a été capturé
   en premier, avec les dates de quatre vrais clubs dessus. Capitaine décide
   ensuite de la présence de « Composer l'équipe ».
+- **Les dispos du match à venir sont peuplées** : trois oui, un peut-être, un
+  non, un sans réponse. Un panneau vide — « 0 disponibles · 6 sans réponse » —
+  est ce à quoi ressemble l'écran quand personne ne s'est servi de la
+  fonctionnalité, soit l'inverse de ce qu'une fiche de store doit montrer. Le
+  sixième est délibérément absent de la table : « sans réponse » est
+  l'**absence** de ligne, pas une valeur, et c'est ce qui donne son sens au
+  compteur que lit le capitaine. Les lignes sont réécrites, jamais fusionnées,
+  pour qu'une réexécution ne fabrique pas un état que personne n'a choisi.
 - Ce script écrit en **production**, et refuse tout identifiant hors du club de
   démo (`assertDemoOnly`). Il affiche son plan et n'écrit rien sans `--apply`.
 - Manuel, et volontairement pas branché sur `mobile-release` : on recapture

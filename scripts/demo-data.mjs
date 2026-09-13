@@ -57,6 +57,31 @@ export const DEMO_IDENTITY = {
 /** The team it captains — the one whose next match the Accueil screen shows. */
 export const DEMO_TEAM = 'demo-team-1'
 
+/**
+ * How the squad answered for the match that is coming up.
+ *
+ * An empty availability panel — "0 disponibles · 6 sans réponse" — is what the
+ * screen looks like when nobody has used the feature, which is the opposite of
+ * what a store listing should show. A spread is also the only way to see the
+ * three states side by side, and the counts the captain actually reads.
+ *
+ * The sixth member of the squad is deliberately missing from this map:
+ * "sans réponse" is a real state, it is the ABSENCE of a row rather than a
+ * value, and the screen has to show it alongside the rest. It is also what
+ * makes the count on the card mean something.
+ */
+export const DEMO_AVAILABILITY = {
+  'user-appstore-demo': 'available', // the captain answers for himself first
+  'demo-player-1': 'available',
+  'demo-player-2': 'available',
+  'demo-player-3': 'maybe',
+  'demo-player-4': 'unavailable',
+  // demo-player-5: rien — sans réponse
+}
+
+/** The journée whose match the Accueil hero card shows: the one coming up. */
+export const UPCOMING_JOURNEE = 2
+
 // ---------------------------------------------------------------------------
 // Pure — the offsets, which are the actual subject
 // ---------------------------------------------------------------------------
@@ -169,9 +194,17 @@ function main(argv) {
   assertDemoOnly([
     ...games.map((g) => g.id),
     ...matchDays.map((m) => m.id),
+    ...Object.keys(DEMO_AVAILABILITY),
     team.id,
     DEMO_USER,
   ])
+
+  // The demo-team-1 fixture in the upcoming journée — the one the hero card
+  // shows, and so the only one whose availabilities are worth arranging.
+  const upcoming = games.find(
+    (g) => g.journee === UPCOMING_JOURNEE && g.id.startsWith('demo-g-1-'),
+  )
+  if (!upcoming) throw new Error(`Aucun match de ${DEMO_TEAM} en journée ${UPCOMING_JOURNEE}.`)
 
   const roster = JSON.parse(team.player_ids)
   const newRoster = roster.includes(DEMO_USER) ? roster : [...roster, DEMO_USER]
@@ -201,6 +234,14 @@ function main(argv) {
       `last_name = ${sqlStr(DEMO_IDENTITY.lastName)}, ` +
       `license_number = ${sqlStr(DEMO_IDENTITY.licenseNumber)} ` +
       `WHERE id = ${sqlStr(DEMO_USER)}`,
+    // Rewritten rather than merged, so re-running cannot accumulate a state
+    // nobody chose — and so the member left silent stays silent.
+    `DELETE FROM game_availabilities WHERE game_id = ${sqlStr(upcoming.id)}`,
+    ...Object.entries(DEMO_AVAILABILITY).map(
+      ([playerId, status]) =>
+        `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) ` +
+        `VALUES (${sqlStr(upcoming.id)}, ${sqlStr(playerId)}, ${sqlStr(status)}, NULL)`,
+    ),
   ]
 
   console.log(`Aujourd'hui : ${today}`)
@@ -212,6 +253,16 @@ function main(argv) {
     `  ${DEMO_USER} → ${DEMO_IDENTITY.firstName} ${DEMO_IDENTITY.lastName}, joueur et ` +
       `capitaine de ${DEMO_TEAM}` +
       (roster.includes(DEMO_USER) ? ' (déjà dans l’effectif)' : ', ajouté à l’effectif'),
+  )
+  const counts = Object.values(DEMO_AVAILABILITY).reduce(
+    (acc, v) => ({ ...acc, [v]: (acc[v] ?? 0) + 1 }),
+    /** @type {Record<string, number>} */ ({}),
+  )
+  const silent = roster.length + (roster.includes(DEMO_USER) ? 0 : 1) -
+    Object.keys(DEMO_AVAILABILITY).length
+  console.log(
+    `  dispos sur ${upcoming.id} → ${counts.available ?? 0} oui, ${counts.maybe ?? 0} ` +
+      `peut-être, ${counts.unavailable ?? 0} non, ${silent} sans réponse`,
   )
   console.log(`\n${statements.length} instructions.`)
 
