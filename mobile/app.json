@@ -2,7 +2,7 @@
   "expo": {
     "name": "Club Ping",
     "slug": "clubping-fr",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "clubping",
