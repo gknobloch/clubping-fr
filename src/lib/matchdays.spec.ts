@@ -11,6 +11,7 @@ import {
   isoWeekRange,
   playersCommittedElsewhere,
   upcomingRounds,
+  formatRoundDates,
 } from './matchdays'
 import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
 
@@ -450,5 +451,24 @@ describe('upcomingRounds (#474)', () => {
   it('keeps today itself, which has not happened yet', () => {
     expect(upcomingRounds([md('now', 1, today, 'g-a')], [], teams, { scope: 'all', today, phaseOf }))
       .toHaveLength(1)
+  })
+})
+
+// Lived in HomePage until #522 gave the native accueil the same card. Its own
+// rule either way: a round rarely happens on one day, because each poule gets
+// its own slot inside the week.
+describe('formatRoundDates', () => {
+  it('names the day when every poule plays it', () => {
+    expect(formatRoundDates({ from: '2026-09-14', to: '2026-09-14' })).toBe('lundi 14 septembre')
+  })
+
+  it('spans two dates in the same month without repeating it', () => {
+    expect(formatRoundDates({ from: '2026-09-14', to: '2026-09-19' })).toBe('du 14 au 19 septembre')
+  })
+
+  // Both months, or "du 28 au 3 octobre" reads as a round going backwards.
+  it('names both months when the round straddles them', () => {
+    expect(formatRoundDates({ from: '2026-09-28', to: '2026-10-03' }))
+      .toBe('du 28 septembre au 3 octobre')
   })
 })

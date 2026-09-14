@@ -332,3 +332,23 @@ export function upcomingRounds<
 
   return [...rounds.values()].sort((a, b) => a.from.localeCompare(b.from)).slice(0, limit)
 }
+
+/**
+ * An `UpcomingRound`'s date line, e.g. "samedi 14 septembre" or "du 14 au 19
+ * septembre".
+ *
+ * A round rarely happens on one day: the FFTT gives each poule its own slot
+ * inside the week, so a club with three teams plays "Journée 1" across three
+ * dates. A single date would name one of them and quietly drop the others.
+ *
+ * Distinct from `formatMatchDayRange`, which abbreviates ("sam. 27 – dim. 28
+ * oct.") for the Journées switcher where the label sits in a chip. This one is
+ * a sentence under a heading, and has the room to spell the month out.
+ */
+export function formatRoundDates({ from, to }: Pick<UpcomingRound, 'from' | 'to'>): string {
+  const day = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+    new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', opts)
+  if (from === to) return day(from, { weekday: 'long', day: 'numeric', month: 'long' })
+  const sameMonth = from.slice(0, 7) === to.slice(0, 7)
+  return `du ${day(from, sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'long' })} au ${day(to, { day: 'numeric', month: 'long' })}`
+}
