@@ -27,6 +27,24 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.4.1 — 14 septembre 2026
+
+- **La fiche d'un licencié indique son brûlage.** L'aperçu rapide et la matrice
+  des journées le disaient déjà ; la fiche, non — alors que c'est l'écran qu'on
+  ouvre justement pour savoir si on peut aligner quelqu'un.
+- **Les champs de recherche s'écrivent droit sur iPhone et iPad.** « Rechercher
+  un joueur » s'affichait lettre par lettre, espacée, dans la composition d'une
+  équipe, sur la fiche d'une équipe et dans la matrice des journées.
+- **Les onglets du bas ont un nom.** VoiceOver annonçait cinq boutons sans
+  intitulé ; il lit maintenant Accueil, Club, Équipes, Journées et Joueurs.
+
+### Play
+
+La fiche d'un licencié indique désormais son brûlage, comme le faisaient déjà
+l'aperçu rapide et la matrice des journées. Les champs de recherche s'affichent
+correctement sur iPhone et iPad, au lieu d'espacer les lettres de leur texte
+d'invite. Et les cinq onglets du bas ont un nom pour VoiceOver.
+
 ## 1.4.0 — 12 septembre 2026
 
 Être prévenu, et une application qui tient sans réseau.
