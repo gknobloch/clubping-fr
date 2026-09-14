@@ -86,6 +86,23 @@ appId: fr.clubping.app
 - tapOn:
     text: "Don.t allow|Don.t Allow|Ne pas autoriser|Refuser"
     optional: true
+
+# …and close whatever that dismissal opened underneath it.
+#
+# The alert is drawn over the Accueil card, and on iOS the touch that dismisses
+# it reaches what is behind: the tap landed on the alert's button at (146,559)
+# and the composition sheet was open by the time the tab bar was looked for —
+# which is what hid it, a `Sheet` being a Modal that owns the hierarchy.
+# Nothing about the alert's geometry is ours to control, so the fall-through is
+# absorbed rather than prevented.
+#
+# `selection-cancel`, never the save button: a capture run must not rewrite the
+# line-up scripts/demo-data.mjs just put there. Optional, because on a device
+# where the prompt never appeared there is nothing to undo.
+- tapOn:
+    id: "selection-cancel"
+    optional: true
+
 # The tab bar is the one thing every landing state shares — a session token
 # saved from a previous run, DEV_LOGIN off, and this member's own club/team all
 # lead here, but a wrong email or a rejected code does not.
