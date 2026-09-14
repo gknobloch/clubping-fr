@@ -46,7 +46,7 @@ const club = (id: string, displayName: string): Club => ({
 
 const team = (id: string, clubId: string, groupId: string): Team => ({
   id, clubId, phaseId: 'ph1', number: 1, divisionId: 'd1', groupId,
-  gameLocationId: 'a1', defaultDay: 'Samedi', defaultTime: '17h00', captainId: undefined,
+  gameLocationId: 'a1', defaultDay: 'Samedi', defaultTime: '17h00', captainId: '',
   isArchived: false, playerIds: [],
 })
 
