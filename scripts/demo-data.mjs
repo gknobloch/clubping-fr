@@ -91,8 +91,19 @@ export const DEMO_AVAILABILITY = {
   // demo-player-5: rien — sans réponse
 }
 
-/** Kick-off. Late afternoon reads better on a screenshot than late evening. */
+/**
+ * Kick-off. Late afternoon reads better on a screenshot than late evening.
+ *
+ * Written to the GAMES and to the teams' declared slot both. They are two
+ * different facts — a team says when it normally receives, a game says when it
+ * is actually played — and the team detail screen shows the *declared* one
+ * ("Calendrier : Samedi 17h00"). Setting only the games left that card
+ * contradicting every fixture under it.
+ */
 export const KICK_OFF = '16h00'
+
+/** The day that slot falls on, stated for the same reason as the hour. */
+export const KICK_OFF_DAY = 'Samedi'
 
 /**
  * The line-up the captain has already made for the coming match.
@@ -136,6 +147,37 @@ export const DEMO_LINEUP = [
  */
 export const DEMO_PROFILE = {
   'demo-player-2': { category: 'V40', phone: '+33 7 99 98 12 34' },
+}
+
+/**
+ * When each demo member last opened the app, in DAYS AGO.
+ *
+ * Offsets, like the calendar and for the same reason — a stored timestamp is
+ * stale the week after it is written, and "Jamais connecté" is what an absent
+ * one renders as.
+ *
+ * Which was the whole problem: every licensee but the review account carried
+ * no visit, so the Joueurs list read as eleven people who have never opened
+ * the app — an advertisement for a club that does not use it. The spread is
+ * what a live club looks like: somebody today, somebody yesterday, somebody a
+ * fortnight ago.
+ *
+ * Under 28 days on purpose. Past that `src/lib/lastSeen.ts` stops saying
+ * "il y a N semaines" and prints a bare date, which reads as a record rather
+ * than as activity.
+ */
+export const DEMO_LAST_SEEN = {
+  'user-appstore-demo': 0, //  Julien Mercier — aujourd'hui
+  'demo-player-1': 0, //       Alex Martin
+  'demo-player-2': 1, //       Camille Durand — hier
+  'demo-player-3': 2, //       Sam Petit
+  'demo-player-4': 3, //       Léa Moreau
+  'demo-player-5': 6, //       Noah Fontaine
+  'demo-player-6': 8, //       Jade Robert — « il y a 1 semaine »
+  'demo-player-7': 1, //       Hugo Girard
+  'demo-player-8': 4, //       Manon Bonnet
+  'demo-player-9': 11, //      Louis Dupont
+  'demo-player-10': 16, //     Emma Lambert — « il y a 2 semaines »
 }
 
 /** The journée whose match the Accueil hero card shows: the one coming up. */
@@ -261,6 +303,7 @@ function main(argv) {
     ...matchDays.map((m) => m.id),
     ...Object.keys(DEMO_AVAILABILITY),
     ...Object.keys(DEMO_PROFILE),
+    ...Object.keys(DEMO_LAST_SEEN),
     ...DEMO_LINEUP,
     team.id,
     DEMO_USER,
@@ -318,6 +361,17 @@ function main(argv) {
     `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
       `VALUES (${sqlStr(upcoming.id)}, ${sqlStr(DEMO_TEAM)}, ${sqlStr(JSON.stringify(DEMO_LINEUP))}) ` +
       `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
+    // The slot the team declares, which the team screen prints under
+    // « Calendrier » — see KICK_OFF.
+    `UPDATE teams SET default_day = ${sqlStr(KICK_OFF_DAY)}, default_time = ${sqlStr(KICK_OFF)} ` +
+      `WHERE id IN (${['demo-team-1', 'demo-team-2'].map(sqlStr).join(', ')})`,
+    // Visits, computed from today — see DEMO_LAST_SEEN. Stored as epoch ms
+    // (migration 0039); the API hands the client an ISO string.
+    ...Object.entries(DEMO_LAST_SEEN).map(
+      ([playerId, daysAgo]) =>
+        `UPDATE users SET last_seen_at = ${Date.parse(`${shiftDate(today, -daysAgo)}T19:00:00Z`)} ` +
+        `WHERE id = ${sqlStr(playerId)}`,
+    ),
     // What the player screens show — see DEMO_PROFILE.
     ...Object.entries(DEMO_PROFILE).flatMap(([playerId, { category, phone }]) => [
       `UPDATE users SET phone = ${sqlStr(phone)} WHERE id = ${sqlStr(playerId)}`,
@@ -350,6 +404,15 @@ function main(argv) {
       `peut-être, ${counts.unavailable ?? 0} non, ${silent} sans réponse`,
   )
   console.log(`  composition → ${DEMO_LINEUP.length} joueurs, coup d'envoi ${KICK_OFF}`)
+  console.log(
+    `  créneau déclaré des équipes → ${KICK_OFF_DAY} ${KICK_OFF} ` +
+      `(le même que les matchs, sinon la fiche équipe les contredit)`,
+  )
+  const seen = Object.values(DEMO_LAST_SEEN)
+  console.log(
+    `  dernières visites → ${seen.length} membres, de ${Math.min(...seen)} ` +
+      `à ${Math.max(...seen)} jours (plus personne « Jamais connecté »)`,
+  )
   for (const [playerId, { category, phone }] of Object.entries(DEMO_PROFILE)) {
     console.log(`  ${playerId} → catégorie ${category} (saison ${season.id}), ${phone}`)
   }

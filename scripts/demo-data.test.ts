@@ -10,6 +10,9 @@ import {
   DEMO_AVAILABILITY,
   DEMO_PROFILE,
   DEMO_IDENTITY,
+  DEMO_LAST_SEEN,
+  KICK_OFF,
+  KICK_OFF_DAY,
 } from './demo-data.mjs'
 import { normalizeCategory } from '../src/lib/playerCategories'
 
@@ -184,5 +187,41 @@ describe('the review account’s own line', () => {
     // FFTT sends a string and nothing here does arithmetic on it; a number
     // would be coerced on the way in and read back differently.
     expect(typeof DEMO_IDENTITY.points).toBe('string')
+  })
+})
+
+describe('the club looks alive', () => {
+  const days = Object.values(DEMO_LAST_SEEN) as number[]
+
+  it('gives every member a visit', () => {
+    // The absence of one renders as "Jamais connecté", and eleven of those
+    // down the Joueurs list advertise a club that does not use the app.
+    expect(Object.keys(DEMO_LAST_SEEN).length).toBeGreaterThanOrEqual(11)
+    expect(days.every((d) => Number.isInteger(d) && d >= 0)).toBe(true)
+  })
+
+  it('keeps them inside the relative-wording window', () => {
+    // Past 28 days src/lib/lastSeen.ts prints a bare date, which reads as a
+    // record rather than as activity.
+    expect(Math.max(...days)).toBeLessThan(28)
+  })
+
+  it('spreads them, rather than stamping one day on everybody', () => {
+    expect(new Set(days).size).toBeGreaterThan(3)
+    expect(Math.min(...days)).toBe(0)
+  })
+
+  it('names only demo rows', () => {
+    expect(() => assertDemoOnly(Object.keys(DEMO_LAST_SEEN))).not.toThrow()
+  })
+})
+
+describe('the declared slot and the fixtures agree', () => {
+  it('states the same hour the games carry', () => {
+    // The team screen prints the team's DECLARED slot under « Calendrier »;
+    // the fixtures under it carry the game's own time. Setting only the games
+    // left that card saying 17h00 over a match at 16h00.
+    expect(KICK_OFF).toBe('16h00')
+    expect(KICK_OFF_DAY).toBe('Samedi')
   })
 })
