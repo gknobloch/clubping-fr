@@ -11,3 +11,8 @@ export type { MatchDayGroup, MatchDayScope } from '@shared/lib/matchdays'
 // the only one of the two that kept the month on both ends of a range
 // spanning two months.
 export { formatMatchDayRange } from '@shared/lib/matchdays'
+// The admin accueil's "Prochaines journées" (#474, #522): which rounds are the
+// viewer's own, and the date line under each. Both from the web's copy — the
+// list was the club's there and every club's here.
+export { upcomingRounds, formatRoundDates } from '@shared/lib/matchdays'
+export type { UpcomingRound } from '@shared/lib/matchdays'

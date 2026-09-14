@@ -27,7 +27,7 @@ import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { getVenue, getVenueAddress } from '@shared/lib/venue'
-import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
+import { formatRoundDates, gameDate, gameTime, isSlotConfirmed, upcomingRounds } from '@/utils/matchdays'
 import { getMondayOf, todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -174,6 +174,27 @@ export default function HomeScreen() {
   const me = myPlayerId ? playerMap.get(myPlayerId) : undefined
   const myClubId = me?.clubId ?? user?.clubId
   const myClub = myClubId ? clubs.find((c) => c.id === myClubId) : undefined
+
+  // ── Generic view: the rounds coming up, for whoever is not playing them ──
+  //
+  // Scoped to the viewer's own club (#522). `matchDays` is the whole table —
+  // GET /api/data carries every club's — so listing it raw showed a club admin
+  // three "Journée 1" rows at three dates, none of them theirs. A general admin
+  // oversees the lot and keeps the whole list; anyone else sees their club and
+  // nothing else, including nothing at all when it has no team yet.
+  //
+  // Same derivation as the web's accueil (#474): a round is per *phase*, and a
+  // club playing in three poules has three rows of that number to merge, or the
+  // card repeats "Journée 1 — 1 match" once per poule.
+  const upcomingAdminRounds = useMemo(
+    () =>
+      upcomingRounds(matchDays, games, teams, {
+        scope: user?.role === 'general_admin' ? 'all' : { clubId: user?.clubId ?? '' },
+        today,
+        phaseOf: (md) => divMap.get(groupMap.get(md.groupId)?.divisionId ?? '')?.phaseId ?? '',
+      }),
+    [matchDays, games, teams, user?.role, user?.clubId, today, divMap, groupMap],
+  )
 
   // ── Hero view-models (one per upcoming game, for the carousel) ──
   type Hero = {
@@ -393,34 +414,22 @@ export default function HomeScreen() {
                 <Text style={styles.seasonName}>{activeSeason.displayName}</Text>
               </View>
             )}
-            {(() => {
-              const upcomingMatchDays = matchDays
-                .filter((md) => new Date(md.date) >= new Date())
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                .slice(0, 3)
-              if (upcomingMatchDays.length === 0) return null
-              return (
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Prochaines journées</Text>
-                  {upcomingMatchDays.map((md) => {
-                    const count = games.filter((g) => g.matchDayId === md.id).length
-                    return (
-                      <View key={md.id} style={styles.matchDayRow}>
-                        <View>
-                          <Text style={styles.matchDayName}>Journée {md.number}</Text>
-                          <Text style={styles.matchDayDate}>
-                            {new Date(md.date + 'T12:00:00').toLocaleDateString('fr-FR', {
-                              weekday: 'long', day: 'numeric', month: 'long',
-                            })}
-                          </Text>
-                        </View>
-                        <Text style={styles.matchCount}>{count} match{count > 1 ? 's' : ''}</Text>
-                      </View>
-                    )
-                  })}
-                </View>
-              )
-            })()}
+            {upcomingAdminRounds.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Prochaines journées</Text>
+                {upcomingAdminRounds.map((round) => (
+                  <View key={round.id} style={styles.matchDayRow}>
+                    <View>
+                      <Text style={styles.matchDayName}>Journée {round.number}</Text>
+                      <Text style={styles.matchDayDate}>{formatRoundDates(round)}</Text>
+                    </View>
+                    <Text style={styles.matchCount}>
+                      {round.games} match{round.games > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>

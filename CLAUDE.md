@@ -128,6 +128,27 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   already has that one in its fingers, and a second affordance must not move the
   first.
 
+### Accueil, vue générique (#474, #522)
+- **Les journées de l'accueil sont celles du club qui regarde.** `GET
+  /api/data` porte la table entière, donc la lister telle quelle montre le
+  calendrier des autres clubs : un administrateur du club de démo voyait trois
+  « Journée 1 » à trois dates, celles de quatre vrais clubs — et c'est cette
+  vue-là qui est partie en premier vers l'App Store (#520).
+- `upcomingRounds` (`src/lib/matchdays.ts`) est la seule dérivation, et la
+  **portée est énoncée, jamais devinée** : `'all'` pour un administrateur
+  général qui supervise tout, `{ clubId }` pour quiconque d'autre. La deviner à
+  partir de la présence d'un `clubId` a déjà coûté sa liste entière à un
+  administrateur général, dont le `club_id` valait la chaîne `'NULL'`.
+- Une journée est **par phase**, et une ligne `MatchDay` est **par poule** :
+  un club à trois équipes a trois lignes du même numéro, à fusionner. Les
+  lister verbatim répétait « Journée 1 — 1 match » une fois par poule.
+- Un club sans équipe ne voit **rien**, ce qui est où une inscription toute
+  fraîche laisse son administrateur.
+- Corrigé sur le web en #474, puis retrouvé intact dans l'app en #522 : les
+  deux écrans passent maintenant par le même code, `formatRoundDates` compris :
+  une plage de dates et non une date, parce que chaque poule a son propre
+  créneau dans la semaine.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

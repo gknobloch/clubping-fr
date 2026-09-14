@@ -22,21 +22,8 @@ import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibi
 import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
-import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingRounds } from '@/lib/matchdays'
+import { formatRoundDates, gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingRounds } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
-
-/**
- * A round's date line. Its groups rarely play on the same day — the FFTT gives
- * each one its own slot inside the week — so a single date would name one of
- * them and quietly drop the others.
- */
-function roundDates({ from, to }: { from: string; to: string }): string {
-  const day = (iso: string, opts: Intl.DateTimeFormatOptions) =>
-    new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', opts)
-  if (from === to) return day(from, { weekday: 'long', day: 'numeric', month: 'long' })
-  const sameMonth = from.slice(0, 7) === to.slice(0, 7)
-  return `du ${day(from, sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'long' })} au ${day(to, { day: 'numeric', month: 'long' })}`
-}
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -500,7 +487,7 @@ export function HomePage() {
                     <li key={round.id} className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
                       <span>
                         <span className="block text-sm font-semibold text-slate-800">Journée {round.number}</span>
-                        <span className="block text-xs text-slate-500">{roundDates(round)}</span>
+                        <span className="block text-xs text-slate-500">{formatRoundDates(round)}</span>
                       </span>
                       <span className="text-sm text-slate-500">
                         {round.games} match{round.games > 1 ? 's' : ''}
