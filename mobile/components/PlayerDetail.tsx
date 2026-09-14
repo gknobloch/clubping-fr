@@ -15,6 +15,8 @@ import { categoryDisplay } from '@shared/lib/playerCategories'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
+import { TeamBadge } from '@/components/TeamBadge'
+import { computeBrulage } from '@shared/lib/brulage'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -39,7 +41,7 @@ export function PlayerDetail({
   const id = playerId
   const {
     players, teams, clubs, phases, seasons, playerPhasePoints,
-    playerSeasonCategories, playerSeasonLicences,
+    playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
   } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
@@ -61,6 +63,30 @@ export function PlayerDetail({
   // A category belongs to a season, not to the licensee (#482): a cadet becomes
   // a junior, and last season's answer is not this season's.
   const category = categoryDisplay(categoryFor(playerSeasonCategories, activeSeason?.id, id))
+
+  // Brûlage — the same answer the quick view and the journées matrix give.
+  //
+  // It belongs on the fiche because this is the screen somebody opens to ask
+  // "can I field them?", and the fiche was the one place that listed a
+  // licensee's situation without it. `computeBrulage` is the single derivation
+  // (src/lib/brulage.ts); never re-answer it at a call site.
+  //
+  // Over the whole phase, with no `asOfMatchDayId`: a fiche is not being read
+  // from inside one match-day, so the question is simply where they stand now.
+  const brulageTeam = (() => {
+    if (!player || !activePhase) return null
+    const clubTeamsInPhase = teams.filter(
+      (t) => t.phaseId === activePhase.id && t.clubId === player.clubId,
+    )
+    // Defaulted: an offline cache written before these rode in `DataState`
+    // has none of them, and a fiche that cannot answer "burned?" should say
+    // nothing rather than fail to render at all (same rule as #498).
+    const info = computeBrulage(
+      player.id, clubTeamsInPhase, matchDays ?? [], games ?? [], gameSelections ?? [],
+    )
+    if (!info.burnedIntoTeamId) return null
+    return teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
+  })()
 
   // And whether the federation listed their licence at all this season (#488).
   const unlicensed = !!player && clubLicences(
@@ -119,6 +145,15 @@ export function PlayerDetail({
               opens WhatsApp. */}
           {player.email && <EmailRow email={player.email} />}
           {player.phone && <PhoneRow phone={player.phone} />}
+          {/* Same badge as the quick view, `danger` and all: the two screens
+              show one licensee, and a rule that looked different depending on
+              which you opened would be worse than one screen not showing it. */}
+          {brulageTeam && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Brûlage</Text>
+              <TeamBadge large danger color={brulageTeam.color} label={getTeamName(brulageTeam, clubs)} />
+            </View>
+          )}
         </View>
 
         {/* Active phase teams — list style, aligned with the team detail roster */}
