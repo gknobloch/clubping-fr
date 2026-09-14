@@ -636,6 +636,19 @@ internal testers that changes nothing — they get every build automatically. Ex
 testers would be emailed, and pilot's default for that is `true`, so the lane pins
 `notify_external_testers: false`: writing release notes must not by itself mail anybody.
 
+### The lane attaches the build too
+
+Without `build_number`, App Store Connect refuses *Add for Review* with *"You must choose
+a build"* — a dropdown somebody has to find, on a page that otherwise arrives complete.
+`deliver` runs with `skip_binary_upload: true` because EAS already uploaded the binary,
+but the version record still has to be told **which** build it is for.
+
+The number comes from `build-context.json`, read off the finished production build of this
+exact version — the same one `testflight_notes` attaches its text to, so the two cannot
+drift. It needs Apple to have **finished processing** the upload, five to ten minutes
+after `eas build --auto-submit` reports success. Run too early and deliver says the build
+does not exist: true, and temporary. Wait for the TestFlight mail and run the lane again.
+
 ### The App Store window closes
 
 `ios_notes` has a window, and it is narrower than the other two: **after the build

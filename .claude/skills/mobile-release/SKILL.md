@@ -259,9 +259,16 @@ id outside the demo club (`assertDemoOnly`) and changes nothing without
 `--apply`; it only ever touches `demo-*` and the review account, never a real
 licensee.
 
+The lane also **attaches the build** to the iOS version record, so *Add for
+Review* is not blocked on "You must choose a build". That needs Apple to have
+finished processing the upload — five to ten minutes after the build reports
+success. Run too early and deliver says the build does not exist; wait for the
+TestFlight mail and run the lane again.
+
 Two things still need a human, and both belong in the report: pressing **Submit
 for review** in App Store Connect, and promoting off the Play `internal` track.
-The lanes create the version record and fill the text; they publish nothing.
+The lanes create the version record, fill the text, attach the build and upload
+the images; they publish nothing.
 
 If the version is over Play's 500 characters, the generator fails with the count
 and asks for a `### Play` subsection in the CHANGELOG — the short text, written

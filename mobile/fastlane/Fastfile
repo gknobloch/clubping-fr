@@ -128,6 +128,20 @@ lane :ios_notes do
     metadata_path: context["metadataPath"],
     # EAS already uploaded the binary; deliver is here for the text alone.
     skip_binary_upload: true,
+    # …but the version record still has to be told WHICH build it is for.
+    # Without this, App Store Connect refuses «Add for Review» with "You must
+    # choose a build" — a dropdown somebody has to find, on a page that
+    # otherwise arrives complete.
+    #
+    # Named, not «the latest»: build-context.json carries the number read off
+    # the finished production build of this exact version, which is the same
+    # number testflight_notes attaches its own text to. The two cannot drift.
+    #
+    # It needs Apple to have FINISHED PROCESSING the upload — five to ten
+    # minutes after `eas build --auto-submit` reports success. Run too early,
+    # deliver says the build does not exist, which is true and temporary: wait
+    # for the TestFlight mail and run the lane again.
+    build_number: context["buildNumber"].to_s,
     # The images, when there are any (#520). `metadata_path` points at the
     # generated folder, which holds none, so the screenshots are named
     # separately — they are captured, not generated, and they are not in git.
@@ -146,8 +160,9 @@ lane :ios_notes do
     force: true,
   )
   UI.success(
-    "Notes App Store déposées sur la version #{context['version']}" \
-    "#{shots ? ', captures comprises' : ''} (pas soumise à la revue)."
+    "Notes App Store déposées sur la version #{context['version']}, build " \
+    "#{context['buildNumber']}#{shots ? ', captures comprises' : ''} " \
+    "(pas soumise à la revue)."
   )
 end
 
