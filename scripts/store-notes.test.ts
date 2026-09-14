@@ -162,3 +162,23 @@ describe('the real mobile/CHANGELOG.md', () => {
     }
   })
 })
+
+describe('how the eas binary is reached', () => {
+  // `npm run store:fastlane` at the repo root is `npm --prefix mobile run …`,
+  // and `--prefix` exports `npm_config_prefix=mobile` into everything
+  // downstream. `npx --no-install eas` then looks for a global install under
+  // `mobile/`, finds none, and dies with "could not determine executable to
+  // run" — from a plain shell it worked, from inside the lane it did not,
+  // which is the worst shape a bug can take. It stopped a release.
+  it('never goes through npx', () => {
+    const source = readFileSync(path.join(__dirname, 'store-notes.mjs'), 'utf8')
+    expect(source).not.toMatch(/['"]npx['"]/)
+  })
+
+  it('does not discard what eas writes to stderr', () => {
+    // The failure above arrived as a bare "Command failed" because stderr was
+    // piped to 'ignore'. Whatever eas has to say, the operator gets to read.
+    const source = readFileSync(path.join(__dirname, 'store-notes.mjs'), 'utf8')
+    expect(source).not.toMatch(/stdio:\s*\[\s*'ignore',\s*'pipe',\s*'ignore'\s*\]/)
+  })
+})

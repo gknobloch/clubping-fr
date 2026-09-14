@@ -16,7 +16,7 @@
 // the React Native runtime, which this needs none of.
 // ---------------------------------------------------------------------------
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -216,6 +216,22 @@ export function sectionForVersion(sections, version) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Where the eas binary is.
+ *
+ * Called directly, never through `npx`. `npm run store:fastlane` at the repo
+ * root is `npm --prefix mobile run …`, and `--prefix` exports
+ * `npm_config_prefix=mobile` into everything downstream — so `npx --no-install
+ * eas` goes looking for a global install under `mobile/`, finds none, and dies
+ * with "could not determine executable to run". It worked from a plain shell
+ * and failed from inside the lane, which is the worst shape a bug can take.
+ */
+function easBin() {
+  const local = path.join(ROOT, 'mobile/node_modules/.bin/eas')
+  if (existsSync(local)) return local
+  return 'eas' // installed globally — `brew install eas` or `npm i -g eas-cli`
+}
+
+/**
  * Ask EAS which build carries this version.
  *
  * Not `eas build:version:get`: that returns the last number EAS handed out,
@@ -230,9 +246,12 @@ export function sectionForVersion(sections, version) {
  */
 function buildVersionFromEas(platform, version) {
   const raw = execFileSync(
-    'npx',
-    ['--no-install', 'eas', 'build:list', '--platform', platform, '--limit', '30', '--json', '--non-interactive'],
-    { cwd: path.join(ROOT, 'mobile'), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    easBin(),
+    ['build:list', '--platform', platform, '--limit', '30', '--json', '--non-interactive'],
+    // stderr inherited, not discarded: swallowing it is how a PATH problem
+    // arrived as a bare "Command failed" with nothing to act on, in the middle
+    // of a release. Anything eas has to say, the operator gets to read.
+    { cwd: path.join(ROOT, 'mobile'), encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
   )
   const builds = JSON.parse(raw)
   const match = builds.find(
