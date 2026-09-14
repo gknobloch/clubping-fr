@@ -10,6 +10,7 @@ import {
   parseDevVars,
   withGradleMemory,
   androidPackage,
+  pngWithoutOrientationMetadata,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -240,5 +241,69 @@ describe('the app id the emulator installs', () => {
 
   it('refuses to guess when app.json does not say', () => {
     expect(() => androidPackage('{"expo":{}}')).toThrow('expo.android.package')
+  })
+})
+
+describe('the orientation metadata a rotation leaves behind', () => {
+  // `sips -r` rotates the pixels AND writes Orientation = 8 into an eXIf chunk
+  // and into the XMP. A reader that honours either turns the image a second
+  // time — so the file looked upright in one viewer and sideways in the next,
+  // and App Store Connect showed the iPad screenshots on their side after they
+  // had uploaded at exactly the right size.
+
+  /** A PNG made of the chunks named, each with a plausible payload. */
+  function png(chunks: Array<[string, Buffer]>): Buffer {
+    const parts = [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])]
+    for (const [type, data] of chunks) {
+      const head = Buffer.alloc(8)
+      head.writeUInt32BE(data.length, 0)
+      head.write(type, 4, 'latin1')
+      parts.push(head, data, Buffer.alloc(4)) // CRC is copied, never recomputed
+    }
+    return Buffer.concat(parts)
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(2752, 0)
+  ihdr.writeUInt32BE(2064, 4)
+  const xmp = Buffer.concat([Buffer.from('XML:com.adobe.xmp\0', 'latin1'), Buffer.from('<tiff:Orientation>8')])
+
+  it('drops the eXIf chunk and the XMP packet', () => {
+    const out = pngWithoutOrientationMetadata(png([
+      ['IHDR', ihdr],
+      ['eXIf', Buffer.from('MM\0*orientation', 'latin1')],
+      ['iTXt', xmp],
+      ['IDAT', Buffer.from('pixels')],
+      ['IEND', Buffer.alloc(0)],
+    ]))
+    expect(out.includes(Buffer.from('eXIf', 'latin1'))).toBe(false)
+    expect(out.includes(Buffer.from('XML:com.adobe.xmp', 'latin1'))).toBe(false)
+  })
+
+  it('keeps the image itself, and its dimensions', () => {
+    const out = pngWithoutOrientationMetadata(png([
+      ['IHDR', ihdr],
+      ['eXIf', Buffer.from('MM\0*', 'latin1')],
+      ['IDAT', Buffer.from('pixels')],
+      ['IEND', Buffer.alloc(0)],
+    ]))
+    expect(pngDimensions(out)).toEqual({ width: 2752, height: 2064 })
+    expect(out.includes(Buffer.from('pixels'))).toBe(true)
+  })
+
+  it('leaves an iTXt that is not the XMP packet alone', () => {
+    const note = Buffer.concat([Buffer.from('Comment\0', 'latin1'), Buffer.from('gardé')])
+    const out = pngWithoutOrientationMetadata(png([
+      ['IHDR', ihdr], ['iTXt', note], ['IDAT', Buffer.from('p')], ['IEND', Buffer.alloc(0)],
+    ]))
+    expect(out.includes(Buffer.from('gardé'))).toBe(true)
+  })
+
+  it('is idempotent — a file with nothing to strip comes back unchanged', () => {
+    const clean = png([['IHDR', ihdr], ['IDAT', Buffer.from('p')], ['IEND', Buffer.alloc(0)]])
+    expect(pngWithoutOrientationMetadata(clean).equals(clean)).toBe(true)
+  })
+
+  it('refuses anything that is not a PNG', () => {
+    expect(() => pngWithoutOrientationMetadata(Buffer.from('nope'))).toThrow('not a PNG')
   })
 })
