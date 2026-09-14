@@ -673,6 +673,43 @@ function findTakeScreenshotDir(root) {
 }
 
 /**
+ * The same PNG without the metadata that claims it needs rotating.
+ *
+ * `sips -r` rotates the PIXELS — the IHDR comes back 2752x2064 — and then also
+ * writes `Orientation = 8` into an `eXIf` chunk and into the XMP. A reader that
+ * honours either turns the image a second time, so the file is upright in one
+ * viewer and on its side in the next. App Store Connect honours it: the iPad
+ * screenshots went up correctly sized and displayed sideways on the product
+ * page.
+ *
+ * Both carriers go. An absent tag means orientation 1, which is what a
+ * correctly-rotated file should have said in the first place. Chunks are
+ * copied verbatim, so their CRCs stay valid; only the ancillary ones named
+ * here are dropped, and a store screenshot needs neither.
+ *
+ * @param {Buffer} buf
+ */
+export function pngWithoutOrientationMetadata(buf) {
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(sig)) throw new Error('not a PNG')
+  const kept = [buf.subarray(0, 8)]
+  let pos = 8
+  while (pos + 8 <= buf.length) {
+    const length = buf.readUInt32BE(pos)
+    const type = buf.subarray(pos + 4, pos + 8).toString('latin1')
+    const end = pos + 12 + length
+    const data = buf.subarray(pos + 8, pos + 8 + length)
+    // The XMP packet rides in an iTXt whose keyword says so; other iTXt
+    // chunks are somebody else's and are left alone.
+    const isXmp = type === 'iTXt' && data.subarray(0, 17).toString('latin1') === 'XML:com.adobe.xmp'
+    if (type !== 'eXIf' && !isXmp) kept.push(buf.subarray(pos, end))
+    pos = end
+    if (type === 'IEND') break
+  }
+  return Buffer.concat(kept)
+}
+
+/**
  * Turn a sideways capture the right way up, in place.
  *
  * Maestro's `setOrientation` rotates the app's interface but not the
@@ -688,6 +725,8 @@ function uprightLandscape(file) {
   // -90 = counter-clockwise, which is what LANDSCAPE_LEFT needs: the status
   // bar comes back along the right edge, and that edge is the top.
   sh('sips', ['-r', '-90', file], { stdio: ['ignore', 'ignore', 'pipe'] })
+  // …and take back sips's claim that it still needs turning.
+  writeFileSync(file, pngWithoutOrientationMetadata(readFileSync(file)))
 }
 
 function validateAndInstall(target, captured) {

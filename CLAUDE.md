@@ -404,6 +404,15 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `clearKeychain` — elle appartient à SpringBoard, pas à l'app — puis revient
   au lancement suivant en tenant toute la hiérarchie, masquant chaque élément
   en dessous. C'est à ça que ressemble une exécution iPad bloquée.
+- **Une rotation `sips` laisse une étiquette qui la refait.** `-r` tourne bien
+  les pixels (l'IHDR revient en 2752x2064) puis écrit `Orientation = 8` dans un
+  chunk `eXIf` **et** dans le XMP. Un lecteur qui l'honore tourne l'image une
+  seconde fois : le même fichier est droit dans une visionneuse et couché dans
+  la suivante. App Store Connect l'honore — les captures iPad sont parties à la
+  bonne taille et se sont affichées de travers sur la fiche. Les deux porteurs
+  sont retirés après rotation ; l'absence d'étiquette vaut orientation 1, ce
+  qu'un fichier correctement tourné aurait dû annoncer d'emblée. Devant une
+  capture de travers, regarder la métadonnée avant les pixels.
 - **L'iPad se capture en paysage, et il lui manque un écran.** Une tablette se
   tient en travers, et c'est la forme pour laquelle #447 a dessiné l'app : les
   cinq destinations deviennent un rail à gauche et la matrice des journées a

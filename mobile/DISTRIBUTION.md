@@ -424,6 +424,20 @@ limits in the message. The script rewrites that line after `prebuild` — not in
 because `--clean` regenerates the file on every run, so a committed value would survive
 exactly until the next capture.
 
+**And `sips` lies about it afterwards.** `-r` rotates the pixels — the IHDR comes back
+2752x2064 — and then writes `Orientation = 8` into an `eXIf` chunk *and* into the XMP. A
+reader that honours either turns the image a second time, so the same file is upright in
+one viewer and on its side in the next. App Store Connect honours it: the iPad
+screenshots uploaded at exactly the right size and displayed sideways on the product
+page. The script strips both carriers after rotating; an absent tag means orientation 1,
+which is what a correctly-rotated file should have claimed to begin with.
+
+If a rotated screenshot ever looks wrong again, check the metadata before the pixels:
+
+```bash
+sips -g pixelWidth -g pixelHeight -g orientation <file>
+```
+
 One caveat if this ever looks ignored: a `gradle.properties` in `GRADLE_USER_HOME`
 (`~/.gradle/`) **outranks** the project's. That is the right precedence — somebody set it
 deliberately — but it means a smaller value there wins.
