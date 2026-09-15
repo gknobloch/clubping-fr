@@ -636,6 +636,28 @@ internal testers that changes nothing — they get every build automatically. Ex
 testers would be emailed, and pilot's default for that is `true`, so the lane pins
 `notify_external_testers: false`: writing release notes must not by itself mail anybody.
 
+### Check the credentials before building, not after
+
+```bash
+npm run store:fastlane -- preflight
+```
+
+Three seconds and no network. It asserts the App Store Connect key — the three
+environment variables, and that `ASC_KEY_CONTENT` actually parses as a key rather than
+merely being non-empty — and that `google-play-service-account.json` exists and holds a
+`client_email` and a `private_key`.
+
+Worth its own lane because of *when* the alternative tells you. Those credentials are
+otherwise first touched by `store:fastlane -- notes`, which runs after both cloud builds,
+both uploads, and inside the window that closes the moment a version is submitted. That
+is how 1.4.0 shipped with Play notes and no App Store ones (#519).
+
+What it deliberately does **not** do is phone Apple or Google. A preflight that needs the
+network turns "your key is not set" into "something failed", which is the class of message
+this is here to prevent. So a revoked-but-well-formed key passes it, and so does a Play
+account missing a per-app permission — the failure this release actually hit on the Android
+side. Both surface at upload, in the platform's own wording.
+
 ### The lane attaches the build too
 
 Without `build_number`, App Store Connect refuses *Add for Review* with *"You must choose
