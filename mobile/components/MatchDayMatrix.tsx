@@ -400,6 +400,20 @@ export function MatchDayMatrix({
   )
 }
 
+// ---------------------------------------------------------------------------
+// L'échelle (#550)
+//
+// This grid took the web's column *widths* verbatim (`TABLE_COL_WIDTHS`) and
+// then wrote them in a phone's type — 13pt names, 11pt in the controls, 10pt
+// for a licence number — where the web draws the same table in `text-sm` (14)
+// with `text-xs` (12) underneath it. Two grids meant to be the same grid, one
+// of them a point to three points smaller, on the device held furthest away.
+//
+// So the sizes below are the web's pair, 14 and 12, with the name a step up at
+// 15 because it is the column the eye returns to. The widths do not move: they
+// were dimensioned for `text-sm` in the first place, which is exactly why the
+// type is what had to catch up.
+// ---------------------------------------------------------------------------
 const s = StyleSheet.create({
   section: {
     backgroundColor: colors.card,
@@ -421,10 +435,10 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   heading: { flexShrink: 1 },
-  teamName: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
-  subtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+  teamName: { fontSize: 18, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   division: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: fonts.semiBold,
     color: colors.textSecondary,
     backgroundColor: colors.card,
@@ -450,7 +464,7 @@ const s = StyleSheet.create({
   // pointer-sized control in a dense header, so 32 is the honest size.
   pagerBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   pagerBtnOff: { opacity: 0.35 },
-  pagerLabel: { fontSize: 12, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
+  pagerLabel: { fontSize: 13, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
 
   searchBar: {
     flexDirection: 'row',
@@ -462,7 +476,7 @@ const s = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 15,
     color: colors.textPrimary,
     // iOS renders TextInput placeholders with stray letter-spacing unless an
     // explicit value is set; pin it to 0 so they track normally (#118).
@@ -479,7 +493,7 @@ const s = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   th: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: fonts.semiBold,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -494,11 +508,11 @@ const s = StyleSheet.create({
     paddingVertical: 6,
     alignItems: 'center',
   },
-  dayNumber: { fontSize: 12, fontFamily: fonts.semiBold, color: colors.textPrimary },
-  dayDate: { fontSize: 10, color: colors.textSecondary, marginTop: 1 },
+  dayNumber: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  dayDate: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   dayDateWarn: { color: colors.warningText },
-  dayOpponent: { fontSize: 10, color: colors.textSecondary, marginTop: 1 },
-  dayExempt: { fontSize: 10, color: colors.textSecondary, fontStyle: 'italic', marginTop: 1 },
+  dayOpponent: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  dayExempt: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic', marginTop: 1 },
 
   subRow: {
     flexDirection: 'row',
@@ -508,10 +522,10 @@ const s = StyleSheet.create({
   },
   subPair: { flexDirection: 'row', borderLeftWidth: 1, borderLeftColor: colors.border },
   subTh: {
-    fontSize: 10,
+    fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
 
   row: {
@@ -527,20 +541,20 @@ const s = StyleSheet.create({
   cellCentred: { alignItems: 'center' },
   pair: { flexDirection: 'row', borderLeftWidth: 1, borderLeftColor: colors.border },
 
-  name: { fontSize: 13, color: colors.textPrimary, paddingHorizontal: 4 },
+  name: { fontSize: 15, color: colors.textPrimary, paddingHorizontal: 4 },
   nameCaptain: { fontFamily: fonts.bold },
   points: { color: colors.textSecondary },
   unlicensed: { fontFamily: fonts.semiBold, color: '#92400E' },
-  license: { fontSize: 10, color: colors.textSecondary, paddingHorizontal: 4, marginTop: 1 },
+  license: { fontSize: 12, color: colors.textSecondary, paddingHorizontal: 4, marginTop: 1 },
   count: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
     alignSelf: 'center',
     fontVariant: ['tabular-nums'],
   },
   brulage: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  brulageText: { fontSize: 11, color: colors.textSecondary },
+  brulageText: { fontSize: 13, color: colors.textSecondary },
   dot: { width: 8, height: 8, borderRadius: 4 },
 
   // Fills its cell rather than its text, so a column of answers reads as one
@@ -552,7 +566,7 @@ const s = StyleSheet.create({
     gap: 5,
     alignSelf: 'stretch',
     width: '100%',
-    minHeight: 30,
+    minHeight: 36,
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: colors.border,
@@ -560,8 +574,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 6,
   },
   controlLocked: { opacity: 0.5 },
-  controlText: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary },
+  controlText: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.textSecondary },
   controlTextEmpty: { color: colors.textSecondary },
 
-  empty: { fontSize: 13, color: colors.textSecondary, padding: 16 },
+  empty: { fontSize: 15, color: colors.textSecondary, padding: 16 },
 })
