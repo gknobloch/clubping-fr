@@ -34,7 +34,7 @@ import type {
   User,
 } from '@shared/types'
 import { apiUrl } from '@/constants/api'
-import { dataHeaders, getSessionToken, onSessionTokenChange } from '@/utils/api'
+import { dataHeaders, getSessionToken, getSessionUserId, onSessionChange } from '@/utils/api'
 import { clearCache, readCache, writeCache } from '@/utils/offlineCache'
 
 // ---------------------------------------------------------------------------
@@ -173,8 +173,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setStale(false)
         setLastSyncedAt(syncedAt)
         lastFetchAt.current = Date.now()
-        // Persist for the next cold start. Best-effort; never blocks the UI.
-        writeCache(data, syncedAt)
+        // Persist for the next cold start, under the member it was fetched for
+        // (#509). Best-effort; never blocks the UI.
+        writeCache(getSessionUserId(), data, syncedAt)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Erreur réseau')
         setApiAvailable(false)
@@ -193,13 +194,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    // The member we have already hydrated for, so a second notification about
+    // the same session does not re-read the cache and re-raise `stale`.
+    let hydratedFor: string | null = null
 
-    // Hydrate from the offline cache before the first network fetch so the app
-    // renders instantly (and stays usable with no connectivity). The fetch
-    // below then refreshes in the background and clears the stale flag.
-    ;(async () => {
-      const cached = await readCache<DataState>()
-      if (!cancelled && cached) {
+    /**
+     * Show what we hold for `memberId`, then refresh.
+     *
+     * Keyed on the member and not merely on "is there a cache", because the
+     * entry may belong to somebody else — a club phone passed on, and, once
+     * there are several, a profile switch that never passes through a sign-out
+     * (#509). `readCache` refuses those; here that simply reads as "nothing to
+     * show yet".
+     *
+     * Nothing is hydrated before a member is known. AuthProvider is a CHILD of
+     * this provider, so its effect runs first, but it reaches storage through
+     * an await — at our own mount the id is still null, and this is called
+     * again the moment it lands.
+     */
+    const hydrate = async (memberId: string | null) => {
+      if (!memberId || memberId === hydratedFor) {
+        if (!cancelled) load(hydratedFor ? 'refresh' : 'initial')
+        return
+      }
+      hydratedFor = memberId
+      const cached = await readCache<DataState>(memberId)
+      if (cancelled) return
+      if (cached) {
         setState(withDefaults(cached.data))
         setLastSyncedAt(cached.lastSyncedAt)
         setStale(true)
@@ -208,20 +229,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       // 'background' when the cache gave us something to show: the fetch must
       // not raise `loading` again, or React would only commit that later value
       // and the spinner would cover the cached content for the whole request.
-      if (!cancelled) load(cached ? 'background' : 'initial')
-    })()
+      load(cached ? 'background' : 'initial')
+    }
 
-    // Refetch when the session token changes (e.g. after login/logout). On
-    // logout (token cleared) drop the cache and reset so the next user never
-    // sees the previous user's data.
-    const unsubscribe = onSessionTokenChange(() => {
+    hydrate(getSessionUserId())
+
+    // React to the session changing (sign-in, sign-out, the member landing
+    // after a restore). Only a token going to null is a sign-out — and only
+    // then is the cache emptied, so the next member on a shared phone starts
+    // clean. A member we simply do not know yet is not a sign-out, and clearing
+    // there would destroy the cache an offline boot is about to read (#513).
+    const unsubscribe = onSessionChange(() => {
       if (getSessionToken() === null) {
         clearCache()
+        hydratedFor = null
         setState(emptyState)
         setStale(false)
         setLastSyncedAt(null)
+        load()
+        return
       }
-      load()
+      hydrate(getSessionUserId())
     })
 
     return () => {
