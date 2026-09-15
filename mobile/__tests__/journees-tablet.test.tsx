@@ -266,9 +266,11 @@ describe('sur une tablette', () => {
 
     fireEvent.press(screen.getByText('J2'))
 
+    // `from` names the axis the match screen then pages along (#552): coming
+    // from a journée, that is the club's other matches of the same round.
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/match/[id]',
-      params: { id: 'g2', teamId: 't1' },
+      params: { id: 'g2', teamId: 't1', from: 'round' },
     })
   })
 })
