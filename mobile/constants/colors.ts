@@ -8,6 +8,12 @@ export const colors = {
   // amber-700. `warning` is a fill (badges, dots); as 12px text on white it
   // sits near 2:1 contrast, so anything readable uses this instead.
   warningText: '#b45309',
+  // amber-700 as a fill, for the one bar that carries it: the update banner
+  // (#508). Deliberately not `accent` — the offline banner is accent, the two
+  // can be stacked, and two unrelated messages must not read as one block. Not
+  // `warning` either: white on amber-500 is ~2.2:1, and the bar's own
+  // background is what the white status-bar clock sits on.
+  updateBar: '#b45309',
   danger: '#ef4444',     // red-500 (errors/destructive)
   maybe: '#f59e0b',      // amber-500
   bg: '#f8fafc',         // slate-50
