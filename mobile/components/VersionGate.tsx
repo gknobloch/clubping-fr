@@ -81,15 +81,25 @@ export function UnsupportedOverlay() {
 }
 
 const styles = StyleSheet.create({
-  // Mirrors OfflineBanner, which sits in the same slot and must not look like a
-  // different kind of object.
+  // The shape of OfflineBanner — same slot, same height, same 13px white
+  // semibold — and deliberately not its fill. Both are thin bars above the
+  // navigator and both can be up at once, so they share a form; `colors.accent`
+  // on this one would make the pair read as a single red block saying neither
+  // thing.
+  //
+  // It was `colors.primary` until #508's follow-up, which is the header's own
+  // colour: the bar had no edge against the screen below it and simply read as
+  // one more line of text in the navy. The fill also runs under the status bar
+  // (paddingTop below), and the clock is white everywhere (#364) — so the
+  // background has to stay dark enough to carry white text, which rules out the
+  // amber-500 fill used for badges.
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingBottom: 6,
     paddingHorizontal: 12,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.updateBar,
   },
   barLabel: { flex: 1 },
   barText: {
