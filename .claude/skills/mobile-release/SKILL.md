@@ -172,6 +172,26 @@ string must never be deleted to "not ask for" a permission.
 
 ## 5. Build and submit
 
+**First, check the credentials — before either build starts:**
+
+```bash
+npm run store:fastlane -- preflight
+```
+
+Three seconds, no network. It asserts the App Store Connect key (`ASC_KEY_ID`,
+`ASC_ISSUER_ID`, `ASC_KEY_CONTENT`, parsed not just counted) and the Play
+service-account file. These are only reached otherwise when `store:fastlane --
+notes` needs them, which is *after* both cloud builds, both uploads, and inside
+the window that shuts the moment a version goes to review. 1.4.0 learned
+`ASC_KEY_ID` was unset exactly there: Play got its notes, the App Store and
+TestFlight did not, and that text cannot be added later without a new version
+number (#519).
+
+It does not phone Apple or Google, so it cannot tell you a key has been
+**revoked**, nor that the Play account lacks a per-app permission — both surface
+at upload, in Apple's or Google's own words. What it catches is the thing that
+actually happened: a variable nobody had set on this machine.
+
 From `mobile/`, one command per platform:
 
 ```bash

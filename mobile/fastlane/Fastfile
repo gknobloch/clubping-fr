@@ -105,6 +105,49 @@ def asc_key
   )
 end
 
+desc "Les identifiants sont-ils là ? À lancer AVANT les builds"
+# ---------------------------------------------------------------------------
+# Fail in the first second, not after two binaries exist (#519)
+#
+# The credentials are only reached when a lane needs them, which is after both
+# cloud builds, both uploads, and inside the window that closes the moment a
+# version goes to review. The 1.4.0 release learned `ASC_KEY_ID` was unset
+# exactly there: Play got its notes, the App Store and TestFlight did not, and
+# the text those two wanted cannot be added later without a new version number.
+#
+# Nothing here touches the network. A preflight that needs Apple to answer
+# turns "your key is not set" into "something failed", which is the class of
+# message this whole issue is about. `app_store_connect_api_key` parses the key
+# locally, so a malformed ASC_KEY_CONTENT is caught too — but a well-formed key
+# that has been REVOKED still gets through, and so does a Play account missing
+# a per-app permission. Both of those surface at upload, with Apple's or
+# Google's own wording.
+# ---------------------------------------------------------------------------
+lane :preflight do
+  asc_key # raises, naming the variable, and parses the base64 key content
+  UI.success("App Store Connect : clé #{ENV['ASC_KEY_ID']} lisible.")
+
+  key = File.join(MOBILE_DIR, "google-play-service-account.json")
+  UI.user_error!("#{key} absent. Voir mobile/DISTRIBUTION.md.") unless File.exist?(key)
+  require "json"
+  begin
+    account = JSON.parse(File.read(key))
+  rescue JSON::ParserError => e
+    UI.user_error!("#{key} n'est pas un JSON lisible : #{e.message}")
+  end
+  %w[client_email private_key].each do |field|
+    next unless account[field].to_s.empty?
+
+    UI.user_error!("#{key} ne contient pas « #{field} » — ce n'est pas une clé de compte de service.")
+  end
+  UI.success("Play : compte de service #{account['client_email']}.")
+
+  UI.important(
+    "Vérifié sans réseau : les clés sont présentes et lisibles. Une clé révoquée " \
+    "ou une permission Play manquante ne se voit qu'au téléversement."
+  )
+end
+
 desc "Régénère les trois fichiers depuis mobile/CHANGELOG.md"
 lane :generate_notes do
   # The script resolves its own paths from its location, so the working
@@ -270,6 +313,9 @@ end
 
 desc "Les trois champs, une fois les deux builds terminés"
 lane :notes do
+  # First, and before generate_notes interrogates EAS: an absent key should
+  # stop this in a second rather than after a round trip.
+  preflight
   generate_notes
   ios_notes
   testflight_notes
