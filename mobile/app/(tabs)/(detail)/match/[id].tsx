@@ -236,8 +236,6 @@ export default function MatchDetailScreen() {
         {/* Keyed on the game so paging lands at the top of the next match rather
             than halfway down it, where the finger left this one. */}
         <ScrollView key={game.id} contentContainerStyle={[styles.scroll, contentWidth()]}>
-          {neighbours && <GamePager neighbours={neighbours} onGo={goTo} />}
-
           {/* Summary */}
           <View style={styles.card}>
             <MatchHeader
@@ -255,6 +253,11 @@ export default function MatchDetailScreen() {
               onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
             />
           </View>
+
+          {/* Under the card and above everything about *this* match, which is
+              where the accueil's carousel puts its dots — the strip belongs to
+              the header it pages, not to the availabilities below it. */}
+          {neighbours && <GamePager neighbours={neighbours} onGo={goTo} />}
 
           {/* Availabilities + line-up (check = selected) */}
           {/* The line-up as it stands, not only as it is being made (#488):

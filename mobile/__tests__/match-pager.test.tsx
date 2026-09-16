@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, within } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { Club, Division, Game, Group, MatchDay, Phase, Player, Team, User } from '@shared/types'
 import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
@@ -90,9 +90,30 @@ const makeTeam = (id: string, number: number, groupId: string, clubId = 'c1'): T
   playerIds: clubId === 'c1' ? ['p1'] : [],
 })
 
+/**
+ * A club of `size` teams, one poule each, all playing journée 1.
+ *
+ * "Journée 1" is therefore `size` MatchDay rows, which is the shape that makes
+ * the round axis a derivation rather than a filter on a number — and nine or
+ * twelve of them is the club size the strip exists for (Rixheim fields nine).
+ */
+function clubOf(size: number) {
+  mockData.teams = [
+    ...Array.from({ length: size }, (_, i) => makeTeam(`t${i + 1}`, i + 1, `grp${i + 1}`)),
+    makeTeam('opp', 99, 'grp1', 'c2'),
+  ]
+  mockData.matchDays = Array.from({ length: size }, (_, i) => ({
+    id: `md-g${i + 1}-j1`, groupId: `grp${i + 1}`, number: 1, date: '2025-09-06',
+  }))
+  mockData.games = Array.from({ length: size }, (_, i) => ({
+    id: `j1-t${i + 1}`, matchDayId: `md-g${i + 1}-j1`, homeTeamId: `t${i + 1}`, awayTeamId: 'opp',
+  }))
+  mockData.groups = Array.from({ length: size }, (_, i) => ({
+    id: `grp${i + 1}`, divisionId: 'd1', number: i + 1, teamIds: [`t${i + 1}`], isArchived: false,
+  }))
+}
+
 // Three club teams, three poules, two journées — Équipe 3 sits journée 2 out.
-// "Journée 1" is therefore three MatchDay rows, which is the shape that makes
-// the round axis a derivation rather than a filter on a number.
 beforeEach(() => {
   mockPush.mockClear()
   mockSetParams.mockClear()
@@ -143,15 +164,40 @@ describe('Détail d’un match — arrivé des Journées', () => {
   it('offers the club’s other matches of the same journée', () => {
     render(<MatchDetailScreen />)
 
-    expect(screen.getByText('Équipe 1')).toBeTruthy()
-    expect(screen.getByText('Équipe 3')).toBeTruthy()
-    expect(screen.getByText('2 / 3')).toBeTruthy()
+    expect(screen.getByText('Éq. 1')).toBeTruthy()
+    expect(screen.getByText('Éq. 3')).toBeTruthy()
+    expect(screen.getByLabelText('Éq. 2').props.accessibilityState).toMatchObject({ selected: true })
+  })
+
+  it('reaches the ninth team of a nine-team club in one tap', () => {
+    // The size this is for: stepping would mean passing the seven nobody asked
+    // for, and a dot would not have said which one was the ninth.
+    clubOf(9)
+    mockParams.id = 'j1-t1'
+    mockParams.teamId = 't1'
+
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Éq. 9'))
+
+    expect(mockSetParams).toHaveBeenCalledWith({ id: 'j1-t9', teamId: 't9', from: 'round' })
+  })
+
+  it('names all twelve of a twelve-team club’s matches', () => {
+    clubOf(12)
+    mockParams.id = 'j1-t1'
+    mockParams.teamId = 't1'
+
+    render(<MatchDetailScreen />)
+
+    // Nothing is dropped or collapsed past the width — the strip scrolls.
+    expect(screen.getAllByTestId(/^game-step-j1-t\d+$/)).toHaveLength(12)
+    expect(screen.getByText('Éq. 12')).toBeTruthy()
   })
 
   it('moves in place, keeping the axis — back still returns to the list', () => {
     render(<MatchDetailScreen />)
 
-    fireEvent.press(screen.getByTestId('game-pager-next'))
+    fireEvent.press(screen.getByLabelText('Éq. 3'))
 
     expect(mockSetParams).toHaveBeenCalledWith({ id: 'j1-t3', teamId: 't3', from: 'round' })
     expect(mockPush).not.toHaveBeenCalled()
@@ -162,10 +208,10 @@ describe('Détail d’un match — arrivé des Journées', () => {
 
     render(<MatchDetailScreen />)
 
-    // Journée 2 is Équipe 1 and Équipe 2 only, so Équipe 2 is the last stop.
-    expect(screen.getByText('2 / 2')).toBeTruthy()
-    expect(screen.getByText('Équipe 1')).toBeTruthy()
-    expect(screen.queryByTestId('game-pager-next')).toBeNull()
+    // Journée 2 is Équipe 1 and Équipe 2 only — Équipe 3 sits it out.
+    expect(screen.getByText('Éq. 1')).toBeTruthy()
+    expect(screen.getByText('Éq. 2')).toBeTruthy()
+    expect(screen.queryByText('Éq. 3')).toBeNull()
   })
 })
 
@@ -175,27 +221,30 @@ describe('Détail d’un match — arrivé d’une équipe', () => {
 
     render(<MatchDetailScreen />)
 
-    expect(screen.getByText('J2')).toBeTruthy()
-    expect(screen.getByText('1 / 2')).toBeTruthy()
+    // Scoped to the strip: the header card right above carries its own «J1»
+    // badge, and the two agreeing is the point rather than a clash.
+    const strip = within(screen.getByTestId('game-strip'))
+    expect(strip.getByText('J1')).toBeTruthy()
+    expect(strip.getByText('J2')).toBeTruthy()
+    expect(strip.getByLabelText('J1').props.accessibilityState).toMatchObject({ selected: true })
   })
 
   it('is what an opener that says nothing gets — the accueil, Mes matchs, a notification', () => {
     render(<MatchDetailScreen />)
 
-    fireEvent.press(screen.getByTestId('game-pager-next'))
+    fireEvent.press(screen.getByLabelText('J2'))
 
     expect(mockSetParams).toHaveBeenCalledWith({ id: 'j2-t2', teamId: 't2', from: 'team' })
   })
 })
 
 describe('Détail d’un match — rien à parcourir', () => {
-  it('shows no pager when the axis holds this match alone', () => {
+  it('shows no strip when the axis holds this match alone', () => {
     mockParams.id = 'j1-t3'
     mockParams.teamId = 't3'
 
     render(<MatchDetailScreen />)
 
-    expect(screen.queryByTestId('game-pager-next')).toBeNull()
-    expect(screen.queryByTestId('game-pager-prev')).toBeNull()
+    expect(screen.queryByTestId('game-strip')).toBeNull()
   })
 })

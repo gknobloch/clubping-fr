@@ -35,13 +35,24 @@ export interface GameStep {
   matchDayNumber: number
   /** The team's number within its club. */
   teamNumber: number
+  /** The team's colour, which is how this app tells one club team from another. */
+  teamColor?: string
 }
 
 export interface GameNeighbours {
   axis: GameAxis
+  /**
+   * Every stop on the axis, in order, the current one included.
+   *
+   * The whole list and not just the two ends: the strip under the match header
+   * names each one and is tappable, because past half a dozen stops a control
+   * that only steps is a control you have to walk through — a club with nine
+   * teams would reach its ninth by passing the eight it did not ask for.
+   */
+  steps: GameStep[]
   /** 0-based position of the fixture on screen. */
   index: number
-  /** How many stops the axis holds, the current one included. */
+  /** How many stops the axis holds, the current one included. `steps.length`. */
   total: number
   previous?: GameStep
   next?: GameStep
@@ -89,6 +100,7 @@ function roundSteps(team: Team, matchDay: MatchDay, data: GameNeighbourData): Ga
         teamId: t.id,
         matchDayNumber: matchDay.number,
         teamNumber: t.number,
+        teamColor: t.color,
       })
     }
   }
@@ -113,6 +125,7 @@ function teamSteps(team: Team, data: GameNeighbourData): GameStep[] {
           teamId: team.id,
           matchDayNumber: g.matchDay.number,
           teamNumber: team.number,
+          teamColor: team.color,
         }]
       : [],
   )
@@ -141,5 +154,12 @@ export function gameNeighbours(
   const index = steps.findIndex((s) => s.gameId === current.gameId && s.teamId === current.teamId)
   if (index < 0 || steps.length < 2) return null
 
-  return { axis, index, total: steps.length, previous: steps[index - 1], next: steps[index + 1] }
+  return {
+    axis,
+    steps,
+    index,
+    total: steps.length,
+    previous: steps[index - 1],
+    next: steps[index + 1],
+  }
 }

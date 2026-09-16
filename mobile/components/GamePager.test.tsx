@@ -1,87 +1,92 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
 import { GamePager, claimsSwipe, stepLabel, swipeDirection } from './GamePager'
-import type { GameNeighbours } from '@shared/lib/gameNeighbours'
+import type { GameNeighbours, GameStep } from '@shared/lib/gameNeighbours'
 
 // ---------------------------------------------------------------------------
-// Le passage d'un match à l'autre (#552) — the row and the gesture rule.
+// La bande de matchs (#552) — the strip and the gesture rule.
 //
-// The two are tested apart because they fail apart: a chevron that says the
-// wrong thing is a wrong label, a swipe claimed too eagerly is a scroller that
+// The two are tested apart because they fail apart: a chip that says the wrong
+// thing is a wrong label, a swipe claimed too eagerly is a scroller that
 // stopped working.
+//
+// What the strip owes the club with nine teams is that its ninth is *named* and
+// *reachable in one tap* — the two things a row of dots cannot give, and the
+// whole reason this is not the accueil's carousel indicator.
 // ---------------------------------------------------------------------------
-const step = (over: Partial<GameNeighbours['next']> = {}) => ({
-  gameId: 'g', teamId: 't', matchDayNumber: 1, teamNumber: 1, ...over,
+const teamSteps = (count: number): GameStep[] =>
+  Array.from({ length: count }, (_, i) => ({
+    gameId: `g${i + 1}`,
+    teamId: `t${i + 1}`,
+    matchDayNumber: 1,
+    teamNumber: i + 1,
+    teamColor: '#374151',
+  }))
+
+const roundSteps = (count: number): GameStep[] =>
+  Array.from({ length: count }, (_, i) => ({
+    gameId: `g${i + 1}`,
+    teamId: 't1',
+    matchDayNumber: i + 1,
+    teamNumber: 1,
+  }))
+
+const neighbours = (
+  axis: GameNeighbours['axis'],
+  steps: GameStep[],
+  index: number,
+): GameNeighbours => ({
+  axis,
+  steps,
+  index,
+  total: steps.length,
+  previous: steps[index - 1],
+  next: steps[index + 1],
 })
 
-describe('GamePager', () => {
-  it('names the club’s teams on the round axis', () => {
-    const neighbours: GameNeighbours = {
-      axis: 'round',
-      index: 1,
-      total: 3,
-      previous: step({ gameId: 'g1', teamId: 't1', teamNumber: 1 }),
-      next: step({ gameId: 'g3', teamId: 't3', teamNumber: 3 }),
-    }
+describe('GamePager — la bande', () => {
+  it('names every one of a nine-team club’s matches on the round axis', () => {
+    render(<GamePager neighbours={neighbours('round', teamSteps(9), 1)} onGo={jest.fn()} />)
 
-    render(<GamePager neighbours={neighbours} onGo={jest.fn()} />)
-
-    expect(screen.getByText('Équipe 1')).toBeTruthy()
-    expect(screen.getByText('Équipe 3')).toBeTruthy()
-    expect(screen.getByText('2 / 3')).toBeTruthy()
+    expect(screen.getByText('Éq. 1')).toBeTruthy()
+    expect(screen.getByText('Éq. 9')).toBeTruthy()
+    expect(screen.getAllByTestId(/^game-step-/)).toHaveLength(9)
   })
 
   it('names the journées on the team axis', () => {
-    const neighbours: GameNeighbours = {
-      axis: 'team',
-      index: 4,
-      total: 14,
-      previous: step({ gameId: 'g4', matchDayNumber: 4 }),
-      next: step({ gameId: 'g6', matchDayNumber: 6 }),
-    }
+    render(<GamePager neighbours={neighbours('team', roundSteps(7), 4)} onGo={jest.fn()} />)
 
-    render(<GamePager neighbours={neighbours} onGo={jest.fn()} />)
-
-    expect(screen.getByText('J4')).toBeTruthy()
-    expect(screen.getByText('J6')).toBeTruthy()
-    expect(screen.getByText('5 / 14')).toBeTruthy()
+    expect(screen.getByText('J1')).toBeTruthy()
+    expect(screen.getByText('J7')).toBeTruthy()
   })
 
-  it('hands back the whole stop, not a game id — the team is half of it', () => {
+  it('reaches the ninth team in one tap, and hands back the whole stop', () => {
     const onGo = jest.fn()
-    const next = step({ gameId: 'g3', teamId: 't3', teamNumber: 3 })
+    const steps = teamSteps(9)
 
-    render(
-      <GamePager
-        neighbours={{ axis: 'round', index: 0, total: 2, next }}
-        onGo={onGo}
-      />,
-    )
-    fireEvent.press(screen.getByTestId('game-pager-next'))
+    render(<GamePager neighbours={neighbours('round', steps, 0)} onGo={onGo} />)
+    fireEvent.press(screen.getByLabelText('Éq. 9'))
 
-    expect(onGo).toHaveBeenCalledWith(next)
+    expect(onGo).toHaveBeenCalledWith(steps[8])
   })
 
-  it('says which way an end goes, for a reader who cannot see the chevron', () => {
-    render(
-      <GamePager
-        neighbours={{ axis: 'round', index: 0, total: 2, next: step({ teamNumber: 3 }) }}
-        onGo={jest.fn()}
-      />,
-    )
+  it('marks where you are, and marks only that', () => {
+    render(<GamePager neighbours={neighbours('round', teamSteps(9), 2)} onGo={jest.fn()} />)
 
-    expect(screen.getByLabelText('Match suivant : Équipe 3')).toBeTruthy()
+    expect(screen.getByLabelText('Éq. 3').props.accessibilityState).toMatchObject({ selected: true })
+    expect(screen.getByLabelText('Éq. 2').props.accessibilityState).toMatchObject({ selected: false })
   })
 
-  it('offers no end that leads nowhere', () => {
-    render(
-      <GamePager
-        neighbours={{ axis: 'team', index: 0, total: 2, next: step({ matchDayNumber: 2 }) }}
-        onGo={jest.fn()}
-      />,
+  it('carries the team colour only where the stops are teams', () => {
+    const { rerender } = render(
+      <GamePager neighbours={neighbours('round', teamSteps(3), 0)} onGo={jest.fn()} />,
     )
+    expect(screen.getByTestId('game-chip-color-g1')).toBeTruthy()
 
-    expect(screen.queryByTestId('game-pager-prev')).toBeNull()
-    expect(screen.getByTestId('game-pager-next')).toBeTruthy()
+    rerender(<GamePager neighbours={neighbours('team', roundSteps(3), 0)} onGo={jest.fn()} />)
+
+    // Every stop on the team axis is the same team, so a colour would say
+    // nothing — and a dot that never varies reads as decoration.
+    expect(screen.queryByTestId('game-chip-color-g1')).toBeNull()
   })
 })
 
@@ -108,8 +113,8 @@ describe('the swipe rule', () => {
 })
 
 describe('stepLabel', () => {
-  it('says what tells one stop from another on each axis', () => {
-    expect(stepLabel('round', step({ teamNumber: 2 }))).toBe('Équipe 2')
-    expect(stepLabel('team', step({ matchDayNumber: 12 }))).toBe('J12')
+  it('uses the short forms this app already uses where space is tight', () => {
+    expect(stepLabel('round', teamSteps(3)[1])).toBe('Éq. 2')
+    expect(stepLabel('team', roundSteps(12)[11])).toBe('J12')
   })
 })
