@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useGlobalSearchParams } from 'expo-router'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { HEADER_HEIGHT } from '@/components/AppHeader'
+import { gameAxisFromParam } from '@shared/lib/gameNeighbours'
 import { colors } from '@/constants/colors'
 import { useLayout } from '@/constants/layout'
 import { fonts } from '@/constants/typography'
@@ -15,17 +16,32 @@ import { fonts } from '@/constants/typography'
 //   /mes-matchs?playerId=…        → Joueurs (a player's matches, from Joueurs)
 //   /mes-matchs                   → Accueil (the "Tous mes matchs" shortcut)
 //   /team/…  (incl. phase-games)  → Équipes
-//   /match/…                      → Journées
+//   /match/…?from=round           → Journées
+//   /match/…  (anything else)     → Équipes
 // This keeps the menu reflecting where you conceptually are (#153).
+//
+// A match screen is the one that answers twice, because it is the one you can
+// swipe along (#552), and what it pages is what it belongs to: the club's
+// matches of a journée, or a team's phase. `from` carries that axis and
+// `gameAxisFromParam` reads it — the same call the screen itself makes, so the
+// lit tab and the dots under the header can never contradict each other. That
+// is also why a match opened from the accueil or from a push notification
+// lights Équipes and no longer Journées: nothing named an axis, so it is the
+// team's phase that is being paged.
 //
 // 'compte' is no longer a tab (#365) — it is reached from the header avatar —
 // so returning it here leaves every tab unhighlighted, which is what we want
 // while the account screen is open.
-export function pathToTab(path: string, hasPlayerId: boolean): string {
-  if (path.startsWith('/mes-matchs')) return hasPlayerId ? 'joueurs' : 'index'
+export function pathToTab(
+  path: string,
+  params: { playerId?: string; from?: string } = {},
+): string {
+  if (path.startsWith('/mes-matchs')) return params.playerId ? 'joueurs' : 'index'
   if (path.startsWith('/player')) return 'joueurs'
   if (path.startsWith('/team')) return 'equipes'
-  if (path.startsWith('/match')) return 'journees'
+  if (path.startsWith('/match')) {
+    return gameAxisFromParam(params.from) === 'round' ? 'journees' : 'equipes'
+  }
   if (path.startsWith('/journees')) return 'journees'
   if (path.startsWith('/equipes')) return 'equipes'
   if (path.startsWith('/joueurs')) return 'joueurs'
@@ -51,8 +67,8 @@ const RAIL_WIDTH = 88
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
   const { isTablet, hasSideRail } = useLayout()
-  const { playerId } = useGlobalSearchParams<{ playerId?: string }>()
-  const activeName = pathToTab(usePathname(), !!playerId)
+  const params = useGlobalSearchParams<{ playerId?: string; from?: string }>()
+  const activeName = pathToTab(usePathname(), params)
 
   const items = state.routes.map((route, index) => {
     const { options } = descriptors[route.key]

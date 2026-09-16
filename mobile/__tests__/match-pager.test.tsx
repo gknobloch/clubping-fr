@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react-native'
+import { act, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { Club, Division, Game, Group, MatchDay, Phase, Player, Team, User } from '@shared/types'
 import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
@@ -6,10 +6,13 @@ import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 // ---------------------------------------------------------------------------
 // Passer d'un match au suivant (#552)
 //
-// What this screen owes the pager is a choice and a move: which axis the
+// What this screen owes the carousel is a choice and a move: which axis the
 // neighbours run along — the screen that opened it says so — and that stepping
 // stays *in place*, so the back button still returns to the list in one press
 // rather than replaying every match walked through.
+//
+// The dots themselves are `components/GamePager.test.tsx`; the swipe that
+// drives them is `claimsSwipe` / `swipeDirection`, tested there too.
 //
 // The axis itself is `@shared/lib/gameNeighbours`, tested without a screen.
 //
@@ -46,6 +49,20 @@ const mockData = {
   clearAvailability: jest.fn(),
   setGameSelection: jest.fn(),
 }
+
+// The gesture is the only way to move now, and a PanResponder's gestureState
+// is built from a touch history no synthetic event carries. So the hook is
+// swapped for one that hands the screen's own callback back here: what is
+// under test is what the screen *does* with a swipe, not how RN detects one
+// (that rule is `claimsSwipe`, tested beside the component).
+let mockSwipeHandler: ((direction: -1 | 1) => void) | null = null
+jest.mock('@/components/GamePager', () => ({
+  ...jest.requireActual('@/components/GamePager'),
+  useSwipeBetweenGames: (fn: (direction: -1 | 1) => void) => {
+    mockSwipeHandler = fn
+    return {}
+  },
+}))
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
@@ -117,6 +134,7 @@ function clubOf(size: number) {
 beforeEach(() => {
   mockPush.mockClear()
   mockSetParams.mockClear()
+  mockSwipeHandler = null
   mockParams.id = 'j1-t2'
   mockParams.teamId = 't2'
   delete mockParams.from
@@ -161,46 +179,49 @@ describe('Détail d’un match — arrivé des Journées', () => {
     mockParams.from = 'round'
   })
 
-  it('offers the club’s other matches of the same journée', () => {
+  it('counts the club’s matches of the same journée, and says which is open', () => {
     render(<MatchDetailScreen />)
 
-    expect(screen.getByText('Éq. 1')).toBeTruthy()
-    expect(screen.getByText('Éq. 3')).toBeTruthy()
-    expect(screen.getByLabelText('Éq. 2').props.accessibilityState).toMatchObject({ selected: true })
+    expect(screen.getByTestId('game-dots').children).toHaveLength(3)
   })
 
-  it('reaches the ninth team of a nine-team club in one tap', () => {
-    // The size this is for: stepping would mean passing the seven nobody asked
-    // for, and a dot would not have said which one was the ninth.
+  it('counts a nine-team club’s nine, and a twelve-team club’s twelve', () => {
+    // `12n + 6` points wide, so nine is 114pt of a 343pt column — the row of
+    // dots is nowhere near the constraint at any club size the FFTT produces.
     clubOf(9)
     mockParams.id = 'j1-t1'
     mockParams.teamId = 't1'
+    const nine = render(<MatchDetailScreen />)
+    expect(screen.getByTestId('game-dots').children).toHaveLength(9)
+    nine.unmount()
 
-    render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Éq. 9'))
-
-    expect(mockSetParams).toHaveBeenCalledWith({ id: 'j1-t9', teamId: 't9', from: 'round' })
-  })
-
-  it('names all twelve of a twelve-team club’s matches', () => {
     clubOf(12)
-    mockParams.id = 'j1-t1'
-    mockParams.teamId = 't1'
-
     render(<MatchDetailScreen />)
-
-    // Nothing is dropped or collapsed past the width — the strip scrolls.
-    expect(screen.getAllByTestId(/^game-step-j1-t\d+$/)).toHaveLength(12)
-    expect(screen.getByText('Éq. 12')).toBeTruthy()
+    expect(screen.getByTestId('game-dots').children).toHaveLength(12)
   })
 
-  it('moves in place, keeping the axis — back still returns to the list', () => {
+  it('moves in place on a swipe, keeping the axis — back returns to the list', () => {
     render(<MatchDetailScreen />)
 
-    fireEvent.press(screen.getByLabelText('Éq. 3'))
+    act(() => mockSwipeHandler?.(1))
 
     expect(mockSetParams).toHaveBeenCalledWith({ id: 'j1-t3', teamId: 't3', from: 'round' })
+    // Pushed, the back button would replay every match walked through.
     expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('goes back the other way, and stops at the ends', () => {
+    render(<MatchDetailScreen />)
+
+    act(() => mockSwipeHandler?.(-1))
+    expect(mockSetParams).toHaveBeenCalledWith({ id: 'j1-t1', teamId: 't1', from: 'round' })
+
+    mockSetParams.mockClear()
+    mockParams.id = 'j1-t1'
+    mockParams.teamId = 't1'
+    render(<MatchDetailScreen />)
+    act(() => mockSwipeHandler?.(-1))
+    expect(mockSetParams).not.toHaveBeenCalled()
   })
 
   it('skips the team that sits the round out', () => {
@@ -209,9 +230,7 @@ describe('Détail d’un match — arrivé des Journées', () => {
     render(<MatchDetailScreen />)
 
     // Journée 2 is Équipe 1 and Équipe 2 only — Équipe 3 sits it out.
-    expect(screen.getByText('Éq. 1')).toBeTruthy()
-    expect(screen.getByText('Éq. 2')).toBeTruthy()
-    expect(screen.queryByText('Éq. 3')).toBeNull()
+    expect(screen.getByTestId('game-dots').children).toHaveLength(2)
   })
 })
 
@@ -221,30 +240,26 @@ describe('Détail d’un match — arrivé d’une équipe', () => {
 
     render(<MatchDetailScreen />)
 
-    // Scoped to the strip: the header card right above carries its own «J1»
-    // badge, and the two agreeing is the point rather than a clash.
-    const strip = within(screen.getByTestId('game-strip'))
-    expect(strip.getByText('J1')).toBeTruthy()
-    expect(strip.getByText('J2')).toBeTruthy()
-    expect(strip.getByLabelText('J1').props.accessibilityState).toMatchObject({ selected: true })
+    // Équipe 2 plays both journées; the round axis would have counted three.
+    expect(screen.getByTestId('game-dots').children).toHaveLength(2)
   })
 
   it('is what an opener that says nothing gets — the accueil, Mes matchs, a notification', () => {
     render(<MatchDetailScreen />)
 
-    fireEvent.press(screen.getByLabelText('J2'))
+    act(() => mockSwipeHandler?.(1))
 
     expect(mockSetParams).toHaveBeenCalledWith({ id: 'j2-t2', teamId: 't2', from: 'team' })
   })
 })
 
 describe('Détail d’un match — rien à parcourir', () => {
-  it('shows no strip when the axis holds this match alone', () => {
+  it('shows no dots when the axis holds this match alone', () => {
     mockParams.id = 'j1-t3'
     mockParams.teamId = 't3'
 
     render(<MatchDetailScreen />)
 
-    expect(screen.queryByTestId('game-strip')).toBeNull()
+    expect(screen.queryByTestId('game-dots')).toBeNull()
   })
 })

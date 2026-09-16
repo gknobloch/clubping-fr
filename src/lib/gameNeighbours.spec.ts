@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gameNeighbours } from './gameNeighbours'
+import { gameAxisFromParam, gameNeighbours } from './gameNeighbours'
 import type { Team, Phase, MatchDay, Game } from '@/types'
 
 const makeTeam = (
@@ -98,26 +98,6 @@ describe('gameNeighbours — the round axis', () => {
     expect(n?.total).toBe(3)
   })
 
-  it('carries the whole axis, so the strip can name and reach every stop', () => {
-    const data = club()
-
-    const n = gameNeighbours({ gameId: 'j1-t1', teamId: 't1' }, 'round', data)
-
-    // Not just the two ends: a nine-team club's ninth has to be one tap away.
-    expect(n?.steps.map((s) => s.teamNumber)).toEqual([1, 2, 3])
-    expect(n?.steps).toHaveLength(n?.total ?? 0)
-  })
-
-  it('carries each team’s colour, which is how the app tells them apart', () => {
-    const data = club()
-    data.teams = data.teams.map((t) => (t.id === 't2' ? { ...t, color: '#374151' } : t))
-
-    const n = gameNeighbours({ gameId: 'j1-t1', teamId: 't1' }, 'round', data)
-
-    expect(n?.steps[1].teamColor).toBe('#374151')
-    expect(n?.steps[0].teamColor).toBeUndefined()
-  })
-
   it('ignores another club playing the same round', () => {
     const data = club()
     data.teams.push(makeTeam({ id: 'x1', clubId: 'c2', number: 1, phaseId: 'ph1', groupId: 'g1' }))
@@ -136,15 +116,6 @@ describe('gameNeighbours — the team axis', () => {
     expect(n).toMatchObject({ axis: 'team', index: 0, total: 2 })
     expect(n?.previous).toBeUndefined()
     expect(n?.next).toMatchObject({ gameId: 'j2-t1', teamId: 't1', matchDayNumber: 2, teamNumber: 1 })
-  })
-
-  it('lists the phase in order, one stop per journée', () => {
-    const data = club()
-
-    const n = gameNeighbours({ gameId: 'j1-t1', teamId: 't1' }, 'team', data)
-
-    expect(n?.steps.map((s) => s.matchDayNumber)).toEqual([1, 2])
-    expect(n?.steps.every((s) => s.teamId === 't1')).toBe(true)
   })
 
   it('orders on the game’s own date, not on insertion', () => {
@@ -188,5 +159,21 @@ describe('gameNeighbours — nothing to page through', () => {
     expect(gameNeighbours({ gameId: 'nope', teamId: 't1' }, 'team', data)).toBeNull()
     expect(gameNeighbours({ gameId: 'j1-t1', teamId: 'nope' }, 'team', data)).toBeNull()
     expect(gameNeighbours({ gameId: 'j1-t1', teamId: 't1' }, 'team', { ...data, matchDays: [] })).toBeNull()
+  })
+})
+
+describe('gameAxisFromParam', () => {
+  it('reads the axis a caller named', () => {
+    expect(gameAxisFromParam('round')).toBe('round')
+    expect(gameAxisFromParam('team')).toBe('team')
+  })
+
+  it('falls back to the team’s phase, the one axis always there', () => {
+    // Shared with the tab bar (#552), which lights Équipes on the strength of
+    // this: the accueil's next match, Mes matchs and a push notification name
+    // no axis, and all three are a team's own calendar.
+    expect(gameAxisFromParam(undefined)).toBe('team')
+    expect(gameAxisFromParam('')).toBe('team')
+    expect(gameAxisFromParam('nonsense')).toBe('team')
   })
 })

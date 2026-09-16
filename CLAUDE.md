@@ -162,42 +162,38 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   doit ramener à la liste d'où l'on vient, pas rejouer les dix matchs
   traversés. Le scroller est clavé sur la rencontre, sans quoi on arrive au
   milieu du match suivant, là où le doigt a laissé le précédent.
-- **Une bande d'étiquettes, sous la carte d'en-tête** — là où le carrousel de
-  l'accueil pose ses points, parce qu'elle appartient à l'en-tête qu'elle
-  feuillette et non aux dispos en dessous.
-- **Nommées et tapables, et surtout pas ces points-là**, et c'est l'axe journée
-  qui tranche. Les points passent bien plus loin qu'on ne croit : ceux de
-  l'accueil font `12n + 6` points de large, donc douze en prennent 150 sur une
-  colonne de 343 et vingt-huit tiennent encore. Ce qui s'arrête à neuf, c'est
-  ce qu'un point **veut dire** : le carrousel de l'accueil est chronologique,
-  la position porte le sens et on ne se déplace que d'un cran. Ici l'axe peut
-  être les neuf ou douze équipes d'un club — un ensemble où l'on va *chercher*.
-  « Lequel est l'Équipe 9 ? » ne se répond qu'en comptant, et un point de 6 pt
-  n'est pas une cible : l'atteindre voudrait dire balayer les huit qu'on n'a
-  pas demandés.
-- D'où `Éq. 3` et `J5` — deux abréviations que l'app emploie déjà là où la
-  place manque (la matrice, `useMatchDayEditing`) — sur des puces de 44 pt.
-  Au-delà de six ou sept la bande **défile** au lieu de rétrécir : rien ne
-  passe sous la règle des 44 pt, rien ne devient anonyme, et un club de douze
-  équipes tient entier dans les 640 pt d'une tablette. La puce courante est
-  ramenée dans la vue, sans animation à l'ouverture — on ne glisse pas vers où
-  l'on est déjà.
-- **Pas de compteur « 5 / 12 »** : les puces portent leur numéro, donc elles
-  *sont* la position. Un compteur est ce qu'il faut à des points qui n'ont pas
-  de nom.
-- La pastille de couleur ne sort que sur l'axe journée, où les arrêts *sont*
-  des équipes — c'est ainsi que l'app les distingue partout ailleurs. Sur
-  l'axe équipe tous les arrêts sont la même équipe : une pastille invariable
-  se lirait comme un ornement.
-- Le `J5` de la puce courante répète le badge de la carte juste au-dessus. Les
-  deux disent la même chose et c'est très bien : l'un situe le match, l'autre
-  situe le match dans l'axe.
+- **Les points du carrousel de l'accueil, sous la carte d'en-tête** — mêmes
+  6 pt, même point courant allongé, même rang. Un carrousel existe déjà dans
+  cette app et c'en est un, donc c'est celui-là.
+- Ils restent un **indicateur et non une commande**, pour la raison même des
+  points de l'accueil : 6 pt n'est pas une cible, et ce qui déplace est le
+  geste. Qui cherche un match précis a toujours la liste d'où il vient, à un
+  retour — c'est-à-dire exactement ce qu'il avait avant, donc rien n'est
+  retiré.
+- Ils portent plus loin qu'il n'y paraît : `12n + 6` points de large, donc le
+  rang d'un club à neuf équipes fait 114 pt d'une colonne de 343, et
+  vingt-huit tiendraient encore. Une bande d'étiquettes nommées a été essayée
+  et écartée : elle réglait un problème de repérage au prix de deux carrousels
+  dissemblables dans la même app.
+- **L'onglet allumé suit l'axe**, pas le fait d'être un match. `from=round`
+  allume Journées, tout le reste allume Équipes — y compris quand rien n'est
+  dit, puisque l'axe est alors la phase de l'équipe. Un match ouvert depuis
+  l'accueil ou depuis une notification allume donc Équipes et non plus
+  Journées : ce qu'on y feuillette est le calendrier d'une équipe.
+- `gameAxisFromParam` est le seul endroit qui lit ce paramètre, et **deux
+  choses l'appellent** : l'écran, qui décide de ce que fait un balayage, et
+  `pathToTab`, qui décide de l'onglet allumé dessous. Deux copies de la valeur
+  par défaut finiraient par diverger, et le menu contredirait les points.
 - **Le balayage ne prend rien au défilement vertical** : il n'est réclamé que
   franchement latéral (`claimsSwipe` — au-delà de 16 pt, et deux fois plus en
   travers qu'en hauteur), et jamais au poser du doigt, qui est un tap
-  appartenant à la ligne en dessous — les puces de la bande comprises. Il
-  couvre tout l'écran et non la seule carte, donc la zone de geste est plus
-  grande que ce qu'un carrousel paginé aurait offert.
+  appartenant à la ligne en dessous. Il couvre tout l'écran et non la seule
+  carte, donc la zone de geste est plus grande que celle d'un carrousel
+  paginé. Sa règle est testée à part (`claimsSwipe`, `swipeDirection`) : le
+  `gestureState` d'un `PanResponder` se construit sur un historique tactile
+  qu'aucun événement synthétique ne porte, donc ce que le test d'écran
+  vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
+  détecte.
 
 ### Accueil, vue générique (#474, #522)
 - **Les journées de l'accueil sont celles du club qui regarde.** `GET

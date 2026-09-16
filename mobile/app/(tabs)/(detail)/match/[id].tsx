@@ -24,7 +24,7 @@ import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
-import { gameNeighbours, type GameAxis, type GameStep } from '@shared/lib/gameNeighbours'
+import { gameAxisFromParam, gameNeighbours, type GameStep } from '@shared/lib/gameNeighbours'
 import { sortByName } from '@shared/lib/sortByName'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
@@ -90,8 +90,9 @@ export default function MatchDetailScreen() {
   // round, everybody else means this team's own calendar. The screen that
   // opened this one says which, and anything unsaid — the accueil, Mes matchs,
   // a push notification — gets the team's phase, the one axis that is always
-  // there.
-  const axis: GameAxis = from === 'round' ? 'round' : 'team'
+  // there. Resolved in `@shared/lib/gameNeighbours` because the tab bar reads
+  // the same param to decide which section stays lit, and the two must agree.
+  const axis = gameAxisFromParam(from)
   const neighbours = useMemo(
     () => gameNeighbours({ gameId: id, teamId }, axis, { teams, games, matchDays, phases }),
     [id, teamId, axis, teams, games, matchDays, phases],
@@ -254,10 +255,10 @@ export default function MatchDetailScreen() {
             />
           </View>
 
-          {/* Under the card and above everything about *this* match, which is
-              where the accueil's carousel puts its dots — the strip belongs to
-              the header it pages, not to the availabilities below it. */}
-          {neighbours && <GamePager neighbours={neighbours} onGo={goTo} />}
+          {/* Under the card, where the accueil's carousel puts its own dots —
+              they belong to the header they page, not to the availabilities
+              below. */}
+          {neighbours && <GamePager neighbours={neighbours} />}
 
           {/* Availabilities + line-up (check = selected) */}
           {/* The line-up as it stands, not only as it is being made (#488):
