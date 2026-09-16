@@ -29,27 +29,41 @@ describe('pathToTab', () => {
     ['/journees', 'journees'],
     ['/joueurs', 'joueurs'],
   ])('maps the section %s to %s', (path, tab) => {
-    expect(pathToTab(path, false)).toBe(tab)
+    expect(pathToTab(path)).toBe(tab)
   })
 
   it.each([
     ['/player/p1', 'joueurs'],
     ['/team/t1', 'equipes'],
     ['/team/phase-games', 'equipes'],
-    ['/match/g1', 'journees'],
   ])('keeps the section highlighted while drilling into %s', (path, tab) => {
-    expect(pathToTab(path, false)).toBe(tab)
+    expect(pathToTab(path)).toBe(tab)
+  })
+
+  it('lights a match by the axis it pages, not by being a match', () => {
+    // #552: the match screen is the one you can swipe along, and what it pages
+    // is what it belongs to. `from` is the axis, read through the same helper
+    // the screen itself calls so the two cannot disagree.
+    expect(pathToTab('/match/g1', { from: 'round' })).toBe('journees')
+    expect(pathToTab('/match/g1', { from: 'team' })).toBe('equipes')
+  })
+
+  it('lights Équipes for a match nobody named an axis for', () => {
+    // The accueil's next-match card, Mes matchs, a push notification: no axis
+    // named means the team's phase, so Équipes — where that team lives.
+    expect(pathToTab('/match/g1')).toBe('equipes')
+    expect(pathToTab('/match/g1', { from: 'nonsense' })).toBe('equipes')
   })
 
   it('splits "mes matchs" by where it was opened from', () => {
-    expect(pathToTab('/mes-matchs', true)).toBe('joueurs') // a player's matches
-    expect(pathToTab('/mes-matchs', false)).toBe('index') // the Accueil shortcut
+    expect(pathToTab('/mes-matchs', { playerId: 'p1' })).toBe('joueurs') // a player's matches
+    expect(pathToTab('/mes-matchs')).toBe('index') // the Accueil shortcut
   })
 
   it('highlights no tab on the account screen', () => {
     // Compte left the tab bar for the header avatar (#365), so its route name
     // matches no rendered tab — which is what leaves them all inactive.
-    expect(pathToTab('/compte', false)).toBe('compte')
+    expect(pathToTab('/compte')).toBe('compte')
   })
 })
 

@@ -247,8 +247,13 @@ export default function PhaseGamesScreen() {
               key={g.id}
               style={styles.matchCard}
               activeOpacity={0.7}
+              // This list is the team axis the match screen pages along
+              // (#552) — same order, same games.
               onPress={() =>
-                router.push({ pathname: '/match/[id]', params: { id: g.id, teamId: team.id } })
+                router.push({
+                  pathname: '/match/[id]',
+                  params: { id: g.id, teamId: team.id, from: 'team' },
+                })
               }
             >
               <View style={styles.matchCardBody}>

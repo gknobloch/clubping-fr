@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import {
@@ -13,6 +13,7 @@ import {
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
+import { GamePager, useSwipeBetweenGames } from '@/components/GamePager'
 import { PlayerRow } from '@/components/PlayerRow'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { PlayerSheet } from '@/components/PlayerSheet'
@@ -23,6 +24,7 @@ import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
 import { computeBrulage } from '@shared/lib/brulage'
+import { gameAxisFromParam, gameNeighbours, type GameStep } from '@shared/lib/gameNeighbours'
 import { sortByName } from '@shared/lib/sortByName'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
@@ -33,9 +35,15 @@ import { fonts } from '@/constants/typography'
 // Match detail — one team's view of a game: availabilities (editable by the
 // captain / club-admin for everyone, by a player for themselves) and the
 // line-up. Opened from a Journées card; back returns there.
+//
+// It is also a stop on an axis rather than a leaf (#552): the neighbouring
+// matches are a swipe or a chevron away, and which matches those are is said
+// by the screen that opened this one — see `axis` below.
 // ---------------------------------------------------------------------------
 export default function MatchDetailScreen() {
-  const { id, teamId } = useLocalSearchParams<{ id: string; teamId: string }>()
+  const { id, teamId, from } = useLocalSearchParams<{
+    id: string; teamId: string; from?: string
+  }>()
   const navigation = useNavigation()
   const router = useRouter()
   const { user } = useAuth()
@@ -73,6 +81,39 @@ export default function MatchDetailScreen() {
   const allClubPlayers = useMemo(
     () => (team ? players.filter((p) => p.clubId === team.clubId) : []),
     [players, team],
+  )
+
+  // --- Le match d'à côté (#552) --------------------------------------------
+  //
+  // Which matches border this one is not a property of the match: a club
+  // officer arriving from the Journées means the club's other fixtures of that
+  // round, everybody else means this team's own calendar. The screen that
+  // opened this one says which, and anything unsaid — the accueil, Mes matchs,
+  // a push notification — gets the team's phase, the one axis that is always
+  // there. Resolved in `@shared/lib/gameNeighbours` because the tab bar reads
+  // the same param to decide which section stays lit, and the two must agree.
+  const axis = gameAxisFromParam(from)
+  const neighbours = useMemo(
+    () => gameNeighbours({ gameId: id, teamId }, axis, { teams, games, matchDays, phases }),
+    [id, teamId, axis, teams, games, matchDays, phases],
+  )
+
+  // In place, never pushed: back has to return to the list this match came
+  // from, not replay every match walked through on the way. The sheets are
+  // closed first — they are about the match being left.
+  const goTo = useCallback(
+    (step?: GameStep) => {
+      if (!step) return
+      setShowCompose(false)
+      setShowSheet(false)
+      setQuickViewPlayer(null)
+      router.setParams({ id: step.gameId, teamId: step.teamId, from: axis })
+    },
+    [router, axis],
+  )
+
+  const swipe = useSwipeBetweenGames((direction) =>
+    goTo(direction === 1 ? neighbours?.next : neighbours?.previous),
   )
 
   if (!game || !team || !matchDay) {
@@ -192,147 +233,156 @@ export default function MatchDetailScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
-        {/* Summary */}
-        <View style={styles.card}>
-          <MatchHeader
-            matchDayNumber={matchDay.number}
-            divisionLabel={div?.displayName}
-            teamColor={team.color}
-            teamNumber={team.number}
-            isHome={isHome}
-            teamName={teamName}
-            opponentName={opponentName}
-            matchDayDate={thisGameDate}
-            time={thisGameTime || undefined}
-            confirmed={slotConfirmed}
-            venueLabel={venueLabel}
-            onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
-          />
-        </View>
-
-        {/* Availabilities + line-up (check = selected) */}
-        {/* The line-up as it stands, not only as it is being made (#488):
-            nobody reopens the sheet to check, and this is the screen a captain
-            lands on the morning of the match. */}
-        {pickedUnlicensed.length > 0 && (
+      <View style={styles.pan} {...swipe}>
+        {/* Keyed on the game so paging lands at the top of the next match rather
+            than halfway down it, where the finger left this one. */}
+        <ScrollView key={game.id} contentContainerStyle={[styles.scroll, contentWidth()]}>
+          {/* Summary */}
           <View style={styles.card}>
-            <Text style={styles.licenceWarning}>
-              {pickedUnlicensed.length === 1
-                ? `${pickedUnlicensed[0]} est aligné sans licence validée pour cette saison à la FFTT.`
-                : `${pickedUnlicensed.length} joueurs alignés n’ont pas de licence validée pour cette saison à la FFTT : ${pickedUnlicensed.join(', ')}.`}
-              {' '}Vérifiez avant la rencontre.
-            </Text>
+            <MatchHeader
+              matchDayNumber={matchDay.number}
+              divisionLabel={div?.displayName}
+              teamColor={team.color}
+              teamNumber={team.number}
+              isHome={isHome}
+              teamName={teamName}
+              opponentName={opponentName}
+              matchDayDate={thisGameDate}
+              time={thisGameTime || undefined}
+              confirmed={slotConfirmed}
+              venueLabel={venueLabel}
+              onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
+            />
           </View>
-        )}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Disponibilités</Text>
-          {roster.map((p) => {
-            const lockedTeam = !selection.includes(p.id) ? committed.get(p.id) : undefined
-            if (lockedTeam !== undefined) {
+          {/* Under the card, where the accueil's carousel puts its own dots —
+              they belong to the header they page, not to the availabilities
+              below. */}
+          {neighbours && <GamePager neighbours={neighbours} />}
+
+          {/* Availabilities + line-up (check = selected) */}
+          {/* The line-up as it stands, not only as it is being made (#488):
+              nobody reopens the sheet to check, and this is the screen a captain
+              lands on the morning of the match. */}
+          {pickedUnlicensed.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.licenceWarning}>
+                {pickedUnlicensed.length === 1
+                  ? `${pickedUnlicensed[0]} est aligné sans licence validée pour cette saison à la FFTT.`
+                  : `${pickedUnlicensed.length} joueurs alignés n’ont pas de licence validée pour cette saison à la FFTT : ${pickedUnlicensed.join(', ')}.`}
+                {' '}Vérifiez avant la rencontre.
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Disponibilités</Text>
+            {roster.map((p) => {
+              const lockedTeam = !selection.includes(p.id) ? committed.get(p.id) : undefined
+              if (lockedTeam !== undefined) {
+                return (
+                  <PlayerRow
+                    key={p.id}
+                    player={p}
+                    availability={undefined}
+                    selected={false}
+                    isMe={p.id === myPlayerId}
+                    canEdit={false}
+                    gameDatePast={gameDatePast}
+                    lockedReason={`Joue en Équipe ${lockedTeam}`}
+                    unlicensed={unlicensed.has(p.id)}
+                    onPickAvailability={() => {}}
+                    onClear={() => {}}
+                    onPressName={() => setQuickViewPlayer(p)}
+                  />
+                )
+              }
+              // `canManage` is the line-up rule; answering has its own, which
+              // stops one step short of a general administrator (#462).
+              const canEdit = !!user && canEditAvailability(user, team, p.id) && !gameDatePast
               return (
                 <PlayerRow
                   key={p.id}
                   player={p}
-                  availability={undefined}
-                  selected={false}
+                  availability={getAvail(p.id)}
+                  selected={selection.includes(p.id)}
                   isMe={p.id === myPlayerId}
-                  canEdit={false}
-                  gameDatePast={gameDatePast}
-                  lockedReason={`Joue en Équipe ${lockedTeam}`}
+                  canEdit={canEdit}
                   unlicensed={unlicensed.has(p.id)}
-                  onPickAvailability={() => {}}
-                  onClear={() => {}}
+                  gameDatePast={gameDatePast}
+                  onPickAvailability={(status) =>
+                    setAvailability(
+                      p.id,
+                      game.id,
+                      status,
+                      user ? availabilityOverride(user, team, p.id) : undefined,
+                    )
+                  }
+                  onClear={() => clearAvailability(p.id, game.id)}
                   onPressName={() => setQuickViewPlayer(p)}
                 />
               )
-            }
-            // `canManage` is the line-up rule; answering has its own, which
-            // stops one step short of a general administrator (#462).
-            const canEdit = !!user && canEditAvailability(user, team, p.id) && !gameDatePast
-            return (
+            })}
+            {borrowedSelected.map((p) => (
               <PlayerRow
                 key={p.id}
                 player={p}
-                availability={getAvail(p.id)}
-                selected={selection.includes(p.id)}
+                availability={undefined}
+                selected
                 isMe={p.id === myPlayerId}
-                canEdit={canEdit}
-                unlicensed={unlicensed.has(p.id)}
+                canEdit={false}
                 gameDatePast={gameDatePast}
-                onPickAvailability={(status) =>
-                  setAvailability(
-                    p.id,
-                    game.id,
-                    status,
-                    user ? availabilityOverride(user, team, p.id) : undefined,
-                  )
-                }
-                onClear={() => clearAvailability(p.id, game.id)}
+                borrowed
+                onPickAvailability={() => {}}
+                onClear={() => {}}
                 onPressName={() => setQuickViewPlayer(p)}
               />
-            )
-          })}
-          {borrowedSelected.map((p) => (
-            <PlayerRow
-              key={p.id}
-              player={p}
-              availability={undefined}
-              selected
-              isMe={p.id === myPlayerId}
-              canEdit={false}
-              gameDatePast={gameDatePast}
-              borrowed
-              onPickAvailability={() => {}}
-              onClear={() => {}}
-              onPressName={() => setQuickViewPlayer(p)}
-            />
-          ))}
-        </View>
+            ))}
+          </View>
 
-        {/* Compose (captain / club-admin) */}
-        {canManage && !gameDatePast && (
-          <TouchableOpacity testID="match-compose" style={styles.compose} onPress={() => setShowCompose(true)}>
+          {/* Compose (captain / club-admin) */}
+          {canManage && !gameDatePast && (
+            <TouchableOpacity testID="match-compose" style={styles.compose} onPress={() => setShowCompose(true)}>
+              <View style={styles.composeLeft}>
+                <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.composeTxt}>Composer l'équipe</Text>
+              </View>
+              <View style={styles.composeRight}>
+                <Text style={[styles.composeCount, { color: selection.length >= playersPerGame ? colors.success : colors.warning }]}>
+                  {selection.length}/{playersPerGame}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Feuille de match — read-only, for everyone */}
+          <TouchableOpacity testID="match-sheet-open" style={styles.compose} onPress={() => setShowSheet(true)}>
             <View style={styles.composeLeft}>
-              <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.composeTxt}>Composer l'équipe</Text>
+              <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
+              <Text style={styles.composeTxt}>Feuille de match</Text>
             </View>
-            <View style={styles.composeRight}>
-              <Text style={[styles.composeCount, { color: selection.length >= playersPerGame ? colors.success : colors.warning }]}>
-                {selection.length}/{playersPerGame}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
-        )}
 
-        {/* Feuille de match — read-only, for everyone */}
-        <TouchableOpacity testID="match-sheet-open" style={styles.compose} onPress={() => setShowSheet(true)}>
-          <View style={styles.composeLeft}>
-            <Ionicons name="document-text-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.composeTxt}>Feuille de match</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
-
-        {/* Jump to the team's full phase view (roster + all matches) */}
-        <TouchableOpacity
-          style={styles.compose}
-          onPress={() =>
-            router.push({
-              pathname: '/team/phase-games',
-              params: { teamId: team.id },
-            })
-          }
-        >
-          <View style={styles.composeLeft}>
-            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.composeTxt}>Tous les matchs de l'équipe</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
-      </ScrollView>
+          {/* Jump to the team's full phase view (roster + all matches) */}
+          <TouchableOpacity
+            style={styles.compose}
+            onPress={() =>
+              router.push({
+                pathname: '/team/phase-games',
+                params: { teamId: team.id },
+              })
+            }
+          >
+            <View style={styles.composeLeft}>
+              <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+              <Text style={styles.composeTxt}>Tous les matchs de l'équipe</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
 
       {showCompose && (
         <CaptainSelectionSheet
@@ -419,6 +469,9 @@ export default function MatchDetailScreen() {
 
 const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 12 },
+  // Holds the swipe for the whole screen, scroller included — the gesture is
+  // only claimed once it is clearly sideways (see useSwipeBetweenGames).
+  pan: { flex: 1 },
   licenceWarning: { fontSize: 13, color: '#92400E' },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 

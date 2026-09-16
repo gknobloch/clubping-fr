@@ -128,6 +128,73 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   already has that one in its fingers, and a second affordance must not move the
   first.
 
+### Passer d'un match à l'autre (#552)
+- **L'écran de match est une étape, pas une feuille.** On y arrivait des
+  Journées ou d'une équipe, et on en repartait par le bouton retour pour ouvrir
+  celui d'à côté — un dirigeant qui relève les dispos d'une journée, un
+  capitaine qui prépare sa phase. Le voisinage était connu au moment de
+  l'ouverture, et jeté.
+- **Deux axes, et c'est l'écran d'appel qui tranche**, jamais une déduction
+  faite sur place : `from=round` depuis les Journées — les autres matchs du
+  club sur cette journée-là, dans l'ordre des équipes — et la phase de l'équipe
+  partout ailleurs, y compris quand rien n'est dit (l'accueil, Mes matchs, une
+  notification). Les proposer tous les deux à la fois mettrait deux sens sur un
+  même geste, et aucun ne serait devinable.
+- **Un voisin est une paire (rencontre, équipe)**, jamais un `gameId` : l'écran
+  est la vue d'*une* équipe sur une rencontre — c'est déjà pourquoi la
+  notification de #495 ne porte pas d'équipe — et sur l'axe journée le voisin
+  est justement une autre équipe.
+- `gameNeighbours` (`src/lib/gameNeighbours.ts`) est la seule dérivation, et
+  elle rend `null` quand l'axe ne tient que ce match : un bouton qui ne mène
+  nulle part ne s'affiche pas, et le dire là évite que chaque appelant le
+  redécide. L'axe équipe passe par `teamPhaseEntries`, donc le balayage
+  parcourt exactement la liste qu'affiche « Tous les matchs de l'équipe » —
+  une seconde dérivation de la même chose les laisserait diverger.
+- **Une journée est par poule** (#474) : « Journée 5 » est autant de lignes
+  `MatchDay` que le club a de poules, et la ligne d'une équipe est celle de son
+  propre groupe. Filtrer sur le numéro seul attraperait la phase suivante, qui
+  renumérote à partir de 1.
+- L'ordre de l'axe journée est celui des équipes par numéro — celui de la
+  matrice, et celui dans lequel les cartes du téléphone sont construites. Le
+  match du membre qui regarde passe en tête de cette liste-là, mais c'est une
+  mise en avant, pas un second ordre.
+- **Le déplacement se fait en place** (`setParams`), jamais empilé : le retour
+  doit ramener à la liste d'où l'on vient, pas rejouer les dix matchs
+  traversés. Le scroller est clavé sur la rencontre, sans quoi on arrive au
+  milieu du match suivant, là où le doigt a laissé le précédent.
+- **Les points du carrousel de l'accueil, sous la carte d'en-tête** — mêmes
+  6 pt, même point courant allongé, même rang. Un carrousel existe déjà dans
+  cette app et c'en est un, donc c'est celui-là.
+- Ils restent un **indicateur et non une commande**, pour la raison même des
+  points de l'accueil : 6 pt n'est pas une cible, et ce qui déplace est le
+  geste. Qui cherche un match précis a toujours la liste d'où il vient, à un
+  retour — c'est-à-dire exactement ce qu'il avait avant, donc rien n'est
+  retiré.
+- Ils portent plus loin qu'il n'y paraît : `12n + 6` points de large, donc le
+  rang d'un club à neuf équipes fait 114 pt d'une colonne de 343, et
+  vingt-huit tiendraient encore. Une bande d'étiquettes nommées a été essayée
+  et écartée : elle réglait un problème de repérage au prix de deux carrousels
+  dissemblables dans la même app.
+- **L'onglet allumé suit l'axe**, pas le fait d'être un match. `from=round`
+  allume Journées, tout le reste allume Équipes — y compris quand rien n'est
+  dit, puisque l'axe est alors la phase de l'équipe. Un match ouvert depuis
+  l'accueil ou depuis une notification allume donc Équipes et non plus
+  Journées : ce qu'on y feuillette est le calendrier d'une équipe.
+- `gameAxisFromParam` est le seul endroit qui lit ce paramètre, et **deux
+  choses l'appellent** : l'écran, qui décide de ce que fait un balayage, et
+  `pathToTab`, qui décide de l'onglet allumé dessous. Deux copies de la valeur
+  par défaut finiraient par diverger, et le menu contredirait les points.
+- **Le balayage ne prend rien au défilement vertical** : il n'est réclamé que
+  franchement latéral (`claimsSwipe` — au-delà de 16 pt, et deux fois plus en
+  travers qu'en hauteur), et jamais au poser du doigt, qui est un tap
+  appartenant à la ligne en dessous. Il couvre tout l'écran et non la seule
+  carte, donc la zone de geste est plus grande que celle d'un carrousel
+  paginé. Sa règle est testée à part (`claimsSwipe`, `swipeDirection`) : le
+  `gestureState` d'un `PanResponder` se construit sur un historique tactile
+  qu'aucun événement synthétique ne porte, donc ce que le test d'écran
+  vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
+  détecte.
+
 ### Accueil, vue générique (#474, #522)
 - **Les journées de l'accueil sont celles du club qui regarde.** `GET
   /api/data` porte la table entière, donc la lister telle quelle montre le

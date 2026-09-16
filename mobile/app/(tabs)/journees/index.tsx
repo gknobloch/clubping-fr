@@ -548,7 +548,15 @@ export default function JourneesScreen() {
         isHome={isHome}
         selectedCount={selectedCount}
         availableCount={availableCount}
-        onPress={() => router.push({ pathname: '/match/[id]', params: { id: game.id, teamId: team.id } })}
+        // `from` names the axis the match screen pages along (#552): opened
+        // from here, the neighbours are the club's other matches of this
+        // journée.
+        onPress={() =>
+          router.push({
+            pathname: '/match/[id]',
+            params: { id: game.id, teamId: team.id, from: 'round' },
+          })
+        }
       />
     )
   }
@@ -645,7 +653,10 @@ export default function JourneesScreen() {
                         if (player && day && group) setComposing({ player, day, group })
                       }}
                       onOpenGame={(game) =>
-                        router.push({ pathname: '/match/[id]', params: { id: game.id, teamId: team.id } })
+                        router.push({
+                          pathname: '/match/[id]',
+                          params: { id: game.id, teamId: team.id, from: 'round' },
+                        })
                       }
                     />
                   )
