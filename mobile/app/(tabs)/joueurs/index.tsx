@@ -25,6 +25,7 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
+import { canManageClub } from '@/utils/roles'
 
 const STATUS_LABELS = {
   active: 'Actif',
@@ -54,6 +55,12 @@ export default function JoueursScreen() {
   // what this tab is for.
   const [activeOnly, setActiveOnly] = useState(true)
   const canSeeArchived = canSeeArchivedPlayers(user?.role)
+  // The FFTT import writes into one club, so it needs one to write into: a
+  // general admin sees every club's licensees here and has no target (#555),
+  // the same reason the web's own trigger asks for a scoped club.
+  const ownClub = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
+  const canImport =
+    !!user && !!ownClub && canManageClub(user, ownClub.id) && !!ownClub.affiliationNumber
   // The fiche beside the list rather than pushed over it (#466).
   const { isTwoPane } = useLayout()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -104,6 +111,17 @@ export default function JoueursScreen() {
           onChangeText={setQuery}
           clearButtonMode="while-editing"
         />
+        {canImport && (
+          <TouchableOpacity
+            testID="import-players"
+            style={styles.importButton}
+            onPress={() => router.push('/joueurs/import')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
+            <Text style={styles.importLabel}>Importer les licenciés FFTT</Text>
+          </TouchableOpacity>
+        )}
         {canSeeArchived && (
           <View style={styles.filterRow}>
             <Switch
@@ -189,6 +207,17 @@ export default function JoueursScreen() {
 
 const styles = StyleSheet.create({
   searchBar: { padding: 12, paddingBottom: 4 },
+  // Under the search box rather than in the header: `AppHeader` carries the
+  // brand mark and the avatar and has no room for an action, and "Importer les
+  // licenciés FFTT" is far too long a label to sit in a 52pt bar anyway — the
+  // same measurement that keeps the web's own trigger out of its PageHeader.
+  importButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44,
+    marginTop: 8, paddingHorizontal: 14, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.accentSoftBorder,
+    backgroundColor: colors.accentSoft,
+  },
+  importLabel: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   input: {
     backgroundColor: colors.card,
     borderRadius: 10,

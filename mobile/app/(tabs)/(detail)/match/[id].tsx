@@ -13,7 +13,8 @@ import {
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
-import { GamePager, useSwipeBetweenGames } from '@/components/GamePager'
+import { GamePager } from '@/components/GamePager'
+import { usePagerSwipe } from '@/components/Pager'
 import { PlayerRow } from '@/components/PlayerRow'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { PlayerSheet } from '@/components/PlayerSheet'
@@ -112,7 +113,7 @@ export default function MatchDetailScreen() {
     [router, axis],
   )
 
-  const swipe = useSwipeBetweenGames((direction) =>
+  const swipe = usePagerSwipe((direction) =>
     goTo(direction === 1 ? neighbours?.next : neighbours?.previous),
   )
 
@@ -470,7 +471,7 @@ export default function MatchDetailScreen() {
 const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 12 },
   // Holds the swipe for the whole screen, scroller included — the gesture is
-  // only claimed once it is clearly sideways (see useSwipeBetweenGames).
+  // only claimed once it is clearly sideways (see usePagerSwipe).
   pan: { flex: 1 },
   licenceWarning: { fontSize: 13, color: '#92400E' },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },

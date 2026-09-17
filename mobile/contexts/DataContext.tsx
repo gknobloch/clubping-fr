@@ -33,6 +33,7 @@ import type {
   PlayerSeasonLicence,
   User,
 } from '@shared/types'
+import type { PlayerImportWrites } from '@shared/lib/ffttPlayers'
 import { apiUrl } from '@/constants/api'
 import { dataHeaders, getSessionToken, onSessionTokenChange } from '@/utils/api'
 import { clearCache, readCache, writeCache } from '@/utils/offlineCache'
@@ -136,6 +137,26 @@ interface DataContextValue extends DataState {
   setAvatar: (playerId: string, base64: string, contentType: string) => Promise<void>
   /** Remove a player's avatar. */
   removeAvatar: (playerId: string) => Promise<void>
+  /**
+   * Record what the federation listed for a club and season — a replacement,
+   * not an addition (#488). Written when the listing is fetched, since who
+   * holds a licence is a fact about FFTT's answer and not about which fields
+   * an admin then ticks.
+   */
+  setClubSeasonLicences: (clubId: string, seasonId: string, playerIds: string[]) => Promise<void>
+  /**
+   * Write one reviewed FFTT import (#555), and reject if any part of it did
+   * not land.
+   *
+   * Deliberately not optimistic, unlike everything else here. The rest of this
+   * context patches one row the member is looking at; this writes a club at
+   * once, and announcing "12 créés" over writes that never left the phone is
+   * the failure #495 spells out — a silent failure is recoverable, a success
+   * claimed wrongly is not. It refetches rather than splicing eighty rows in
+   * by hand: after a write of this size the server is the only thing that
+   * knows what the club now holds.
+   */
+  applyPlayerImport: (writes: PlayerImportWrites) => Promise<void>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -427,6 +448,65 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [apiAvailable, patchPlayerAvatar],
   )
 
+  // --- FFTT player import (#555) ---------------------------------------------
+
+  /** POST/PATCH/PUT that must land: it throws rather than swallowing. */
+  const write = useCallback(
+    async (path: string, method: 'POST' | 'PATCH' | 'PUT', body: unknown) => {
+      const res = await fetch(apiUrl(path), {
+        method,
+        headers: dataHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    },
+    [],
+  )
+
+  const setClubSeasonLicences = useCallback(
+    async (clubId: string, seasonId: string, playerIds: string[]) => {
+      await write(`/clubs/${clubId}/seasons/${seasonId}/licences`, 'PUT', { playerIds })
+      setState((prev) => ({
+        ...prev,
+        playerSeasonLicences: [
+          ...prev.playerSeasonLicences.filter(
+            (l) => !(l.seasonId === seasonId && playerIds.includes(l.playerId)),
+          ),
+          ...playerIds.map((playerId) => ({ seasonId, playerId })),
+        ],
+      }))
+    },
+    [write],
+  )
+
+  const applyPlayerImport = useCallback(
+    async (writes: PlayerImportWrites) => {
+      // Creations first: the points and categories below are filed under ids
+      // these rows are about to carry.
+      for (const c of writes.creates) {
+        await write('/players', 'POST', {
+          id: c.id,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          licenseNumber: c.licenseNumber,
+          email: '',
+          phone: '',
+          status: 'active',
+          clubId: c.clubId,
+        })
+      }
+      for (const u of writes.updates) await write(`/players/${u.id}`, 'PATCH', u.patch)
+      if (writes.points.length) {
+        await write('/player-phase-points/batch', 'POST', { updates: writes.points })
+      }
+      if (writes.categories.length) {
+        await write('/player-season-categories/batch', 'POST', { updates: writes.categories })
+      }
+      await load('refresh')
+    },
+    [write, load],
+  )
+
   const value = useMemo<DataContextValue>(
     () => ({
       ...state,
@@ -443,8 +523,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setGameSelection,
       setAvatar,
       removeAvatar,
+      setClubSeasonLicences,
+      applyPlayerImport,
     }),
-    [state, loading, refreshing, error, stale, lastSyncedAt, refresh, updatePlayer, updateTeam, setAvailability, clearAvailability, setGameSelection, setAvatar, removeAvatar],
+    [state, loading, refreshing, error, stale, lastSyncedAt, refresh, updatePlayer, updateTeam, setAvailability, clearAvailability, setGameSelection, setAvatar, removeAvatar, setClubSeasonLicences, applyPlayerImport],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

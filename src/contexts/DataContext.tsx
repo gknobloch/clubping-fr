@@ -74,7 +74,12 @@ const demotedSeasonStatus = (seasonId: string, newSeasonId: string): SeasonStatu
 // DataState moved to src/types (#285): it is the GET /api/data contract, so
 // the API is annotated with the same declaration this file asserts against.
 
-function nextId(prefix: string): string {
+/**
+ * A fresh local id. Exported since #555: the FFTT import has to know the id of
+ * a licensee it is creating *before* the creation, so it can file that
+ * person's points and category under it in the same pass.
+ */
+export function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
@@ -500,7 +505,7 @@ interface DataContextValue extends DataState {
   moveDivisionUp: (divisionId: string) => void
   moveDivisionDown: (divisionId: string) => void
   updatePlayer: (id: string, patch: Partial<Player>) => void
-  addPlayer: (data: Omit<Player, 'id'>) => Player
+  addPlayer: (data: Omit<Player, 'id'> & { id?: string }) => Player
   /** Appoint a club admin — at most 5 per club, decided by the API (#474). */
   addClubAdmin: (clubId: string, target: ClubAdminTarget) => Promise<ClubAdminResult>
   /** Stand one down; refused for the last admin a club has (#474). */
@@ -1780,8 +1785,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) api(`/players/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
   }, [persist])
 
-  const addPlayer = useCallback((data: Omit<Player, 'id'>) => {
-    const id = nextId('player')
+  // `id` is optional and normally left out. The FFTT import supplies one
+  // because it has already filed points and a category under it (#555).
+  const addPlayer = useCallback((data: Omit<Player, 'id'> & { id?: string }) => {
+    const id = data.id ?? nextId('player')
     const player: Player = { ...withoutEmptyEmail(data), id }
     setPlayers((prev) => [...prev, player])
     if (persist) api('/players', { method: 'POST', body: JSON.stringify(player) })

@@ -1,0 +1,66 @@
+import { render, screen } from '@testing-library/react-native'
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { PagerDots, claimsSwipe, swipeDirection } from './Pager'
+import { colors } from '@/constants/colors'
+
+// ---------------------------------------------------------------------------
+// The app's one carousel (#552, #555) — the indicator and the gesture rule.
+//
+// They are tested apart because they fail apart: a dot in the wrong place is a
+// wrong indicator, a swipe claimed too eagerly is a scroller that stopped
+// working. What each carousel counts along is its caller's business and is
+// tested there (`GamePager.test.tsx` for the match axis).
+// ---------------------------------------------------------------------------
+const dots = () =>
+  screen.getByTestId('pager-dots').children as { props: { style: StyleProp<ViewStyle> } }[]
+/** The current dot is the accent-filled one — the accueil's own rule. */
+const isActive = (i: number) =>
+  StyleSheet.flatten(dots()[i].props.style)?.backgroundColor === colors.accent
+
+describe('PagerDots', () => {
+  it('draws one dot per card', () => {
+    render(<PagerDots index={1} total={9} />)
+
+    expect(dots()).toHaveLength(9)
+  })
+
+  it('lights the one you are on, and only that one', () => {
+    render(<PagerDots index={4} total={7} />)
+
+    expect(isActive(4)).toBe(true)
+    expect(isActive(3)).toBe(false)
+    expect(isActive(5)).toBe(false)
+  })
+
+  it('stretches the current dot rather than only colouring it', () => {
+    // The elongated dot is what the accueil's carousel does, and copying it is
+    // the whole reason this component is shared rather than redrawn.
+    render(<PagerDots index={0} total={3} />)
+
+    expect(StyleSheet.flatten(dots()[0].props.style)?.width).toBeGreaterThan(
+      StyleSheet.flatten(dots()[1].props.style)?.width as number,
+    )
+  })
+})
+
+describe('the swipe rule', () => {
+  it('leaves a vertical drag to the scroller', () => {
+    expect(claimsSwipe(20, 60)).toBe(false)
+    expect(claimsSwipe(0, 120)).toBe(false)
+  })
+
+  it('leaves a barely moved finger alone — that is a tap that wobbled', () => {
+    expect(claimsSwipe(12, 0)).toBe(false)
+  })
+
+  it('claims a clearly sideways drag', () => {
+    expect(claimsSwipe(40, 10)).toBe(true)
+    expect(claimsSwipe(-40, 10)).toBe(true)
+  })
+
+  it('turns the page the way the finger went, and not for a nudge', () => {
+    expect(swipeDirection(-120)).toBe(1)
+    expect(swipeDirection(120)).toBe(-1)
+    expect(swipeDirection(-40)).toBe(0)
+  })
+})

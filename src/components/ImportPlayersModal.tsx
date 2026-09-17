@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
-import { useAppData } from '@/contexts/DataContext'
+import { nextId, useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { PlayerImportPreview } from '@/components/PlayerImportPreview'
 import {
   buildImportRows,
+  defaultImportSelection,
   fieldKey,
   fetchClubLicencesFromBrowser,
   fetchFfttPlayerFromBrowser,
+  playerImportWrites,
   playersMissingFromFftt,
   sameClubNumber,
   writableFields,
@@ -15,7 +17,7 @@ import {
   type PlayerImportRow,
 } from '@/lib/ffttPlayers'
 import { sortByName } from '@/lib/sortByName'
-import type { Player, PlayerPhasePoints, PlayerSeasonCategory } from '@/types'
+import type { Player } from '@/types'
 
 type Status =
   | { kind: 'idle' }
@@ -70,11 +72,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
     )
     setRows(built)
     setMissing(missingPlayers)
-    // Pre-tick exactly what is writable — importing an identical value is a
-    // no-op, and there is nothing to decide about a field FFTT left empty.
-    setSelected(new Set(
-      built.flatMap((r) => writableFields(r.fields).map((f) => fieldKey(r.licence.licence, f.key))),
-    ))
+    setSelected(defaultImportSelection(built))
     setStatus({ kind: 'ready' })
   }
 
@@ -153,53 +151,31 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
   const selectedCount = selected.size
 
   const applyImport = () => {
-    const points: PlayerPhasePoints[] = []
-    const categories: PlayerSeasonCategory[] = []
-    let created = 0
-    let updated = 0
-
-    for (const row of rows) {
-      const picked = writableFields(row.fields).filter((f) => selected.has(fieldKey(row.licence.licence, f.key)))
-      if (picked.length === 0) continue
-      const has = (key: string) => picked.some((f) => f.key === key)
-
-      let playerId = row.playerId
-      if (!playerId) {
-        // A new licensee: name and licence come from FFTT, everything else is
-        // ours to fill in later (FFTT states no e-mail, no phone).
-        const player = addPlayer({
-          firstName: row.licence.firstName,
-          lastName: row.licence.lastName,
-          licenseNumber: row.licence.licence,
-          email: '',
-          phone: '',
-          status: 'active',
-          clubId,
-        })
-        playerId = player.id
-        created += 1
-      } else {
-        const patch: Partial<Player> = {}
-        if (has('lastName')) patch.lastName = row.licence.lastName
-        if (has('firstName')) patch.firstName = row.licence.firstName
-        if (Object.keys(patch).length) updatePlayer(playerId, patch)
-        if (Object.keys(patch).length || has('points') || has('category')) updated += 1
-      }
-      if (has('points') && row.licence.points) {
-        points.push({ phaseId, playerId, points: row.licence.points })
-      }
-      // The category comes with the licence, and is filed under the season it
-      // was issued for — never over last season's (#482).
-      if (has('category') && row.licence.category && seasonId) {
-        categories.push({ seasonId, playerId, category: row.licence.category })
-      }
+    // The same derivation the app's import runs (#555): what the ticks amount
+    // to is decided in one place, and only the writing of it differs here.
+    const writes = playerImportWrites(rows, selected, {
+      clubId, phaseId, seasonId, newId: () => nextId('player'),
+    })
+    for (const c of writes.creates) {
+      // Name and licence come from FFTT; everything else is ours to fill in
+      // later, since FFTT states no e-mail and no phone.
+      addPlayer({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        licenseNumber: c.licenseNumber,
+        email: '',
+        phone: '',
+        status: 'active',
+        clubId: c.clubId,
+      })
     }
-
-    setPlayerPhasePoints(points)
-    setPlayerSeasonCategories(categories)
+    for (const u of writes.updates) updatePlayer(u.id, u.patch)
+    setPlayerPhasePoints(writes.points)
+    setPlayerSeasonCategories(writes.categories)
     setRows([])
     setSelected(new Set())
-    setStatus({ kind: 'done', created, updated })
+    setStatus({ kind: 'done', created: writes.created, updated: writes.updated })
   }
 
   const inputClass =
