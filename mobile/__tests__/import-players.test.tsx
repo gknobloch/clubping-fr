@@ -15,7 +15,9 @@ import ImportPlayersScreen from '@/app/(tabs)/joueurs/import'
 // derivation the right review and never claims more than it wrote.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null } = { user: null }
-const applyPlayerImport = jest.fn(async (_writes: PlayerImportWrites) => {})
+// Typed on its argument so the assertions below can read the writes it was
+// handed, which is the whole of what this screen is judged on.
+const applyPlayerImport = jest.fn<Promise<void>, [PlayerImportWrites]>(async () => {})
 const setClubSeasonLicences = jest.fn(async () => {})
 const mockBack = jest.fn()
 
@@ -96,7 +98,33 @@ beforeEach(() => {
 
 const openScreen = async () => {
   render(<ImportPlayersScreen />)
-  await waitFor(() => expect(screen.getByTestId('import-summary')).toBeTruthy())
+  await waitFor(() => expect(screen.getByTestId('import-apply')).toBeTruthy())
+}
+
+/** Spy on the confirmation, and answer it the way a finger would. */
+const whenAsked = () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+  return {
+    /** The sentence the dialog put in front of the member. */
+    said: () => alert.mock.calls[alert.mock.calls.length - 1]?.[1],
+    press: (label: string) => {
+      const buttons = alert.mock.calls[alert.mock.calls.length - 1]?.[2] ?? []
+      buttons.find((b) => b.text === label)?.onPress?.()
+    },
+    alert,
+  }
+}
+
+/** Tap Importer and confirm, as a member does. */
+const importAndConfirm = async () => {
+  const asked = whenAsked()
+  fireEvent.press(screen.getByTestId('import-apply'))
+  // The write is awaited inside the screen, so the state it lands on settles a
+  // microtask later — outside the press, and outside React's own act scope.
+  await act(async () => {
+    asked.press('Importer')
+  })
+  return asked
 }
 
 describe("l'accès à l'import", () => {
@@ -152,16 +180,36 @@ describe('le deck', () => {
     expect(screen.queryByTestId('import-card-999999')).toBeNull()
   })
 
-  it('names who we hold that the FFTT listing does not mention', async () => {
+  it('counts who we hold that the FFTT listing does not mention, folded away', async () => {
+    // A club of sixty routinely has fifty-three of these, and open they are
+    // twenty lines of names between the review and the button.
     mockData.players = [held({ id: 'p9', firstName: 'Ancien', lastName: 'Membre', licenseNumber: '111111' })]
     await openScreen()
 
-    expect(screen.getByTestId('import-missing')).toBeTruthy()
-    expect(screen.getByText(/Ancien Membre/)).toBeTruthy()
+    expect(screen.getByText('Absents de la liste FFTT (1)')).toBeTruthy()
+    expect(screen.queryByTestId('import-missing-names')).toBeNull()
+  })
+
+  it('names them when the list is opened, and folds back', async () => {
+    mockData.players = [held({ id: 'p9', firstName: 'Ancien', lastName: 'Membre', licenseNumber: '111111' })]
+    await openScreen()
+
+    fireEvent.press(screen.getByTestId('import-missing-toggle'))
+    expect(screen.getByTestId('import-missing-names')).toHaveTextContent('Ancien Membre')
+
+    fireEvent.press(screen.getByTestId('import-missing-toggle'))
+    expect(screen.queryByTestId('import-missing-names')).toBeNull()
   })
 })
 
 describe('le carrousel', () => {
+  it('neither points nor invites a swipe when there is one card to review', async () => {
+    await openScreen()
+
+    expect(screen.queryByTestId('import-dots')).toBeNull()
+    expect(screen.queryByText(/Balayez/)).toBeNull()
+  })
+
   const three = () => listing(
     record(),
     record({ licence: '392885', nom: 'CLEMENT', prenom: 'Didier' }),
@@ -201,21 +249,48 @@ describe('le carrousel', () => {
     expect(screen.getByTestId('import-card-684545')).toBeTruthy()
   })
 
-  it('keeps every card in the count, not just the one on screen', async () => {
-    // The button answers for the whole deck: what is under the finger is one
-    // card, what is being imported is all of them.
+  it('says where it is on the card, so a long deck still has a position', async () => {
+    // Past `MAX_DOTS` there are no dots, and this is all there is (#555).
     ffttAnswers(three())
     await openScreen()
 
-    expect(screen.getByTestId('import-summary')).toHaveTextContent('3 licenciés créés.')
+    expect(screen.getByText('425881 · 1 / 3')).toBeTruthy()
+  })
+
+  it('keeps every card in the count, not just the one on screen', async () => {
+    // The confirmation answers for the whole deck: what is under the finger is
+    // one card, what is being imported is all of them.
+    ffttAnswers(three())
+    await openScreen()
+    const asked = whenAsked()
+
+    fireEvent.press(screen.getByTestId('import-apply'))
+
+    expect(asked.said()).toBe('3 licenciés créés.')
   })
 })
 
 describe('la revue', () => {
   it('announces what the selection writes, counting a creation', async () => {
     await openScreen()
+    const asked = whenAsked()
 
-    expect(screen.getByTestId('import-summary')).toHaveTextContent('1 licencié créé.')
+    fireEvent.press(screen.getByTestId('import-apply'))
+
+    expect(asked.said()).toBe('1 licencié créé.')
+  })
+
+  it('writes nothing when the confirmation is declined', async () => {
+    await openScreen()
+    const asked = whenAsked()
+
+    fireEvent.press(screen.getByTestId('import-apply'))
+    await act(async () => {
+      asked.press('Annuler')
+    })
+
+    expect(applyPlayerImport).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('import-done')).toBeNull()
   })
 
   it('drops a licensee out of the count when they are ignored', async () => {
@@ -223,7 +298,9 @@ describe('la revue', () => {
 
     fireEvent.press(screen.getByTestId('import-ignore-425881'))
 
-    expect(screen.getByTestId('import-summary')).toHaveTextContent('Rien de sélectionné.')
+    // Nothing left to write, so there is nothing to confirm either.
+    expect(screen.getByText('Rien de sélectionné')).toBeTruthy()
+    expect(screen.getByTestId('import-apply').props.accessibilityState.disabled).toBe(true)
   })
 
   it('takes an ignored licensee back, whole', async () => {
@@ -231,8 +308,10 @@ describe('la revue', () => {
     fireEvent.press(screen.getByTestId('import-ignore-425881'))
 
     fireEvent.press(screen.getByTestId('import-ignore-425881'))
+    const asked = whenAsked()
+    fireEvent.press(screen.getByTestId('import-apply'))
 
-    expect(screen.getByTestId('import-summary')).toHaveTextContent('1 licencié créé.')
+    expect(asked.said()).toBe('1 licencié créé.')
   })
 
   it('unticks one field without touching the rest of the card', async () => {
@@ -242,8 +321,8 @@ describe('la revue', () => {
     fireEvent.press(screen.getByTestId('import-field-425881-lastName'))
 
     // Still an update — the points and the category are still ticked.
-    expect(screen.getByTestId('import-summary')).toHaveTextContent('1 mis à jour.')
-    fireEvent.press(screen.getByTestId('import-apply'))
+    const asked = await importAndConfirm()
+    expect(asked.said()).toBe('1 mis à jour.')
     await waitFor(() => expect(applyPlayerImport).toHaveBeenCalled())
     expect(applyPlayerImport.mock.calls[0][0]).toMatchObject({ updates: [] })
   })
@@ -253,7 +332,7 @@ describe("l'import", () => {
   it('writes the selection and reports what landed', async () => {
     await openScreen()
 
-    fireEvent.press(screen.getByTestId('import-apply'))
+    await importAndConfirm()
 
     await waitFor(() => expect(screen.getByTestId('import-done')).toBeTruthy())
     expect(screen.getByText('1 licencié créé.')).toBeTruthy()
@@ -267,15 +346,16 @@ describe("l'import", () => {
 
   it('claims nothing when the writes did not land, and keeps the review', async () => {
     applyPlayerImport.mockRejectedValueOnce(new Error('HTTP 500'))
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
     await openScreen()
 
-    fireEvent.press(screen.getByTestId('import-apply'))
+    const asked = await importAndConfirm()
 
-    await waitFor(() => expect(alert).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(asked.alert).toHaveBeenCalledWith('Import interrompu', expect.any(String)),
+    )
     expect(screen.queryByTestId('import-done')).toBeNull()
-    expect(screen.getByTestId('import-summary')).toHaveTextContent('1 licencié créé.')
-    alert.mockRestore()
+    // The review is still there, ticks and all.
+    expect(screen.getByTestId('import-card-425881')).toBeTruthy()
   })
 
   it('records who the federation listed, for the season (#488)', async () => {

@@ -18,7 +18,30 @@ import { colors } from '@/constants/colors'
 // is 114pt of a 343pt column and twenty-eight would still fit.
 // ---------------------------------------------------------------------------
 
-/** Where you are in the row, and how long the row is. */
+/**
+ * Past this many, dots stop indicating anything.
+ *
+ * A row is `12n + 6` points wide, so twenty-eight of them is 342pt — the whole
+ * of a phone's 343pt content column, with the current one indistinguishable
+ * from its neighbours. #552's axes are short by nature (a club's teams, a
+ * phase's journées) and never come near it; #555's is a club's licence list,
+ * and Rixheim's is sixty, which draws a dotted line from edge to edge.
+ */
+export const MAX_DOTS = 28
+
+/**
+ * Where you are in the row, and how long the row is — or nothing at all, when
+ * a row of dots would say nothing.
+ *
+ * Both ends are refused. One card is not a carousel, which is the very thing
+ * `gameNeighbours` says by returning `null` on an axis of one; and past
+ * `MAX_DOTS` the row is a dotted line with no current dot in it.
+ *
+ * Answered here rather than at each call site, for the same reason: a caller
+ * that has to decide whether the indicator is worth drawing will eventually
+ * decide differently from the next one. A deck outside these bounds says where
+ * it is in words instead.
+ */
 export function PagerDots({
   index,
   total,
@@ -28,6 +51,7 @@ export function PagerDots({
   total: number
   testID?: string
 }) {
+  if (total < 2 || total > MAX_DOTS) return null
   return (
     <View testID={testID} style={styles.dots}>
       {Array.from({ length: total }, (_, i) => (

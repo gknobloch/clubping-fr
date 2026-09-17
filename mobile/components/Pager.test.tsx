@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react-native'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import { PagerDots, claimsSwipe, swipeDirection } from './Pager'
+import { MAX_DOTS, PagerDots, claimsSwipe, swipeDirection } from './Pager'
 import { colors } from '@/constants/colors'
 
 // ---------------------------------------------------------------------------
@@ -30,6 +30,27 @@ describe('PagerDots', () => {
     expect(isActive(4)).toBe(true)
     expect(isActive(3)).toBe(false)
     expect(isActive(5)).toBe(false)
+  })
+
+  it('draws nothing for a single card — one card is not a carousel', () => {
+    render(<PagerDots index={0} total={1} />)
+
+    expect(screen.queryByTestId('pager-dots')).toBeNull()
+  })
+
+  it('draws nothing at all past the width a row can indicate in', () => {
+    // A club's licence list is routinely sixty long (#555). Sixty dots is a
+    // dotted line from edge to edge, with the current one indistinguishable —
+    // so the caller is told there is no indicator, rather than given a bad one.
+    render(<PagerDots index={12} total={MAX_DOTS + 1} />)
+
+    expect(screen.queryByTestId('pager-dots')).toBeNull()
+  })
+
+  it('still draws the longest row that does fit', () => {
+    render(<PagerDots index={0} total={MAX_DOTS} />)
+
+    expect(dots()).toHaveLength(MAX_DOTS)
   })
 
   it('stretches the current dot rather than only colouring it', () => {

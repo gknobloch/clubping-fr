@@ -156,6 +156,8 @@ export default function ImportPlayersScreen() {
     [deck, selected, club?.id, phase?.id, phase?.seasonId],
   )
 
+  const nothingPicked = writes.created + writes.updated === 0
+
   const move = (direction: -1 | 1) =>
     setIndex((i) => Math.min(deck.length - 1, Math.max(0, i + direction)))
   const swipe = usePagerSwipe(move)
@@ -181,6 +183,22 @@ export default function ImportPlayersScreen() {
       }
       return next
     })
+  }
+
+  /**
+   * What the import will write, said once, in the way the platform says a
+   * thing that is about to happen.
+   *
+   * The counts used to sit above the button, which is where a summary stops
+   * being read: it is the line you scroll past on the way to the thing you
+   * came to press. In the dialog it is the last thing between the decision and
+   * the writing, and it costs one tap to back out of.
+   */
+  const confirmImport = () => {
+    Alert.alert('Importer ?', countLine(writes.created, writes.updated), [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Importer', onPress: () => { void runImport() } },
+    ])
   }
 
   const runImport = async () => {
@@ -286,10 +304,15 @@ export default function ImportPlayersScreen() {
               onSetRow={setRow}
               position={`${index + 1} / ${deck.length}`}
             />
+            {/* Above `MAX_DOTS` this draws nothing and the card's own
+                «12 / 60» is the position — a club's licence list is routinely
+                longer than a row of dots can indicate. */}
             <PagerDots testID="import-dots" index={index} total={deck.length} />
-            <Text style={s.hint}>
-              Balayez pour passer au licencié suivant.
-            </Text>
+            {deck.length > 1 && (
+              <Text style={s.hint}>
+                Balayez pour passer au licencié suivant.
+              </Text>
+            )}
           </>
         ) : (
           <View style={s.card}>
@@ -311,19 +334,19 @@ export default function ImportPlayersScreen() {
 
         {deck.length > 0 && (
           <View style={s.footer}>
-            <Text testID="import-summary" style={s.summary}>
-              {writes.created + writes.updated === 0
-                ? 'Rien de sélectionné.'
-                : countLine(writes.created, writes.updated)}
-            </Text>
+            {/* Not the counts — those are the confirmation's. This is the one
+                thing the dialog cannot say, because it is a setting of the
+                import rather than a consequence of it. */}
             <Text style={s.summaryMeta}>Points enregistrés sur {phase?.displayName}.</Text>
             <TouchableOpacity
               testID="import-apply"
-              style={[s.primary, writes.created + writes.updated === 0 && s.primaryOff]}
-              disabled={writes.created + writes.updated === 0}
-              onPress={runImport}
+              style={[s.primary, nothingPicked && s.primaryOff]}
+              disabled={nothingPicked}
+              onPress={confirmImport}
             >
-              <Text style={s.primaryTxt}>Importer</Text>
+              <Text style={s.primaryTxt}>
+                {nothingPicked ? 'Rien de sélectionné' : 'Importer'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -384,13 +407,14 @@ function LicenceCard({
       <View style={s.cardHead}>
         <View style={s.cardHeadBody}>
           <Text style={s.name} numberOfLines={1}>{rowName(row)}</Text>
-          <Text style={s.licence}>{row.licence.licence}</Text>
+          <Text style={s.licence}>
+            {row.licence.licence} · {position}
+          </Text>
         </View>
         <View style={[s.badge, { backgroundColor: badge.bg }]}>
           <Text style={[s.badgeTxt, { color: badge.fg }]}>{badge.label}</Text>
         </View>
       </View>
-      <Text style={s.position}>{position}</Text>
 
       {row.link && (
         // A namesake the club already holds, with no licence of their own — an
@@ -456,17 +480,41 @@ function LicenceCard({
  * Who we hold that FFTT's list does not mention — a departure, or a licence not
  * renewed. Reported and never deleted: the club decides what happens to
  * someone's history, not an import.
+ *
+ * Folded away, because the count is the whole message and the names are the
+ * answer to a question only some of them will ask. A club of sixty routinely
+ * has fifty-three of these — a season's roster that predates its first import
+ * — and open, that is twenty lines of names between the review and the button
+ * that acts on it.
  */
 function MissingNote({ missing }: { missing: Player[] }) {
+  const [open, setOpen] = useState(false)
   return (
     <View testID="import-missing" style={s.note}>
-      <Text style={s.noteTitle}>Absents de la liste FFTT ({missing.length})</Text>
-      <Text style={s.noteBody}>
-        Licence non renouvelée ou départ. Rien n’est supprimé : à vous d’archiver si besoin.
-      </Text>
-      <Text style={s.noteNames}>
-        {sortByName(missing).map((p) => `${p.firstName} ${p.lastName}`).join(', ')}
-      </Text>
+      <TouchableOpacity
+        testID="import-missing-toggle"
+        style={s.noteHead}
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+      >
+        <View style={s.noteHeadBody}>
+          <Text style={s.noteTitle}>Absents de la liste FFTT ({missing.length})</Text>
+          <Text style={s.noteBody}>
+            Licence non renouvelée ou départ. Rien n’est supprimé : à vous d’archiver si besoin.
+          </Text>
+        </View>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={18}
+          color={colors.textSecondary}
+        />
+      </TouchableOpacity>
+      {open && (
+        <Text testID="import-missing-names" style={s.noteNames}>
+          {sortByName(missing).map((p) => `${p.firstName} ${p.lastName}`).join(', ')}
+        </Text>
+      )}
     </View>
   )
 }
@@ -488,7 +536,6 @@ const s = StyleSheet.create({
   licence: { fontSize: 12, color: colors.textSecondary, fontFamily: fonts.regular, letterSpacing: 0.5 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   badgeTxt: { fontSize: 11, fontFamily: fonts.semiBold },
-  position: { fontSize: 12, color: colors.textSecondary, fontFamily: fonts.regular },
   linkNote: { fontSize: 13, color: colors.warningText, fontFamily: fonts.regular },
 
   fields: { gap: 4 },
@@ -522,14 +569,15 @@ const s = StyleSheet.create({
 
   note: {
     backgroundColor: colors.card, borderRadius: 12, borderWidth: 1,
-    borderColor: colors.border, padding: 12, gap: 4,
+    borderColor: colors.border, padding: 12, gap: 6,
   },
+  noteHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  noteHeadBody: { flex: 1, gap: 2 },
   noteTitle: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
   noteBody: { fontSize: 12, color: colors.textSecondary, fontFamily: fonts.regular },
   noteNames: { fontSize: 13, color: colors.textPrimary, fontFamily: fonts.regular },
 
   footer: { gap: 6, marginTop: 4 },
-  summary: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   summaryMeta: { fontSize: 12, color: colors.textSecondary, fontFamily: fonts.regular },
   primary: {
     backgroundColor: colors.accent, borderRadius: 12, minHeight: 48,

@@ -452,10 +452,22 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   sur un téléphone ce serait une décision de plus devant ce qu'on est venu
   faire, et la réponse est la phase active tous les jours sauf les quelques-uns
   qui entourent un changement. Qui a besoin de l'autre a le web.
-- Le bouton **annonce avant d'écrire** — tant de créés, tant de mis à jour — et
-  c'est là toute la confirmation : un second dialogue ferait de ce résumé une
-  formalité qu'on passe. Le compte porte sur tout le deck et non sur la carte
-  sous le doigt.
+- Le résumé — tant de créés, tant de mis à jour — est **dans la confirmation**,
+  pas au-dessus du bouton : au-dessus, c'est la ligne qu'on dépasse en allant
+  vers ce qu'on est venu presser. Dans le dialogue, c'est la dernière chose
+  entre la décision et l'écriture, et il en coûte un geste pour en sortir. Le
+  compte porte sur tout le deck et non sur la carte sous le doigt.
+- **Les absents de la liste FFTT sont repliés**, compte visible : un club de
+  soixante en a couramment cinquante-trois — un effectif antérieur à son
+  premier import — et déplié, cela fait vingt lignes de noms entre la revue et
+  le bouton qui agit dessus.
+- **Une liste de licenciés dépasse ce qu'une rangée de points peut indiquer.**
+  Soixante points font 726 pt sur une colonne de 343 : une ligne pointillée
+  sans point courant. `PagerDots` refuse les deux extrémités — au-delà de
+  `MAX_DOTS`, et en deçà de deux, une carte n'étant pas un carrousel (ce que
+  dit déjà `gameNeighbours` en rendant `null` sur un axe d'un seul match). La
+  position est alors sur la carte, « 12 / 60 », et c'est le composant qui
+  tranche plutôt que chaque appelant.
 - L'entrée est **sous le champ de recherche des Joueurs**, pas dans l'en-tête :
   `AppHeader` porte la marque et l'avatar, et « Importer les licenciés FFTT »
   est de toute façon une étiquette bien trop longue pour une barre de 52 pt —
