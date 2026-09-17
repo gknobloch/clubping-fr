@@ -131,6 +131,24 @@ jobs:
       - run: npm ci
         env:
           npm_config_registry: 'https://registry.npmjs.org/'
+      # #494 — `--with-deps` starts with an `apt-get update`, which reads every
+      # source configured on the image, and ubuntu-latest carries Google's
+      # Chrome repo. On 9 September a hash sum mismatch there held #493 for a
+      # day: three reruns died in ~25 s, before a single test ran. That source
+      # brings this job nothing — Playwright downloads its own Chromium, and the
+      # libraries `--with-deps` really installs come from Ubuntu's repos.
+      #
+      # `--with-deps` is kept: it is what makes a missing system dependency show
+      # up here rather than on someone's laptop.
+      #
+      # The glob matters. The image already deleted `google-chrome.list`, but
+      # Chrome's deb had moved to the deb822 layout and wrote
+      # `google-chrome.sources`, which slipped through — so the name alone
+      # would be a no-op. Fixed upstream in runner-images#14711 on 10 September,
+      # after the image ubuntu-latest still serves; these two lines stay
+      # afterwards, since `rm -f` on nothing costs nothing and the file has come
+      # back once already.
+      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome*
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
         env:
