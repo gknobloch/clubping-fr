@@ -417,6 +417,62 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   and throws on one. A PDF with no text layer goes through
   `renderPdfPages` first — that is the whole scanned-calendar path.
 
+### Importer les licenciés depuis l'app (#555)
+- **Le tableau n'était pas la fonctionnalité.** #384 a bâti la revue champ par
+  champ comme un tableau, et #381 l'a cachée sous `md:` parce qu'un tableau de
+  quatre-vingts lignes ne tient pas sur 375 px. La revue est pourtant une
+  *suite* de licenciés : sur un téléphone c'est un carrousel, une carte à la
+  fois, et chaque champ y reste décochable — FFTT exporte les noms sans accent
+  et parfois périmés, donc « prends tout » n'est pas une réponse qu'un club
+  peut donner, quelle que soit la largeur.
+- **Le carrousel est celui de l'app**, `components/Pager.tsx` : les points de
+  l'accueil et de #552, et la même règle de balayage. #552 l'avait écrit pour
+  lui seul ; le second usage l'a sorti de `GamePager`, qui ne garde que ce qui
+  lui appartient — l'axe que les points comptent.
+- **`playerImportWrites` est la seule dérivation** de « ce que cette revue
+  écrit », partagée par les deux écrans. Elle était inline dans
+  `ImportPlayersModal` ; deux copies auraient fini par écrire deux choses
+  différentes de la même liste FFTT. Elle rend des *lignes*, pas des appels :
+  le web les écrit optimistement par son DataContext, l'app les attend.
+- **`parseClubLicencesXml` n'a plus de DOM.** React Native n'en a pas, et c'est
+  le même import des deux côtés — donc un scanner (`parseFlatXmlRecords`) et
+  non une expression régulière : un enregistrement est un `<licence>` qui
+  contient un `<licence>`, et seule la profondeur distingue les deux.
+- **L'import de l'app n'est pas optimiste**, seule écriture de `DataContext` à
+  ne pas l'être. Le reste y corrige une ligne qu'on a sous les yeux ; celui-ci
+  écrit un club entier, et annoncer « 12 créés » sur des écritures qui n'ont
+  jamais quitté le téléphone est exactement le piège de #495 — un échec
+  silencieux se rattrape, un succès affirmé à tort, non. Il refait un
+  `GET /data` plutôt que d'insérer quatre-vingts lignes à la main : après une
+  écriture de cette taille, seul le serveur sait ce que le club contient.
+- **Le deck ne contient que ce qu'il y a à écrire.** Sur le web les licenciés
+  déjà à jour sont des lignes qu'un coup d'œil balaie ; ici chacun serait une
+  carte à faire défiler. Ils sont comptés et énoncés, jamais tus.
+- **La phase des points est énoncée, pas choisie.** Le web offre un sélecteur ;
+  sur un téléphone ce serait une décision de plus devant ce qu'on est venu
+  faire, et la réponse est la phase active tous les jours sauf les quelques-uns
+  qui entourent un changement. Qui a besoin de l'autre a le web.
+- Le résumé — tant de créés, tant de mis à jour — est **dans la confirmation**,
+  pas au-dessus du bouton : au-dessus, c'est la ligne qu'on dépasse en allant
+  vers ce qu'on est venu presser. Dans le dialogue, c'est la dernière chose
+  entre la décision et l'écriture, et il en coûte un geste pour en sortir. Le
+  compte porte sur tout le deck et non sur la carte sous le doigt.
+- **Les absents de la liste FFTT sont repliés**, compte visible : un club de
+  soixante en a couramment cinquante-trois — un effectif antérieur à son
+  premier import — et déplié, cela fait vingt lignes de noms entre la revue et
+  le bouton qui agit dessus.
+- **Une liste de licenciés dépasse ce qu'une rangée de points peut indiquer.**
+  Soixante points font 726 pt sur une colonne de 343 : une ligne pointillée
+  sans point courant. `PagerDots` refuse les deux extrémités — au-delà de
+  `MAX_DOTS`, et en deçà de deux, une carte n'étant pas un carrousel (ce que
+  dit déjà `gameNeighbours` en rendant `null` sur un axe d'un seul match). La
+  position est alors sur la carte, « 12 / 60 », et c'est le composant qui
+  tranche plutôt que chaque appelant.
+- L'entrée est **sous le champ de recherche des Joueurs**, pas dans l'en-tête :
+  `AppHeader` porte la marque et l'avatar, et « Importer les licenciés FFTT »
+  est de toute façon une étiquette bien trop longue pour une barre de 52 pt —
+  la mesure même qui tient le déclencheur du web hors de son `PageHeader`.
+
 ### Version des clients (#508)
 - **Le serveur publie un plancher, jamais un verdict.** `GET
   /api/client-version` répond deux chaînes ; c'est le client qui compare. Un

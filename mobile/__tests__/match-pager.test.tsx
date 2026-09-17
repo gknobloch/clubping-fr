@@ -12,7 +12,7 @@ import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 // rather than replaying every match walked through.
 //
 // The dots themselves are `components/GamePager.test.tsx`; the swipe that
-// drives them is `claimsSwipe` / `swipeDirection`, tested there too.
+// drives them is `claimsSwipe` / `swipeDirection`, tested in `Pager.test.tsx`.
 //
 // The axis itself is `@shared/lib/gameNeighbours`, tested without a screen.
 //
@@ -54,11 +54,11 @@ const mockData = {
 // is built from a touch history no synthetic event carries. So the hook is
 // swapped for one that hands the screen's own callback back here: what is
 // under test is what the screen *does* with a swipe, not how RN detects one
-// (that rule is `claimsSwipe`, tested beside the component).
+// (that rule is `claimsSwipe`, tested beside `Pager`).
 let mockSwipeHandler: ((direction: -1 | 1) => void) | null = null
-jest.mock('@/components/GamePager', () => ({
-  ...jest.requireActual('@/components/GamePager'),
-  useSwipeBetweenGames: (fn: (direction: -1 | 1) => void) => {
+jest.mock('@/components/Pager', () => ({
+  ...jest.requireActual('@/components/Pager'),
+  usePagerSwipe: (fn: (direction: -1 | 1) => void) => {
     mockSwipeHandler = fn
     return {}
   },

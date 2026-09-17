@@ -146,31 +146,120 @@ export function dafunkerClubLicencesUrl(clubNumber: string): string {
   return `${LICENCES_URL}?club=${encodeURIComponent(digits(clubNumber))}`
 }
 
-function text(node: ParentNode, tag: string): string {
-  return node.querySelector(tag)?.textContent?.trim() ?? ''
+// ---------------------------------------------------------------------------
+// Reading the XML without a DOM (#555)
+// ---------------------------------------------------------------------------
+//
+// This used `DOMParser`, which the app does not have: React Native has no DOM
+// at all, and the import is the same import on both — one FFTT answer, one way
+// of reading it. (The same wall the API ran into, from the other side: see the
+// note that sent `clubIdFromAffiliation` to entityIds.ts in #285.)
+//
+// A scanner rather than a regular expression, for one reason that is the whole
+// difficulty of this particular document: a record is a `<licence>` element
+// holding a `<licence>` child, so the name alone does not say which of the two
+// a tag opens. Depth does, and only a scanner has it.
+
+/** The handful of entities FFTT's own export actually emits. */
+function decodeEntities(raw: string): string {
+  return raw.replace(/&(#x?[0-9A-Fa-f]+|[a-zA-Z]+);/g, (whole, body: string) => {
+    if (body[0] === '#') {
+      const code = body[1] === 'x' || body[1] === 'X'
+        ? parseInt(body.slice(2), 16)
+        : parseInt(body.slice(1), 10)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : whole
+    }
+    const named: Record<string, string> = {
+      amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0',
+    }
+    return named[body.toLowerCase()] ?? whole
+  })
+}
+
+const TAG = /<[!?]?\/?([A-Za-z_][\w.:-]*)([^>]*)>/g
+
+/**
+ * Every `<recordTag>` element sitting one level under the root, as a flat map
+ * of its leaf children.
+ *
+ * Flat on purpose: an FFTT licence record is a row, and nothing in it nests.
+ * A repeated child keeps the FIRST value, which is what `querySelector` did.
+ */
+export function parseFlatXmlRecords(
+  xml: string,
+  recordTag: string,
+): Array<Record<string, string>> {
+  const wanted = recordTag.toLowerCase()
+  const records: Array<Record<string, string>> = []
+  /** Open element names, outermost first. */
+  const stack: string[] = []
+  /** The record being filled, and the depth it sits at. */
+  let record: Record<string, string> | null = null
+  let recordDepth = -1
+  /** The leaf being read, and where its text starts in `xml`. */
+  let leaf: string | null = null
+  let leafFrom = 0
+
+  TAG.lastIndex = 0
+  for (let m = TAG.exec(xml); m; m = TAG.exec(xml)) {
+    const [whole, rawName, attrs] = m
+    // Declarations, processing instructions and comments say nothing here.
+    if (whole.startsWith('<!') || whole.startsWith('<?')) continue
+    const name = rawName.toLowerCase()
+    const closing = whole[1] === '/'
+    const selfClosing = !closing && attrs.trimEnd().endsWith('/')
+
+    if (closing) {
+      // Drop back to whichever ancestor this closes — a stray close tag that
+      // matches nothing leaves the stack alone rather than unwinding it.
+      const at = stack.lastIndexOf(name)
+      if (at === -1) continue
+      if (leaf !== null && record && at === stack.length - 1 && name === leaf) {
+        if (!(name in record)) record[name] = decodeEntities(xml.slice(leafFrom, m.index)).trim()
+        leaf = null
+      }
+      if (record && at === recordDepth) {
+        records.push(record)
+        record = null
+        recordDepth = -1
+        leaf = null
+      }
+      stack.length = at
+      continue
+    }
+
+    if (selfClosing) continue
+
+    // Depth 1 is a child of the root: `<liste>` holds the records.
+    if (record === null && stack.length === 1 && name === wanted) {
+      record = {}
+      recordDepth = 1
+    } else if (record !== null && stack.length === recordDepth + 1) {
+      leaf = name
+      leafFrom = m.index + whole.length
+    }
+    stack.push(name)
+  }
+  return records
 }
 
 /** Parse an XML licence list — one record or a club's worth of them. */
 export function parseClubLicencesXml(xml: string): FfttLicence[] {
-  const doc = new DOMParser().parseFromString(xml, 'application/xml')
-  if (doc.querySelector('parsererror')) return []
-
-  return Array.from(doc.querySelectorAll('licence')).flatMap((node) => {
-    // Each record is itself a <licence> element holding a <licence> child —
-    // querySelector('licence') on the record would match the record. Read the
-    // child explicitly.
-    const licence = Array.from(node.children)
-      .find((c) => c.tagName.toLowerCase() === 'licence')?.textContent?.trim() ?? ''
-    const lastName = text(node, 'nom')
+  return parseFlatXmlRecords(xml, 'licence').flatMap((r) => {
+    // Two fields are called "licence" here: the `<licence>` CHILD of the record
+    // is the licence number, while `<idlicence>` is FFTT's internal row id,
+    // which is not what anyone means by "numéro de licence".
+    const licence = r.licence ?? ''
+    const lastName = r.nom ?? ''
     if (!licence || !lastName) return []
     return [{
       licence,
       lastName: normalizePersonName(lastName),
-      firstName: normalizePersonName(text(node, 'prenom')),
-      clubNumber: text(node, 'numclub'),
-      clubName: normalizeFfttName(text(node, 'nomclub')),
-      points: formatPoints(text(node, 'point')),
-      category: text(node, 'cat').toUpperCase(),
+      firstName: normalizePersonName(r.prenom ?? ''),
+      clubNumber: r.numclub ?? '',
+      clubName: normalizeFfttName(r.nomclub ?? ''),
+      points: formatPoints(r.point ?? ''),
+      category: (r.cat ?? '').toUpperCase(),
     }]
   })
 }
@@ -434,4 +523,129 @@ export function buildImportRows(
 export function playersMissingFromFftt(licences: FfttLicence[], clubPlayers: Player[]): Player[] {
   const known = new Set(licences.map((l) => l.licence.trim()))
   return clubPlayers.filter((p) => !known.has((p.licenseNumber ?? '').trim()))
+}
+
+// ---------------------------------------------------------------------------
+// What a reviewed import would write (#555)
+// ---------------------------------------------------------------------------
+//
+// This lived inline in ImportPlayersModal until the app grew the same import
+// (#555). It is the same question on both — "given these rows and these ticks,
+// what lands in the database?" — and it has to be answered once, or the two
+// screens will eventually write different things from the same review.
+//
+// It answers in rows, not in calls: nothing here knows about an API, a context
+// or a fetch. Both platforms apply the result their own way, because the web
+// writes optimistically through its DataContext and the app waits for the
+// writes and reports on them.
+
+/** A licensee the import would create — FFTT's name and licence, nothing else. */
+export interface PlayerImportCreate {
+  /** Minted by the caller, so points and a category can be filed under it. */
+  id: string
+  firstName: string
+  lastName: string
+  licenseNumber: string
+  /** The club importing. A licensee is created in one, never in the abstract. */
+  clubId: string
+}
+
+/** A licensee the import would correct, with only the ticked fields in it. */
+export interface PlayerImportUpdate {
+  id: string
+  patch: { firstName?: string; lastName?: string }
+}
+
+/** Everything one reviewed import writes, and what it amounts to. */
+export interface PlayerImportWrites {
+  creates: PlayerImportCreate[]
+  updates: PlayerImportUpdate[]
+  points: PlayerPhasePoints[]
+  categories: PlayerSeasonCategory[]
+  /** How many licensees this creates — the count the button announces. */
+  created: number
+  /** How many it corrects. A player only gaining points counts here too. */
+  updated: number
+}
+
+export interface PlayerImportTarget {
+  /** The club being imported into. */
+  clubId: string
+  /** Phase the points are filed under. */
+  phaseId: string
+  /** Season the category is filed under — a category belongs to one (#482). */
+  seasonId?: string
+  /** Mints the id of a licensee being created. */
+  newId: () => string
+}
+
+/**
+ * The writes a review amounts to: the ticked fields of each row, and nothing
+ * else.
+ *
+ * A row with no tick left on it is skipped outright — that is what "ignore
+ * this licensee" means, and it is also what an untouched `unchanged` row
+ * already was.
+ */
+export function playerImportWrites(
+  rows: PlayerImportRow[],
+  /** Ticked `licence:field` keys — see `fieldKey`. */
+  selected: Set<string>,
+  { clubId, phaseId, seasonId, newId }: PlayerImportTarget,
+): PlayerImportWrites {
+  const writes: PlayerImportWrites = {
+    creates: [], updates: [], points: [], categories: [], created: 0, updated: 0,
+  }
+
+  for (const row of rows) {
+    const picked = writableFields(row.fields)
+      .filter((f) => selected.has(fieldKey(row.licence.licence, f.key)))
+    if (picked.length === 0) continue
+    const has = (key: PlayerSyncFieldKey) => picked.some((f) => f.key === key)
+
+    let playerId = row.playerId
+    if (!playerId) {
+      // A new licensee: name and licence come from FFTT, and everything else is
+      // ours to fill in later — FFTT states no e-mail and no phone.
+      playerId = newId()
+      writes.creates.push({
+        id: playerId,
+        firstName: row.licence.firstName,
+        lastName: row.licence.lastName,
+        licenseNumber: row.licence.licence,
+        clubId,
+      })
+      writes.created += 1
+    } else {
+      const patch: PlayerImportUpdate['patch'] = {}
+      if (has('lastName')) patch.lastName = row.licence.lastName
+      if (has('firstName')) patch.firstName = row.licence.firstName
+      if (Object.keys(patch).length) writes.updates.push({ id: playerId, patch })
+      // Points and a category are corrections too: a player whose name we
+      // already had right but whose ranking moved is one this import updated.
+      if (Object.keys(patch).length || has('points') || has('category')) writes.updated += 1
+    }
+    if (has('points') && row.licence.points) {
+      writes.points.push({ phaseId, playerId, points: row.licence.points })
+    }
+    // The category comes with the licence and is filed under the season it was
+    // issued for, never over last season's (#482).
+    if (has('category') && row.licence.category && seasonId) {
+      writes.categories.push({ seasonId, playerId, category: row.licence.category })
+    }
+  }
+
+  return writes
+}
+
+/**
+ * Everything a fresh review starts ticked: exactly what is writable.
+ *
+ * Importing an identical value is a no-op, and there is nothing to decide about
+ * a field FFTT left empty — so neither is offered, on either platform.
+ */
+export function defaultImportSelection(rows: PlayerImportRow[]): Set<string> {
+  return new Set(
+    rows.flatMap((r) => writableFields(r.fields).map((f) => fieldKey(r.licence.licence, f.key))),
+  )
 }

@@ -1,15 +1,15 @@
 import { render, screen } from '@testing-library/react-native'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import { GamePager, claimsSwipe, swipeDirection } from './GamePager'
+import { GamePager } from './GamePager'
 import { colors } from '@/constants/colors'
 import type { GameNeighbours } from '@shared/lib/gameNeighbours'
 
 // ---------------------------------------------------------------------------
-// Les points sous la carte (#552) — the indicator and the gesture rule.
+// Les points sous la carte (#552) — the indicator, on the match axis.
 //
-// The two are tested apart because they fail apart: a dot on the wrong match
-// is a wrong indicator, a swipe claimed too eagerly is a scroller that stopped
-// working.
+// The gesture that drives them is `Pager.test.tsx`: the two are tested apart
+// because they fail apart, and since #555 they live apart too — a dot on the
+// wrong match is this file's, a swipe claimed too eagerly is the pager's.
 // ---------------------------------------------------------------------------
 const step = { gameId: 'g', teamId: 't', matchDayNumber: 1, teamNumber: 1 }
 
@@ -48,27 +48,5 @@ describe('GamePager — les points', () => {
 
     rerender(<GamePager neighbours={neighbours(2, 3)} />)
     expect(isActive(2)).toBe(true)
-  })
-})
-
-describe('the swipe rule', () => {
-  it('leaves a vertical drag to the scroller', () => {
-    expect(claimsSwipe(20, 60)).toBe(false)
-    expect(claimsSwipe(0, 120)).toBe(false)
-  })
-
-  it('leaves a barely moved finger alone — that is a tap that wobbled', () => {
-    expect(claimsSwipe(12, 0)).toBe(false)
-  })
-
-  it('claims a clearly sideways drag', () => {
-    expect(claimsSwipe(40, 10)).toBe(true)
-    expect(claimsSwipe(-40, 10)).toBe(true)
-  })
-
-  it('turns the page the way the finger went, and not for a nudge', () => {
-    expect(swipeDirection(-120)).toBe(1)
-    expect(swipeDirection(120)).toBe(-1)
-    expect(swipeDirection(-40)).toBe(0)
   })
 })

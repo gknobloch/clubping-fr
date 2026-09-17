@@ -6,7 +6,11 @@ import {
   dafunkerLicenceUrl,
   formatPoints,
   normalizePersonName,
+  defaultImportSelection,
+  fieldKey,
   parseClubLicencesXml,
+  parseFlatXmlRecords,
+  playerImportWrites,
   playerSyncFields,
   playersMissingFromFftt,
   sameClubNumber,
@@ -362,5 +366,116 @@ describe('buildImportRows — linking rather than duplicating (#474)', () => {
     const [row] = buildImportRows([licence], [], [], 'phase-27-1')
     expect(row.status).toBe('new')
     expect(row.link).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The DOM-free scanner (#555)
+// ---------------------------------------------------------------------------
+describe('parseFlatXmlRecords', () => {
+  it('keeps a record child that shares the record’s own tag name', () => {
+    // The whole reason this is a scanner: <licence> names both the record and
+    // one of its fields, so only depth tells them apart.
+    expect(parseFlatXmlRecords(
+      '<liste><licence><licence>684545</licence><nom>CERONI</nom></licence></liste>',
+      'licence',
+    )).toEqual([{ licence: '684545', nom: 'CERONI' }])
+  })
+
+  it('ignores the XML declaration and comments', () => {
+    expect(parseFlatXmlRecords(
+      '<?xml version="1.0"?><!-- ignore --><liste><licence><nom>A</nom></licence></liste>',
+      'licence',
+    )).toEqual([{ nom: 'A' }])
+  })
+
+  it('decodes the entities FFTT emits in a club name', () => {
+    expect(parseFlatXmlRecords(
+      '<liste><licence><nomclub>TT SAINT-LOUIS &amp; ENV.</nomclub></licence></liste>',
+      'licence',
+    )).toEqual([{ nomclub: 'TT SAINT-LOUIS & ENV.' }])
+  })
+
+  it('reads an empty element as an empty value', () => {
+    expect(parseFlatXmlRecords(
+      '<liste><licence><nom>A</nom><cat></cat><point/></licence></liste>',
+      'licence',
+    )).toEqual([{ nom: 'A', cat: '' }])
+  })
+
+  it('returns nothing for an empty list, a self-closing one, or nonsense', () => {
+    expect(parseFlatXmlRecords('<liste></liste>', 'licence')).toEqual([])
+    expect(parseFlatXmlRecords('<liste/>', 'licence')).toEqual([])
+    expect(parseFlatXmlRecords('nonsense', 'licence')).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// What a review amounts to (#555)
+// ---------------------------------------------------------------------------
+describe('playerImportWrites', () => {
+  const incoming = (over: Partial<typeof LICENCE> = {}) => ({ ...LICENCE, ...over })
+  /** Predictable ids, so the assertions can name them. */
+  const ids = () => {
+    let n = 0
+    return () => `new-${++n}`
+  }
+  const target = { clubId: 'club-1', phaseId: 'phase-1', seasonId: 'season-1', newId: ids() }
+
+  it('creates a licensee, with the points and category filed under the new id', () => {
+    const rows = buildImportRows([incoming()], [], [], 'phase-1')
+    const writes = playerImportWrites(rows, defaultImportSelection(rows), {
+      ...target, newId: ids(),
+    })
+    expect(writes.creates).toEqual([{
+      id: 'new-1', firstName: 'Bertrand', lastName: 'De Coatpont',
+      licenseNumber: '6813454', clubId: 'club-1',
+    }])
+    expect(writes.points).toEqual([{ phaseId: 'phase-1', playerId: 'new-1', points: '803' }])
+    expect(writes.categories).toEqual([
+      { seasonId: 'season-1', playerId: 'new-1', category: 'S' },
+    ])
+    expect(writes).toMatchObject({ created: 1, updated: 0, updates: [] })
+  })
+
+  it('writes only the ticked fields of a row', () => {
+    const held = player({ id: 'p1', firstName: 'Bertrand', lastName: 'Dupont', licenseNumber: '6813454' })
+    const rows = buildImportRows([incoming()], [held], [], 'phase-1')
+    // The surname alone; the points and category are left behind.
+    const selected = new Set([fieldKey('6813454', 'lastName')])
+    const writes = playerImportWrites(rows, selected, { ...target, newId: ids() })
+    expect(writes.updates).toEqual([{ id: 'p1', patch: { lastName: 'De Coatpont' } }])
+    expect(writes.points).toEqual([])
+    expect(writes.categories).toEqual([])
+    expect(writes).toMatchObject({ created: 0, updated: 1 })
+  })
+
+  it('skips a row with nothing ticked — that is what ignoring one means', () => {
+    const rows = buildImportRows([incoming()], [], [], 'phase-1')
+    expect(playerImportWrites(rows, new Set(), { ...target, newId: ids() })).toEqual({
+      creates: [], updates: [], points: [], categories: [], created: 0, updated: 0,
+    })
+  })
+
+  it('counts a licensee who only gains points as updated', () => {
+    const held = player({
+      id: 'p1', firstName: 'Bertrand', lastName: 'De Coatpont', licenseNumber: '6813454',
+    })
+    const rows = buildImportRows([incoming()], [held], [], 'phase-1')
+    const writes = playerImportWrites(rows, defaultImportSelection(rows), {
+      ...target, newId: ids(),
+    })
+    expect(writes.updates).toEqual([])
+    expect(writes.updated).toBe(1)
+    expect(writes.points).toEqual([{ phaseId: 'phase-1', playerId: 'p1', points: '803' }])
+  })
+
+  it('files no category when no season is stated — a category belongs to one', () => {
+    const rows = buildImportRows([incoming()], [], [], 'phase-1')
+    const writes = playerImportWrites(rows, defaultImportSelection(rows), {
+      clubId: 'club-1', phaseId: 'phase-1', seasonId: undefined, newId: ids(),
+    })
+    expect(writes.categories).toEqual([])
+    expect(writes.points).toHaveLength(1)
   })
 })
