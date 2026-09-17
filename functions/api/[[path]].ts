@@ -103,6 +103,38 @@ function lastSeenVisibleTo(viewer: UserRow | undefined): (row: UserRow) => boole
 const lastSeenField = (r: UserRow, visible: (row: UserRow) => boolean) =>
   r.last_seen_at && visible(r) ? { lastSeenAt: new Date(r.last_seen_at).toISOString() } : {}
 
+/**
+ * The viewer the routes that write on somebody else judge against.
+ *
+ * `undefined` means AUTH_GUARD_DISABLED — the local-only escape hatch that
+ * already serves the entire dataset to an unauthenticated caller (#138). The
+ * same reasoning as `lastSeenVisibleTo` applies: refusing every appointment
+ * there would hide the feature from local development and protect nothing, so
+ * a missing viewer stands in as a general admin.
+ */
+const managingViewer = (c: { get: (k: 'user') => UserRow | undefined }) => {
+  const u = c.get('user')
+  return u ? { role: u.role, clubId: u.club_id ?? undefined } : { role: 'general_admin' }
+}
+
+type ManagingViewer = ReturnType<typeof managingViewer>
+
+/**
+ * Whether `viewer` administers `clubId` (#558) — a general admin everywhere, a
+ * club admin at home, nobody else anywhere.
+ *
+ * The one question behind every club-scoped write: the appointments of #474,
+ * the licence set of #488, and the player routes, whose only guard used to be
+ * the browser's own `canEditPlayers`. A screen deciding what it may write is
+ * not an authorisation, and since #555 there are two of them.
+ */
+const administers = (viewer: ManagingViewer, clubId: string | null | undefined) =>
+  viewer.role === 'general_admin' ||
+  (viewer.role === 'club_admin' && !!clubId && viewer.clubId === clubId)
+
+/** The body a club-scope refusal carries, same as #488's licence set. */
+const notAllowed = { error: 'not_allowed' } as const
+
 // --- GET /api/data — return all entities ---
 app.get('/data', async (c) => {
   const db = c.env.DB
@@ -3463,8 +3495,59 @@ function clearGamesOfTeam(db: Env['Bindings']['DB'], teamId: string) {
 const emailOrNull = (email: unknown): string | null =>
   typeof email === 'string' && email.trim() !== '' ? email.trim() : null
 
+/** The club a licensee belongs to, or `undefined` for an id the table has never
+ *  heard of (#558). */
+const clubOfPlayer = async (db: D1Database, id: string) =>
+  (await db.prepare('SELECT club_id FROM users WHERE id = ?').bind(id).first<{ club_id: string | null }>())
+    ?.club_id ?? undefined
+
+/**
+ * Whether the table knows `id` to be somebody `viewer` does not administer —
+ * the question the per-player writers ask, rather than "is this one mine?".
+ *
+ * An id nobody knows is not an id belonging to somebody else, and here the
+ * difference is load-bearing: the web's `DataContext` fires its writes without
+ * awaiting them, so an import's batch of points can reach the API before the
+ * `POST /players` creating the licensee it is about. Demanding a known member
+ * would drop the points of exactly the people the import just added, and the
+ * row it writes instead is one nothing can read until that creation lands.
+ *
+ * `PATCH /players/:id` asks the stricter question, because it can afford to: an
+ * unknown id there updates nothing anyway, so refusing it costs no caller
+ * anything.
+ */
+const isForeignPlayer = async (db: D1Database, viewer: ManagingViewer, id: string) => {
+  if (viewer.role === 'general_admin') return false
+  const club = await clubOfPlayer(db, id)
+  return club !== undefined && !administers(viewer, club)
+}
+
+/**
+ * The guard the three per-player writers share (#558): an administrator, and
+ * not one line naming another club's licensee.
+ *
+ * All or nothing, unlike the licence set of #488, which drops a stray id: that
+ * body is scoped to one club by its URL and answers a question about that club,
+ * while these name their players one by one. A legitimate import never names an
+ * outsider, so the refusal is nothing a club ever meets — and a batch written
+ * halfway is the worse answer to one that does.
+ */
+async function mayWritePlayers(
+  db: D1Database,
+  viewer: ManagingViewer,
+  playerIds: string[],
+): Promise<boolean> {
+  if (viewer.role !== 'general_admin' && viewer.role !== 'club_admin') return false
+  const unique = [...new Set(playerIds)]
+  const foreign = await Promise.all(unique.map((id) => isForeignPlayer(db, viewer, id)))
+  return !foreign.some(Boolean)
+}
+
 app.post('/players', async (c) => {
   const d = await c.req.json()
+  // The club is named by the body, so there is nothing to look up: a club admin
+  // fills their own roster, a general admin anyone's (#558).
+  if (!administers(managingViewer(c), d.clubId)) return c.json(notAllowed, 403)
   await c.env.DB.prepare(
     `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
      VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -3472,9 +3555,36 @@ app.post('/players', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * What a member may change about themselves from "Mon compte" (#558).
+ *
+ * Their coordinates, and nothing that decides where they play: a licensee who
+ * could PATCH their own `clubId` would walk into any club, and one who could
+ * PATCH their own `status` would leave the archive on their own say-so.
+ */
+const OWN_PROFILE_FIELDS = ['email', 'phone', 'birthDate', 'birthPlace'] as const
+
 app.patch('/players/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
+
+  // Two ways in, and the narrow one is not a lesser form of the other: an
+  // administrator of the member's club edits the licensee, and the member edits
+  // their own four contact fields (#558). A `clubId` in the patch is judged
+  // twice over — moving somebody writes on the club they leave and on the one
+  // they join, so both have to be the caller's.
+  const viewer = managingViewer(c)
+  const manages =
+    (viewer.role === 'general_admin' || administers(viewer, await clubOfPlayer(c.env.DB, id))) &&
+    (!('clubId' in p) || administers(viewer, p.clubId))
+  if (!manages) {
+    const self = c.get('user')?.id === id
+    const ownFieldsOnly = Object.keys(p).every(
+      (k) => (OWN_PROFILE_FIELDS as readonly string[]).includes(k),
+    )
+    if (!self || !ownFieldsOnly) return c.json(notAllowed, 403)
+  }
+
   const s: string[] = [], v: unknown[] = []
   if ('firstName' in p) { s.push('first_name = ?'); v.push(p.firstName) }
   if ('lastName' in p) { s.push('last_name = ?'); v.push(p.lastName) }
@@ -3495,20 +3605,6 @@ app.patch('/players/:id', async (c) => {
 // (at most 5, never zero, who may appoint whom) live in src/lib/clubAdmins.ts
 // and are shared verbatim with both club screens: the browser disables the
 // button, and this decides.
-
-/**
- * The viewer these routes judge against.
- *
- * `undefined` means AUTH_GUARD_DISABLED — the local-only escape hatch that
- * already serves the entire dataset to an unauthenticated caller (#138). The
- * same reasoning as `lastSeenVisibleTo` applies: refusing every appointment
- * there would hide the feature from local development and protect nothing, so
- * a missing viewer stands in as a general admin.
- */
-const managingViewer = (c: { get: (k: 'user') => UserRow | undefined }) => {
-  const u = c.get('user')
-  return u ? { role: u.role, clubId: u.club_id ?? undefined } : { role: 'general_admin' }
-}
 
 /** Members shaped for the rules: role, club and status are all they read. */
 async function clubAdminCandidates(db: D1Database) {
@@ -4273,6 +4369,9 @@ app.post('/player-phase-points/batch', async (c) => {
     updates?: Array<{ phaseId: string; playerId: string; points: string }>
   }
   if (!updates?.length) return c.json({ ok: true })
+  if (!(await mayWritePlayers(c.env.DB, managingViewer(c), updates.map((u) => u.playerId)))) {
+    return c.json(notAllowed, 403)
+  }
   await c.env.DB.batch(updates.map((u) =>
     c.env.DB.prepare(
       `INSERT INTO player_phase_points (phase_id, player_id, points) VALUES (?, ?, ?)
@@ -4326,6 +4425,9 @@ app.post('/player-season-categories/batch', async (c) => {
     updates?: Array<{ seasonId: string; playerId: string; category: string }>
   }
   if (!updates?.length) return c.json({ ok: true })
+  if (!(await mayWritePlayers(c.env.DB, managingViewer(c), updates.map((u) => u.playerId)))) {
+    return c.json(notAllowed, 403)
+  }
   await c.env.DB.batch(updates.map((u) =>
     c.env.DB.prepare(
       `INSERT INTO player_season_categories (season_id, player_id, category) VALUES (?, ?, ?)
@@ -4338,9 +4440,13 @@ app.post('/player-season-categories/batch', async (c) => {
 // A form clearing the field means "we do not know", which is the absence of a
 // row rather than an empty string — same three-state care as a derogation.
 app.delete('/player-season-categories/:seasonId/:playerId', async (c) => {
+  const playerId = c.req.param('playerId')
+  if (!(await mayWritePlayers(c.env.DB, managingViewer(c), [playerId]))) {
+    return c.json(notAllowed, 403)
+  }
   await c.env.DB.prepare(
     'DELETE FROM player_season_categories WHERE season_id = ? AND player_id = ?',
-  ).bind(c.req.param('seasonId'), c.req.param('playerId')).run()
+  ).bind(c.req.param('seasonId'), playerId).run()
   return c.json({ ok: true })
 })
 

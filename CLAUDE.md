@@ -413,6 +413,41 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   at all — silently, because the empty-list case (the senior championship) is
   the one that still worked. Never loosen it back.
 
+### Écrire sur un licencié (#558)
+- **Le navigateur n'est pas une autorisation.** `POST /players`,
+  `PATCH /players/:id` et les écritures par joueur ne demandaient qu'une
+  session valide : `canEditPlayers` dans `PlayersPage` était seul à poser la
+  question, et depuis #555 il y a deux clients. N'importe quel licencié
+  connecté pouvait donc créer quelqu'un dans le club d'à côté, le renommer, le
+  changer de club, ou lui poser les points et la catégorie qui décident de son
+  éligibilité (#482).
+- La règle est celle du jeu de licences de #488 : `managingViewer`, puis
+  `administers` — administrateur général partout, administrateur de club chez
+  lui, personne d'autre nulle part. `administers` en est la seule copie, et
+  `AUTH_GUARD_DISABLED` y reste un administrateur général (#138).
+- **Un `clubId` dans un patch est jugé deux fois** : déplacer un licencié écrit
+  sur le club qu'il quitte *et* sur celui qu'il rejoint, donc les deux doivent
+  être à l'appelant.
+- **« Mon compte » est l'exception, et elle est bornée à quatre champs**
+  (`OWN_PROFILE_FIELDS`) : e-mail, téléphone, date et lieu de naissance. Un
+  membre qui pourrait patcher son propre `clubId` entrerait dans n'importe quel
+  club, et son propre `status` le sortirait des archives. Tout ou rien : un
+  patch qui glisse un numéro de licence à côté d'un téléphone ne pose pas la
+  moitié permise.
+- **Un identifiant inconnu n'est pas celui d'un autre club.** Le `DataContext`
+  du web envoie ses écritures sans les attendre : le lot de points d'un import
+  peut doubler le `POST /players` du licencié qu'il vient de créer. Exiger un
+  membre connu supprimerait les points exactement des gens que l'import vient
+  d'ajouter, et la ligne écrite à la place n'est lisible par rien tant que la
+  création n'a pas atterri. `PATCH /players/:id` pose la question stricte parce
+  qu'il le peut : un identifiant inconnu n'y modifie rien de toute façon.
+- **Les lots sont tout ou rien**, à la différence du jeu de licences de #488
+  qui écarte un intrus : celui-là est clavé sur un club par son URL et répond
+  d'une question sur ce club, alors que ceux-ci nomment leurs joueurs un par
+  un. Un import légitime n'en nomme jamais un d'ailleurs, donc ce refus n'est
+  rien qu'un club rencontre — et un lot écrit à moitié serait la pire réponse à
+  celui qui le ferait.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per
