@@ -468,6 +468,24 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   dit déjà `gameNeighbours` en rendant `null` sur un axe d'un seul match). La
   position est alors sur la carte, « 12 / 60 », et c'est le composant qui
   tranche plutôt que chaque appelant.
+- **Deux sources, une revue** (#557). La liste du club est ce qui s'ouvre ; le
+  champ « n° licence » au-dessus en cherche une seule — le geste qu'un
+  téléphone sert le mieux, quelqu'un venant d'arriver et lisant son numéro à
+  voix haute. Les deux passent par `showRows`, donc une licence se revoit de la
+  même façon quelle que soit la façon dont on l'a atteinte.
+- **Ce qui diffère, c'est ce que chacune a le droit d'écrire.** Une recherche
+  par licence n'inscrit **rien** dans `player_season_licences` : ce jeu est un
+  *remplacement* pour le club et la saison (#488), et regarder une licence ne
+  dit rien des cinquante-neuf autres — l'écrire les effacerait. Pas d'« absents
+  de la liste FFTT » non plus : c'est une phrase sur un listing du club, et une
+  licence n'en est pas un. `scope` porte cette différence, et n'est donc pas
+  cosmétique.
+- Le champ **répond sous lui-même** et ne remplace jamais la revue : un numéro
+  mal tapé ne doit pas coûter le deck déjà à l'écran. C'est aussi pourquoi
+  `Search` est un état à part de `Status`.
+- « Déjà à jour » se dit **au singulier** après une recherche : la phrase du
+  club — « tout ce que la FFTT liste » — serait une affirmation sur soixante
+  personnes tirée d'en avoir regardé une.
 - L'entrée est **sous le champ de recherche des Joueurs**, pas dans l'en-tête :
   `AppHeader` porte la marque et l'avatar, et « Importer les licenciés FFTT »
   est de toute façon une étiquette bien trop longue pour une barre de 52 pt —
