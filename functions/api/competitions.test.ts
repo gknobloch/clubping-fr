@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { app } from './[[path]]'
 import type { UserRow } from './rows'
+import { sessionKey } from './auth'
 
 // #482 — the two halves of this feature have different owners, and the API is
 // where that is decided rather than in the browser: a general admin says which
@@ -46,8 +47,12 @@ function fakeDb(
       const bound = (params: unknown[]) => ({
         async first() {
           if (sql.includes('FROM sessions')) {
-            return viewerId && params.includes(TOKEN)
-              ? { token: TOKEN, user_id: viewerId, expires_at: Date.now() + HOUR }
+            // Keyed by the digest, the only form the lookup binds since #410
+            // — `sessionKey` so this answers to exactly what the code
+            // asks for.
+            const key = await sessionKey(TOKEN)
+            return viewerId && params.includes(key)
+              ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
           if (sql.includes('FROM users WHERE id = ?')) {

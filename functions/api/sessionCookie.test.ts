@@ -4,7 +4,7 @@
 // header names in a browser, and happy-dom drops them — every assertion here
 // would pass or fail for reasons that have nothing to do with the code.
 import { describe, expect, it } from 'vitest'
-import { authApp, requestToken, sessionCookie, sessionCookieHeader, SESSION_COOKIE } from './auth'
+import { authApp, requestToken, sessionCookie, sessionCookieHeader, sessionKey, SESSION_COOKIE } from './auth'
 import { app } from './[[path]]'
 
 // ---------------------------------------------------------------------------
@@ -117,10 +117,12 @@ function db() {
           return {
             async first() {
               if (sql.includes('FROM sessions')) {
-                // Both storage forms are bound since #410; this row is in the
-                // pre-#410 plaintext form.
-                return args.includes(VALID)
-                  ? { token: VALID, user_id: 'u1', expires_at: Date.now() + 60_000 }
+                // Keyed by the digest, the only form the lookup binds since
+                // #410 — `sessionKey` so this answers to exactly what the
+                // code asks for.
+                const key = await sessionKey(VALID)
+                return args.includes(key)
+                  ? { token: key, user_id: 'u1', expires_at: Date.now() + 60_000 }
                   : null
               }
               if (sql.includes('FROM users')) return user

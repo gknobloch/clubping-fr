@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { app } from './[[path]]'
 import type { UserRow } from './rows'
+import { sessionKey } from './auth'
 
 // #558 — who may write on a licensee. These routes used to require nothing but
 // a valid session, so any signed-in member could create somebody in the club
@@ -44,8 +45,12 @@ function fakeDb(users: UserRow[], viewerId: string | null) {
       const bound = (params: unknown[]) => ({
         async first() {
           if (sql.includes('FROM sessions')) {
-            return viewerId && params.includes(TOKEN)
-              ? { token: TOKEN, user_id: viewerId, expires_at: Date.now() + HOUR }
+            // Keyed by the digest, the only form the lookup binds since #410
+            // — `sessionKey` so this answers to exactly what the code
+            // asks for.
+            const key = await sessionKey(TOKEN)
+            return viewerId && params.includes(key)
+              ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
           if (sql.includes('FROM users WHERE id = ?')) {
