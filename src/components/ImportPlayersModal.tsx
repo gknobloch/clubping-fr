@@ -7,6 +7,7 @@ import {
   buildImportRows,
   defaultImportSelection,
   fieldKey,
+  importCandidates,
   fetchClubLicencesFromBrowser,
   fetchFfttPlayerFromBrowser,
   playerImportWrites,
@@ -14,7 +15,6 @@ import {
   sameClubNumber,
   writableFields,
   type FfttLicence,
-  type PlayerImportRow,
 } from '@/lib/ffttPlayers'
 import { sortByName } from '@/lib/sortByName'
 import type { Player } from '@/types'
@@ -39,7 +39,7 @@ type Status =
  */
 export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClose: () => void }) {
   const {
-    clubs, phases, players, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
+    clubs, phases, players, users, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
     playerSeasonCategories, setPlayerSeasonCategories, setClubSeasonLicences,
   } = useAppData()
 
@@ -55,29 +55,77 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
 
   const [licenceInput, setLicenceInput] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
-  const [rows, setRows] = useState<PlayerImportRow[]>([])
+  const [licences, setLicences] = useState<FfttLicence[]>([])
   const [missing, setMissing] = useState<Player[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  /**
+   * Name matches the admin has confirmed: licence number → member id (#566).
+   *
+   * Held here rather than folded into the rows because it is an answer to a
+   * question the rows ask, and it has to survive them being rebuilt.
+   */
+  const [confirmed, setConfirmed] = useState<Map<string, string>>(new Map())
 
   const clubPlayers = useMemo(
     () => players.filter((p) => p.clubId === clubId && p.status === 'active'),
     [players, clubId],
   )
 
-  /** Everything a fresh fetch replaces. */
-  const showRows = (licences: FfttLicence[], missingPlayers: Player[]) => {
+  /**
+   * The club's members, as candidates for a name match (#566). Every member,
+   * archived ones included — this argument used to be `[]`, which is why the
+   * suggestion never once appeared.
+   */
+  const candidates = useMemo(() => importCandidates(users, clubId), [users, clubId])
+
+  /** The rows, rebuilt whenever a suggestion is accepted or withdrawn. */
+  const build = (forLicences: FfttLicence[], links: Map<string, string>) =>
     // The category belongs to the season the chosen phase sits in (#482).
-    const built = buildImportRows(
-      licences, players, playerPhasePoints, phaseId, [], playerSeasonCategories, seasonId,
+    buildImportRows(
+      forLicences, players, playerPhasePoints, phaseId, candidates,
+      playerSeasonCategories, seasonId, links,
     )
-    setRows(built)
+
+  const rows = useMemo(
+    () => build(licences, confirmed),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [licences, confirmed, players, playerPhasePoints, phaseId, candidates, playerSeasonCategories, seasonId],
+  )
+
+  /** Everything a fresh fetch replaces. */
+  const showRows = (next: FfttLicence[], missingPlayers: Player[]) => {
+    setLicences(next)
+    setConfirmed(new Map())
     setMissing(missingPlayers)
-    setSelected(defaultImportSelection(built))
+    setSelected(defaultImportSelection(build(next, new Map())))
     setStatus({ kind: 'ready' })
   }
 
+  /**
+   * Accept or withdraw a suggested match.
+   *
+   * The row is rebuilt against that member, so its ticks are re-taken from the
+   * new diff: accepting turns a creation into a correction, and the licence
+   * line — the wrong number giving way to FFTT's — only becomes writable at
+   * that moment. Carrying the old ticks over would leave it unticked, which is
+   * the one field the admin just asked for.
+   */
+  const confirmLink = (licence: string, memberId: string | null) => {
+    const next = new Map(confirmed)
+    if (memberId) next.set(licence, memberId)
+    else next.delete(licence)
+    setConfirmed(next)
+    const rebuilt = build(licences, next).find((r) => r.licence.licence === licence)
+    setSelected((prev) => {
+      const keep = new Set([...prev].filter((k) => !k.startsWith(`${licence}:`)))
+      if (rebuilt) for (const f of writableFields(rebuilt.fields)) keep.add(fieldKey(licence, f.key))
+      return keep
+    })
+  }
+
   const reset = () => {
-    setRows([])
+    setLicences([])
+    setConfirmed(new Map())
     setMissing([])
     setSelected(new Set())
     setStatus({ kind: 'idle' })
@@ -85,7 +133,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
 
   const searchOne = async () => {
     setStatus({ kind: 'loading' })
-    setRows([])
+    setLicences([])
     setMissing([])
     const result = await fetchFfttPlayerFromBrowser(licenceInput)
     if (result === null) return setStatus({ kind: 'error' })
@@ -101,14 +149,14 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
   const importClub = async () => {
     if (!club?.affiliationNumber) return
     setStatus({ kind: 'loading' })
-    setRows([])
+    setLicences([])
     setMissing([])
-    const licences = await fetchClubLicencesFromBrowser(club.affiliationNumber)
-    if (licences === null) return setStatus({ kind: 'error' })
-    if (licences.length === 0) return setStatus({ kind: 'not_found' })
+    const fetched = await fetchClubLicencesFromBrowser(club.affiliationNumber)
+    if (fetched === null) return setStatus({ kind: 'error' })
+    if (fetched.length === 0) return setStatus({ kind: 'not_found' })
     // The endpoint is scoped by club number, but it is FFTT's word for it, not
     // ours — drop anything that came back for another club rather than trust it.
-    const ours = licences.filter((l) => sameClubNumber(l.clubNumber, club.affiliationNumber))
+    const ours = fetched.filter((l) => sameClubNumber(l.clubNumber, club.affiliationNumber))
     showRows(ours, playersMissingFromFftt(ours, clubPlayers))
     // Who holds a validated licence this season is a fact about this listing,
     // not about which fields an admin then ticks — so it is recorded here, and
@@ -173,7 +221,8 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
     for (const u of writes.updates) updatePlayer(u.id, u.patch)
     setPlayerPhasePoints(writes.points)
     setPlayerSeasonCategories(writes.categories)
-    setRows([])
+    setLicences([])
+    setConfirmed(new Map())
     setSelected(new Set())
     setStatus({ kind: 'done', created: writes.created, updated: writes.updated })
   }
@@ -279,8 +328,10 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
                 <PlayerImportPreview
                   rows={rows}
                   selected={selected}
+                  confirmed={confirmed}
                   onToggleField={toggleField}
                   onToggleRow={toggleRow}
+                  onConfirmLink={confirmLink}
                 />
               </div>
               {missing.length > 0 && (

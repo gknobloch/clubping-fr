@@ -35,7 +35,7 @@
 // veterans. It is stored exactly as sent and normalized on read — see
 // src/lib/playerCategories.ts.
 
-import type { Player, PlayerPhasePoints, PlayerSeasonCategory } from '../types'
+import type { Player, PlayerPhasePoints, PlayerSeasonCategory, User } from '../types'
 import { normalizeFfttName } from './ffttClub'
 import { categoryFor } from './seasonCategories'
 
@@ -399,7 +399,21 @@ export interface PlayerImportRow {
    * nothing is linked until the import is told to, and a `name` match is a
    * question put to the admin rather than an answer.
    */
-  link?: { id: string; on: 'name'; name: string }
+  link?: {
+    id: string
+    on: 'name'
+    name: string
+    /**
+     * The licence that member carries today, when they carry one at all
+     * (#566). Its presence is the difference between the two cases, and the
+     * screens word them differently: a member with no licence is somebody we
+     * are about to give one to, while a member with a *different* one is a
+     * number that is wrong and about to be corrected.
+     */
+    heldLicence?: string
+    /** Whether that member is archived — said, because it explains the absence. */
+    archived?: boolean
+  }
 }
 
 /** Key identifying one field of one licence in a preview's selection set. */
@@ -440,6 +454,35 @@ export interface ImportCandidate {
   lastName?: string
   email?: string
   licenseNumber?: string
+  /** Archived members count (#566) — see `importCandidates`. */
+  archived?: boolean
+}
+
+/**
+ * The club's members, as candidates for a name match (#566).
+ *
+ * Every member, not just the non-playing ones: this used to be documented as
+ * "club members outside `players`" and was fed `[]` by both screens, so it
+ * never ran at all. `DataState.users` carries the whole table — players,
+ * non-playing admins, archived rows alike — and all three can be the person
+ * FFTT is naming.
+ *
+ * Archived members are in, and that is not an oversight. A namesake in the
+ * archive is still a namesake, and skipping them is precisely how a club ends
+ * up holding the same licensee twice: once archived under a wrong licence, once
+ * created fresh beside them.
+ */
+export function importCandidates(users: User[], clubId: string): ImportCandidate[] {
+  return users
+    .filter((u) => u.clubId === clubId)
+    .map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      licenseNumber: u.licenseNumber,
+      archived: u.status === 'archived',
+    }))
 }
 
 const nameKey = (first: string | undefined, last: string | undefined) =>
@@ -449,17 +492,32 @@ const nameKey = (first: string | undefined, last: string | undefined) =>
  * Who, among the club's members, this licence might already be — when the
  * licence number itself matched nobody.
  *
- * Anyone already holding a *different* licence is never offered: whoever they
- * are, they are not this licensee. One namesake is a suggestion; several is a
- * question this cannot answer, so it asks none of them rather than guessing.
+ * Two cases, and #474 only ever covered the first. A member holding **no**
+ * licence is the approved club admin who gave none when they asked. A member
+ * holding a **different** one is a number that is simply wrong — a typo, or a
+ * licence that has since been reissued — and that is the case that produced a
+ * real duplicate: 681243 sitting beside FFTT's 6810333 for the same person
+ * (#566). Refusing to offer them, on the grounds that "whoever they are, they
+ * are not this licensee", assumed the number we hold is right; the whole reason
+ * to run this import is that it sometimes is not.
+ *
+ * `claimed` is what keeps that widening safe: a member another line of the same
+ * import matched on their licence is spoken for, and offering them here would
+ * invite the admin to fuse two people who are both in front of them.
+ *
+ * One namesake is a suggestion; several is a question this cannot answer, so it
+ * asks none of them rather than guessing. And a suggestion is all it is —
+ * nothing links until the admin says so.
  */
 export function findImportCandidate(
   licence: Pick<FfttLicence, 'firstName' | 'lastName'>,
   candidates: ImportCandidate[],
+  /** Member ids another licence of this same import already matched exactly. */
+  claimed: ReadonlySet<string> = new Set(),
 ): ImportCandidate | null {
   const wanted = nameKey(licence.firstName, licence.lastName)
   const sameName = candidates.filter(
-    (c) => !(c.licenseNumber ?? '').trim() && nameKey(c.firstName, c.lastName) === wanted,
+    (c) => !claimed.has(c.id) && nameKey(c.firstName, c.lastName) === wanted,
   )
   return sameName.length === 1 ? sameName[0] : null
 }
@@ -469,49 +527,83 @@ export function buildImportRows(
   players: Player[],
   phasePoints: PlayerPhasePoints[],
   phaseId: string,
-  /** Club members outside `players` — non-playing admins, chiefly (#474). */
+  /** The club's members, for the name match — see `importCandidates` (#566). */
   candidates: ImportCandidate[] = [],
   /** A category is stated per season (#482), so it is read for `phaseId`'s. */
   seasonCategories: PlayerSeasonCategory[] = [],
   seasonId?: string,
+  /**
+   * Suggestions the admin has confirmed: licence number → member id (#566).
+   *
+   * A confirmed row is built exactly like one matched on its licence, against
+   * that member — so the licence field states the correction it is there to
+   * make (681243 → 6810333) and the row writes through `updates` instead of
+   * `creates`, with no second rule in `playerImportWrites` to keep in step.
+   */
+  confirmed: ReadonlyMap<string, string> = new Map(),
 ): PlayerImportRow[] {
   const byLicence = new Map(
     players.filter((p) => p.licenseNumber).map((p) => [p.licenseNumber.trim(), p]),
   )
-  return licences.map((licence) => {
-    const player = byLicence.get(licence.licence.trim())
-    if (!player) {
-      // No licence match. Before creating a person, see whether the club
-      // already holds them under no licence at all — an approved admin, most
-      // likely, who gave no licence when they asked (#474).
-      const suggestion = findImportCandidate(licence, candidates)
-      if (suggestion) {
-        return {
-          licence,
-          status: 'new' as const,
-          fields: playerSyncFields(licence),
-          link: {
-            id: suggestion.id,
-            on: 'name' as const,
-            name: `${suggestion.firstName ?? ''} ${suggestion.lastName ?? ''}`.trim(),
-          },
-        }
-      }
-      return { licence, status: 'new' as const, fields: playerSyncFields(licence) }
-    }
+  const byId = new Map(candidates.map((c) => [c.id, c]))
+  // Whoever a licence of this very import has already taken is spoken for, and
+  // must not also be offered as somebody else's namesake — matched on their
+  // licence, or claimed by a confirmation the admin has already given. Two
+  // licensees genuinely sharing a name would otherwise both be offered the one
+  // member, and confirming both would write two corrections onto one person,
+  // last one winning, with the other licence silently never created.
+  const claimed = new Set([
+    ...licences.map((l) => byLicence.get(l.licence.trim())?.id).filter((id): id is string => !!id),
+    ...confirmed.values(),
+  ])
+
+  /** The row for a licence we are writing onto a member we already hold. */
+  const against = (
+    licence: FfttLicence,
+    member: { id: string; firstName?: string; lastName?: string; licenseNumber?: string },
+  ): PlayerImportRow => {
     const fields = playerSyncFields(licence, {
-      lastName: player.lastName,
-      firstName: player.firstName,
-      licenseNumber: player.licenseNumber,
-      points: phasePoints.find((p) => p.phaseId === phaseId && p.playerId === player.id)?.points,
-      category: categoryFor(seasonCategories, seasonId, player.id),
+      lastName: member.lastName ?? '',
+      firstName: member.firstName ?? '',
+      licenseNumber: member.licenseNumber ?? '',
+      points: phasePoints.find((p) => p.phaseId === phaseId && p.playerId === member.id)?.points,
+      category: categoryFor(seasonCategories, seasonId, member.id),
     })
     return {
       licence,
-      playerId: player.id,
+      playerId: member.id,
       status: writableFields(fields).length ? ('changed' as const) : ('unchanged' as const),
       fields,
     }
+  }
+
+  return licences.map((licence) => {
+    const player = byLicence.get(licence.licence.trim())
+    if (player) return against(licence, player)
+
+    // No licence match. Before creating a person, see whether the club already
+    // holds them — under no licence at all (#474), or under one that is wrong
+    // (#566).
+    const accepted = byId.get(confirmed.get(licence.licence.trim()) ?? '')
+    if (accepted) return against(licence, accepted)
+
+    const suggestion = findImportCandidate(licence, candidates, claimed)
+    if (suggestion) {
+      const held = (suggestion.licenseNumber ?? '').trim()
+      return {
+        licence,
+        status: 'new' as const,
+        fields: playerSyncFields(licence),
+        link: {
+          id: suggestion.id,
+          on: 'name' as const,
+          name: `${suggestion.firstName ?? ''} ${suggestion.lastName ?? ''}`.trim(),
+          ...(held ? { heldLicence: held } : {}),
+          ...(suggestion.archived ? { archived: true } : {}),
+        },
+      }
+    }
+    return { licence, status: 'new' as const, fields: playerSyncFields(licence) }
   })
 }
 
@@ -553,7 +645,7 @@ export interface PlayerImportCreate {
 /** A licensee the import would correct, with only the ticked fields in it. */
 export interface PlayerImportUpdate {
   id: string
-  patch: { firstName?: string; lastName?: string }
+  patch: { firstName?: string; lastName?: string; licenseNumber?: string }
 }
 
 /** Everything one reviewed import writes, and what it amounts to. */
@@ -620,6 +712,11 @@ export function playerImportWrites(
       const patch: PlayerImportUpdate['patch'] = {}
       if (has('lastName')) patch.lastName = row.licence.lastName
       if (has('firstName')) patch.firstName = row.licence.firstName
+      // Only ever writable on a confirmed name match (#566): a row matched on
+      // its licence holds that number already, so the field reads as unchanged
+      // and never reaches this. Here it is the correction itself — the wrong
+      // number, 681243, giving way to FFTT's 6810333.
+      if (has('licenseNumber')) patch.licenseNumber = row.licence.licence
       if (Object.keys(patch).length) writes.updates.push({ id: playerId, patch })
       // Points and a category are corrections too: a player whose name we
       // already had right but whose ranking moved is one this import updated.

@@ -568,6 +568,58 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   est de toute façon une étiquette bien trop longue pour une barre de 52 pt —
   la mesure même qui tient le déclencheur du web hors de son `PageHeader`.
 
+### Un homonyme déjà au club (#566)
+- **Un numéro de licence faux fabrique un doublon.** Un club portait Nathan
+  Santoro deux fois : sous 681243, un numéro simplement erroné, et sous le
+  6810333 de la FFTT que cet import venait de créer à côté. La ligne supprimée
+  était la seule à porter son e-mail — or la connexion se fait par code envoyé à
+  l'adresse de `users` —, donc la nettoyer voulait dire reporter e-mail et
+  téléphone avant de supprimer, pas supprimer.
+- **La protection existait et ne s'exécutait jamais.** `findImportCandidate`
+  et `PlayerImportRow.link` datent de #474, mais les deux écrans passaient `[]`
+  comme vivier. `DataState.users` porte pourtant tous les membres des deux
+  côtés : ce n'était pas une donnée manquante, c'était un argument oublié.
+- **Le vivier, c'est tout le club** (`importCandidates`) : les joueurs, les
+  administrateurs qui ne jouent pas, et **les archivés**. C'est aux archives que
+  ce doublon-là dormait, et sauter l'archive est précisément ce qui fait qu'un
+  club finit par tenir deux fois le même licencié. Jamais au-delà du club qui
+  importe : un homonyme du club d'à côté n'est pas son licencié.
+- **La règle a été inversée, et c'est tout le correctif.** #474 n'offrait qu'un
+  membre ne portant *aucune* licence, au motif que quiconque en porte une autre
+  « n'est pas ce licencié ». Cela suppose que le numéro détenu est juste, alors
+  qu'un numéro faux est exactement ce que cet import est là pour corriger.
+- **Ce qui rend l'élargissement sûr, c'est `claimed`** : un membre qu'une autre
+  licence du même lot apparie déjà — sur son numéro, ou par une confirmation
+  déjà donnée — est pris, et ne doit pas être proposé une seconde fois. Sans
+  quoi deux licenciés réellement homonymes se verraient offrir le même membre,
+  les deux corrections atterriraient sur une seule personne, et la seconde
+  licence ne serait jamais créée — en silence.
+- **Une suggestion est une question, jamais une réponse.** La FFTT ne donne ni
+  adresse ni date de naissance sur un enregistrement de licence : il ne reste
+  que le nom, et deux personnes d'un même club peuvent le partager. Rattacher
+  tout seul fusionnerait deux membres définitivement — pire que le doublon que
+  cela évite. Le texte énonce ce qui est vrai du membre trouvé et rien de ce
+  qui suit : cocher un champ ne fusionne rien, donc « sera fusionné » serait un
+  mensonge (même raison qu'en #482 et #495).
+- **Une confirmation entre dans `buildImportRows`, pas dans
+  `playerImportWrites`.** Une ligne rattachée est bâtie exactement comme une
+  ligne appariée sur sa licence, contre ce membre : elle porte alors un
+  `playerId`, la ligne « N° licence » énonce la correction (681243 → 6810333),
+  et l'écriture passe par `updates` sans qu'aucune seconde règle n'ait à rester
+  d'accord avec la première. `PlayerImportUpdate.patch` gagne `licenseNumber`
+  pour cela, et ce champ n'est écrivable que là : une ligne appariée sur sa
+  licence détient déjà ce numéro.
+- **Les cases sont reprises au rattachement**, pas conservées : la ligne de
+  licence ne devient écrivable qu'à cet instant, et garder les anciennes cases
+  laisserait décoché le seul champ qu'on vient de demander.
+- Le deck de l'app ne change pas de longueur en rattachant — une ligne
+  confirmée a toujours sa licence à écrire — donc la carte sous le doigt reste
+  la carte sous le doigt.
+- **L'app rebâtit depuis un instantané**, une fermeture gardée dans un `ref` et
+  posée quand les licences arrivent, et non un `useMemo` sur `players` : la
+  règle de #555 tient toujours, un rafraîchissement qui atterrit en pleine
+  revue ne doit pas reconstruire le deck sous le doigt.
+
 ### Version des clients (#508)
 - **Le serveur publie un plancher, jamais un verdict.** `GET
   /api/client-version` répond deux chaînes ; c'est le client qui compare. Un

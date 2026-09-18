@@ -8,6 +8,7 @@ import {
   normalizePersonName,
   defaultImportSelection,
   fieldKey,
+  importCandidates,
   parseClubLicencesXml,
   parseFlatXmlRecords,
   playerImportWrites,
@@ -316,8 +317,22 @@ describe('findImportCandidate (#474)', () => {
     ).toEqual(admin)
   })
 
-  it('never offers someone who already holds a different licence', () => {
-    expect(findImportCandidate(licence, [{ ...admin, licenseNumber: '999999' }])).toBeNull()
+  // Reversed in #566, and that is the whole fix. The old rule reasoned that
+  // somebody holding another licence "is not this licensee" — which assumes the
+  // number we hold is right, when a wrong one is exactly what this import is
+  // for. A real club carried Nathan Santoro twice: 681243 beside FFTT's
+  // 6810333, the same person.
+  it('offers a namesake holding a different licence, which is the number to fix', () => {
+    const wrong = { ...admin, licenseNumber: '681243' }
+    expect(findImportCandidate(licence, [wrong])).toEqual(wrong)
+  })
+
+  // The guard that makes the widening above safe: a member another line of the
+  // same import matches exactly is spoken for, and offering them here would
+  // invite an admin to fuse two people both in front of them.
+  it('never offers a member another licence of the same import already matches', () => {
+    const taken = { ...admin, licenseNumber: '999999' }
+    expect(findImportCandidate(licence, [taken], new Set(['u1']))).toBeNull()
   })
 
   // Two namesakes in one club is a question this cannot answer, and answering
@@ -366,6 +381,135 @@ describe('buildImportRows — linking rather than duplicating (#474)', () => {
     const [row] = buildImportRows([licence], [], [], 'phase-27-1')
     expect(row.status).toBe('new')
     expect(row.link).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The duplicate a wrong licence number makes (#566)
+// ---------------------------------------------------------------------------
+describe('buildImportRows — a namesake under the wrong licence (#566)', () => {
+  const licence = {
+    licence: '6810333', lastName: 'Santoro', firstName: 'Nathan',
+    clubNumber: '06680011', clubName: 'Rixheim PPA', points: '1788', category: 'S',
+  }
+  /** What the club held: the right person under a number that is wrong. */
+  const held = {
+    id: 'p-old', firstName: 'Nathan', lastName: 'Santoro', licenseNumber: '681243',
+  }
+
+  it('says which licence the namesake carries, so the question can be asked', () => {
+    const [row] = buildImportRows([licence], [], [], 'phase-27-1', [held])
+    expect(row.status).toBe('new')
+    expect(row.link).toEqual({
+      id: 'p-old', on: 'name', name: 'Nathan Santoro', heldLicence: '681243',
+    })
+  })
+
+  // Archived is where this particular duplicate was found. Skipping the archive
+  // is how a club ends up holding one licensee twice.
+  it('offers an archived namesake, and says so', () => {
+    const [row] = buildImportRows([licence], [], [], 'phase-27-1', [{ ...held, archived: true }])
+    expect(row.link?.archived).toBe(true)
+  })
+
+  it('corrects the member once the match is confirmed, rather than creating one', () => {
+    const [row] = buildImportRows(
+      [licence], [], [], 'phase-27-1', [held], [], 'season-27',
+      new Map([['6810333', 'p-old']]),
+    )
+    expect(row.playerId).toBe('p-old')
+    expect(row.link).toBeUndefined()
+    expect(row.status).toBe('changed')
+    // The licence line states the correction, which is the point of confirming.
+    const licenceField = row.fields.find((f) => f.key === 'licenseNumber')
+    expect(licenceField).toMatchObject({ current: '681243', incoming: '6810333', unchanged: false })
+    // The name is the same on both sides, so it is not something to write.
+    expect(row.fields.find((f) => f.key === 'lastName')?.unchanged).toBe(true)
+  })
+
+  it('writes the confirmed match as a correction, licence number included', () => {
+    const rows = buildImportRows(
+      [licence], [], [], 'phase-27-1', [held], [], 'season-27',
+      new Map([['6810333', 'p-old']]),
+    )
+    const writes = playerImportWrites(rows, defaultImportSelection(rows), {
+      clubId: 'club-fftt-06680011', phaseId: 'phase-27-1', seasonId: 'season-27',
+      newId: () => 'should-not-be-called',
+    })
+    expect(writes.creates).toEqual([])
+    expect(writes.created).toBe(0)
+    expect(writes.updated).toBe(1)
+    expect(writes.updates).toEqual([{ id: 'p-old', patch: { licenseNumber: '6810333' } }])
+    expect(writes.points).toEqual([
+      { phaseId: 'phase-27-1', playerId: 'p-old', points: '1788' },
+    ])
+    expect(writes.categories).toEqual([
+      { seasonId: 'season-27', playerId: 'p-old', category: 'S' },
+    ])
+  })
+
+  // Declining is the other half: a genuine namesake must still be creatable.
+  it('still creates a licensee when the match is not confirmed', () => {
+    const rows = buildImportRows([licence], [], [], 'phase-27-1', [held])
+    const writes = playerImportWrites(rows, defaultImportSelection(rows), {
+      clubId: 'club-fftt-06680011', phaseId: 'phase-27-1', newId: () => 'p-new',
+    })
+    expect(writes.created).toBe(1)
+    expect(writes.creates[0]).toMatchObject({ id: 'p-new', licenseNumber: '6810333' })
+  })
+
+  // The scenario that produced the bug report: FFTT lists the club, one of its
+  // licences matches nobody, and the person is sitting right there under a
+  // number nobody had checked.
+  it('does not offer a namesake that another licence of the same batch matches', () => {
+    const other = {
+      ...licence, licence: '681243', firstName: 'Nathan', lastName: 'Santoro',
+    }
+    const licensee = {
+      id: 'p-old', firstName: 'Nathan', lastName: 'Santoro', licenseNumber: '681243',
+      email: '', phone: '', status: 'active' as const, clubId: 'club-fftt-06680011',
+    }
+    const rows = buildImportRows([licence, other], [licensee], [], 'phase-27-1', [held])
+    // The second licence owns that member outright; the first must not claim them.
+    expect(rows[1].playerId).toBe('p-old')
+    expect(rows[0].link).toBeUndefined()
+  })
+
+  // Two licensees genuinely sharing a name, one member to be had. Confirming
+  // the first must take them off the table for the second, or both corrections
+  // land on one person and the other licence is silently never created.
+  it('withdraws a member from the offers once another licence has claimed them', () => {
+    const twin = { ...licence, licence: '6810334' }
+    const [, second] = buildImportRows(
+      [licence, twin], [], [], 'phase-27-1', [held], [], 'season-27',
+      new Map([['6810333', 'p-old']]),
+    )
+    expect(second.link).toBeUndefined()
+  })
+})
+
+describe('importCandidates (#566)', () => {
+  const users = [
+    { id: 'u1', role: 'player' as const, isPlayer: true, firstName: 'A', lastName: 'Un', clubId: 'c1' },
+    { id: 'u2', role: 'club_admin' as const, isPlayer: false, firstName: 'B', lastName: 'Deux', clubId: 'c1' },
+    { id: 'u3', role: 'player' as const, isPlayer: true, firstName: 'C', lastName: 'Trois', clubId: 'c1', status: 'archived' as const },
+    { id: 'u4', role: 'player' as const, isPlayer: true, firstName: 'D', lastName: 'Quatre', clubId: 'c2' },
+  ]
+
+  // Every member of the club: a player, a non-playing admin and an archived
+  // row are all people FFTT's listing can be naming.
+  it('takes every member of the club, playing or not, archived or not', () => {
+    expect(importCandidates(users, 'c1').map((c) => c.id)).toEqual(['u1', 'u2', 'u3'])
+  })
+
+  it('marks the archived ones, because the screens say so', () => {
+    expect(importCandidates(users, 'c1').find((c) => c.id === 'u3')?.archived).toBe(true)
+  })
+
+  // One club's members must never be offered as another's: a namesake in the
+  // next club along is not this club's licensee.
+  it('never reaches outside the club importing', () => {
+    expect(importCandidates(users, 'c1').some((c) => c.id === 'u4')).toBe(false)
   })
 })
 

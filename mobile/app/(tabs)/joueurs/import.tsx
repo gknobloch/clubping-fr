@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import {
   fetchClubLicencesFromBrowser,
   fetchFfttPlayerFromBrowser,
   fieldKey,
+  importCandidates,
   playerImportWrites,
   playersMissingFromFftt,
   sameClubNumber,
@@ -90,7 +91,7 @@ type Search =
 export default function ImportPlayersScreen() {
   const { user } = useAuth()
   const {
-    clubs, phases, players, playerPhasePoints, playerSeasonCategories,
+    clubs, phases, players, users, playerPhasePoints, playerSeasonCategories,
     setClubSeasonLicences, applyPlayerImport,
   } = useAppData()
   const router = useRouter()
@@ -119,11 +120,37 @@ export default function ImportPlayersScreen() {
   const [scope, setScope] = useState<Scope>('club')
   const [licenceInput, setLicenceInput] = useState('')
   const [search, setSearch] = useState<Search>({ kind: 'idle' })
+  /** Name matches the member has confirmed: licence number → member id (#566). */
+  const [confirmed, setConfirmed] = useState<Map<string, string>>(new Map())
 
   const clubPlayers = useMemo(
     () => players.filter((p) => p.clubId === club?.id && p.status === 'active'),
     [players, club?.id],
   )
+
+  /**
+   * How to rebuild the deck from the data the fetch saw, given the name
+   * matches confirmed since (#566).
+   *
+   * A ref holding a closure rather than a `useMemo` over `players`, and for the
+   * reason `showRows` already states: a refetch landing mid-review must not
+   * rebuild the deck under the member's finger. Accepting a suggestion has to
+   * rebuild it, so the rule is captured once, when the licences arrive, and
+   * replayed from exactly that snapshot.
+   */
+  const rebuild = useRef<(links: ReadonlyMap<string, string>) => PlayerImportRow[]>(() => [])
+
+  /** Deck positions: which cards the deck holds, given those links. */
+  const seat = (rows: PlayerImportRow[]) => {
+    // Only the licensees with something to write go in the deck. On the web the
+    // unchanged ones are rows of a table one glance takes in; here each is a
+    // card to swipe past, and a club whose roster is already right would be
+    // eighty swipes of "rien à écrire". The count says they were seen.
+    const reviewable = rows.filter((r) => writableFields(r.fields).length > 0)
+    setDeck(reviewable)
+    setUpToDate(rows.length - reviewable.length)
+    return reviewable
+  }
 
   /**
    * Turn a set of licences into the deck being reviewed.
@@ -132,25 +159,47 @@ export default function ImportPlayersScreen() {
    * so a licence is reviewed the same way however it was reached.
    */
   const showRows = useCallback((licences: FfttLicence[], nextScope: Scope) => {
-    const rows = buildImportRows(
-      licences, players, playerPhasePoints, phase?.id ?? '', [],
-      playerSeasonCategories, phase?.seasonId,
+    // Every member of the club, archived included, as candidates for a name
+    // match (#566). This argument was `[]` on both clients, which is why a
+    // licensee already held under a wrong number was recreated beside himself.
+    const candidates = importCandidates(users, club?.id ?? '')
+    const make = (links: ReadonlyMap<string, string>) => buildImportRows(
+      licences, players, playerPhasePoints, phase?.id ?? '', candidates,
+      playerSeasonCategories, phase?.seasonId, links,
     )
-    // Only the licensees with something to write go in the deck. On the web the
-    // unchanged ones are rows of a table one glance takes in; here each is a
-    // card to swipe past, and a club whose roster is already right would be
-    // eighty swipes of "rien à écrire". The count says they were seen.
-    const reviewable = rows.filter((r) => writableFields(r.fields).length > 0)
-    setDeck(reviewable)
-    setUpToDate(rows.length - reviewable.length)
+    rebuild.current = make
+    setConfirmed(new Map())
+    setSelected(defaultImportSelection(seat(make(new Map()))))
     setIndex(0)
-    setSelected(defaultImportSelection(reviewable))
     setScope(nextScope)
     setStatus({ kind: 'review' })
     // Read at call time rather than depended on: a refetch landing mid-review
     // must not rebuild the deck under the member's finger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase?.id, phase?.seasonId])
+  }, [phase?.id, phase?.seasonId, club?.id])
+
+  /**
+   * Accept or withdraw a suggested match (#566).
+   *
+   * The card is rebuilt against that member, so its ticks are re-taken from the
+   * new diff: the licence line — the wrong number giving way to FFTT's — only
+   * becomes writable at this moment, and carrying the old ticks over would
+   * leave unticked the one field just asked for. The deck never changes length
+   * here (a confirmed row always has that licence line to write), so the card
+   * under the finger stays the card under the finger.
+   */
+  const confirmLink = (licence: string, memberId: string | null) => {
+    const next = new Map(confirmed)
+    if (memberId) next.set(licence, memberId)
+    else next.delete(licence)
+    setConfirmed(next)
+    const rebuilt = seat(rebuild.current(next)).find((r) => r.licence.licence === licence)
+    setSelected((prev) => {
+      const keep = new Set([...prev].filter((k) => !k.startsWith(`${licence}:`)))
+      if (rebuilt) for (const f of writableFields(rebuilt.fields)) keep.add(fieldKey(licence, f.key))
+      return keep
+    })
+  }
 
   const load = useCallback(async () => {
     if (!club?.affiliationNumber) return
@@ -443,8 +492,10 @@ export default function ImportPlayersScreen() {
             <LicenceCard
               row={row}
               selected={selected}
+              linked={confirmed.has(row.licence.licence)}
               onToggleField={toggleField}
               onSetRow={setRow}
+              onConfirmLink={confirmLink}
             />
             {/* Dots while they fit, «12 / 53» past that — see `PagerPosition`.
                 A club's licence list is routinely longer than a row of dots
@@ -535,12 +586,15 @@ const STATUS_BADGE: Record<'new' | 'changed', { label: string; bg: string; fg: s
 }
 
 function LicenceCard({
-  row, selected, onToggleField, onSetRow,
+  row, selected, linked, onToggleField, onSetRow, onConfirmLink,
 }: {
   row: PlayerImportRow
   selected: Set<string>
+  /** Whether this row's name match has been confirmed (#566). */
+  linked: boolean
   onToggleField: (licence: string, key: PlayerSyncField['key']) => void
   onSetRow: (row: PlayerImportRow, taken: boolean) => void
+  onConfirmLink: (licence: string, memberId: string | null) => void
 }) {
   const fields = writableFields(row.fields)
   const taken = fields.filter((f) => selected.has(fieldKey(row.licence.licence, f.key)))
@@ -560,12 +614,39 @@ function LicenceCard({
       </View>
 
       {row.link && (
-        // A namesake the club already holds, with no licence of their own — an
-        // approved club admin, most likely (#474). A name is not proof, so this
-        // is said and never acted on: the import still creates a licensee.
-        <Text style={s.linkNote}>
-          {row.link.name} figure déjà dans le club, sans numéro de licence.
-        </Text>
+        // A namesake the club already holds — with no licence of their own (an
+        // approved club admin, most likely, #474) or under a number that is
+        // simply wrong (#566). A name is not proof: two people in one club can
+        // share one, so this asks and never acts on its own.
+        <View style={s.linkBox}>
+          <Text style={s.linkNote}>
+            {row.link.name}
+            {row.link.archived ? ' (archivé)' : ''} figure déjà dans le club
+            {row.link.heldLicence
+              ? ` sous la licence ${row.link.heldLicence}.`
+              : ' sans numéro de licence.'}
+            {' '}Est-ce la même personne ?
+          </Text>
+          <TouchableOpacity
+            testID={`import-link-${row.licence.licence}`}
+            style={s.linkBtn}
+            onPress={() => onConfirmLink(row.licence.licence, row.link!.id)}
+          >
+            <Text style={s.linkBtnTxt}>Oui, mettre à jour ce membre</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {linked && (
+        <View style={s.linkBox}>
+          <Text style={s.linkNote}>Rattaché à un membre du club.</Text>
+          <TouchableOpacity
+            testID={`import-unlink-${row.licence.licence}`}
+            style={s.linkBtn}
+            onPress={() => onConfirmLink(row.licence.licence, null)}
+          >
+            <Text style={s.linkBtnTxt}>Annuler le rattachement</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <View style={s.fields}>
@@ -708,7 +789,19 @@ const s = StyleSheet.create({
   licence: { fontSize: 12, color: colors.textSecondary, fontFamily: fonts.regular, letterSpacing: 0.5 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   badgeTxt: { fontSize: 11, fontFamily: fonts.semiBold },
+  linkBox: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+  },
   linkNote: { fontSize: 13, color: colors.warningText, fontFamily: fonts.regular },
+  // 44pt of target, the shared rule for anything tappable below `md:`.
+  linkBtn: { minHeight: 44, justifyContent: 'center' },
+  linkBtnTxt: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.warningText },
 
   fields: { gap: 4 },
   // 44pt of target below `md:` — the shared rule for anything tappable.
