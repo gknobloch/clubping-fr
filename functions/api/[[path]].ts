@@ -143,6 +143,25 @@ const notAllowed = { error: 'not_allowed' } as const
 const notFound = { error: 'not_found' } as const
 
 /**
+ * Only a general admin. A missing viewer is the local hatch (#138).
+ *
+ * Asked as its own question rather than as `administers(viewer, undefined)`,
+ * which happens to give the same answer today: what these routes mean is "is
+ * this a general admin?", not "does this person administer no club in
+ * particular?", and the two would part company the first time `administers`
+ * learned a new case.
+ *
+ * It answers for everything no club owns — a season, a phase, a division, a
+ * poule's calendar, and the existence of a club (#570) — as well as for the
+ * competitions of #482 and the onboarding queue of #474, which is where it used
+ * to be declared, far from every caller but one.
+ */
+const isGeneralAdmin = (c: { get: (k: 'user') => UserRow | undefined }) => {
+  const u = c.get('user')
+  return !u || u.role === 'general_admin'
+}
+
+/**
  * The caller as the match rules read them (#569), or `null` under
  * AUTH_GUARD_DISABLED.
  *
@@ -2922,6 +2941,7 @@ app.post('/schedule-documents/import', async (c) => {
 })
 
 app.delete('/seasons/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const id = c.req.param('id')
   const phases = 'SELECT id FROM phases WHERE season_id = ?'
@@ -2988,6 +3008,7 @@ app.patch('/phases/:id', async (c) => {
 
 // Delete phase (archived only) — cascades: divisions → groups → teams, match days → games → availabilities → selections
 app.delete('/phases/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const id = c.req.param('id')
   const divisions = 'SELECT id FROM divisions WHERE phase_id = ?'
@@ -3039,6 +3060,7 @@ app.patch('/divisions/:id', async (c) => {
 
 // Delete division (archived only) — cascades: groups → teams → match days → games → availabilities → selections
 app.delete('/divisions/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const id = c.req.param('id')
   const groups = 'SELECT id FROM groups WHERE division_id = ?'
@@ -3065,9 +3087,8 @@ app.post('/divisions/:id/move', async (c) => {
 // --- Competitions (#482) ---
 //
 // A competition is a general admin's decision, so these three routes refuse
-// anybody else — `isGeneralAdmin` is declared with the onboarding routes below,
-// and is called here at request time. Eligibility overrides, further down, are
-// the club's half of the same feature and are scoped to the club they name.
+// anybody else. Eligibility overrides, further down, are the club's half of the
+// same feature and are scoped to the club they name.
 
 /** Only category codes we know reach the column; anything else is dropped. */
 const categoriesJson = (v: unknown): string => {
@@ -3237,6 +3258,7 @@ app.patch('/clubs/:id', async (c) => {
 // Only ever called on a club the admin has confirmed has no teams/players
 // left (checked client-side, #247 follow-up) — no cascade needed here.
 app.delete('/clubs/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const id = c.req.param('id')
   await db.batch([
@@ -3402,6 +3424,7 @@ app.patch('/groups/:id', async (c) => {
 
 // Delete group (archived only) — cascades: teams, match days → games → availabilities → selections
 app.delete('/groups/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const id = c.req.param('id')
   // Delete teams in this group (and their game cascades)
@@ -3423,6 +3446,7 @@ app.delete('/groups/:id', async (c) => {
 // Mirrors the match-day cascade from the group delete above, minus the
 // group/team removal.
 app.delete('/groups/:id/games', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const id = c.req.param('id')
   await db.batch(clearGamesUnderMatchDays(db, 'SELECT id FROM match_days WHERE group_id = ?', id))
@@ -3832,12 +3856,6 @@ const requestFromRow = (r: ClubAdminRequestRow): ClubAdminRequest => ({
   ...(r.decided_by ? { decidedBy: r.decided_by } : {}),
   ...(r.decision_note ? { decisionNote: r.decision_note } : {}),
 })
-
-/** Only a general admin reads or decides. A missing viewer is the local hatch. */
-const isGeneralAdmin = (c: { get: (k: 'user') => UserRow | undefined }) => {
-  const u = c.get('user')
-  return !u || u.role === 'general_admin'
-}
 
 /** A week: long enough for a club secretary who reads mail on Sundays. */
 const CLUB_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
