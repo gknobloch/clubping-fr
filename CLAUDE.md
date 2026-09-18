@@ -486,6 +486,58 @@ invisible dans le diff comme dans la revue.
   rien qu'un club rencontre — et un lot écrit à moitié serait la pire réponse à
   celui qui le ferait.
 
+### Répondre, composer, diriger une équipe (#569)
+- **La règle existait ; elle n'était nulle part.** Dispos, compositions et
+  `PATCH /teams/:id` ne demandaient qu'une session valide : n'importe quel
+  licencié connecté répondait à la place de n'importe qui, sur la rencontre de
+  n'importe quel club, composait l'équipe d'en face, ou déplaçait une équipe de
+  club. Le rôle, lui, était vérifié **quatre fois** côté client —
+  `useMatchDayEditing`, une seconde copie inline dans `MatchDaysPage`,
+  `mobile/utils/roles.ts` — et zéro fois côté serveur.
+- `src/lib/teamAuthority.ts` est la seule copie, partagée par le web
+  (`@/lib/...`), l'app (`@shared/lib/...`) et l'API, comme
+  `competitionEligibility` depuis #498.
+- **Deux questions, pas une** (#462) : `mayManageTeam` — qui dirige une équipe,
+  donc son effectif, son capitaine, son lien WhatsApp *et* sa composition — et
+  `mayAnswerFor` — qui parle pour un licencié. Elles se ressemblent et diffèrent
+  là où ça compte : un administrateur général compose n'importe quelle équipe
+  **mais ne répond pour personne**, une disponibilité étant une déclaration
+  personnelle. Le `canEditGameSelection` du web omettait l'administrateur
+  général et le `canManageTeam` de l'app l'admettait ; c'est la seconde qui est
+  l'intention écrite, et qui l'emporte.
+- **Le club du licencié est le seul conjoint ajouté**, et non déplacé. Les
+  écrans n'avaient jamais eu à l'énoncer — ils ne listent que les licenciés du
+  club — mais sur le serveur le site d'appel ne contraint plus rien : sans lui,
+  un administrateur de club répondait pour les joueurs d'en face sur ses
+  propres rencontres. L'effectif, lui, n'est pas la question : « Autres joueurs
+  du club » est exactement quelqu'un qu'aucune équipe ne porte encore.
+- **Une dispo ne nomme pas d'équipe** — ni le web ni l'app n'en envoient — donc
+  la question est posée **des deux côtés de la rencontre**
+  (`mayAnswerOnFixture`), et non résolue d'abord. Résoudre « l'équipe » par
+  l'effectif, comme le fait la notification de #495, serait faux ici : le
+  licencié peut n'être sur aucun des deux.
+- **`overriddenBy` se dérive, ne se croit pas.** C'est une affirmation que
+  l'appelant fait sur lui-même, et c'est elle qui fait dire à l'écran « répondu
+  par le capitaine ». Les écrans la calculent encore pour l'étiquette ; l'API
+  la recalcule et écrit la sienne. Le corps de la requête n'est honoré que sous
+  `AUTH_GUARD_DISABLED`, où il n'y a personne de qui la dériver.
+- **Le capitaine dirige, l'administrateur situe.** `TEAM_STRUCTURAL_FIELDS`
+  (`clubId`, `phaseId`, `number`, `groupId`, `isArchived`) demande
+  `administers` en plus : un capitaine tient son équipe, il ne décide pas de sa
+  poule ni de son numéro. Et `clubId` est jugé aux deux bouts, pour la raison
+  de #558.
+- **La matrice n'écrit plus que les compos de son club.**
+  `setPlayerSelectedForMatchDay` envoyait les deux côtés de chaque rencontre de
+  la journée : la ligne de l'adversaire partait inchangée — un no-op, mais une
+  écriture sur la composition d'un autre club, que l'API refuse désormais et
+  qui aurait emporté tout le lot. Un joueur ne peut de toute façon être aligné
+  que dans les équipes de son propre club.
+- **`AUTH_GUARD_DISABLED` veut dire « ne pas demander »**, et surtout pas
+  « administrateur général » comme dans `managingViewer` : un administrateur
+  général ne répond pour personne, donc le même raccourci rendrait toute
+  saisie de disponibilité impossible en local — exactement ce que l'échappatoire
+  de #138 existe pour éviter.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per

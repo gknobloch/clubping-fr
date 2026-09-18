@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { isPlayerEligibleForTeam } from '@/lib/brulage'
+import { answerOverride, mayAnswerFor, mayManageTeam } from '@/lib/teamAuthority'
 import type { AvailabilityStatus } from '@/types'
 
 /**
@@ -14,7 +15,7 @@ import type { AvailabilityStatus } from '@/types'
 export function useMatchDayEditing(phaseId: string | null) {
   const { user } = useAuth()
   const {
-    teams, clubs, games, matchDays, divisions, groups,
+    teams, clubs, games, matchDays, divisions, groups, players,
     gameAvailabilities, gameSelections,
     getGameSelectionPlayerIds, setGameAvailability, clearGameAvailability, setGameSelectionBatch,
   } = useAppData()
@@ -48,34 +49,33 @@ export function useMatchDayEditing(phaseId: string | null) {
   const getAvailability = (gameId: string, playerId: string): AvailabilityStatus | undefined =>
     gameAvailabilities.find((x) => x.gameId === gameId && x.playerId === playerId)?.status
 
+  /**
+   * The rules themselves live in `@/lib/teamAuthority` (#569), shared with the
+   * app and with the API that now refuses the write. What stays here is the
+   * lookup: these screens speak in ids, the rules speak in rows.
+   */
+  const authority = (playerId: string, teamId: string) => {
+    const team = teams.find((t) => t.id === teamId)
+    const player = players.find((p) => p.id === playerId)
+    return user && team && player ? { user, team, player } : null
+  }
+
   /** Only the player themselves, their captain, or their club admin. Global admin has no edit. */
   const canEditAvailability = (playerId: string, teamId: string): boolean => {
-    if (!user) return false
-    const team = teams.find((t) => t.id === teamId)
-    if (!team) return false
-    return (
-      user.id === playerId ||
-      team.captainId === user.id ||
-      (user.role === 'club_admin' && team.clubId === user.clubId)
-    )
+    const ctx = authority(playerId, teamId)
+    return !!ctx && mayAnswerFor(ctx.user, ctx.team, ctx.player)
   }
 
-  /** Who is answering for someone else, so the API can record it. */
+  /** Who is answering for someone else, so the label can say so. */
   const isOverride = (playerId: string, teamId: string): 'captain' | 'club_admin' | undefined => {
-    if (!user) return undefined
-    const team = teams.find((t) => t.id === teamId)
-    if (!team || user.id === playerId) return undefined
-    if (team.captainId === user.id) return 'captain'
-    if (user.role === 'club_admin' && team.clubId === user.clubId) return 'club_admin'
-    return undefined
+    const ctx = authority(playerId, teamId)
+    return ctx ? answerOverride(ctx.user, ctx.team, ctx.player) : undefined
   }
 
-  /** Captain (their team) or club admin (their club) picks who plays. */
+  /** Captain (their team), club admin (their club), or a general admin. */
   const canEditGameSelection = (teamId: string): boolean => {
-    if (!user) return false
     const team = teams.find((t) => t.id === teamId)
-    if (!team) return false
-    return team.captainId === user.id || (user.role === 'club_admin' && team.clubId === user.clubId)
+    return !!user && !!team && mayManageTeam(user, team)
   }
 
   const getSelectedTeamForGame = (gameId: string, playerId: string): string | null => {
@@ -104,16 +104,20 @@ export function useMatchDayEditing(phaseId: string | null) {
   const setPlayerSelectedForMatchDay = (matchDayId: string, playerId: string, teamId: string | null) => {
     const correspondingIds = getCorrespondingMatchDayIds(matchDayId)
     const allDayGames = games.filter((g) => correspondingIds.includes(g.matchDayId))
+    // Only the club's own line-ups are rewritten (#569). This used to send
+    // both sides of every fixture in the round: the opponent's row went out
+    // unchanged, a no-op that nonetheless wrote on another club's line-up —
+    // and the API now refuses it, which would have taken the whole batch with
+    // it. A player can only be picked for their own club's teams anyway.
+    const mine = new Set(myClubTeamsInPhase.map((t) => t.id))
     const updates: Array<{ gameId: string; teamId: string; playerIds: string[] }> = []
     for (const game of allDayGames) {
-      const homeIds = getGameSelectionPlayerIds(game.id, game.homeTeamId).filter((id) => id !== playerId)
-      const awayIds = getGameSelectionPlayerIds(game.id, game.awayTeamId).filter((id) => id !== playerId)
-      if (teamId === game.homeTeamId) homeIds.push(playerId)
-      else if (teamId === game.awayTeamId) awayIds.push(playerId)
-      updates.push(
-        { gameId: game.id, teamId: game.homeTeamId, playerIds: homeIds },
-        { gameId: game.id, teamId: game.awayTeamId, playerIds: awayIds }
-      )
+      for (const side of [game.homeTeamId, game.awayTeamId]) {
+        if (!mine.has(side)) continue
+        const ids = getGameSelectionPlayerIds(game.id, side).filter((id) => id !== playerId)
+        if (teamId === side) ids.push(playerId)
+        updates.push({ gameId: game.id, teamId: side, playerIds: ids })
+      }
     }
     if (updates.length > 0) setGameSelectionBatch(updates)
   }
