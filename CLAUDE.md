@@ -58,9 +58,25 @@ For any new feature or substantial change:
 2. **Create an issue if none exists** — use it as the single tracking place
 3. **Branch from issue** — e.g. `23-add-unit-and-e2e-tests`
 4. **Never push directly to main** — all changes go through a PR from a feature branch
-5. **Clean up after merge** — switch to main, pull, delete local and remote feature branches
+5. **Put `Closes #N` in the PR body** — on its own line, and in English
+6. **Clean up after merge** — switch to main, pull, delete local and remote feature branches
 
 Summary: Issue first → branch → implement → PR → merge → clean up branches.
+
+### Le mot-clé de fermeture est dans le *corps* de la PR, et en anglais
+GitHub ne lit les mots-clés de fermeture que dans le **corps** d'une PR et dans
+les messages de commit. Jamais dans le **titre** : un titre qui se termine par
+« … (Closes #561) » a exactement l'air de ce qu'il faut, ne lie rien, et laisse
+l'issue ouverte après la fusion. C'est ce qui est arrivé à #561, restée ouverte
+une journée alors que son correctif était déjà en production.
+
+Anglais, aussi : « Corrige #342 » ne produit qu'une référence ordinaire. Les
+titres et le corps des PR restent en français — cette ligne-là est la seule
+exception, parce qu'elle s'adresse à GitHub et non à un relecteur.
+
+**Après une fusion, vérifier que l'issue s'est bien fermée** plutôt que de le
+supposer : c'est le seul moyen de voir la différence entre les deux, et elle est
+invisible dans le diff comme dans la revue.
 
 ## Conventions
 - UI text must be in French
