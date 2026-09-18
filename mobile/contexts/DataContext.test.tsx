@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { act, renderHook, waitFor } from '@testing-library/react-native'
-import { setSessionToken } from '@/utils/api'
+import { setSession } from '@/utils/api'
 import { readCache, writeCache } from '@/utils/offlineCache'
 import { DataProvider, useAppData } from './DataContext'
 
@@ -43,6 +43,11 @@ function deferred<T>() {
 
 const okResponse = (body: unknown) => ({ ok: true, status: 200, json: async () => body })
 
+// The cache is keyed to a member since #509, so these tests need one signed in
+// before the provider mounts — otherwise there is nobody to attribute a cache
+// entry to and nothing is ever written.
+const MEMBER = 'u-member'
+
 const mockFetch = jest.fn()
 
 function render() {
@@ -51,19 +56,20 @@ function render() {
 
 beforeEach(async () => {
   await AsyncStorage.clear()
+  setSession('session-token', MEMBER)
   mockFetch.mockReset()
   global.fetch = mockFetch as unknown as typeof fetch
 })
 
 afterEach(() => {
-  // The token lives in a module holder shared across tests; a leftover value
+  // The session lives in a module holder shared across tests; a leftover value
   // would make the next provider mount think a user is signed in.
-  setSessionToken(null)
+  setSession(null, null)
 })
 
 describe('DataProvider — cold start hydration', () => {
   it('renders cached data before the first fetch resolves', async () => {
-    await writeCache(payload({ clubs: [club('c1', 'Ping Club')] }), '2026-01-15T10:00:00.000Z')
+    await writeCache(MEMBER, payload({ clubs: [club('c1', 'Ping Club')] }), '2026-01-15T10:00:00.000Z')
     const inflight = deferred<unknown>()
     mockFetch.mockReturnValue(inflight.promise)
 
@@ -130,8 +136,8 @@ describe('DataProvider — successful fetch', () => {
     expect(result.current.lastSyncedAt).not.toBeNull()
 
     // Persisted for the next cold start, with the same timestamp the UI shows.
-    await waitFor(async () => expect(await readCache()).not.toBeNull())
-    expect(await readCache()).toEqual({
+    await waitFor(async () => expect(await readCache(MEMBER)).not.toBeNull())
+    expect(await readCache(MEMBER)).toEqual({
       data: body,
       lastSyncedAt: result.current.lastSyncedAt,
     })
@@ -145,14 +151,14 @@ describe('DataProvider — successful fetch', () => {
     await waitFor(() => expect(result.current.error).toBe('HTTP 500'))
     expect(result.current.stale).toBe(true)
     // Nothing half-written: a rejected fetch must not poison the cache.
-    expect(await readCache()).toBeNull()
+    expect(await readCache(MEMBER)).toBeNull()
   })
 })
 
 describe('DataProvider — fetch failure', () => {
   it('keeps the cached data on screen and flags it stale', async () => {
     const cached = payload({ clubs: [club('c1', 'Ping Club')] })
-    await writeCache(cached, '2026-01-15T10:00:00.000Z')
+    await writeCache(MEMBER, cached, '2026-01-15T10:00:00.000Z')
     mockFetch.mockRejectedValue(new Error('Network request failed'))
 
     const { result } = render()
@@ -162,7 +168,7 @@ describe('DataProvider — fetch failure', () => {
     expect(result.current.stale).toBe(true)
     // The cache is still there for the next launch — a failed fetch never
     // invalidates it.
-    expect(await readCache()).toEqual({ data: cached, lastSyncedAt: '2026-01-15T10:00:00.000Z' })
+    expect(await readCache(MEMBER)).toEqual({ data: cached, lastSyncedAt: '2026-01-15T10:00:00.000Z' })
     expect(result.current.lastSyncedAt).toBe('2026-01-15T10:00:00.000Z')
   })
 
@@ -190,27 +196,31 @@ describe('DataProvider — logout', () => {
     mockFetch.mockResolvedValue(okResponse(payload({ clubs: [club('c1', 'Ping Club')] })))
     const { result } = render()
     await waitFor(() => expect(result.current.clubs).toHaveLength(1))
-    expect(await readCache()).not.toBeNull()
+    expect(await readCache(MEMBER)).not.toBeNull()
 
     // Sign in, then out. Only the second transition is a logout; the first is
     // what makes it one.
     await act(async () => {
-      setSessionToken('session-token')
+      setSession('session-token-2', MEMBER)
     })
     await waitFor(() => expect(result.current.clubs).toHaveLength(1))
 
     mockFetch.mockRejectedValue(new Error('Unauthorized'))
     await act(async () => {
-      setSessionToken(null)
+      setSession(null, null)
     })
 
     // No trace of the previous user, on screen or on disk.
     await waitFor(() => expect(result.current.clubs).toEqual([]))
     expect(result.current.lastSyncedAt).toBeNull()
-    await waitFor(async () => expect(await readCache()).toBeNull())
+    await waitFor(async () => expect(await readCache(MEMBER)).toBeNull())
   })
 
   it('refetches when a user signs in', async () => {
+    // Mounted signed out, which is what the login screen actually is — the
+    // holder carries the member now, so "a session appeared" has to be a real
+    // transition rather than the same value set twice.
+    setSession(null, null)
     mockFetch.mockResolvedValue(okResponse(payload()))
     const { result } = render()
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -218,7 +228,7 @@ describe('DataProvider — logout', () => {
 
     mockFetch.mockResolvedValue(okResponse(payload({ clubs: [club('c1', 'Ping Club')] })))
     await act(async () => {
-      setSessionToken('session-token')
+      setSession('session-token', MEMBER)
     })
 
     await waitFor(() => expect(result.current.clubs).toHaveLength(1))

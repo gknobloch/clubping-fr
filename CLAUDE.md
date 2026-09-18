@@ -97,6 +97,28 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
 - Le cache n'est vidé que sur une déconnexion **réelle** : le membre s'est
   déconnecté, ou le serveur a refusé sa session. Les clubs partagent des
   téléphones, donc ce vidage-là doit rester.
+- **L'entrée nomme son membre, et la séparation se joue à la LECTURE** (#509 sur
+  mobile, comme #387 sur le web). Vider à la déconnexion suppose qu'une
+  déconnexion ait lieu et qu'elle aboutisse — `clearCache` avale ses propres
+  échecs, et un basculement de profil n'y passerait pas du tout. `readCache`
+  refuse l'entrée d'un autre : ça ne suppose rien. Le vidage reste, en filet.
+- **Refuser n'est pas supprimer.** Une entrée qui n'est pas la nôtre est laissée
+  en place : elle appartient toujours à quelqu'un, et la prochaine écriture
+  l'écrasera de toute façon. Le cache tient un membre à la fois.
+- Rien n'est attribué à personne, dans les deux sens : sans membre connu,
+  `readCache` ne rend rien et `writeCache` n'écrit rien. Une entrée sans
+  propriétaire est exactement ce que ce cache ne doit plus jamais contenir — les
+  entrées d'avant #509 en sont, et sont donc refusées une fois, puis
+  réécrites par le premier fetch.
+- Le membre voyage **avec le jeton**, dans le holder de `utils/api.ts` :
+  `DataProvider` enveloppe `AuthProvider`, donc `DataContext` ne peut pas
+  atteindre `useAuth()`. Un seul setter pour les deux (`setSession`), pour qu'un
+  jeton ne puisse jamais être publié sans dire de qui il est.
+- Au démarrage, `AuthContext` publie le membre **avant** d'interroger le réseau,
+  depuis `pp-club-user` : sur un boot sans signal il n'y aura pas de réponse
+  plus tard, et sans membre il n'y a pas de cache à lire. `DataContext`
+  n'hydrate donc rien tant qu'aucun membre n'est connu — et ce n'est pas une
+  déconnexion : seul le jeton qui passe à `null` en est une.
 
 ### Mobile UI
 - **Page-header actions use `HeaderAction`** (`src/components/Button.tsx`) — icon

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { act, renderHook, waitFor } from '@testing-library/react-native'
 import type { DevUser } from '@shared/types'
-import { getSessionToken, setSessionToken } from '@/utils/api'
+import { getSessionToken, setSession } from '@/utils/api'
 import { AuthProvider, useAuth } from './AuthContext'
 
 // ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ beforeEach(async () => {
 afterEach(() => {
   // The token lives in a module holder shared across tests; a leftover value
   // would make the next mount think a user is signed in.
-  setSessionToken(null)
+  setSession(null, null)
 })
 
 describe('AuthProvider — dev user list', () => {
@@ -162,7 +162,7 @@ describe('AuthProvider — devLoginAs', () => {
       await result.current.devLoginAs('u-captain')
     })
     unmount()
-    setSessionToken(null)
+    setSession(null, null)
 
     // Fresh launch: the stored token is validated through /api/auth/me, the
     // same path a real OTP session takes.
