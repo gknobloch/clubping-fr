@@ -914,3 +914,38 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   `src/lib/pushNotifications.ts`, sans base ni réseau ; `functions/api/push.ts`
   est le transport Expo, et le seul à savoir purger un token qu'Expo déclare
   mort — personne d'autre ne le remarquera jamais.
+
+### Supprimer une colonne, ou changer un schéma sous le code (#410)
+
+- **Le code d'abord, le schéma ensuite, et jamais dans le même déploiement.**
+  `deploy.yml` applique les migrations *avant* de remplacer le worker : entre
+  les deux, il s'écoule la build et le déploiement Pages — une à deux minutes
+  pendant lesquelles c'est l'**ancien** code qui sert le **nouveau** schéma. Une
+  colonne supprimée en même temps que le code qui cesse de la lire disparaît
+  donc sous des requêtes encore en vol, et `no such column` est tout ce qu'il
+  reste.
+- Ce n'est pas une panne de deux minutes, c'est une **déconnexion**. Un statut
+  non-2xx devient un `ApiError` qui en porte un (`src/lib/authApi.ts`), et
+  `isServerRejection` lit un statut comme un refus du serveur et non comme un
+  serveur injoignable (#387) : le jeton est effacé, et le cache hors-ligne avec
+  lui. Le membre se retrouve devant l'écran de connexion d'une app où l'on ne
+  rentre que par un code reçu par e-mail. C'est exactement ce que les trente
+  jours d'attente de #410 servaient à éviter, et ça se serait produit au
+  dernier pas.
+- Donc deux PR et deux déploiements : celle qui cesse de lire, puis celle qui
+  supprime. La seconde ne se fusionne qu'une fois la première **déployée**, pas
+  seulement fusionnée — et le code de la première doit marcher contre les deux
+  schémas, ce qui se teste des deux côtés plutôt que ce qui se suppose.
+- **Le découpage crée sa propre chausse-trappe.** Entre les deux déploiements,
+  les lignes écrites par la première PR prennent les `DEFAULT` de la colonne
+  qu'elle ne nomme plus. Un balayage clavé sur ce drapeau — `DELETE ... WHERE
+  token_hashed = 0`, ce que l'issue proposait — supprimerait donc précisément
+  les sessions créées entre les deux, c'est-à-dire les membres qui se sont
+  connectés pendant l'opération. Trier sur ce qui a un sens (`expires_at` : la
+  ligne est morte), jamais sur un drapeau que la migration est en train de
+  retirer.
+- **La forme d'une valeur ne prouve pas sa nature.** Vérifier que tous les
+  jetons stockés font 64 caractères hexadécimaux ne dit rien : `randomToken`
+  produit exactement la même forme, donc un jeton en clair passe le test. La
+  seule preuve est de **rejouer** une valeur lue en base en `Authorization:
+  Bearer` et d'obtenir un 401.
