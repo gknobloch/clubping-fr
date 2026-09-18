@@ -27,8 +27,10 @@ import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { getVenue, getVenueAddress } from '@shared/lib/venue'
-import { formatRoundDates, gameDate, gameTime, isSlotConfirmed, upcomingRounds } from '@/utils/matchdays'
-import { getMondayOf, todayIso } from '@/utils/weeks'
+import {
+  formatRoundDates, gameDate, gameTime, isSlotConfirmed, upcomingRounds, upcomingTeamGames,
+} from '@/utils/matchdays'
+import { todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -53,7 +55,6 @@ export default function HomeScreen() {
   const [matchPage, setMatchPage] = useState(0)
 
   const today = todayIso()
-  const currentWeekMonday = getMondayOf(today)
 
   const myPlayerId = user?.isPlayer ? user.id : undefined
 
@@ -130,13 +131,10 @@ export default function HomeScreen() {
   }
 
   const activeTeamGames = myActiveTeam ? getTeamGames(myActiveTeam.id) : []
-  const upcomingGames = useMemo(() => {
-    if (!myActiveTeam) return []
-    const dateOf = (g: Game) => { const md = mdMap.get(g.matchDayId); return md ? gameDate(g, md) : null }
-    return getTeamGames(myActiveTeam.id)
-      .filter((g) => { const d = dateOf(g); return d !== null && getMondayOf(d) >= currentWeekMonday })
-      .sort((a, b) => (dateOf(a) ?? '').localeCompare(dateOf(b) ?? ''))
-  }, [myActiveTeam, games, mdMap, currentWeekMonday]) // eslint-disable-line react-hooks/exhaustive-deps
+  const upcomingGames = useMemo(
+    () => (myActiveTeam ? upcomingTeamGames(getTeamGames(myActiveTeam.id), mdMap, today) : []),
+    [myActiveTeam, games, mdMap, today], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   // Roster sorted (used by every hero card + the compose sheet).
   const roster = useMemo(

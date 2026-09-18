@@ -22,7 +22,10 @@ import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibi
 import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
-import { formatRoundDates, gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere, upcomingRounds } from '@/lib/matchdays'
+import {
+  formatRoundDates, gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere,
+  upcomingRounds, upcomingTeamGames,
+} from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 
 export function HomePage() {
@@ -70,12 +73,10 @@ export function HomePage() {
         : [],
     [games, myActiveTeam],
   )
-  const upcoming = useMemo(() => {
-    const dateOf = (g: (typeof teamGames)[number]) => { const md = mdMap.get(g.matchDayId); return md ? gameDate(g, md) : null }
-    return teamGames
-      .filter((g) => { const d = dateOf(g); return d !== null && d >= today })
-      .sort((a, b) => (dateOf(a) ?? '').localeCompare(dateOf(b) ?? ''))
-  }, [teamGames, mdMap, today])
+  const upcoming = useMemo(
+    () => upcomingTeamGames(teamGames, mdMap, today),
+    [teamGames, mdMap, today],
+  )
 
   const availOf = (gameId: string): AvailabilityStatus | undefined =>
     myPlayerId ? gameAvailabilities.find((a) => a.playerId === myPlayerId && a.gameId === gameId)?.status : undefined
