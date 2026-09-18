@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { app } from './[[path]]'
 import { needsSession } from './authGuard'
+import { sessionKey } from './auth'
 
 // The home for session-guard coverage (#138). `avatarRoutes.test.ts` pins the
 // image exemption from the routes' side — that a broken avatar cannot happen
@@ -123,11 +124,12 @@ function dbWithSession(expiresAt: number) {
           return {
             async first() {
               if (sql.includes('FROM sessions')) {
-                // The lookup binds both storage forms since #410 — the digest
-                // first, then the plaintext for rows minted before it. This row
-                // is stored in the old form, so it exercises the fallback.
-                return args.includes(VALID_TOKEN)
-                  ? { token: VALID_TOKEN, user_id: 'u1', expires_at: expiresAt }
+                // Keyed by the digest, the only form the lookup binds since
+                // #410 — `sessionKey` so this answers to exactly what the
+                // code asks for.
+                const key = await sessionKey(VALID_TOKEN)
+                return args.includes(key)
+                  ? { token: key, user_id: 'u1', expires_at: expiresAt }
                   : null
               }
               if (sql.includes('FROM users')) return args[0] === 'u1' ? user : null

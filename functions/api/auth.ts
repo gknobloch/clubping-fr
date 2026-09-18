@@ -267,34 +267,37 @@ async function userByEmail(db: D1Database, email: string): Promise<UserRow | nul
  * No salt and no KDF: the token is 32 random bytes (see `randomToken`), so
  * there is no low-entropy secret to grind at. This is lookup-key hardening,
  * not password storage.
+ *
+ * Exported for the test fixtures that stand in for D1: a fake `sessions` row
+ * has to answer to the key the lookup actually binds, and deriving it there
+ * with a second SHA-256 would let the two drift apart silently.
  */
-const sessionKey = (token: string) => sha256Hex(token)
+export const sessionKey = (token: string) => sha256Hex(token)
 
 /**
- * Match a session under either storage form, each arm checking the form it
- * means (#410).
+ * Match a session by the digest of the presented token (#410).
  *
- * The second arm is the transition: rows minted before this change hold the
- * plaintext token, and dropping them would have signed the whole club out — D1
- * exposes no hash function, so they cannot be rewritten in place. Every login
- * from here writes a digest, SESSION_TTL_MS caps the old rows at 30 days, and
- * #409's purge clears them sooner. Phase 3 drops the arm and the column.
+ * Only ever the digest: the presented value is never compared against the
+ * stored one. That is the whole property — reading the table yields no
+ * credential to replay, because what it holds is not what the client sends.
  *
- * `token_hashed` is what keeps the fallback from undoing the change. A plain
- * `token = digest OR token = presented` also matches a HASHED row when someone
- * replays the stored value verbatim — which would leave a database read
- * yielding a working credential, exactly what this stops.
+ * The transitional second arm is gone with the rows it existed for: phase 1
+ * reached production on 19/08/2026, and the last plaintext session expired on
+ * 17/09 — checked, not assumed. `sessions.token_hashed` still exists and is no
+ * longer read; a follow-up drops it, deliberately in a LATER deploy than this
+ * one. Migrations run before the worker is swapped, so a column dropped in the
+ * same deploy would be missing from under the code still serving traffic, and
+ * every authenticated request in that window would fail — which the client
+ * reads as a rejected session and signs the member out (#387).
  *
- * Returns the matched row's key and form, because the caller has to delete the
- * row it actually matched.
+ * Returns the matched row's key, because the caller has to delete the row it
+ * actually matched.
  */
 const SESSION_BY_TOKEN =
-  'SELECT token, token_hashed, user_id, expires_at FROM sessions' +
-  ' WHERE (token = ? AND token_hashed = 1) OR (token = ? AND token_hashed = 0)'
+  'SELECT token, user_id, expires_at FROM sessions WHERE token = ?'
 
 interface SessionRow {
   token: string
-  token_hashed: number
   user_id: string
   expires_at: number
 }
@@ -302,7 +305,7 @@ interface SessionRow {
 async function sessionByToken(db: D1Database, token: string) {
   return db
     .prepare(SESSION_BY_TOKEN)
-    .bind(await sessionKey(token), token)
+    .bind(await sessionKey(token))
     .first<SessionRow>()
 }
 
@@ -311,8 +314,8 @@ async function createSession(db: D1Database, userId: string): Promise<string> {
   const now = Date.now()
   await db
     .prepare(
-      'INSERT INTO sessions (token, token_hashed, user_id, created_at, expires_at)' +
-      ' VALUES (?, 1, ?, ?, ?)',
+      'INSERT INTO sessions (token, user_id, created_at, expires_at)' +
+      ' VALUES (?, ?, ?, ?)',
     )
     .bind(await sessionKey(token), userId, now, now + SESSION_TTL_MS)
     .run()
@@ -424,12 +427,12 @@ export async function userFromToken(db: D1Database, token: string): Promise<User
   const session = await sessionByToken(db, token)
   if (!session) return null
   if (session.expires_at <= Date.now()) {
-    // By the key and form actually matched, not the presented value: a hashed
-    // row would not match the plaintext, and the row would outlive its own
-    // expiry, to be re-checked and re-skipped forever (#410).
+    // By the key actually matched, not the presented value — which is not what
+    // the row is keyed by, so the delete would miss and the row would outlive
+    // its own expiry, to be re-checked and re-skipped forever (#410).
     await db
-      .prepare('DELETE FROM sessions WHERE token = ? AND token_hashed = ?')
-      .bind(session.token, session.token_hashed)
+      .prepare('DELETE FROM sessions WHERE token = ?')
+      .bind(session.token)
       .run()
     return null
   }
@@ -596,14 +599,11 @@ authApp.get('/me', async (c) => {
 // it would send a dead credential on every subsequent request.
 authApp.post('/logout', async (c) => {
   const token = requestToken(c.req)
-  // Both storage forms, so a session minted before #410 still revokes.
+  // By digest, the form the row is stored in (#410).
   if (token) {
     await c.env.DB
-      .prepare(
-        'DELETE FROM sessions' +
-        ' WHERE (token = ? AND token_hashed = 1) OR (token = ? AND token_hashed = 0)',
-      )
-      .bind(await sessionKey(token), token)
+      .prepare('DELETE FROM sessions WHERE token = ?')
+      .bind(await sessionKey(token))
       .run()
   }
   c.header('Set-Cookie', sessionCookieHeader(null, c.req.url))

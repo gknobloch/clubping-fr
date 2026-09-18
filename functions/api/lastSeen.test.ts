@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { app } from './[[path]]'
 import type { UserRow } from './rows'
+import { sessionKey } from './auth'
 import type { Player, User } from '../../src/types'
 
 // #406 — a club that has just shared the app wants to know who has opened it.
@@ -60,10 +61,12 @@ function dbWith(users: UserRow[], viewerId: string | null) {
       const bound = (params: unknown[]) => ({
         async first() {
           if (sql.includes('FROM sessions')) {
-            // Since #410 the lookup binds the digest and the plaintext; this
-            // fixture answers to the plaintext, the pre-#410 storage form.
-            return viewerId && params.includes(TOKEN)
-              ? { token: TOKEN, user_id: viewerId, expires_at: Date.now() + HOUR }
+            // Keyed by the digest, the only form the lookup binds since #410
+            // — `sessionKey` so this answers to exactly what the code
+            // asks for.
+            const key = await sessionKey(TOKEN)
+            return viewerId && params.includes(key)
+              ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
           if (sql.includes('FROM users WHERE id = ?')) return copyOf(params[0])

@@ -22,7 +22,14 @@ import { authApp, userFromToken } from './auth'
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex')
 
-/** The `sessions` / `users` columns these tests touch, per migrations 0006–0040. */
+/**
+ * The `sessions` / `users` columns these tests touch, per migrations 0006–0041.
+ *
+ * `token_hashed` is still here because production still has it: the code stops
+ * reading it in this change, and a later one drops the column, so the table the
+ * code will actually meet on deploy is this one. Nothing below sets it — the
+ * INSERT no longer names it, which the DEFAULT covers.
+ */
 const SCHEMA = `
   CREATE TABLE sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL,
@@ -65,16 +72,20 @@ function realD1() {
 
   const sessions = () =>
     sqlite
-      .prepare('SELECT token, token_hashed, user_id, expires_at FROM sessions ORDER BY expires_at')
-      .all() as { token: string; token_hashed: number; user_id: string; expires_at: number }[]
-  /** A row in whichever storage form — `hashed` mirrors what migration 0041 marks. */
-  const addSession = (token: string, userId: string, expiresAt: number, hashed = 0) =>
+      .prepare('SELECT token, user_id, expires_at FROM sessions ORDER BY expires_at')
+      .all() as { token: string; user_id: string; expires_at: number }[]
+  /**
+   * A session row, keyed the way every row is keyed since #410 phase 1: by the
+   * digest. Takes the token as the client holds it, so a test says what it
+   * means and the hashing stays in one place.
+   */
+  const addSession = (token: string, userId: string, expiresAt: number) =>
     sqlite
       .prepare(
-        'INSERT INTO sessions (token, token_hashed, user_id, created_at, expires_at)' +
-        ' VALUES (?,?,?,?,?)',
+        'INSERT INTO sessions (token, user_id, created_at, expires_at)' +
+        ' VALUES (?,?,?,?)',
       )
-      .run(token, hashed, userId, expiresAt - 1000, expiresAt)
+      .run(sha256(token), userId, expiresAt - 1000, expiresAt)
 
   return { db, sessions, addSession }
 }
@@ -114,36 +125,18 @@ describe('session tokens are stored as a digest (#410)', () => {
     expect(await userFromToken(db, token)).toMatchObject({ id: 'u1' })
   })
 
-  // The regression this file exists to prevent. A lookup written as
-  // `token = digest OR token = presented` passes every other test here and
-  // still fails this one: replaying the stored value verbatim matches the
-  // hashed row through the fallback arm, which hands back exactly the property
-  // the change removes. `token_hashed` is what closes it.
+  // The regression this file exists to prevent, and the one case that outlives
+  // the transition. A lookup that compares the presented value against the
+  // stored one — `token = digest OR token = presented`, as the phase-1 fallback
+  // was first written — passes every other test here and still fails this one:
+  // replaying the stored value verbatim matches its own row, handing back
+  // exactly the property the change removes. Nothing but the digest is ever
+  // compared now, which is what closes it.
   it('refuses the stored digest presented as if it were a token', async () => {
     const { db, sessions } = realD1()
     await signIn(db)
 
     expect(await userFromToken(db, sessions()[0].token)).toBeNull()
-  })
-
-  // The other direction: a legacy row must never satisfy the digest arm. Staged
-  // with a contrived row whose stored plaintext happens to equal sha256(token),
-  // so the only thing keeping it from matching is the form check.
-  it('will not match a legacy row through the digest arm', async () => {
-    const { db, addSession } = realD1()
-    const token = 'a-token-someone-guessed'
-    addSession(sha256(token), 'u1', Date.now() + HOUR, 0)
-
-    expect(await userFromToken(db, token)).toBeNull()
-  })
-
-  // Rows minted before #410 hold the plaintext. Dropping them would have signed
-  // the club out, so the lookup accepts both forms until they age out.
-  it('still accepts a session stored in the pre-#410 plaintext form', async () => {
-    const { db, addSession } = realD1()
-    addSession('legacy-plaintext-token', 'u1', Date.now() + HOUR)
-
-    expect(await userFromToken(db, 'legacy-plaintext-token')).toMatchObject({ id: 'u1' })
   })
 
   /** Sign out with whatever token the client is holding. */
@@ -165,20 +158,12 @@ describe('session tokens are stored as a digest (#410)', () => {
     expect(sessions()).toHaveLength(0)
   })
 
-  it('revokes a legacy plaintext session at logout too', async () => {
-    const { db, sessions, addSession } = realD1()
-    addSession('legacy-plaintext-token', 'u1', Date.now() + HOUR)
-
-    expect((await logout(db, 'legacy-plaintext-token')).status).toBe(200)
-    expect(sessions()).toHaveLength(0)
-  })
-
   // The expiry sweep deletes by the key it matched. Deleting by the presented
-  // plaintext would miss a hashed row, leaving it to be re-checked forever.
-  it('deletes an expired hashed row rather than missing it', async () => {
+  // value would match no row at all, leaving it to be re-checked forever.
+  it('deletes an expired row rather than missing it', async () => {
     const { db, sessions, addSession } = realD1()
     const token = 'expired-token'
-    addSession(sha256(token), 'u1', Date.now() - HOUR, 1)
+    addSession(token, 'u1', Date.now() - HOUR)
 
     expect(await userFromToken(db, token)).toBeNull()
     expect(sessions()).toHaveLength(0)
@@ -192,8 +177,8 @@ describe('signing in clears that member’s expired sessions (#409)', () => {
     addSession('dead-2', 'u1', Date.now() - 90 * 24 * HOUR)
 
     await signIn(db, 'u1')
-    expect(sessions().map((s) => s.token)).not.toContain('dead-1')
-    expect(sessions().map((s) => s.token)).not.toContain('dead-2')
+    expect(sessions().map((s) => s.token)).not.toContain(sha256('dead-1'))
+    expect(sessions().map((s) => s.token)).not.toContain(sha256('dead-2'))
   })
 
   // The failure mode worth guarding: a purge scoped to the member but not to
@@ -205,7 +190,7 @@ describe('signing in clears that member’s expired sessions (#409)', () => {
 
     const fresh = await signIn(db, 'u1')
     expect(sessions().map((s) => s.token).sort()).toEqual(
-      ['phone-still-valid', sha256(fresh)].sort(),
+      [sha256('phone-still-valid'), sha256(fresh)].sort(),
     )
     expect(await userFromToken(db, 'phone-still-valid')).toMatchObject({ id: 'u1' })
   })
@@ -215,6 +200,6 @@ describe('signing in clears that member’s expired sessions (#409)', () => {
     addSession('someone-else-dead', 'u2', Date.now() - HOUR)
 
     await signIn(db, 'u1')
-    expect(sessions().map((s) => s.token)).toContain('someone-else-dead')
+    expect(sessions().map((s) => s.token)).toContain(sha256('someone-else-dead'))
   })
 })

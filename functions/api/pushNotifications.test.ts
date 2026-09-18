@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { app } from './[[path]]'
 import type { UserRow } from './rows'
+import { sessionKey } from './auth'
 
 // The push endpoints and the daily sweep (#495), end to end through the real
 // Hono app: what the routes refuse, what the sweep decides to send, and what it
@@ -77,8 +78,12 @@ function fakeDb(f: DbFixture) {
       const bound = (params: unknown[]) => ({
         async first() {
           if (sql.includes('FROM sessions')) {
-            return f.viewerId && params.includes(TOKEN)
-              ? { token: TOKEN, user_id: f.viewerId, expires_at: Date.now() + HOUR }
+            // Keyed by the digest, the only form the lookup binds since #410
+            // — `sessionKey` so this answers to exactly what the code
+            // asks for.
+            const key = await sessionKey(TOKEN)
+            return f.viewerId && params.includes(key)
+              ? { token: key, user_id: f.viewerId, expires_at: Date.now() + HOUR }
               : null
           }
           if (sql.includes('FROM users WHERE id = ?')) {
