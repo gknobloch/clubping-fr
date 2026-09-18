@@ -5,11 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import {
-  availabilityOverride,
-  canEditAvailability,
-  canManageTeam,
   getTeamName,
 } from '@/utils/roles'
+import { answerOverride, mayAnswerFor, mayManageTeam } from '@shared/lib/teamAuthority'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
@@ -177,7 +175,7 @@ export default function MatchDetailScreen() {
     team.id, matchDay.number, clubTeamsInPhase, games, matchDays, gameSelections,
   )
 
-  const canManage = !!(user && canManageTeam(user, team))
+  const canManage = !!(user && mayManageTeam(user, team))
   const thisGameDate = gameDate(game, matchDay)
   // The receiving club's time (#287): the game's own, else the home team's
   // default, and none at all when that club's playing day is unknown.
@@ -300,7 +298,7 @@ export default function MatchDetailScreen() {
               }
               // `canManage` is the line-up rule; answering has its own, which
               // stops one step short of a general administrator (#462).
-              const canEdit = !!user && canEditAvailability(user, team, p.id) && !gameDatePast
+              const canEdit = !!user && mayAnswerFor(user, team, p) && !gameDatePast
               return (
                 <PlayerRow
                   key={p.id}
@@ -316,7 +314,7 @@ export default function MatchDetailScreen() {
                       p.id,
                       game.id,
                       status,
-                      user ? availabilityOverride(user, team, p.id) : undefined,
+                      user ? answerOverride(user, team, p) : undefined,
                     )
                   }
                   onClear={() => clearAvailability(p.id, game.id)}

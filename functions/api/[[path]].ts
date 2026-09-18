@@ -3,13 +3,17 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseCategories, jsonParseIds } from './rows'
-import type { Address, AvailabilityStatus, ClubChannel, Competition, DataState } from '../../src/types'
+import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, CompetitionEligibilityRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { canClubAdd } from '../../src/lib/competitionEligibility'
+import {
+  fixtureOverride, mayAnswerOnFixture, mayManageTeam,
+  type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
+} from '../../src/lib/teamAuthority'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
@@ -134,6 +138,55 @@ const administers = (viewer: ManagingViewer, clubId: string | null | undefined) 
 
 /** The body a club-scope refusal carries, same as #488's licence set. */
 const notAllowed = { error: 'not_allowed' } as const
+
+/** Not a refusal: the fixture, team or licensee named does not exist (#569). */
+const notFound = { error: 'not_found' } as const
+
+/**
+ * The caller as the match rules read them (#569), or `null` under
+ * AUTH_GUARD_DISABLED.
+ *
+ * `null` means "do not ask", and deliberately not what `managingViewer` does.
+ * Standing a missing viewer in as a general admin works for everything that
+ * asks `administers`, but a general admin answers for nobody
+ * (`src/lib/teamAuthority.ts`), so the same trick would make it impossible to
+ * set an availability at all on a local database with no sessions to hand out
+ * — hiding the feature from local development, which is exactly what #138's
+ * escape hatch exists to prevent.
+ */
+const authorityViewer = (c: { get: (k: 'user') => UserRow | undefined }): AuthorityViewer | null => {
+  const u = c.get('user')
+  return u ? { id: u.id, role: u.role, clubId: u.club_id ?? undefined } : null
+}
+
+/** Both sides of a fixture — no availability request names a team (#569). */
+async function fixtureTeams(db: D1Database, gameId: string): Promise<AuthorityTeam[]> {
+  const r = await db.prepare(
+    `SELECT t.id AS id, t.club_id AS club_id, t.captain_id AS captain_id
+       FROM games g
+       JOIN teams t ON t.id IN (g.home_team_id, g.away_team_id)
+      WHERE g.id = ?`,
+  ).bind(gameId).all<{ id: string; club_id: string; captain_id: string | null }>()
+  return r.results.map((t) => ({ id: t.id, clubId: t.club_id, captainId: t.captain_id ?? '' }))
+}
+
+/** One team, for the rules that are about a team rather than a fixture. */
+async function authorityTeam(db: D1Database, teamId: string): Promise<AuthorityTeam | null> {
+  const t = await db
+    .prepare('SELECT id, club_id, captain_id FROM teams WHERE id = ?')
+    .bind(teamId)
+    .first<{ id: string; club_id: string; captain_id: string | null }>()
+  return t ? { id: t.id, clubId: t.club_id, captainId: t.captain_id ?? '' } : null
+}
+
+/** The licensee being answered for. Their club is half the rule. */
+async function authorityPlayer(db: D1Database, playerId: string): Promise<AuthorityPlayer | null> {
+  const u = await db
+    .prepare('SELECT id, club_id FROM users WHERE id = ?')
+    .bind(playerId)
+    .first<{ id: string; club_id: string | null }>()
+  return u ? { id: u.id, clubId: u.club_id ?? '' } : null
+}
 
 // --- GET /api/data — return all entities ---
 app.get('/data', async (c) => {
@@ -4293,10 +4346,29 @@ async function clearTeamGamesOutsideGroup(
   return { deletedGames, deletedMatchDays }
 }
 
+/**
+ * Where a team sits in the competition, as opposed to how it is run (#569).
+ *
+ * A captain runs their team — its roster, its captaincy, its WhatsApp link —
+ * but does not decide which club, phase, poule or number it plays under. Those
+ * belong to an administrator, and `clubId` is judged on both ends for #558's
+ * reason: moving a team writes on the club it leaves and on the one it joins.
+ */
+const TEAM_STRUCTURAL_FIELDS = ['clubId', 'phaseId', 'number', 'groupId', 'isArchived'] as const
+
 app.patch('/teams/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
   const db = c.env.DB
+  const viewer = authorityViewer(c)
+  if (viewer) {
+    const team = await authorityTeam(db, id)
+    if (!team) return c.json(notFound, 404)
+    if (!mayManageTeam(viewer, team)) return c.json(notAllowed, 403)
+    const structural = TEAM_STRUCTURAL_FIELDS.some((f) => f in p)
+    if (structural && !administers(viewer, team.clubId)) return c.json(notAllowed, 403)
+    if ('clubId' in p && !administers(viewer, p.clubId)) return c.json(notAllowed, 403)
+  }
   // A pool change is a move, not a field edit (#422) — read the pool the team
   // is in before the update, so the work below only runs when it differs.
   const movingTo = typeof p.groupId === 'string' && p.groupId ? p.groupId : null
@@ -4515,6 +4587,22 @@ app.patch('/games/:id', async (c) => {
 // --- Game Availabilities ---
 app.post('/game-availabilities/set', async (c) => {
   const d = await c.req.json()
+  // Who may answer, and as whom (#569). `overriddenBy` is not read from the
+  // body: it is an assertion the caller makes about themselves, and it is what
+  // makes a screen say "répondu par le capitaine". The request's value is only
+  // honoured under AUTH_GUARD_DISABLED, where there is nobody to derive it
+  // from.
+  const viewer = authorityViewer(c)
+  let overriddenBy: AvailabilityOverriddenBy | null = d.overriddenBy ?? null
+  if (viewer) {
+    const [teams, player] = await Promise.all([
+      fixtureTeams(c.env.DB, d.gameId),
+      authorityPlayer(c.env.DB, d.playerId),
+    ])
+    if (!teams.length || !player) return c.json(notFound, 404)
+    if (!mayAnswerOnFixture(viewer, teams, player)) return c.json(notAllowed, 403)
+    overriddenBy = fixtureOverride(viewer, teams, player) ?? null
+  }
   // The previous answer, read before the upsert overwrites it. This is the one
   // place in the app that can see both values — web and mobile both write
   // here — and the captain's notification turns entirely on the difference:
@@ -4526,7 +4614,7 @@ app.post('/game-availabilities/set', async (c) => {
   await c.env.DB.prepare(
     `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) VALUES (?, ?, ?, ?)
      ON CONFLICT(game_id, player_id) DO UPDATE SET status = excluded.status, overridden_by = excluded.overridden_by`
-  ).bind(d.gameId, d.playerId, d.status, d.overriddenBy ?? null).run()
+  ).bind(d.gameId, d.playerId, d.status, overriddenBy).run()
   if (previous && previous.status !== d.status) {
     // Awaited rather than backgrounded: a Worker stops at the response, and
     // waitUntil is not reachable from a Hono handler here. The send is one
@@ -4545,6 +4633,16 @@ app.post('/game-availabilities/set', async (c) => {
 
 app.post('/game-availabilities/clear', async (c) => {
   const { gameId, playerId } = await c.req.json()
+  // Withdrawing an answer is answering (#569): same rule as setting one.
+  const viewer = authorityViewer(c)
+  if (viewer) {
+    const [teams, player] = await Promise.all([
+      fixtureTeams(c.env.DB, gameId),
+      authorityPlayer(c.env.DB, playerId),
+    ])
+    if (!teams.length || !player) return c.json(notFound, 404)
+    if (!mayAnswerOnFixture(viewer, teams, player)) return c.json(notAllowed, 403)
+  }
   await c.env.DB.prepare(
     'DELETE FROM game_availabilities WHERE game_id = ? AND player_id = ?'
   ).bind(gameId, playerId).run()
@@ -4552,8 +4650,30 @@ app.post('/game-availabilities/clear', async (c) => {
 })
 
 // --- Game Selections ---
+
+/**
+ * Whether `viewer` may write the line-ups these updates name (#569) —
+ * `mayManageTeam` on every team, all or nothing, the way #558's batches judge
+ * the licensees they name.
+ *
+ * `null` is the AUTH_GUARD_DISABLED escape hatch and passes without a query.
+ */
+async function mayWriteLineUps(
+  db: D1Database,
+  viewer: AuthorityViewer | null,
+  teamIds: string[],
+): Promise<boolean> {
+  if (!viewer) return true
+  const unique = [...new Set(teamIds)]
+  const teams = await Promise.all(unique.map((id) => authorityTeam(db, id)))
+  return teams.every((team) => team !== null && mayManageTeam(viewer, team))
+}
+
 app.post('/game-selections/set', async (c) => {
   const d = await c.req.json()
+  if (!(await mayWriteLineUps(c.env.DB, authorityViewer(c), [d.teamId]))) {
+    return c.json(notAllowed, 403)
+  }
   if (!d.playerIds?.length) {
     await c.env.DB.prepare('DELETE FROM game_selections WHERE game_id = ? AND team_id = ?')
       .bind(d.gameId, d.teamId).run()
@@ -4569,7 +4689,11 @@ app.post('/game-selections/set', async (c) => {
 })
 
 app.post('/game-selections/batch', async (c) => {
-  const { updates } = await c.req.json()
+  const { updates } = await c.req.json() as { updates: Array<{ gameId: string; teamId: string; playerIds: string[] }> }
+  const teamIds = updates.map((u) => u.teamId)
+  if (!(await mayWriteLineUps(c.env.DB, authorityViewer(c), teamIds))) {
+    return c.json(notAllowed, 403)
+  }
   for (const d of updates) {
     if (!d.playerIds?.length) {
       await c.env.DB.prepare('DELETE FROM game_selections WHERE game_id = ? AND team_id = ?')

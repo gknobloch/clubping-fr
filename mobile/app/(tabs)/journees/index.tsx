@@ -21,7 +21,7 @@ import {
   type MatrixRow,
 } from '@/components/MatchDayMatrix'
 import { useLayout } from '@/constants/layout'
-import { canEditAvailability, availabilityOverride, canManageTeam } from '@/utils/roles'
+import { answerOverride, mayAnswerFor, mayManageTeam } from '@shared/lib/teamAuthority'
 import { sortByName } from '@shared/lib/sortByName'
 import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
@@ -334,12 +334,12 @@ export default function JourneesScreen() {
         brulage: burnedInto ? { teamNumber: burnedInto.number, color: burnedInto.color } : undefined,
         cells: days.map((day, i) => ({
           status: day.game ? availabilityOf(player.id, day.game.id) : undefined,
-          canEdit: !!user && canEditAvailability(user, team, player.id),
+          canEdit: !!user && mayAnswerFor(user, team, player),
           selectedTeam: selectedTeamFor(player.id, i),
-          // The line-up rule, not the availability one. `canManageTeam` is what
+          // The line-up rule, not the availability one. `mayManageTeam` is what
           // the match screen asks before it lets anybody compose, and asking a
           // different question here would make the same action mean two things.
-          canCompose: !!user && canManageTeam(user, team),
+          canCompose: !!user && mayManageTeam(user, team),
         })),
       }
     })
@@ -393,10 +393,10 @@ export default function JourneesScreen() {
 
   function otherMatrixRows(days: MatrixDay[]): MatrixRow[] {
     // Whether the viewer may field anybody that round: the club's teams that
-    // actually play it, and `canManageTeam` over them — the web's
+    // actually play it, and `mayManageTeam` over them — the web's
     // `ourClubTeamsThisDay.some(canEditGameSelection)`.
     const composable = visibleGroups.map((group) =>
-      clubTeams.some((t) => !!teamGame(t, group.matchDays).game && !!user && canManageTeam(user, t)),
+      clubTeams.some((t) => !!teamGame(t, group.matchDays).game && !!user && mayManageTeam(user, t)),
     )
     return shownOtherPlayers.map((player) => {
       const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
@@ -517,7 +517,7 @@ export default function JourneesScreen() {
     const { player, team, game } = editing
     setEditing(null)
     if (status === null) await clearAvailability(player.id, game.id)
-    else await setAvailability(player.id, game.id, status, availabilityOverride(user, team, player.id))
+    else await setAvailability(player.id, game.id, status, answerOverride(user, team, player))
   }
 
   function renderCard({ team, game }: { team: Team; game: Game }) {

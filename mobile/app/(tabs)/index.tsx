@@ -11,12 +11,8 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import {
-  availabilityOverride,
-  canEditAvailability,
-  canManageTeam,
-  getTeamName,
-} from '@/utils/roles'
+import { getTeamName } from '@/utils/roles'
+import { answerOverride, mayAnswerFor, mayManageTeam } from '@shared/lib/teamAuthority'
 import { colors } from '@/constants/colors'
 import { useLayout } from '@/constants/layout'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -59,6 +55,17 @@ export default function HomeScreen() {
   const myPlayerId = user?.isPlayer ? user.id : undefined
 
   const playerMap = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
+
+  // The card speaks in ids and the rule reads rows: a licensee's club is half
+  // of `mayAnswerFor` (#569), so it has to be looked up before asking.
+  const answerableBy = (team: Team, playerId: string) => {
+    const player = playerMap.get(playerId)
+    return !!user && !!player && mayAnswerFor(user, team, player)
+  }
+  const overrideFor = (team: Team, playerId: string) => {
+    const player = playerMap.get(playerId)
+    return user && player ? answerOverride(user, team, player) : undefined
+  }
   const mdMap = useMemo(() => new Map(matchDays.map((md) => [md.id, md])), [matchDays])
   const divMap = useMemo(() => new Map(divisions.map((d) => [d.id, d])), [divisions])
   const groupMap = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
@@ -80,7 +87,7 @@ export default function HomeScreen() {
   const activeSeason = seasons.find((s) => s.status === 'active')
   const activePhase = phases.find((p) => p.status === 'active')
   const myActiveTeam = activePhase ? myTeamByPhase.get(activePhase.id) : undefined
-  const isCaptain = !!(user && myActiveTeam && canManageTeam(user, myActiveTeam))
+  const isCaptain = !!(user && myActiveTeam && mayManageTeam(user, myActiveTeam))
   const isPlayer = !!myPlayerId && !!myActiveTeam
 
   // The match card runs the width of the content and splits inside itself
@@ -350,13 +357,13 @@ export default function HomeScreen() {
                             // Answering is its own rule, not the line-up's:
                             // yourself, your captain, your club's admin — and
                             // the answer carries who gave it (#462).
-                            canEdit: (pid) => !!user && canEditAvailability(user, myActiveTeam, pid),
+                            canEdit: (pid) => answerableBy(myActiveTeam, pid),
                             onSet: (pid, status) =>
                               setAvailability(
                                 pid,
                                 h.game.id,
                                 status,
-                                user ? availabilityOverride(user, myActiveTeam, pid) : undefined,
+                                overrideFor(myActiveTeam, pid),
                               ),
                             onClear: (pid) => clearAvailability(pid, h.game.id),
                             onOpenPlayer: (pid) => router.push(`/player/${pid}`),

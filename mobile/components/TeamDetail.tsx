@@ -8,7 +8,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { getTeamName, canManageTeam } from '@/utils/roles'
+import { getTeamName } from '@/utils/roles'
+import { mayManageTeam } from '@shared/lib/teamAuthority'
 import { sortByName } from '@shared/lib/sortByName'
 import { computeBrulage } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
@@ -80,7 +81,7 @@ export function TeamDetail({
   const club = clubs.find((c) => c.id === team?.clubId)
   const division = divisions.find((d) => d.id === team?.divisionId)
   const phase = phases.find((p) => p.id === team?.phaseId)
-  const isCaptain = !!(user && team && canManageTeam(user, team))
+  const isCaptain = !!(user && team && mayManageTeam(user, team))
 
   // The FFTT did not list these licences this season (#488): a squad list is
   // exactly where a captain would otherwise not notice.
