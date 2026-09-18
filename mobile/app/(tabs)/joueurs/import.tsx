@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
@@ -13,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { Screen, contentWidth } from '@/components/Screen'
-import { PagerDots, usePagerSwipe } from '@/components/Pager'
+import { PagerPosition, usePagerSwipe } from '@/components/Pager'
 import { colors } from '@/constants/colors'
 import { fonts, displayFonts } from '@/constants/typography'
 import { canManageClub } from '@/utils/roles'
@@ -22,11 +24,13 @@ import {
   buildImportRows,
   defaultImportSelection,
   fetchClubLicencesFromBrowser,
+  fetchFfttPlayerFromBrowser,
   fieldKey,
   playerImportWrites,
   playersMissingFromFftt,
   sameClubNumber,
   writableFields,
+  type FfttLicence,
   type PlayerImportRow,
   type PlayerSyncField,
 } from '@shared/lib/ffttPlayers'
@@ -63,6 +67,26 @@ type Status =
   | { kind: 'importing' }
   | { kind: 'done'; created: number; updated: number }
 
+/**
+ * Where the deck on screen came from (#557).
+ *
+ * Not cosmetic: a club-wide listing says who holds a licence this season and a
+ * single look-up says nothing at all about the other fifty-nine, so the two
+ * differ in what they are allowed to write as much as in what they show.
+ */
+type Scope = 'club' | 'licence'
+
+/** The one-licence field's own outcome, kept apart from the review's (#557). */
+type Search =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  /** FFTT unreachable. */
+  | { kind: 'error' }
+  /** An unknown licence answers with an empty list, not an error. */
+  | { kind: 'not_found' }
+  /** It exists, and belongs to somebody else's club. */
+  | { kind: 'foreign_club'; clubName: string; clubNumber: string }
+
 export default function ImportPlayersScreen() {
   const { user } = useAuth()
   const {
@@ -92,24 +116,24 @@ export default function ImportPlayersScreen() {
   /** Licensees FFTT lists that we already hold, field for field. */
   const [upToDate, setUpToDate] = useState(0)
   const [missing, setMissing] = useState<Player[]>([])
+  const [scope, setScope] = useState<Scope>('club')
+  const [licenceInput, setLicenceInput] = useState('')
+  const [search, setSearch] = useState<Search>({ kind: 'idle' })
 
   const clubPlayers = useMemo(
     () => players.filter((p) => p.clubId === club?.id && p.status === 'active'),
     [players, club?.id],
   )
 
-  const load = useCallback(async () => {
-    if (!club?.affiliationNumber) return
-    setStatus({ kind: 'loading' })
-    const licences = await fetchClubLicencesFromBrowser(club.affiliationNumber)
-    if (licences === null) return setStatus({ kind: 'error' })
-    // The endpoint is scoped by club number, but that is FFTT's word for it and
-    // not ours — drop anything that came back for another club.
-    const ours = licences.filter((l) => sameClubNumber(l.clubNumber, club.affiliationNumber))
-    if (ours.length === 0) return setStatus({ kind: 'empty' })
-
+  /**
+   * Turn a set of licences into the deck being reviewed.
+   *
+   * Both sources land here — the club's whole listing and a single look-up —
+   * so a licence is reviewed the same way however it was reached.
+   */
+  const showRows = useCallback((licences: FfttLicence[], nextScope: Scope) => {
     const rows = buildImportRows(
-      ours, players, playerPhasePoints, phase?.id ?? '', [],
+      licences, players, playerPhasePoints, phase?.id ?? '', [],
       playerSeasonCategories, phase?.seasonId,
     )
     // Only the licensees with something to write go in the deck. On the web the
@@ -121,8 +145,26 @@ export default function ImportPlayersScreen() {
     setUpToDate(rows.length - reviewable.length)
     setIndex(0)
     setSelected(defaultImportSelection(reviewable))
-    setMissing(playersMissingFromFftt(ours, clubPlayers))
+    setScope(nextScope)
     setStatus({ kind: 'review' })
+    // Read at call time rather than depended on: a refetch landing mid-review
+    // must not rebuild the deck under the member's finger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase?.id, phase?.seasonId])
+
+  const load = useCallback(async () => {
+    if (!club?.affiliationNumber) return
+    setStatus({ kind: 'loading' })
+    setSearch({ kind: 'idle' })
+    const licences = await fetchClubLicencesFromBrowser(club.affiliationNumber)
+    if (licences === null) return setStatus({ kind: 'error' })
+    // The endpoint is scoped by club number, but that is FFTT's word for it and
+    // not ours — drop anything that came back for another club.
+    const ours = licences.filter((l) => sameClubNumber(l.clubNumber, club.affiliationNumber))
+    if (ours.length === 0) return setStatus({ kind: 'empty' })
+
+    showRows(ours, 'club')
+    setMissing(playersMissingFromFftt(ours, clubPlayers))
 
     // Who holds a validated licence this season is a fact about this listing,
     // not about which fields the member then ticks — so it is recorded now, and
@@ -137,10 +179,40 @@ export default function ImportPlayersScreen() {
         clubPlayers.filter((p) => listed.has((p.licenseNumber ?? '').trim())).map((p) => p.id),
       ).catch(() => {})
     }
-    // `players` and the rest are read at call time, not depended on: a refetch
-    // landing mid-review must not rebuild the deck under the member's finger.
+    // `players` and the rest are read at call time — see `showRows`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [club?.id, club?.affiliationNumber, phase?.id, phase?.seasonId])
+  }, [club?.id, club?.affiliationNumber, phase?.id, phase?.seasonId, showRows])
+
+  /**
+   * One licence, by number (#557) — the half of #384 the app did not carry.
+   *
+   * It is the look-up a phone is best at: somebody has just joined and is
+   * reading their number out, and pulling sixty licences to find one of them is
+   * the long way round.
+   *
+   * Nothing is recorded about the season's licences here, deliberately. That
+   * set is a *replacement* for the club (#488): looking one licence up says
+   * nothing about the other fifty-nine, and writing it would erase them.
+   */
+  const searchLicence = useCallback(async () => {
+    const wanted = licenceInput.trim()
+    if (!wanted) return
+    Keyboard.dismiss()
+    setSearch({ kind: 'loading' })
+    const result = await fetchFfttPlayerFromBrowser(wanted)
+    if (result === null) return setSearch({ kind: 'error' })
+    if (result === 'not_found') return setSearch({ kind: 'not_found' })
+    // A club admin administers one club: importing somebody else's licensee
+    // would move them between clubs without anyone saying so.
+    if (!sameClubNumber(result.clubNumber, club?.affiliationNumber)) {
+      return setSearch({
+        kind: 'foreign_club', clubName: result.clubName, clubNumber: result.clubNumber,
+      })
+    }
+    setSearch({ kind: 'idle' })
+    setMissing([])
+    showRows([result], 'licence')
+  }, [licenceInput, club?.affiliationNumber, showRows])
 
   useEffect(() => {
     if (mayImport) load()
@@ -295,19 +367,89 @@ export default function ImportPlayersScreen() {
           {club?.displayName} · n° {club?.affiliationNumber}
         </Text>
 
+        <View style={s.searchRow}>
+          <TextInput
+            testID="import-licence-input"
+            style={s.searchInput}
+            value={licenceInput}
+            onChangeText={(t) => { setLicenceInput(t); setSearch({ kind: 'idle' }) }}
+            placeholder="N° licence"
+            placeholderTextColor={colors.textSecondary}
+            keyboardType="number-pad"
+            returnKeyType="search"
+            onSubmitEditing={searchLicence}
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            accessibilityLabel="N° licence"
+          />
+          <TouchableOpacity
+            testID="import-licence-search"
+            style={[s.searchButton, !licenceInput.trim() && s.searchButtonOff]}
+            disabled={!licenceInput.trim() || search.kind === 'loading'}
+            onPress={searchLicence}
+            accessibilityRole="button"
+            accessibilityLabel="Rechercher cette licence"
+          >
+            {search.kind === 'loading' ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Ionicons name="search" size={18} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* The field answers under itself and never replaces the review: a
+            mistyped number must not cost the deck already on screen. */}
+        {search.kind === 'not_found' && (
+          <Text testID="import-search-message" style={s.searchNote}>
+            Aucun licencié pour ce numéro.
+          </Text>
+        )}
+        {search.kind === 'error' && (
+          <Text testID="import-search-message" style={s.searchNote}>
+            Impossible de contacter la FFTT. Réessayez plus tard.
+          </Text>
+        )}
+        {search.kind === 'foreign_club' && (
+          <Text testID="import-search-message" style={s.searchWarn}>
+            Cette licence appartient à {search.clubName || `au club n° ${search.clubNumber}`} —
+            elle ne peut pas être importée dans {club?.displayName}.
+          </Text>
+        )}
+
+        {scope === 'licence' && (
+          <TouchableOpacity
+            testID="import-back-to-club"
+            style={s.backToClub}
+            onPress={load}
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={16} color={colors.accent} />
+            <Text style={s.backToClubTxt}>Revoir tous les licenciés du club</Text>
+          </TouchableOpacity>
+        )}
+
         {row ? (
           <>
+            {/* How big the job is, before the first card rather than after the
+                last. It counts the deck and not the ticks, so it is the same
+                number the position below counts against — what the import will
+                actually write is the confirmation's to say, once. */}
+            <Text testID="import-deck-count" style={s.deckCount}>
+              {deck.length === 1
+                ? '1 licencié à revoir'
+                : `${deck.length} licenciés à revoir`}
+            </Text>
             <LicenceCard
               row={row}
               selected={selected}
               onToggleField={toggleField}
               onSetRow={setRow}
-              position={`${index + 1} / ${deck.length}`}
             />
-            {/* Above `MAX_DOTS` this draws nothing and the card's own
-                «12 / 60» is the position — a club's licence list is routinely
-                longer than a row of dots can indicate. */}
-            <PagerDots testID="import-dots" index={index} total={deck.length} />
+            {/* Dots while they fit, «12 / 53» past that — see `PagerPosition`.
+                A club's licence list is routinely longer than a row of dots
+                can indicate, and that is the deck this screen usually holds. */}
+            <PagerPosition testID="import-position" index={index} total={deck.length} />
             {deck.length > 1 && (
               <Text style={s.hint}>
                 Balayez pour passer au licencié suivant.
@@ -316,13 +458,15 @@ export default function ImportPlayersScreen() {
           </>
         ) : (
           <View style={s.card}>
-            <Text style={s.emptyDeck}>
-              Rien à écrire : tout ce que la FFTT liste est déjà à jour.
+            <Text testID="import-empty-deck" style={s.emptyDeck}>
+              {scope === 'licence'
+                ? 'Rien à écrire : ce licencié est déjà à jour.'
+                : 'Rien à écrire : tout ce que la FFTT liste est déjà à jour.'}
             </Text>
           </View>
         )}
 
-        {upToDate > 0 && (
+        {scope === 'club' && upToDate > 0 && (
           <Text style={s.sideNote}>
             {upToDate === 1
               ? '1 licencié est déjà à jour.'
@@ -330,7 +474,9 @@ export default function ImportPlayersScreen() {
           </Text>
         )}
 
-        {missing.length > 0 && <MissingNote missing={missing} />}
+        {/* «Absents de la liste FFTT» is a sentence about a club's listing,
+            and one licence is not one. */}
+        {scope === 'club' && missing.length > 0 && <MissingNote missing={missing} />}
 
         {deck.length > 0 && (
           <View style={s.footer}>
@@ -389,13 +535,12 @@ const STATUS_BADGE: Record<'new' | 'changed', { label: string; bg: string; fg: s
 }
 
 function LicenceCard({
-  row, selected, onToggleField, onSetRow, position,
+  row, selected, onToggleField, onSetRow,
 }: {
   row: PlayerImportRow
   selected: Set<string>
   onToggleField: (licence: string, key: PlayerSyncField['key']) => void
   onSetRow: (row: PlayerImportRow, taken: boolean) => void
-  position: string
 }) {
   const fields = writableFields(row.fields)
   const taken = fields.filter((f) => selected.has(fieldKey(row.licence.licence, f.key)))
@@ -407,9 +552,7 @@ function LicenceCard({
       <View style={s.cardHead}>
         <View style={s.cardHeadBody}>
           <Text style={s.name} numberOfLines={1}>{rowName(row)}</Text>
-          <Text style={s.licence}>
-            {row.licence.licence} · {position}
-          </Text>
+          <Text style={s.licence}>{row.licence.licence}</Text>
         </View>
         <View style={[s.badge, { backgroundColor: badge.bg }]}>
           <Text style={[s.badgeTxt, { color: badge.fg }]}>{badge.label}</Text>
@@ -524,6 +667,35 @@ const s = StyleSheet.create({
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   notice: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', fontFamily: fonts.regular },
   lede: { fontSize: 13, color: colors.textSecondary, fontFamily: fonts.regular },
+  deckCount: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
+
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  searchInput: {
+    flex: 1,
+    minHeight: 44,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontFamily: fonts.regular,
+    // Pinned, always. iOS invents letter-spacing in the PLACEHOLDER when a
+    // TextInput style declares none — «N ° l i c e n c e» — and it shows on a
+    // device only, never in a render test (#118, found again on a store
+    // screenshot in #520). `text-input-letter-spacing.test.ts` reads this.
+    letterSpacing: 0,
+  },
+  searchButton: {
+    width: 44, height: 44, borderRadius: 10, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  searchButtonOff: { backgroundColor: colors.border },
+  searchNote: { fontSize: 13, color: colors.textSecondary, fontFamily: fonts.regular },
+  searchWarn: { fontSize: 13, color: colors.warningText, fontFamily: fonts.regular },
+  backToClub: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
+  backToClubTxt: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
 
   card: {
     backgroundColor: colors.card, borderRadius: 14, borderWidth: 1,

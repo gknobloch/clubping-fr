@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react-native'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import { MAX_DOTS, PagerDots, claimsSwipe, swipeDirection } from './Pager'
+import { MAX_DOTS, PagerDots, PagerPosition, claimsSwipe, swipeDirection } from './Pager'
 import { colors } from '@/constants/colors'
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,34 @@ describe('PagerDots', () => {
     expect(StyleSheet.flatten(dots()[0].props.style)?.width).toBeGreaterThan(
       StyleSheet.flatten(dots()[1].props.style)?.width as number,
     )
+  })
+})
+
+describe('PagerPosition', () => {
+  it('draws the dots while they fit', () => {
+    render(<PagerPosition index={1} total={9} />)
+
+    expect(screen.getByTestId('pager-position').children).toHaveLength(9)
+  })
+
+  it('counts in words past the width a row of dots has', () => {
+    // And this is the only form that says HOW MANY there are, which is the
+    // first thing a fifty-three card deck is asked.
+    render(<PagerPosition index={11} total={53} />)
+
+    expect(screen.getByTestId('pager-position')).toHaveTextContent('12 / 53')
+  })
+
+  it('counts from one, not from zero', () => {
+    render(<PagerPosition index={0} total={53} />)
+
+    expect(screen.getByTestId('pager-position')).toHaveTextContent('1 / 53')
+  })
+
+  it('draws nothing for a single card, in either form', () => {
+    render(<PagerPosition index={0} total={1} />)
+
+    expect(screen.queryByTestId('pager-position')).toBeNull()
   })
 })
 

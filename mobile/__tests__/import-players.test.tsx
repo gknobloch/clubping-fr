@@ -75,6 +75,30 @@ const ffttAnswers = (xml: string) => {
   global.fetch = jest.fn(async () => ({ ok: true, text: async () => xml })) as never
 }
 
+/**
+ * FFTT answering one thing to `?club=` and another to `?licence=`.
+ *
+ * The two scopes hit the same endpoint with different query strings, and the
+ * whole of #557 is that they must not be confused for one another.
+ */
+const ffttAnswersPerScope = (
+  answers: { toClubListing: string; toLicenceLookup: string },
+) => {
+  global.fetch = jest.fn(async (url: string) => ({
+    ok: true,
+    text: async () =>
+      String(url).includes('licence=') ? answers.toLicenceLookup : answers.toClubListing,
+  })) as never
+}
+
+/** Type a licence number in and press the search button. */
+const searchLicence = async (licence: string) => {
+  fireEvent.changeText(screen.getByTestId('import-licence-input'), licence)
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('import-licence-search'))
+  })
+}
+
 const signIn = (role: Role) => {
   mockAuth.user = { id: 'u1', role, isPlayer: false, clubId: 'c1' }
 }
@@ -206,8 +230,10 @@ describe('le carrousel', () => {
   it('neither points nor invites a swipe when there is one card to review', async () => {
     await openScreen()
 
-    expect(screen.queryByTestId('import-dots')).toBeNull()
+    expect(screen.queryByTestId('import-position')).toBeNull()
     expect(screen.queryByText(/Balayez/)).toBeNull()
+    // The count still says what there is, in the singular.
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('1 licencié à revoir')
   })
 
   const three = () => listing(
@@ -220,9 +246,56 @@ describe('le carrousel', () => {
     ffttAnswers(three())
     await openScreen()
 
-    expect(screen.getByTestId('import-dots').children).toHaveLength(3)
+    expect(screen.getByTestId('import-position').children).toHaveLength(3)
     expect(screen.getByTestId('import-card-425881')).toBeTruthy()
     expect(screen.queryByTestId('import-card-392885')).toBeNull()
+  })
+
+  it('says how big the job is before the first card', async () => {
+    ffttAnswers(three())
+    await openScreen()
+
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('3 licenciés à revoir')
+  })
+
+  it('counts the deck, not the ticks — the position counts against the same number', async () => {
+    ffttAnswers(three())
+    await openScreen()
+
+    fireEvent.press(screen.getByTestId('import-ignore-425881'))
+
+    // Still three to review; what will be WRITTEN is the confirmation's to say.
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('3 licenciés à revoir')
+  })
+
+  it('counts in words for a club-sized deck, where dots cannot', async () => {
+    // The real case: Rixheim lists sixty, and a row of sixty dots is a dotted
+    // line with no current dot in it.
+    const many = Array.from({ length: 40 }, (_, i) =>
+      record({ licence: String(500000 + i), nom: `NOM${i}` }))
+    ffttAnswers(listing(...many))
+    await openScreen()
+
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('40 licenciés à revoir')
+    expect(screen.getByTestId('import-position')).toHaveTextContent('1 / 40')
+
+    act(() => mockSwipeHandler?.(1))
+    expect(screen.getByTestId('import-position')).toHaveTextContent('2 / 40')
+
+    act(() => mockSwipeHandler?.(1))
+    expect(screen.getByTestId('import-position')).toHaveTextContent('3 / 40')
+  })
+
+  it('runs the position along as the finger does', async () => {
+    ffttAnswers(three())
+    await openScreen()
+    expect(screen.getByTestId('import-position').children).toHaveLength(3)
+
+    act(() => mockSwipeHandler?.(1))
+
+    // Three dots still, the second one lit — the fraction takes over only past
+    // `MAX_DOTS`, which is `Pager.test.tsx`'s business.
+    expect(screen.getByTestId('import-card-392885')).toBeTruthy()
   })
 
   it('moves to the next card on a swipe, and back on the other one', async () => {
@@ -249,14 +322,6 @@ describe('le carrousel', () => {
     expect(screen.getByTestId('import-card-684545')).toBeTruthy()
   })
 
-  it('says where it is on the card, so a long deck still has a position', async () => {
-    // Past `MAX_DOTS` there are no dots, and this is all there is (#555).
-    ffttAnswers(three())
-    await openScreen()
-
-    expect(screen.getByText('425881 · 1 / 3')).toBeTruthy()
-  })
-
   it('keeps every card in the count, not just the one on screen', async () => {
     // The confirmation answers for the whole deck: what is under the finger is
     // one card, what is being imported is all of them.
@@ -267,6 +332,118 @@ describe('le carrousel', () => {
     fireEvent.press(screen.getByTestId('import-apply'))
 
     expect(asked.said()).toBe('3 licenciés créés.')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Chercher une licence, une seule (#557)
+// ---------------------------------------------------------------------------
+describe('la recherche par licence', () => {
+  const OTHER = record({ licence: '684545', nom: 'CERONI', prenom: 'Herve' })
+
+  beforeEach(() => {
+    ffttAnswersPerScope({ toClubListing: listing(record()), toLicenceLookup: listing(OTHER) })
+  })
+
+  it('replaces the deck with the one licence it found', async () => {
+    await openScreen()
+    expect(screen.getByTestId('import-card-425881')).toBeTruthy()
+
+    await searchLicence('684545')
+
+    expect(screen.getByTestId('import-card-684545')).toBeTruthy()
+    expect(screen.queryByTestId('import-card-425881')).toBeNull()
+  })
+
+  it('records nothing about the season’s licences — one is not a listing (#488)', async () => {
+    await openScreen()
+    setClubSeasonLicences.mockClear()
+
+    await searchLicence('684545')
+
+    // That set is a REPLACEMENT for the club and season: writing it from a
+    // single look-up would erase the other fifty-nine.
+    expect(setClubSeasonLicences).not.toHaveBeenCalled()
+  })
+
+  it('drops the club-wide notes, which are sentences about a listing', async () => {
+    mockData.players = [held({ id: 'p9', firstName: 'Ancien', lastName: 'Membre', licenseNumber: '111111' })]
+    await openScreen()
+    expect(screen.getByTestId('import-missing')).toBeTruthy()
+
+    await searchLicence('684545')
+
+    expect(screen.queryByTestId('import-missing')).toBeNull()
+  })
+
+  it('refuses a licence that belongs to another club', async () => {
+    ffttAnswersPerScope({
+      toClubListing: listing(record()),
+      toLicenceLookup: listing(record({ licence: '999999', numclub: '06880123', nomclub: 'ETIVAL' })),
+    })
+    await openScreen()
+
+    await searchLicence('999999')
+
+    expect(screen.getByTestId('import-search-message')).toHaveTextContent(/Etival/)
+    // And the club's own review is untouched.
+    expect(screen.getByTestId('import-card-425881')).toBeTruthy()
+  })
+
+  it('says so for an unknown number without costing the deck on screen', async () => {
+    ffttAnswersPerScope({ toClubListing: listing(record()), toLicenceLookup: '<liste></liste>' })
+    await openScreen()
+
+    await searchLicence('000000')
+
+    expect(screen.getByTestId('import-search-message')).toHaveTextContent('Aucun licencié pour ce numéro.')
+    expect(screen.getByTestId('import-card-425881')).toBeTruthy()
+  })
+
+  it('says a licensee is already up to date, in the singular', async () => {
+    // The club-wide sentence — "tout ce que la FFTT liste" — would be a claim
+    // about sixty people made from looking at one.
+    mockData.players = [held({ id: 'p2', firstName: 'Herve', lastName: 'Ceroni', licenseNumber: '684545' })]
+    mockData.playerPhasePoints = [{ phaseId: 'ph1', playerId: 'p2', points: '1731' }] as never
+    mockData.playerSeasonCategories = [{ seasonId: 's1', playerId: 'p2', category: 'V40' }] as never
+    await openScreen()
+
+    await searchLicence('684545')
+
+    expect(screen.getByTestId('import-empty-deck'))
+      .toHaveTextContent('Rien à écrire : ce licencié est déjà à jour.')
+  })
+
+  it('imports the found licence the same way as any other card', async () => {
+    await openScreen()
+    await searchLicence('684545')
+
+    await importAndConfirm()
+
+    await waitFor(() => expect(screen.getByTestId('import-done')).toBeTruthy())
+    expect(applyPlayerImport.mock.calls[0][0].creates).toEqual([
+      expect.objectContaining({ licenseNumber: '684545', clubId: 'c1' }),
+    ])
+  })
+
+  it('goes back to the whole club, notes and all', async () => {
+    mockData.players = [held({ id: 'p9', firstName: 'Ancien', lastName: 'Membre', licenseNumber: '111111' })]
+    await openScreen()
+    await searchLicence('684545')
+    expect(screen.queryByTestId('import-missing')).toBeNull()
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('import-back-to-club'))
+    })
+
+    expect(screen.getByTestId('import-card-425881')).toBeTruthy()
+    expect(screen.getByTestId('import-missing')).toBeTruthy()
+  })
+
+  it('offers no search for an empty box', async () => {
+    await openScreen()
+
+    expect(screen.getByTestId('import-licence-search').props.accessibilityState.disabled).toBe(true)
   })
 })
 
