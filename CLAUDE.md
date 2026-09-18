@@ -216,6 +216,38 @@ Summary: Issue first → branch → implement → PR → merge → clean up bran
   une plage de dates et non une date, parce que chaque poule a son propre
   créneau dans la semaine.
 
+### « Aujourd'hui », et ce qu'est une date (#561)
+
+- **Un match cesse d'être prochain le lendemain, pas le dimanche suivant.**
+  L'accueil de l'app coupait sa liste au lundi de la semaine courante : un
+  match joué le jeudi tenait donc encore la tête du carrousel le vendredi
+  matin, imprimant « jeudi 17 septembre » sous un badge orange « Aujourd'hui »,
+  et demandant « Ma disponibilité » pour une rencontre déjà jouée. Le web
+  coupait au jour depuis toujours ; `upcomingTeamGames`
+  (`src/lib/matchdays.ts`) est maintenant la seule dérivation des deux côtés.
+  Le jour même, le match reste — c'est le seul jour où « Aujourd'hui » est
+  vrai.
+- À ne pas confondre avec la tolérance de `activeMatchDayNumber`, qui garde
+  une journée du samedi active jusqu'au dimanche soir : celle-là répond « sur
+  quelle journée ouvrir la liste », où montrer celle qu'on vient de jouer rend
+  service. « Prochains matchs » est une affirmation sur l'avenir, et porte un
+  sélecteur de disponibilité dessous.
+- **`countdownLabel` ne compte que ce qui est devant.** Il répondait
+  « Aujourd'hui » pour tout `days <= 0`, ce qui transformait une carte
+  attardée en une affirmation fausse. Il rend `null` pour le passé — il n'y a
+  rien à décompter, et un badge n'est pas l'endroit pour le dire. L'accueil ne
+  lui passe plus de match passé, mais l'étiquette doit être juste seule :
+  c'est la seule ligne de la carte qui prétend savoir quel jour on est.
+- **Toutes les dates de cette app sont des dates civiles**, sans fuseau :
+  celle d'un match, celle d'une journée, celle qu'un licencié lit sur sa
+  carte. Celle à laquelle on les compare doit l'être aussi, d'où `todayIso()`
+  lu sur le calendrier local et **jamais** `new Date().toISOString()`, qui
+  convertit d'abord en UTC : à l'est de Greenwich, la première heure ou deux
+  de chaque journée se relisait comme la veille. Même symptôme que le filtre à
+  la semaine, autre cause — un match d'hier redevenait « aujourd'hui » entre
+  minuit et 2 h. `src/lib/weeks.spec.ts` épingle une horloge française, sans
+  quoi le défaut est invisible sur une CI en UTC.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

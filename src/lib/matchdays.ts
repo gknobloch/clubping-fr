@@ -42,6 +42,41 @@ export function deriveMatchDayDate(gamesForMatchDay: Game[], currentDate: string
 /** A specific game's own date, falling back to its match day's (derived) date when unset. */
 export const gameDate = (game: Game, matchDay: MatchDay): string => game.date ?? matchDay.date
 
+/**
+ * A team's games still to come, soonest first — the accueil's "Prochains
+ * matchs", on the web and in the app alike.
+ *
+ * **The cut is the day, not the week** (#561). The app used to keep every game
+ * of the current Monday-to-Sunday week, so a match played on Thursday was
+ * still a coming match on Friday: its card sat at the head of the carousel
+ * offering "Ma disponibilité" for a match already played, under a countdown
+ * badge reading "Aujourd'hui" over its own printed date of the day before.
+ * A match stops being next the day after it is played; the day itself it
+ * stays, which is the only day "Aujourd'hui" is true.
+ *
+ * `today` is passed in rather than read here so a screen derives it once and
+ * everything on it agrees — and so a test can name the day.
+ *
+ * A game whose match day is missing is dropped: with no date it can be placed
+ * neither before today nor after it.
+ */
+export function upcomingTeamGames(
+  teamGames: Game[],
+  matchDaysById: Map<string, MatchDay>,
+  today: string,
+): Game[] {
+  const dateOf = (g: Game): string | null => {
+    const md = matchDaysById.get(g.matchDayId)
+    return md ? gameDate(g, md) : null
+  }
+  return teamGames
+    .filter((g) => {
+      const d = dateOf(g)
+      return d !== null && d >= today
+    })
+    .sort((a, b) => (dateOf(a) ?? '').localeCompare(dateOf(b) ?? ''))
+}
+
 /** Monday and Sunday (YYYY-MM-DD) of the ISO week containing `isoDate`. */
 export function isoWeekRange(isoDate: string): { start: string; end: string } | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null

@@ -6,12 +6,24 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { todayIso } from '@/utils/weeks'
 import { fonts } from '@/constants/typography'
 
-// Days-until label from a YYYY-MM-DD match date.
-function countdownLabel(dateStr: string): string {
+/**
+ * Days-until label from a YYYY-MM-DD match date, and `null` for a match that
+ * has been played — there is nothing left to count down, and a badge is not
+ * the place to say so.
+ *
+ * It used to answer "Aujourd'hui" for everything at or before today (#561),
+ * which is how a match played the day before came to announce itself as
+ * today's, in orange, directly above its own printed date of the day before.
+ * The accueil no longer hands it a past match, but a label that asserts the
+ * day has to be right on its own: it is the only line on the card claiming to
+ * know what day it is.
+ */
+function countdownLabel(dateStr: string): string | null {
   const today = new Date(todayIso() + 'T00:00:00')
   const d = new Date(dateStr + 'T00:00:00')
   const days = Math.round((d.getTime() - today.getTime()) / 86_400_000)
-  if (days <= 0) return "Aujourd'hui"
+  if (days < 0) return null
+  if (days === 0) return "Aujourd'hui"
   if (days === 1) return 'Demain'
   return `Dans ${days} jours`
 }
@@ -66,6 +78,7 @@ export function MatchHeader({
     weekday: 'long', day: 'numeric', month: 'long',
   })
   const title = isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`
+  const countdown = showCountdown ? countdownLabel(matchDayDate) : null
 
   return (
     <View style={s.wrap}>
@@ -80,10 +93,10 @@ export function MatchHeader({
             </View>
           ) : null}
         </View>
-        {showCountdown ? (
+        {countdown ? (
           <View style={s.countdown}>
             <Ionicons name="time-outline" size={12} color={colors.warning} />
-            <Text style={s.countdownTxt}>{countdownLabel(matchDayDate)}</Text>
+            <Text style={s.countdownTxt}>{countdown}</Text>
           </View>
         ) : null}
       </View>

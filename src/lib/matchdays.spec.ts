@@ -12,6 +12,7 @@ import {
   playersCommittedElsewhere,
   upcomingRounds,
   formatRoundDates,
+  upcomingTeamGames,
 } from './matchdays'
 import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
 
@@ -301,6 +302,52 @@ describe('formatMatchDayRange', () => {
   it('keeps the month on both ends across two months (#450)', () => {
     // "mar. 13 – sam. 18 mai" reads as 13 to 18 May.
     expect(formatMatchDayRange('2026-10-13', '2027-05-18')).toBe('mar. 13 oct. – mar. 18 mai')
+  })
+})
+
+describe('upcomingTeamGames', () => {
+  // The report behind #561: a match played on Thursday 17 September, still at
+  // the head of "Prochains matchs" on Friday the 18th under an "Aujourd'hui"
+  // badge, because the app cut the list at the week instead of the day.
+  const mdMap = new Map<string, MatchDay>([
+    ['md-1', { id: 'md-1', groupId: 'group-1', number: 1, date: '2026-09-17' }],
+    ['md-2', { id: 'md-2', groupId: 'group-1', number: 2, date: '2026-09-24' }],
+    ['md-3', { id: 'md-3', groupId: 'group-1', number: 3, date: '2026-10-01' }],
+  ])
+  const g = (id: string, matchDayId: string, date?: string): Game => ({
+    id, matchDayId, homeTeamId: 'team-1', awayTeamId: 'opp-1', ...(date ? { date } : {}),
+  })
+
+  it('drops a match played earlier the same week', () => {
+    const upcoming = upcomingTeamGames([g('g1', 'md-1'), g('g2', 'md-2')], mdMap, '2026-09-18')
+    expect(upcoming.map((x) => x.id)).toEqual(['g2'])
+  })
+
+  it('keeps the match being played today', () => {
+    const upcoming = upcomingTeamGames([g('g1', 'md-1'), g('g2', 'md-2')], mdMap, '2026-09-17')
+    expect(upcoming.map((x) => x.id)).toEqual(['g1', 'g2'])
+  })
+
+  it('sorts by date, soonest first, whatever order the games arrive in', () => {
+    const upcoming = upcomingTeamGames(
+      [g('g3', 'md-3'), g('g1', 'md-1'), g('g2', 'md-2')], mdMap, '2026-09-01',
+    )
+    expect(upcoming.map((x) => x.id)).toEqual(['g1', 'g2', 'g3'])
+  })
+
+  it("reads the game's own date before its journée's", () => {
+    // The journée is the 17th, but this fixture was moved to the 19th (#271):
+    // it is still to come on the 18th.
+    const upcoming = upcomingTeamGames([g('g1', 'md-1', '2026-09-19')], mdMap, '2026-09-18')
+    expect(upcoming.map((x) => x.id)).toEqual(['g1'])
+  })
+
+  it('drops a game whose journée is unknown rather than guessing a side', () => {
+    expect(upcomingTeamGames([g('g9', 'md-gone')], mdMap, '2026-09-01')).toEqual([])
+  })
+
+  it('is empty once the season is behind', () => {
+    expect(upcomingTeamGames([g('g1', 'md-1'), g('g2', 'md-2')], mdMap, '2026-11-01')).toEqual([])
   })
 })
 
