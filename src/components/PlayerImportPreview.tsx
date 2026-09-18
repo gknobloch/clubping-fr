@@ -13,6 +13,47 @@ function rowName(row: PlayerImportRow): string {
   return `${held('firstName') ?? row.licence.firstName} ${held('lastName') ?? row.licence.lastName}`
 }
 
+/**
+ * The question a name match puts to the admin (#566).
+ *
+ * A question and not an answer: FFTT gives no address and no birth date on a
+ * licence record, so a name is all there is to go on, and two people in one
+ * club can share one. Linking on our own would silently fuse them — worse than
+ * the duplicate it avoids.
+ *
+ * The wording states what is true of the member we found and nothing about what
+ * follows, which is the same rule #482 and #495 settled on: the licence number
+ * is what is wrong, and saying "sera fusionné" would promise more than a tick
+ * on one field does.
+ */
+function LinkOffer({
+  row, onConfirm,
+}: {
+  row: PlayerImportRow
+  onConfirm: (licence: string, memberId: string | null) => void
+}) {
+  const link = row.link!
+  return (
+    <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+      <p className="text-sm text-amber-900">
+        <span className="font-medium">{link.name}</span>
+        {link.archived ? ' (archivé)' : ''} figure déjà dans le club
+        {link.heldLicence
+          ? <> sous la licence <span className="font-mono">{link.heldLicence}</span>.</>
+          : <> sans numéro de licence.</>}
+        {' '}Est-ce la même personne&nbsp;?
+      </p>
+      <button
+        type="button"
+        onClick={() => onConfirm(row.licence.licence, link.id)}
+        className="mt-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-sm font-medium text-amber-900 hover:bg-amber-100"
+      >
+        Oui, c’est la même — mettre à jour ce membre
+      </button>
+    </div>
+  )
+}
+
 const STATUS_BADGE: Record<PlayerImportRow['status'], { label: string; className: string }> = {
   new: { label: 'Nouveau', className: 'bg-green-100 text-green-800' },
   changed: { label: 'Modifié', className: 'bg-amber-100 text-amber-800' },
@@ -29,13 +70,16 @@ const STATUS_BADGE: Record<PlayerImportRow['status'], { label: string; className
  * would bury the handful of lines that matter.
  */
 export function PlayerImportPreview({
-  rows, selected, onToggleField, onToggleRow,
+  rows, selected, confirmed, onToggleField, onToggleRow, onConfirmLink,
 }: {
   rows: PlayerImportRow[]
   /** Selected `licence:field` keys. */
   selected: Set<string>
+  /** Accepted name matches: licence number → member id (#566). */
+  confirmed: ReadonlyMap<string, string>
   onToggleField: (licence: string, field: PlayerSyncField['key']) => void
   onToggleRow: (licence: string, checked: boolean) => void
+  onConfirmLink: (licence: string, memberId: string | null) => void
 }) {
   return (
     <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -44,6 +88,7 @@ export function PlayerImportPreview({
         const badge = STATUS_BADGE[row.status]
         const rowChecked = fields.length > 0 && fields.every((f) => selected.has(fieldKey(row.licence.licence, f.key)))
         const rowId = `import-player-${row.licence.licence}`
+        const isLinked = confirmed.has(row.licence.licence)
         return (
           <li key={row.licence.licence} className="px-3 py-2.5">
             <div className="flex items-start gap-3">
@@ -65,6 +110,20 @@ export function PlayerImportPreview({
                     {badge.label}
                   </span>
                 </label>
+
+                {row.link && <LinkOffer row={row} onConfirm={onConfirmLink} />}
+                {isLinked && (
+                  <p className="mt-1 text-sm text-slate-600">
+                    Rattaché à un membre du club.{' '}
+                    <button
+                      type="button"
+                      onClick={() => onConfirmLink(row.licence.licence, null)}
+                      className="font-medium text-accent-700 underline"
+                    >
+                      Annuler
+                    </button>
+                  </p>
+                )}
 
                 {fields.length === 0 ? (
                   <p className="mt-0.5 text-sm text-slate-500">Rien à écrire — déjà à jour.</p>

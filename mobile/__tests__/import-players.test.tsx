@@ -25,6 +25,7 @@ const mockData = {
   clubs: [] as Club[],
   phases: [] as Phase[],
   players: [] as Player[],
+  users: [] as User[],
   playerPhasePoints: [] as never[],
   playerSeasonCategories: [] as never[],
   applyPlayerImport,
@@ -114,6 +115,7 @@ beforeEach(() => {
   mockData.clubs = [club]
   mockData.phases = [phase]
   mockData.players = []
+  mockData.users = []
   mockData.playerPhasePoints = []
   mockData.playerSeasonCategories = []
   signIn('club_admin')
@@ -444,6 +446,80 @@ describe('la recherche par licence', () => {
     await openScreen()
 
     expect(screen.getByTestId('import-licence-search').props.accessibilityState.disabled).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Un homonyme déjà au club (#566)
+// ---------------------------------------------------------------------------
+describe('le rattachement d’un homonyme', () => {
+  /** The club holds Nathan under a licence number that is wrong. */
+  const wrongNumber = () => {
+    mockData.users = [{
+      id: 'p-old', role: 'player', isPlayer: true,
+      firstName: 'Nathan', lastName: 'Santoro', licenseNumber: '681243', clubId: 'c1',
+    }]
+    ffttAnswers(listing(record({ licence: '6810333', nom: 'SANTORO', prenom: 'Nathan' })))
+  }
+
+  it('asks rather than creating a second Nathan Santoro', async () => {
+    wrongNumber()
+    await openScreen()
+    expect(screen.getByTestId('import-link-6810333')).toBeTruthy()
+  })
+
+  // The bug this fixes: with nobody offered, the deck's only answer was to
+  // create, and the club ended up holding the same licensee twice.
+  it('still creates when the match is left unconfirmed', async () => {
+    wrongNumber()
+    await openScreen()
+    await importAndConfirm()
+    expect(applyPlayerImport).toHaveBeenCalledTimes(1)
+    expect(applyPlayerImport.mock.calls[0][0].created).toBe(1)
+  })
+
+  it('corrects the member once confirmed, licence number and all', async () => {
+    wrongNumber()
+    await openScreen()
+    await act(async () => { fireEvent.press(screen.getByTestId('import-link-6810333')) })
+    await importAndConfirm()
+    const writes = applyPlayerImport.mock.calls[0][0]
+    expect(writes.creates).toEqual([])
+    expect(writes.created).toBe(0)
+    expect(writes.updates).toEqual([{ id: 'p-old', patch: { licenseNumber: '6810333' } }])
+  })
+
+  // Confirming is reversible: a namesake who turns out to be somebody else
+  // must still be creatable without reloading the whole listing.
+  it('goes back to creating when the rattachement is withdrawn', async () => {
+    wrongNumber()
+    await openScreen()
+    await act(async () => { fireEvent.press(screen.getByTestId('import-link-6810333')) })
+    await act(async () => { fireEvent.press(screen.getByTestId('import-unlink-6810333')) })
+    await importAndConfirm()
+    expect(applyPlayerImport.mock.calls[0][0].created).toBe(1)
+  })
+
+  // An archived namesake is where the real duplicate was found.
+  it('offers an archived namesake too', async () => {
+    mockData.users = [{
+      id: 'p-old', role: 'player', isPlayer: true, status: 'archived',
+      firstName: 'Nathan', lastName: 'Santoro', licenseNumber: '681243', clubId: 'c1',
+    }]
+    ffttAnswers(listing(record({ licence: '6810333', nom: 'SANTORO', prenom: 'Nathan' })))
+    await openScreen()
+    expect(screen.getByTestId('import-link-6810333')).toBeTruthy()
+  })
+
+  // A member of the club next door is not this club's licensee.
+  it('never offers a namesake from another club', async () => {
+    mockData.users = [{
+      id: 'p-other', role: 'player', isPlayer: true,
+      firstName: 'Nathan', lastName: 'Santoro', licenseNumber: '681243', clubId: 'c2',
+    }]
+    ffttAnswers(listing(record({ licence: '6810333', nom: 'SANTORO', prenom: 'Nathan' })))
+    await openScreen()
+    expect(screen.queryByTestId('import-link-6810333')).toBeNull()
   })
 })
 
