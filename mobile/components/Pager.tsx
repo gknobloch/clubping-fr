@@ -1,6 +1,7 @@
 import { useRef } from 'react'
-import { View, StyleSheet, PanResponder } from 'react-native'
+import { View, Text, StyleSheet, PanResponder } from 'react-native'
 import { colors } from '@/constants/colors'
+import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
 // Le carrousel de l'app (#552, #555)
@@ -58,6 +59,36 @@ export function PagerDots({
         <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
       ))}
     </View>
+  )
+}
+
+/**
+ * Where you are in the row, in whichever form the row can carry: the dots when
+ * they fit, and «12 / 53» when they do not.
+ *
+ * One component decides, so no caller has to ask "are there too many for
+ * dots?" — the question `PagerDots` alone would leave each of them holding.
+ * The fraction is not a lesser fallback either: it is the only form that says
+ * *how many* there are, which is the thing a fifty-three card deck is asked
+ * first.
+ */
+export function PagerPosition({
+  index,
+  total,
+  testID = 'pager-position',
+}: {
+  index: number
+  total: number
+  testID?: string
+}) {
+  // One card is not a carousel — the same thing `gameNeighbours` says by
+  // returning `null` on an axis of one.
+  if (total < 2) return null
+  if (total <= MAX_DOTS) return <PagerDots index={index} total={total} testID={testID} />
+  return (
+    <Text testID={testID} style={styles.position}>
+      {index + 1} / {total}
+    </Text>
   )
 }
 
@@ -122,4 +153,14 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: -4, marginBottom: -2 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
   dotActive: { backgroundColor: colors.accent, width: 18 },
+  // Sits where the dots would, and reads as what they are: the indicator under
+  // the card, not a line of the card itself.
+  position: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+    marginTop: -4,
+    marginBottom: -2,
+  },
 })

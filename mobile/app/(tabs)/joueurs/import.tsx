@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { Screen, contentWidth } from '@/components/Screen'
-import { PagerDots, usePagerSwipe } from '@/components/Pager'
+import { PagerPosition, usePagerSwipe } from '@/components/Pager'
 import { colors } from '@/constants/colors'
 import { fonts, displayFonts } from '@/constants/typography'
 import { canManageClub } from '@/utils/roles'
@@ -431,17 +431,25 @@ export default function ImportPlayersScreen() {
 
         {row ? (
           <>
+            {/* How big the job is, before the first card rather than after the
+                last. It counts the deck and not the ticks, so it is the same
+                number the position below counts against — what the import will
+                actually write is the confirmation's to say, once. */}
+            <Text testID="import-deck-count" style={s.deckCount}>
+              {deck.length === 1
+                ? '1 licencié à revoir'
+                : `${deck.length} licenciés à revoir`}
+            </Text>
             <LicenceCard
               row={row}
               selected={selected}
               onToggleField={toggleField}
               onSetRow={setRow}
-              position={`${index + 1} / ${deck.length}`}
             />
-            {/* Above `MAX_DOTS` this draws nothing and the card's own
-                «12 / 60» is the position — a club's licence list is routinely
-                longer than a row of dots can indicate. */}
-            <PagerDots testID="import-dots" index={index} total={deck.length} />
+            {/* Dots while they fit, «12 / 53» past that — see `PagerPosition`.
+                A club's licence list is routinely longer than a row of dots
+                can indicate, and that is the deck this screen usually holds. */}
+            <PagerPosition testID="import-position" index={index} total={deck.length} />
             {deck.length > 1 && (
               <Text style={s.hint}>
                 Balayez pour passer au licencié suivant.
@@ -527,13 +535,12 @@ const STATUS_BADGE: Record<'new' | 'changed', { label: string; bg: string; fg: s
 }
 
 function LicenceCard({
-  row, selected, onToggleField, onSetRow, position,
+  row, selected, onToggleField, onSetRow,
 }: {
   row: PlayerImportRow
   selected: Set<string>
   onToggleField: (licence: string, key: PlayerSyncField['key']) => void
   onSetRow: (row: PlayerImportRow, taken: boolean) => void
-  position: string
 }) {
   const fields = writableFields(row.fields)
   const taken = fields.filter((f) => selected.has(fieldKey(row.licence.licence, f.key)))
@@ -545,9 +552,7 @@ function LicenceCard({
       <View style={s.cardHead}>
         <View style={s.cardHeadBody}>
           <Text style={s.name} numberOfLines={1}>{rowName(row)}</Text>
-          <Text style={s.licence}>
-            {row.licence.licence} · {position}
-          </Text>
+          <Text style={s.licence}>{row.licence.licence}</Text>
         </View>
         <View style={[s.badge, { backgroundColor: badge.bg }]}>
           <Text style={[s.badgeTxt, { color: badge.fg }]}>{badge.label}</Text>
@@ -662,6 +667,7 @@ const s = StyleSheet.create({
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   notice: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', fontFamily: fonts.regular },
   lede: { fontSize: 13, color: colors.textSecondary, fontFamily: fonts.regular },
+  deckCount: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
 
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   searchInput: {

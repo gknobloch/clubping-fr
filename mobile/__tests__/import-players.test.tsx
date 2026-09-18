@@ -230,8 +230,10 @@ describe('le carrousel', () => {
   it('neither points nor invites a swipe when there is one card to review', async () => {
     await openScreen()
 
-    expect(screen.queryByTestId('import-dots')).toBeNull()
+    expect(screen.queryByTestId('import-position')).toBeNull()
     expect(screen.queryByText(/Balayez/)).toBeNull()
+    // The count still says what there is, in the singular.
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('1 licencié à revoir')
   })
 
   const three = () => listing(
@@ -244,9 +246,56 @@ describe('le carrousel', () => {
     ffttAnswers(three())
     await openScreen()
 
-    expect(screen.getByTestId('import-dots').children).toHaveLength(3)
+    expect(screen.getByTestId('import-position').children).toHaveLength(3)
     expect(screen.getByTestId('import-card-425881')).toBeTruthy()
     expect(screen.queryByTestId('import-card-392885')).toBeNull()
+  })
+
+  it('says how big the job is before the first card', async () => {
+    ffttAnswers(three())
+    await openScreen()
+
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('3 licenciés à revoir')
+  })
+
+  it('counts the deck, not the ticks — the position counts against the same number', async () => {
+    ffttAnswers(three())
+    await openScreen()
+
+    fireEvent.press(screen.getByTestId('import-ignore-425881'))
+
+    // Still three to review; what will be WRITTEN is the confirmation's to say.
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('3 licenciés à revoir')
+  })
+
+  it('counts in words for a club-sized deck, where dots cannot', async () => {
+    // The real case: Rixheim lists sixty, and a row of sixty dots is a dotted
+    // line with no current dot in it.
+    const many = Array.from({ length: 40 }, (_, i) =>
+      record({ licence: String(500000 + i), nom: `NOM${i}` }))
+    ffttAnswers(listing(...many))
+    await openScreen()
+
+    expect(screen.getByTestId('import-deck-count')).toHaveTextContent('40 licenciés à revoir')
+    expect(screen.getByTestId('import-position')).toHaveTextContent('1 / 40')
+
+    act(() => mockSwipeHandler?.(1))
+    expect(screen.getByTestId('import-position')).toHaveTextContent('2 / 40')
+
+    act(() => mockSwipeHandler?.(1))
+    expect(screen.getByTestId('import-position')).toHaveTextContent('3 / 40')
+  })
+
+  it('runs the position along as the finger does', async () => {
+    ffttAnswers(three())
+    await openScreen()
+    expect(screen.getByTestId('import-position').children).toHaveLength(3)
+
+    act(() => mockSwipeHandler?.(1))
+
+    // Three dots still, the second one lit — the fraction takes over only past
+    // `MAX_DOTS`, which is `Pager.test.tsx`'s business.
+    expect(screen.getByTestId('import-card-392885')).toBeTruthy()
   })
 
   it('moves to the next card on a swipe, and back on the other one', async () => {
@@ -271,14 +320,6 @@ describe('le carrousel', () => {
     act(() => mockSwipeHandler?.(1))
     act(() => mockSwipeHandler?.(1))
     expect(screen.getByTestId('import-card-684545')).toBeTruthy()
-  })
-
-  it('says where it is on the card, so a long deck still has a position', async () => {
-    // Past `MAX_DOTS` there are no dots, and this is all there is (#555).
-    ffttAnswers(three())
-    await openScreen()
-
-    expect(screen.getByText('425881 · 1 / 3')).toBeTruthy()
   })
 
   it('keeps every card in the count, not just the one on screen', async () => {
