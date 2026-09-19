@@ -17,6 +17,9 @@ import { MatchHeader } from '@/components/MatchHeader'
 import { useOpenTeam } from '@/utils/openFiche'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import type { Player } from '@shared/types'
+import { LIST_PANE_WIDTH, useLayout } from '@/constants/layout'
+import { usePaneSelection } from '@/utils/paneSelection'
+import { MatchDetail } from '@/components/MatchDetail'
 import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
@@ -26,12 +29,26 @@ import { fonts } from '@/constants/typography'
 // title shows the team name; a footer row links to the team's own page so the
 // screen is never a dead-end when reached from a match.
 // ---------------------------------------------------------------------------
+/** Ce que le rail sélectionne quand ce n'est pas un match. */
+const RESUME = 'resume'
+
+/** «sam. 5 sept.» — tout ce qu'une entrée de rail a la place de dire. */
+function shortDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
 export default function PhaseGamesScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>()
   const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
   const openTeam = useOpenTeam()
+  const { isTwoPane } = useLayout()
+  const { selectedId, select } = usePaneSelection()
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
@@ -78,6 +95,11 @@ export default function PhaseGamesScreen() {
   const team = teams.find((t) => t.id === currentEntry?.teamId)
   const teamGames = currentEntry?.games ?? []
 
+  // Lu sur la liste plutôt que gardé à part : le commutateur change de phase,
+  // où le match sélectionné n'existe pas — le volet retombe alors sur
+  // « Résumé » tout seul, et retrouve le match au retour.
+  const selectedGame = teamGames.find((g) => g.id === selectedId)
+
   const teamSelections = useMemo(
     () => (team ? gameSelections.filter((s) => s.teamId === team.id) : []),
     [gameSelections, team],
@@ -114,63 +136,153 @@ export default function PhaseGamesScreen() {
     )
   }
 
+  const switcher = currentEntry ? (
+    <Switcher
+      title={currentEntry.label}
+      onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
+      onNext={phaseIndex < ordered.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
+    />
+  ) : null
+
+  /** L'effectif et ce qu'il a joué — le « Résumé » du rail sur tablette. */
+  const members =
+    (rosterPlayers.length > 0 || borrowedPlayers.length > 0) && team ? (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          Joueurs ({rosterPlayers.length + borrowedPlayers.length})
+        </Text>
+        {rosterPlayers.map((p) => (
+          <TouchableOpacity
+            key={p.id}
+            style={styles.memberRow}
+            onPress={() => setSelectedPlayer(p)}
+          >
+            <Text style={styles.memberName}>{p.firstName} {p.lastName}</Text>
+            {p.id === team.captainId && <Text style={styles.capBadge}>Cap.</Text>}
+            <Text style={styles.gamesCount}>{playedCount.get(p.id) ?? 0}/{totalGames}</Text>
+          </TouchableOpacity>
+        ))}
+        {borrowedPlayers.map((p) => (
+          <TouchableOpacity
+            key={p.id}
+            style={styles.memberRow}
+            onPress={() => setSelectedPlayer(p)}
+          >
+            <Text style={styles.memberName}>{p.firstName} {p.lastName}</Text>
+            <Text style={styles.renforceBadge}>Renfort</Text>
+            <Text style={styles.gamesCount}>{playedCount.get(p.id) ?? 0}/{totalGames}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    ) : null
+
+  /** Jamais un cul-de-sac : la fiche de l'équipe est à un geste. */
+  const teamLink = team ? (
+    <TouchableOpacity style={styles.linkRow} onPress={() => openTeam(team.id)}>
+      <View style={styles.linkLeft}>
+        <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.linkText}>Voir la fiche équipe</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+    </TouchableOpacity>
+  ) : null
+
+  const quickView = selectedPlayer && team && (
+    <PlayerQuickView
+      playerId={selectedPlayer.id}
+      team={team}
+      phaseLabel={currentEntry?.label}
+      onClose={() => setSelectedPlayer(null)}
+    />
+  )
+
+  // -------------------------------------------------------------------------
+  // Deux volets, au-dessus du seuil tablette (#585)
+  //
+  // Le rail *est* la liste des matchs, donc le volet droit porte le match lui-
+  // même — disponibilités, composition, feuille — plutôt qu'une carte qu'il
+  // faudrait encore ouvrir. « Résumé » garde ce que l'écran montrait en haut :
+  // l'effectif et ce que chacun a joué.
+  // -------------------------------------------------------------------------
+  if (isTwoPane) {
+    return (
+      <Screen style={styles.split}>
+        <View style={styles.railPane}>
+          <ScrollView contentContainerStyle={styles.railList}>
+            {switcher}
+            <TouchableOpacity
+              testID="rail-resume"
+              style={[styles.railRow, !selectedGame && styles.railRowSelected]}
+              accessibilityState={!selectedGame ? { selected: true } : {}}
+              onPress={() => select(RESUME)}
+            >
+              <Text style={[styles.railResume, !selectedGame && styles.railTextSelected]}>
+                Résumé
+              </Text>
+            </TouchableOpacity>
+
+            {teamGames.map((g) => {
+              const md = g.matchDay
+              if (!md || !team) return null
+              const isHome = g.homeTeamId === team.id
+              const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
+              const isSelected = g.id === selectedGame?.id
+              return (
+                <TouchableOpacity
+                  key={g.id}
+                  testID={`rail-game-${g.id}`}
+                  style={[styles.railRow, isSelected && styles.railRowSelected]}
+                  accessibilityState={isSelected ? { selected: true } : {}}
+                  onPress={() => select(g.id)}
+                >
+                  {/* L'adversaire et le côté, puis la journée et la date, et
+                      rien d'autre : le reste est dans le volet à côté. */}
+                  <View style={styles.railTop}>
+                    <Ionicons
+                      name={isHome ? 'home' : 'paper-plane-outline'}
+                      size={13}
+                      color={isSelected ? colors.accent : colors.textSecondary}
+                    />
+                    <Text
+                      style={[styles.railOpponent, isSelected && styles.railTextSelected]}
+                      numberOfLines={1}
+                    >
+                      {opp ? getTeamName(opp, clubs) : '—'}
+                    </Text>
+                  </View>
+                  <Text style={styles.railMeta}>
+                    J{md.number} · {shortDate(gameDate(g, md))}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+
+            {totalGames === 0 && <Text style={styles.empty}>Aucun match trouvé.</Text>}
+          </ScrollView>
+        </View>
+
+        <View style={styles.detailPane}>
+          {selectedGame && team ? (
+            <MatchDetail gameId={selectedGame.id} teamId={team.id} embedded />
+          ) : (
+            <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
+              {members}
+              {teamLink}
+            </ScrollView>
+          )}
+        </View>
+
+        {quickView}
+      </Screen>
+    )
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
-
-        {/* Phase switcher — aligned with Équipes / Mes matchs */}
-        {currentEntry && (
-          <Switcher
-            title={currentEntry.label}
-            onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
-            onNext={phaseIndex < ordered.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
-          />
-        )}
-
-        {/* Member stats */}
-        {(rosterPlayers.length > 0 || borrowedPlayers.length > 0) && team && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Joueurs ({rosterPlayers.length + borrowedPlayers.length})
-            </Text>
-            {rosterPlayers.map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={styles.memberRow}
-                onPress={() => setSelectedPlayer(p)}
-              >
-                <Text style={styles.memberName}>{p.firstName} {p.lastName}</Text>
-                {p.id === team.captainId && <Text style={styles.capBadge}>Cap.</Text>}
-                <Text style={styles.gamesCount}>{playedCount.get(p.id) ?? 0}/{totalGames}</Text>
-              </TouchableOpacity>
-            ))}
-            {borrowedPlayers.map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={styles.memberRow}
-                onPress={() => setSelectedPlayer(p)}
-              >
-                <Text style={styles.memberName}>{p.firstName} {p.lastName}</Text>
-                <Text style={styles.renforceBadge}>Renfort</Text>
-                <Text style={styles.gamesCount}>{playedCount.get(p.id) ?? 0}/{totalGames}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Not a dead-end: jump to the team's own page (for the selected phase). */}
-        {team && (
-          <TouchableOpacity
-            style={styles.linkRow}
-            onPress={() => openTeam(team.id)}
-          >
-            <View style={styles.linkLeft}>
-              <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.linkText}>Voir la fiche équipe</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
+        {switcher}
+        {members}
+        {teamLink}
 
         {/* Games list — tappable cards aligned with Journées / Mes matchs. */}
         <Text style={styles.listLabel}>Matchs ({totalGames})</Text>
@@ -229,14 +341,7 @@ export default function PhaseGamesScreen() {
 
       </ScrollView>
 
-      {selectedPlayer && team && (
-        <PlayerQuickView
-          playerId={selectedPlayer.id}
-          team={team}
-          phaseLabel={currentEntry?.label}
-          onClose={() => setSelectedPlayer(null)}
-        />
-      )}
+      {quickView}
     </Screen>
   )
 }
@@ -246,6 +351,34 @@ export default function PhaseGamesScreen() {
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
   scroll: { gap: 12, padding: 16, paddingBottom: 32 },
+
+  split: { flexDirection: 'row' },
+  railPane: {
+    width: LIST_PANE_WIDTH,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.border,
+  },
+  detailPane: { flex: 1 },
+  railList: { padding: 16, gap: 8 },
+  railRow: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  // La surface rouge pâle dont l'app se sert déjà pour dire « celle-ci »
+  // (#447) — la même que la liste des équipes à côté de sa fiche.
+  railRowSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  railTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  railResume: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  railOpponent: { flex: 1, fontSize: 15, color: colors.textPrimary },
+  railTextSelected: { color: colors.accent, fontFamily: fonts.semiBold },
+  railMeta: { fontSize: 12, color: colors.textSecondary },
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', padding: 24 },
 
   section: {
