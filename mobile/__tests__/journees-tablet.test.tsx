@@ -533,3 +533,73 @@ describe('l’éligibilité aux compétitions', () => {
     expect(screen.queryByTestId('compose-team-t2')).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// La ligne « Résumé » (#580)
+//
+// The grid's Compo cells each state one player's team, so a line-up holding
+// one player too many looks correct on every row it has. This row is the only
+// thing on the grid that answers about the journée rather than about a player,
+// and what it counts is the line-up — never the rows above it.
+// ---------------------------------------------------------------------------
+describe('la ligne « Résumé »', () => {
+  /** In the club, in no roster: «Autres joueurs du club», and fieldable. */
+  const spare = (n: number): Player => ({
+    ...captain, id: `s${n}`, firstName: `Renfort${n}`, lastName: 'Muller',
+    licenseNumber: `990070${n}`,
+  })
+
+  const renderTablet = () => {
+    setWindowSize(TABLET_SMALL)
+    render(<JourneesScreen />, { metrics: TABLET })
+    layoutAt(LANDSCAPE)
+  }
+
+  it('compte la composition, et non les lignes de la section', () => {
+    // The whole of #580 in one assertion. t1's roster is two players and the
+    // line-up for J1 names five: the three others come from «Autres joueurs du
+    // club», so no row of this section shows them. Counting rows would print
+    // 2/4 under a compo that holds five names.
+    mockData.players = [captain, mate, spare(1), spare(2), spare(3)]
+    mockData.gameSelections = [
+      { teamId: 't1', gameId: 'g1', playerIds: ['p1', 'p2', 's1', 's2', 's3'] },
+    ]
+
+    renderTablet()
+
+    expect(screen.getByTestId('summary-compo-0')).toHaveTextContent('5/4')
+  })
+
+  it('compte les dispos sur l’effectif', () => {
+    mockData.gameAvailabilities = [
+      { playerId: 'p1', gameId: 'g1', status: 'available' },
+      { playerId: 'p2', gameId: 'g1', status: 'unavailable' },
+    ]
+
+    renderTablet()
+
+    expect(screen.getByTestId('summary-dispo-0')).toHaveTextContent('1/4')
+  })
+
+  it('n’annonce rien quand l’équipe ne joue pas la journée', () => {
+    // «—», not 0/4: an exempt team has no line-up to be short of, and 0/4
+    // would read as a compo nobody has made.
+    mockData.games = mockData.games.filter((g) => g.id !== 'g1')
+
+    renderTablet()
+
+    expect(screen.getByTestId('summary-dispo-0')).toHaveTextContent('—')
+    expect(screen.getByTestId('summary-compo-0')).toHaveTextContent('—')
+  })
+
+  it('ne la met pas sous « Autres joueurs du club »', () => {
+    // That section has no fixture of its own, so there is nothing it could be
+    // short of — one team on screen, one Résumé row.
+    mockData.players = [captain, mate, spare(1)]
+
+    renderTablet()
+
+    expect(screen.getByText('Autres joueurs du club')).toBeTruthy()
+    expect(screen.getAllByTestId('matrix-summary')).toHaveLength(1)
+  })
+})

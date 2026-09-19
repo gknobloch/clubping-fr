@@ -86,6 +86,53 @@ export function matrixColumns(available: number, count: number) {
   }
 }
 
+/**
+ * What the Résumé row states for one journée (#580): how many of the roster
+ * answered available, how many the line-up names, and how many the division
+ * requires.
+ *
+ * `selected` counts the **line-up**, never the rows of this section. A player
+ * fielded from «Autres joueurs du club» is on the line-up and in no section
+ * above it — which is exactly how a compo reaches 5 for a 4-player division
+ * without any of the four rows showing it.
+ */
+export interface MatrixTotals {
+  available: number
+  selected: number
+  required: number
+}
+
+/**
+ * The Résumé row's two verdicts, and they are not the same shape.
+ *
+ * Availability is a floor: more than enough is fine, and a club with nine
+ * willing players has not done anything wrong. A line-up is an exact count —
+ * the feuille de match has `required` places and no more — so `===` is what
+ * turns 5/4 red as well as 3/4. The web's footer has always read this way
+ * (`src/pages/admin/MatchDaysPage.tsx`); the asymmetry is the whole of #580,
+ * so it is pinned here rather than written inline twice.
+ */
+export function summaryVerdict(totals: MatrixTotals): {
+  availableOk: boolean
+  selectedOk: boolean
+} {
+  return {
+    availableOk: totals.available >= totals.required,
+    selectedOk: totals.selected === totals.required,
+  }
+}
+
+/**
+ * The Résumé row's two tints: deliberately the green and red of the Dispo
+ * answers directly above it rather than a pair of its own. The row states a
+ * verdict about the columns it sits under, and a second green on the same grid
+ * would read as a second meaning.
+ */
+const VERDICT = {
+  ok: { bg: AVAIL.available.bg, text: AVAIL.available.color },
+  off: { bg: AVAIL.unavailable.bg, text: AVAIL.unavailable.color },
+}
+
 /** One journée's column pair, and this team's fixture for it. */
 export interface MatrixDay {
   /** The journée's number, as `J5`. */
@@ -99,6 +146,12 @@ export interface MatrixDay {
   unconfirmed: boolean
   isHome: boolean
   opponentName: string
+  /**
+   * The Résumé row's counts (#580). Absent in a section with no team, and
+   * absent when the team sits the round out: there is no fixture to be short
+   * of, which is the «—» the web prints in the same two cells.
+   */
+  totals?: MatrixTotals
 }
 
 /** One row: a player of the team, and their answers across the journées. */
@@ -394,6 +447,71 @@ export function MatchDayMatrix({
                   : 'Aucun autre joueur dans le club.'}
             </Text>
           )}
+
+          {/* Résumé (#580) — the web's `tfoot`, and the only thing on this
+              grid that answers about the *journée* rather than about a player.
+              It is what says a compo is wrong: the Compo cells each show one
+              player's team, so five names in a four-place line-up look
+              correct on all five rows. Roster sections only — «Autres joueurs
+              du club» has no fixture of its own to count. */}
+          {isTeamSection && (
+            <View style={s.summaryRow} testID="matrix-summary">
+              <Text
+                style={[s.summaryLabel, { width: c.joueur + c.dispo + c.joues + c.brulage }]}
+              >
+                Résumé
+              </Text>
+              {days.map((d, i) => {
+                const verdict = d.totals ? summaryVerdict(d.totals) : null
+                return (
+                  <View key={i} style={s.pair}>
+                    <View
+                      testID={`summary-dispo-${i}`}
+                      style={[
+                        s.summaryCell,
+                        { width: c.day },
+                        verdict && {
+                          backgroundColor: verdict.availableOk ? VERDICT.ok.bg : VERDICT.off.bg,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.summaryText,
+                          verdict && {
+                            color: verdict.availableOk ? VERDICT.ok.text : VERDICT.off.text,
+                          },
+                        ]}
+                      >
+                        {d.totals ? `${d.totals.available}/${d.totals.required}` : '—'}
+                      </Text>
+                    </View>
+                    <View
+                      testID={`summary-compo-${i}`}
+                      style={[
+                        s.summaryCell,
+                        { width: c.day },
+                        verdict && {
+                          backgroundColor: verdict.selectedOk ? VERDICT.ok.bg : VERDICT.off.bg,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.summaryText,
+                          verdict && {
+                            color: verdict.selectedOk ? VERDICT.ok.text : VERDICT.off.text,
+                          },
+                        ]}
+                      >
+                        {d.totals ? `${d.totals.selected}/${d.totals.required}` : '—'}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -578,4 +696,31 @@ const s = StyleSheet.create({
   controlTextEmpty: { color: colors.textSecondary },
 
   empty: { fontSize: 15, color: colors.textSecondary, padding: 16 },
+
+  // The footer reads as a footer: the header's background, and a full-weight
+  // top border where the rows above it use a hairline.
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+    color: colors.textPrimary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  summaryCell: { justifyContent: 'center', paddingVertical: 8 },
+  summaryText: {
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    // Three journées of counts sit in a row; proportional digits make the
+    // column ripple as the numbers change.
+    fontVariant: ['tabular-nums'],
+  },
 })

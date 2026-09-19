@@ -286,6 +286,7 @@ export default function JourneesScreen() {
   }
 
   function matrixDays(team: Team): MatrixDay[] {
+    const required = perGame(team)
     return visibleGroups.map((group) => {
       const { matchDay, game } = teamGame(team, group.matchDays)
       const homeTeam = game ? teams.find((t) => t.id === game.homeTeamId) : undefined
@@ -304,6 +305,22 @@ export default function JourneesScreen() {
         unconfirmed: !!game && !confirmed,
         isHome,
         opponentName: opp ? getTeamName(opp, clubs) : '?',
+        // Résumé (#580). The two counts are read from different places on
+        // purpose, as the web's footer reads them: availability over the
+        // *roster*, because that is who was asked, and the line-up over
+        // `selectionOf`, because that is who is fielded — which can include a
+        // player from «Autres joueurs du club», listed in no roster and in no
+        // row of this section. Counting the section's own rows would report
+        // 4/4 on the very compo that has five names in it.
+        totals: game
+          ? {
+              available: team.playerIds.filter(
+                (pid) => availabilityOf(pid, game.id) === 'available',
+              ).length,
+              selected: selectionOf(team.id, game.id).length,
+              required,
+            }
+          : undefined,
       }
     })
   }
