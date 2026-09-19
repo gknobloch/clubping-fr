@@ -685,10 +685,13 @@ export default function JourneesScreen() {
                         const group = visibleGroups[dayIndex]
                         if (player && day && group) setComposing({ player, day, group })
                       }}
+                      // La journée, pas seulement ce match : ce qu'on tient en
+                      // cliquant une colonne, ce sont les rencontres du club ce
+                      // jour-là (#585).
                       onOpenGame={(game) =>
                         router.push({
-                          pathname: '/match/[id]',
-                          params: { id: game.id, teamId: team.id, from: 'round' },
+                          pathname: '/round',
+                          params: { gameId: game.id, teamId: team.id },
                         })
                       }
                       onOpenPlayer={setQuickViewId}

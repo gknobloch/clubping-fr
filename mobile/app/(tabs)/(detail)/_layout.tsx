@@ -81,6 +81,7 @@ export default function DetailLayout() {
       <Stack.Screen name="team/[id]" options={{ title: 'Équipe' }} />
       <Stack.Screen name="team/phase-games" options={{ title: 'Matchs' }} />
       <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
+      <Stack.Screen name="round" options={{ title: 'Journée' }} />
       <Stack.Screen name="mes-matchs" options={{ title: 'Mes matchs' }} />
     </Stack>
   )

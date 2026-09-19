@@ -259,18 +259,19 @@ describe('sur une tablette', () => {
     expect(screen.queryByTestId('availability-sheet')).toBeNull()
   })
 
-  it('mène au match, où se compose l’équipe', () => {
+  it('mène à la journée, pas au seul match', () => {
     setWindowSize(TABLET_SMALL)
     render(<JourneesScreen />, { metrics: TABLET })
     layoutAt(LANDSCAPE)
 
     fireEvent.press(screen.getByText('J2'))
 
-    // `from` names the axis the match screen then pages along (#552): coming
-    // from a journée, that is the club's other matches of the same round.
+    // Ce qu'on tient en cliquant une colonne, c'est la journée : les
+    // rencontres du club ce jour-là, dont celle-ci (#585). L'écran s'ouvre
+    // dessus et le rail porte les autres.
     expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/match/[id]',
-      params: { id: 'g2', teamId: 't1', from: 'round' },
+      pathname: '/round',
+      params: { gameId: 'g2', teamId: 't1' },
     })
   })
 })
