@@ -143,6 +143,63 @@ const notAllowed = { error: 'not_allowed' } as const
 const notFound = { error: 'not_found' } as const
 
 /**
+ * Whether `viewer` administers at least one of these clubs (#577).
+ *
+ * Several things this API writes belong to more than one club at once — a
+ * fixture has two, a poule's calendar has as many as it has teams — and the
+ * answer for those is *either* side, not a single owner to resolve first. A
+ * negotiated slot (#294) concerns both teams, and the screens have always let
+ * either of them edit it.
+ *
+ * An empty list therefore admits nobody but a general admin, which is the right
+ * answer for a poule no club has entered yet.
+ */
+const administersAny = (viewer: ManagingViewer, clubIds: string[]) =>
+  viewer.role === 'general_admin' || clubIds.some((id) => administers(viewer, id))
+
+/** Chunked at 90: D1 binds one parameter per id, as `clearGamesByIds` does. */
+async function clubIdsWhere(
+  db: D1Database,
+  sql: (holes: string) => string,
+  ids: string[],
+): Promise<string[]> {
+  const found = new Set<string>()
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90)
+    const r = await db
+      .prepare(sql(chunk.map(() => '?').join(',')))
+      .bind(...chunk)
+      .all<{ club_id: string | null }>()
+    for (const row of r.results) if (row.club_id) found.add(row.club_id)
+  }
+  return [...found]
+}
+
+/** The clubs fielding a team in these poules — who may touch their calendar. */
+const clubsInGroups = (db: D1Database, groupIds: string[]) =>
+  clubIdsWhere(db, (holes) => `SELECT DISTINCT club_id FROM teams WHERE group_id IN (${holes})`, groupIds)
+
+/** The clubs these teams belong to. */
+const clubsOfTeams = (db: D1Database, teamIds: string[]) =>
+  clubIdsWhere(db, (holes) => `SELECT DISTINCT club_id FROM teams WHERE id IN (${holes})`, teamIds)
+
+/** The two clubs playing a fixture. */
+async function clubsOfGame(db: D1Database, gameId: string): Promise<string[]> {
+  const r = await db.prepare(
+    `SELECT DISTINCT t.club_id AS club_id
+       FROM games g
+       JOIN teams t ON t.id IN (g.home_team_id, g.away_team_id)
+      WHERE g.id = ?`,
+  ).bind(gameId).all<{ club_id: string | null }>()
+  return r.results.map((x) => x.club_id).filter((x): x is string => !!x)
+}
+
+/** The poule a journée belongs to. */
+const groupOfMatchDay = async (db: D1Database, matchDayId: string) =>
+  (await db.prepare('SELECT group_id FROM match_days WHERE id = ?').bind(matchDayId)
+    .first<{ group_id: string }>())?.group_id ?? null
+
+/**
  * Only a general admin. A missing viewer is the local hatch (#138).
  *
  * Asked as its own question rather than as `administers(viewer, undefined)`,
@@ -1342,6 +1399,7 @@ type TeamImportOverride = { id: string; gameLocationId: string; defaultDay: stri
 app.post('/teams/import', async (c) => {
   const b = await c.req.json()
   const clubId = typeof b.clubId === 'string' ? b.clubId : ''
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
   const requested: TeamImportOverride[] = Array.isArray(b.teams)
     ? b.teams.filter((t: unknown): t is TeamImportOverride =>
         !!t && typeof t === 'object' &&
@@ -2078,6 +2136,15 @@ app.post('/games/import', async (c) => {
   const b = await c.req.json()
   const groupIds = parseGroupIds(b.groupIds)
   if (groupIds.length === 0) return c.json({ error: 'invalid_params' }, 400)
+  // Every poule the import touches must be one the caller plays in (#577), not
+  // merely one of them: the run writes both sides of every fixture it creates,
+  // and `removeObsolete` can delete a whole calendar.
+  const importViewer = managingViewer(c)
+  for (const groupId of groupIds) {
+    if (!administersAny(importViewer, await clubsInGroups(c.env.DB, [groupId]))) {
+      return c.json(notAllowed, 403)
+    }
+  }
   const onlyTeamId = typeof b.teamId === 'string' && b.teamId ? b.teamId : null
   // Opt-in (#289): an existing game's date is only replaced by FFTT's when
   // asked. A PDF calendar states the real slot — day AND time — while FFTT
@@ -2554,6 +2621,19 @@ app.post('/schedule-documents/import', async (c) => {
     .map(parseScheduleDocInput)
     .filter((s): s is ScheduleDocInput => s !== null)
   if (schedules.length === 0) return c.json({ error: 'invalid_params' }, 400)
+  // Two rules in one route (#577). A schedule filed into an existing poule is
+  // that poule's clubs' business; one that would mint a division or a group is
+  // the competition's skeleton, and #576 says who builds that.
+  const docViewer = managingViewer(c)
+  for (const schedule of schedules) {
+    if (!schedule.divisionId || !schedule.groupId) {
+      if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+      continue
+    }
+    if (!administersAny(docViewer, await clubsInGroups(c.env.DB, [schedule.groupId]))) {
+      return c.json(notAllowed, 403)
+    }
+  }
   // Opt-in, mirroring the FFTT import (#289/#294): the document is
   // authoritative on day and time, but refreshing an existing game is still
   // the user's call.
@@ -3275,6 +3355,7 @@ app.post('/clubs', async (c) => {
 })
 
 app.patch('/clubs/:id', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('id'))) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []
@@ -3302,6 +3383,7 @@ app.delete('/clubs/:id', async (c) => {
 
 // --- Club Addresses ---
 app.post('/clubs/:clubId/addresses', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const clubId = c.req.param('clubId')
   const d = await c.req.json()
   if (d.isDefault) {
@@ -3314,6 +3396,7 @@ app.post('/clubs/:clubId/addresses', async (c) => {
 })
 
 app.patch('/clubs/:clubId/addresses/:addressId', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const clubId = c.req.param('clubId')
   const addressId = c.req.param('addressId')
   const p = await c.req.json()
@@ -3331,6 +3414,7 @@ app.patch('/clubs/:clubId/addresses/:addressId', async (c) => {
 })
 
 app.delete('/clubs/:clubId/addresses/:addressId', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const clubId = c.req.param('clubId')
   const addressId = c.req.param('addressId')
   const row = await c.env.DB.prepare('SELECT is_default FROM club_addresses WHERE id = ?').bind(addressId).first()
@@ -3345,6 +3429,7 @@ app.delete('/clubs/:clubId/addresses/:addressId', async (c) => {
 
 // --- Club Communication Channels (#135) ---
 app.post('/clubs/:clubId/channels', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const clubId = c.req.param('clubId')
   const d = await c.req.json()
   // New channels go to the end of the list.
@@ -3359,6 +3444,7 @@ app.post('/clubs/:clubId/channels', async (c) => {
 })
 
 app.patch('/clubs/:clubId/channels/:channelId', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const channelId = c.req.param('channelId')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []
@@ -3371,6 +3457,7 @@ app.patch('/clubs/:clubId/channels/:channelId', async (c) => {
 })
 
 app.delete('/clubs/:clubId/channels/:channelId', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const channelId = c.req.param('channelId')
   await c.env.DB.prepare('DELETE FROM club_channels WHERE id = ?').bind(channelId).run()
   return c.json({ ok: true })
@@ -3378,6 +3465,7 @@ app.delete('/clubs/:clubId/channels/:channelId', async (c) => {
 
 // Reorder: body { ids: string[] } — sort_order becomes each id's index.
 app.put('/clubs/:clubId/channels/reorder', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const clubId = c.req.param('clubId')
   const { ids } = await c.req.json() as { ids?: string[] }
   if (ids?.length) {
@@ -3411,6 +3499,7 @@ app.get('/clubs/:id/logo', async (c) => {
 })
 
 app.put('/clubs/:id/logo', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('id'))) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const body = await c.req.json() as { data?: string; contentType?: string }
   if (!body.data) return c.json({ error: 'missing data' }, 400)
@@ -3425,6 +3514,7 @@ app.put('/clubs/:id/logo', async (c) => {
 })
 
 app.delete('/clubs/:id/logo', async (c) => {
+  if (!administers(managingViewer(c), c.req.param('id'))) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   await c.env.DB.prepare('DELETE FROM club_logos WHERE club_id = ?').bind(id).run()
   return c.json({ ok: true })
@@ -4343,6 +4433,9 @@ app.delete('/users/:id/avatar', async (c) => {
 // --- Teams ---
 app.post('/teams', async (c) => {
   const d = await c.req.json()
+  // The club is named by the body, so there is nothing to look up (#577),
+  // exactly as for `POST /players` in #558.
+  if (!administers(managingViewer(c), d.clubId)) return c.json(notAllowed, 403)
   await c.env.DB.prepare(
     `INSERT INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, color, whatsapp_link, is_archived, team_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -4460,6 +4553,10 @@ app.patch('/teams/:id', async (c) => {
 app.delete('/teams/:id', async (c) => {
   const db = c.env.DB
   const id = c.req.param('id')
+  const viewer = managingViewer(c)
+  const owner = await authorityTeam(db, id)
+  if (!owner) return c.json(notFound, 404)
+  if (!administers(viewer, owner.clubId)) return c.json(notAllowed, 403)
   // Remove team from group's team_ids
   const groupsR = await db.prepare('SELECT id, team_ids FROM groups').all()
   for (const g of groupsR.results) {
@@ -4478,8 +4575,14 @@ app.delete('/teams/:id', async (c) => {
 
 // Batch update teams (used for player conflict resolution)
 app.post('/teams/batch', async (c) => {
-  const { updates } = await c.req.json()
+  const { updates } = await c.req.json() as { updates?: Array<{ id: string; playerIds: string[] }> }
   if (!updates?.length) return c.json({ ok: true })
+  // All or nothing, like #558's batches: a legitimate caller never names a team
+  // of another club, so the refusal is nothing a club meets — and half a batch
+  // of rosters is the worse answer to one that does.
+  const viewer = managingViewer(c)
+  const owners = await clubsOfTeams(c.env.DB, updates.map((u) => u.id))
+  if (!owners.every((clubId) => administers(viewer, clubId))) return c.json(notAllowed, 403)
   const stmts = updates.map((u: { id: string; playerIds: string[] }) =>
     c.env.DB.prepare('UPDATE teams SET player_ids = ? WHERE id = ?')
       .bind(jsonStr(u.playerIds), u.id)
@@ -4579,8 +4682,23 @@ app.delete('/player-season-categories/:seasonId/:playerId', async (c) => {
 })
 
 // --- Match Days ---
+/**
+ * A journée and a fixture belong to more than one club (#577).
+ *
+ * The rule is **either side**: an administrator of any club playing that poule,
+ * or a general admin. A negotiated slot (#294) concerns both teams, and the
+ * screens have always let either of them set it — `gameEditOpponentOptions`
+ * assumes as much. Naming the home club alone would have been defensible and is
+ * not what the app does.
+ *
+ * A poule no club has entered yet admits nobody but a general admin, which is
+ * where an import of a brand-new division starts.
+ */
 app.post('/match-days', async (c) => {
   const d = await c.req.json()
+  if (!administersAny(managingViewer(c), await clubsInGroups(c.env.DB, [d.groupId]))) {
+    return c.json(notAllowed, 403)
+  }
   await c.env.DB.prepare(
     'INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)'
   ).bind(d.id, d.groupId, d.number, d.date).run()
@@ -4590,6 +4708,16 @@ app.post('/match-days', async (c) => {
 app.patch('/match-days/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
+  // Moving a journée between poules is judged at both ends, for #558's reason.
+  const viewer = managingViewer(c)
+  const from = await groupOfMatchDay(c.env.DB, id)
+  if (!from) return c.json(notFound, 404)
+  const groups = 'groupId' in p && p.groupId ? [from, p.groupId] : [from]
+  for (const groupId of groups) {
+    if (!administersAny(viewer, await clubsInGroups(c.env.DB, [groupId]))) {
+      return c.json(notAllowed, 403)
+    }
+  }
   const s: string[] = [], v: unknown[] = []
   if ('groupId' in p) { s.push('group_id = ?'); v.push(p.groupId) }
   if ('number' in p) { s.push('number = ?'); v.push(p.number) }
@@ -4602,6 +4730,11 @@ app.patch('/match-days/:id', async (c) => {
 app.post('/games', async (c) => {
   const d = await c.req.json()
   const db = c.env.DB
+  // Either of the two teams named (#577), which is also what an import does
+  // when it creates a club's fixture against a visitor it does not administer.
+  if (!administersAny(managingViewer(c), await clubsOfTeams(db, [d.homeTeamId, d.awayTeamId]))) {
+    return c.json(notAllowed, 403)
+  }
   await db.prepare(
     'INSERT INTO games (id, match_day_id, home_team_id, away_team_id, time, date, game_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(d.id, d.matchDayId, d.homeTeamId, d.awayTeamId, d.time ?? null, d.date ?? null, d.gameId ?? null).run()
@@ -4613,6 +4746,16 @@ app.patch('/games/:id', async (c) => {
   const id = c.req.param('id')
   const p = await c.req.json()
   const db = c.env.DB
+  const viewer = managingViewer(c)
+  const playing = await clubsOfGame(db, id)
+  if (!playing.length) return c.json(notFound, 404)
+  if (!administersAny(viewer, playing)) return c.json(notAllowed, 403)
+  // Re-pointing a fixture at another team is judged at both ends: the sides it
+  // leaves and the sides it joins (#558's rule, applied to a fixture).
+  const repointed = [p.homeTeamId, p.awayTeamId].filter((t): t is string => typeof t === 'string' && !!t)
+  if (repointed.length && !administersAny(viewer, await clubsOfTeams(db, repointed))) {
+    return c.json(notAllowed, 403)
+  }
   const s: string[] = [], v: unknown[] = []
   if ('matchDayId' in p) { s.push('match_day_id = ?'); v.push(p.matchDayId) }
   if ('homeTeamId' in p) { s.push('home_team_id = ?'); v.push(p.homeTeamId) }
