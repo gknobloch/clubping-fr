@@ -22,7 +22,7 @@ const neighbours = (index: number, total: number): GameNeighbours => ({
 })
 
 const dots = () =>
-  screen.getByTestId('game-dots').children as { props: { style: StyleProp<ViewStyle> } }[]
+  screen.getByTestId('game-dots').children as unknown as { props: { style: StyleProp<ViewStyle> } }[]
 /** The current dot is the accent-filled one — the accueil's own rule. */
 const isActive = (i: number) =>
   StyleSheet.flatten(dots()[i].props.style)?.backgroundColor === colors.accent
