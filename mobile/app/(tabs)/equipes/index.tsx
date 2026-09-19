@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, RefreshControl } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAppData } from '@/contexts/DataContext'
@@ -11,7 +11,9 @@ import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { TeamDetail } from '@/components/TeamDetail'
 import { colors } from '@/constants/colors'
 import { LIST_PANE_WIDTH, useLayout } from '@/constants/layout'
-import { useMemo, useState } from 'react'
+import { usePaneSelection } from '@/utils/paneSelection'
+import type { Team } from '@shared/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
@@ -39,7 +41,7 @@ export default function EquipesScreen() {
   const { user } = useAuth()
   const router = useRouter()
   const { isTwoPane } = useLayout()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const listRef = useRef<FlatList<Team>>(null)
 
   const visibleTeams =
     user?.role === 'general_admin'
@@ -58,6 +60,23 @@ export default function EquipesScreen() {
     if (p) setPhaseId(p.id)
   }
 
+  // The row a selection from elsewhere still owes the list. Held rather than
+  // scrolled to on the spot, because the phase may have to move first and the
+  // list only holds the team one render later.
+  const [pendingScroll, setPendingScroll] = useState<string | null>(null)
+
+  const { selectedId, select } = usePaneSelection({
+    onArrival: (id) => {
+      // Follow the team into its own phase: the matrix opens on the phase
+      // being played, this tab on the active one. Done here, once, at the
+      // moment the team is asked for — as a standing effect it would fight the
+      // switcher instead, undoing every move off the selected team's phase.
+      const team = visibleTeams.find((t) => t.id === id)
+      if (team) setPhaseId(team.phaseId)
+      setPendingScroll(id)
+    },
+  })
+
   const phaseTeams = useMemo(
     () =>
       visibleTeams
@@ -66,6 +85,17 @@ export default function EquipesScreen() {
     [visibleTeams, phase],
   )
 
+  // Brought to the middle rather than the top: a team named from the Journées
+  // matrix lands where the eye already is, with its neighbours either side to
+  // say where in the list it sits.
+  useEffect(() => {
+    if (!pendingScroll) return
+    const index = phaseTeams.findIndex((t) => t.id === pendingScroll)
+    if (index < 0) return // the phase has not landed yet
+    listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 })
+    setPendingScroll(null)
+  }, [pendingScroll, phaseTeams])
+
   // Read from the list rather than held apart from it: the switcher moves the
   // list to another phase, where the selected team does not exist. Deriving it
   // means the pane empties on its own instead of showing a fiche from a phase
@@ -73,29 +103,47 @@ export default function EquipesScreen() {
   const selectedTeam = phaseTeams.find((t) => t.id === selectedId) ?? null
 
   function openTeam(id: string) {
-    if (isTwoPane) setSelectedId(id)
+    if (isTwoPane) select(id)
     else router.push(`/team/${id}`)
   }
 
   const list = (
-    <ScrollView
+    <FlatList
+      ref={listRef}
+      data={phaseTeams}
+      keyExtractor={(t) => t.id}
       contentContainerStyle={[styles.list, contentWidth()]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-    >
-      {phase ? (
-        <Switcher
-          title={`Saison ${phase.displayName}`}
-          onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
-          onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
-        />
-      ) : null}
-
-      {phaseTeams.map((team) => {
+      ListHeaderComponent={
+        phase ? (
+          <Switcher
+            title={`Saison ${phase.displayName}`}
+            onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
+            onNext={
+              phaseIndex < orderedPhases.length - 1
+                ? () => selectPhase(phaseIndex + 1)
+                : undefined
+            }
+          />
+        ) : null
+      }
+      ListEmptyComponent={
+        phase ? <Text style={styles.empty}>Aucune équipe pour cette phase.</Text> : null
+      }
+      // A row can be asked for before the list has measured it — an arrival on
+      // mount, or one far enough down that nothing below the fold is laid out
+      // yet. Let the list settle, then ask again.
+      onScrollToIndexFailed={({ index }) => {
+        setTimeout(
+          () => listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 }),
+          0,
+        )
+      }}
+      renderItem={({ item: team }) => {
         const division = divisions.find((d) => d.id === team.divisionId)
         const isSelected = team.id === selectedTeam?.id
         return (
           <TouchableOpacity
-            key={team.id}
             testID={`team-row-${team.id}`}
             style={[styles.card, isSelected && styles.cardSelected]}
             accessibilityState={isSelected ? { selected: true } : {}}
@@ -112,12 +160,8 @@ export default function EquipesScreen() {
             {!isTwoPane && <Text style={styles.chevron}>›</Text>}
           </TouchableOpacity>
         )
-      })}
-
-      {phase && phaseTeams.length === 0 && (
-        <Text style={styles.empty}>Aucune équipe pour cette phase.</Text>
-      )}
-    </ScrollView>
+      }}
+    />
   )
 
   if (!isTwoPane) return <Screen>{list}</Screen>

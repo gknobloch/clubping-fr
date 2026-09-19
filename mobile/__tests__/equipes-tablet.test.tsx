@@ -1,6 +1,12 @@
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render, TABLET } from '@/__tests__/support/render'
 import {
+  givenParams,
+  resetParams,
+  setParams,
+  useParams,
+} from '@/__tests__/support/routeParams'
+import {
   PHONE_WIDTH,
   TABLET_LANDSCAPE,
   TABLET_SMALL,
@@ -47,8 +53,14 @@ const mockData = {
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+// The selection lives in the route now (#585): the mock has to round-trip it,
+// or a tap is recorded and the pane beside the list stays empty.
+// `mock`-prefixed, the one shape jest's hoist check allows a factory to reach.
+const mockSetParams = setParams
+const mockUseParams = useParams
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+  useLocalSearchParams: () => mockUseParams(),
   useNavigation: () => ({ setOptions: jest.fn() }),
 }))
 // Fetched over the network; the fiche's layout is what is under test.
@@ -78,6 +90,7 @@ const team2: Team = { ...team1, id: 't2', number: 2 }
 const laterTeam: Team = { ...team1, id: 't3', phaseId: 'ph2', number: 7 }
 
 beforeEach(() => {
+  resetParams()
   mockPush.mockClear()
   mockAuth.user = { ...captain, role: 'player', isPlayer: true } as User
   mockData.clubs = [club]
@@ -172,5 +185,62 @@ describe('on a tablet', () => {
 
     expect(mockPush).not.toHaveBeenCalled()
     expect(screen.getByText('Joueurs (1)')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Arriver avec une équipe déjà choisie (#585)
+//
+// The selection used to be a `useState` private to this screen, so a tap in the
+// Journées matrix had nowhere to say which fiche it wanted. It lives in the
+// route now, which is what makes «ouvrir une équipe» mean the same thing
+// wherever it is asked.
+// ---------------------------------------------------------------------------
+describe('une sélection venue d’ailleurs', () => {
+  it('ouvre la fiche demandée, liste à côté', () => {
+    setWindowSize(TABLET_SMALL)
+    givenParams({ selected: 't2' })
+
+    render(<EquipesScreen />, { metrics: TABLET })
+
+    expect(screen.queryByText(PLACEHOLDER)).toBeNull()
+    expect(screen.getByTestId('team-row-t2').props.accessibilityState).toEqual({ selected: true })
+  })
+
+  it('suit l’équipe dans sa propre phase', () => {
+    // t3 plays the phase after the active one. The matrix opens on the phase
+    // being played and this tab on the active one, so the two disagree often —
+    // and an empty pane would be the wrong answer to a team that was named.
+    setWindowSize(TABLET_SMALL)
+    givenParams({ selected: 't3' })
+
+    render(<EquipesScreen />, { metrics: TABLET })
+
+    expect(screen.getByText('Saison 2026/2027 Phase 2')).toBeTruthy()
+    expect(screen.getByTestId('team-row-t3').props.accessibilityState).toEqual({ selected: true })
+    expect(screen.queryByText(PLACEHOLDER)).toBeNull()
+  })
+
+  it('ne suit plus rien une fois le commutateur repris en main', () => {
+    // The follow happens once, on arrival. A standing effect would undo every
+    // move off the selected team's phase — the switcher would be inert.
+    setWindowSize(TABLET_SMALL)
+    givenParams({ selected: 't3' })
+
+    render(<EquipesScreen />, { metrics: TABLET })
+    fireEvent.press(screen.getByTestId('icon-chevron-back'))
+
+    expect(screen.getByText('Saison 2026/2027 Phase 1')).toBeTruthy()
+    expect(screen.getByText(PLACEHOLDER)).toBeTruthy()
+  })
+
+  it('ignore une équipe qui n’existe pas', () => {
+    // A stale link, or a team deleted since. The invitation stands.
+    setWindowSize(TABLET_SMALL)
+    givenParams({ selected: 'disparue' })
+
+    render(<EquipesScreen />, { metrics: TABLET })
+
+    expect(screen.getByText(PLACEHOLDER)).toBeTruthy()
   })
 })

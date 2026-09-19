@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   FlatList,
   View,
@@ -14,6 +14,8 @@ import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
 import { LIST_PANE_WIDTH, useLayout } from '@/constants/layout'
+import { usePaneSelection } from '@/utils/paneSelection'
+import type { Player } from '@shared/types'
 import { sortByName } from '@shared/lib/sortByName'
 import { hasVisited, lastSeenSentence } from '@shared/lib/lastSeen'
 import {
@@ -63,7 +65,11 @@ export default function JoueursScreen() {
     !!user && !!ownClub && canManageClub(user, ownClub.id) && !!ownClub.affiliationNumber
   // The fiche beside the list rather than pushed over it (#466).
   const { isTwoPane } = useLayout()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const listRef = useRef<FlatList<Player>>(null)
+  // The row a selection from elsewhere still owes the list. Held rather than
+  // scrolled to on the spot: on mount the list has measured nothing yet.
+  const [pendingScroll, setPendingScroll] = useState<string | null>(null)
+  const { selectedId, select } = usePaneSelection({ onArrival: setPendingScroll })
 
   const clubPlayers =
     user?.role === 'general_admin'
@@ -95,8 +101,21 @@ export default function JoueursScreen() {
   // one is a change of who this list is about.
   const selectedPlayer = roster.find((p) => p.id === selectedId) ?? null
 
+  // A club of sixty is the case this exists for: a licensee named from another
+  // tab is otherwise selected forty rows below the fold, on a list that looks
+  // untouched. Centred, so the neighbours say where in the alphabet it landed.
+  // The target is `filtered` and not the roster — the row to bring on screen
+  // is the one the list actually renders.
+  useEffect(() => {
+    if (!pendingScroll) return
+    const index = filtered.findIndex((p) => p.id === pendingScroll)
+    if (index < 0) return
+    listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 })
+    setPendingScroll(null)
+  }, [pendingScroll, filtered])
+
   function openPlayer(id: string) {
-    if (isTwoPane) setSelectedId(id)
+    if (isTwoPane) select(id)
     else router.push(`/player/${id}`)
   }
 
@@ -135,9 +154,19 @@ export default function JoueursScreen() {
         )}
       </View>
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={(p) => p.id}
         contentContainerStyle={[styles.list, contentWidth()]}
+        // A row can be asked for before the list has measured it — an arrival
+        // on mount, or one far enough down that nothing below the fold is laid
+        // out yet. Let the list settle, then ask again.
+        onScrollToIndexFailed={({ index }) => {
+          setTimeout(
+            () => listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 }),
+            0,
+          )
+        }}
         renderItem={({ item: p }) => {
           const club = clubs.find((c) => c.id === p.clubId)
           const isSelected = p.id === selectedPlayer?.id

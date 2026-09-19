@@ -1,6 +1,12 @@
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render, TABLET } from '@/__tests__/support/render'
 import {
+  givenParams,
+  resetParams,
+  setParams,
+  useParams,
+} from '@/__tests__/support/routeParams'
+import {
   PHONE_WIDTH,
   TABLET_LANDSCAPE,
   TABLET_SMALL,
@@ -36,8 +42,14 @@ const mockData: {
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+// The selection lives in the route now (#585): the mock has to round-trip it,
+// or a tap is recorded and the pane beside the list stays empty.
+// `mock`-prefixed, the one shape jest's hoist check allows a factory to reach.
+const mockSetParams = setParams
+const mockUseParams = useParams
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+  useLocalSearchParams: () => mockUseParams(),
   useNavigation: () => ({ setOptions: jest.fn() }),
 }))
 
@@ -62,6 +74,7 @@ const signIn = (role: Role) => {
 const LABEL = 'Joueurs actifs uniquement'
 
 beforeEach(() => {
+  resetParams()
   mockPush.mockClear()
   mockData.players = [active, archived]
   mockData.clubs = [club]
@@ -252,5 +265,39 @@ describe("Joueurs — l'import FFTT (#555)", () => {
     render(<JoueursScreen />)
 
     expect(screen.queryByTestId('import-players')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Arriver avec un licencié déjà choisi (#585)
+//
+// The selection lives in the route, so an aperçu opened anywhere in the app can
+// say which fiche it wants without reaching into this screen's state.
+// ---------------------------------------------------------------------------
+describe('une sélection venue d’ailleurs', () => {
+  const PLACEHOLDER = 'Choisissez un licencié pour afficher sa fiche.'
+
+  it('ouvre la fiche demandée, liste à côté', () => {
+    setWindowSize(TABLET_LANDSCAPE)
+    givenParams({ selected: 'p1' })
+
+    render(<JoueursScreen />, { metrics: TABLET })
+
+    expect(screen.queryByText(PLACEHOLDER)).toBeNull()
+    expect(screen.getByTestId('player-row-p1').props.accessibilityState).toEqual({
+      selected: true,
+    })
+  })
+
+  it('ignore un licencié que la liste ne montre pas', () => {
+    // p2 is archived, and the list opens on the active roster (#438). The
+    // invitation stands rather than the pane showing somebody absent from the
+    // list beside it.
+    setWindowSize(TABLET_LANDSCAPE)
+    givenParams({ selected: 'p2' })
+
+    render(<JoueursScreen />, { metrics: TABLET })
+
+    expect(screen.getByText(PLACEHOLDER)).toBeTruthy()
   })
 })
