@@ -26,6 +26,7 @@ export function PlayerQuickView({
   phaseId,
   phaseLabel,
   onClose,
+  showProfile,
 }: {
   playerId: string
   /**
@@ -38,6 +39,8 @@ export function PlayerQuickView({
   /** «Saison 2026/2027 Phase 1» — derived from the phase when not given. */
   phaseLabel?: string
   onClose: () => void
+  /** Voir `PlayerSheet` : faux là où partir abandonnerait un travail en cours. */
+  showProfile?: boolean
 }) {
   const {
     players, teams, clubs, phases, matchDays, games, gameSelections, playerPhasePoints,
@@ -89,6 +92,7 @@ export function PlayerQuickView({
       brulageTeam={burnedIntoId ? teams.find((t) => t.id === burnedIntoId) ?? null : null}
       history={history}
       onClose={onClose}
+      showProfile={showProfile}
     />
   )
 }

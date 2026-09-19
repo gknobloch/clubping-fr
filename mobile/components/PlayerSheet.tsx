@@ -50,6 +50,7 @@ export function PlayerSheet({
   history,
   onClose,
   onProfile,
+  showProfile = true,
 }: {
   player: Player
   /** e.g. "Saison 2025/2026 Phase 2" — used as section heading above phase stats */
@@ -63,8 +64,14 @@ export function PlayerSheet({
   history: PlayerHistoryEntry[]
   onClose: () => void
   /** Overrides the "Profil" action. When omitted, it closes the sheet and opens
-   *  the player's profile in the Joueurs tab. The button is always shown. */
+   *  the player's profile in the Joueurs tab. */
   onProfile?: () => void
+  /**
+   * Proposer « Profil ». Vrai partout sauf là où partir serait abandonner ce
+   * qu'on est en train de faire — une composition en cours (#585). L'aperçu y
+   * répond à « qui est-ce ? » et rien de plus.
+   */
+  showProfile?: boolean
 }) {
   const { clubs, players, seasons, playerSeasonLicences } = useAppData()
 
@@ -186,13 +193,15 @@ export function PlayerSheet({
           <TouchableOpacity style={[s.footerBtn, s.footerClose]} onPress={onClose}>
             <Text style={s.footerCloseTxt}>Fermer</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            testID="player-sheet-profile"
-            style={[s.footerBtn, s.footerProfile]}
-            onPress={openProfile}
-          >
-            <Text style={s.footerProfileTxt}>Profil</Text>
-          </TouchableOpacity>
+          {showProfile && (
+            <TouchableOpacity
+              testID="player-sheet-profile"
+              style={[s.footerBtn, s.footerProfile]}
+              onPress={openProfile}
+            >
+              <Text style={s.footerProfileTxt}>Profil</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </Sheet>

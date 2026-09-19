@@ -377,10 +377,6 @@ export function MatchDetail({
           teamPlayers={roster}
           clubs={clubs}
           playersPerGame={playersPerGame}
-          onOpenPlayer={(pid) => {
-            const p = playerMap.get(pid)
-            if (p) setQuickViewPlayer(p)
-          }}
           getAvailability={(pid) => getAvail(pid)}
           initialSelection={selection}
           selectionData={{

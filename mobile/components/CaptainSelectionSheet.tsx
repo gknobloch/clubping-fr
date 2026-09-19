@@ -1,6 +1,7 @@
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useMemo, useState } from 'react'
 import { Sheet } from '@/components/Sheet'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
@@ -53,7 +54,6 @@ export function CaptainSelectionSheet({
   teamPlayers,
   clubs,
   playersPerGame,
-  onOpenPlayer,
   getAvailability,
   initialSelection,
   selectionData,
@@ -64,8 +64,6 @@ export function CaptainSelectionSheet({
   teamPlayers: Player[]
   clubs: Club[]
   playersPerGame: number
-  /** Ouvre l'aperçu d'un licencié (#585). Sans lui, le nom reste inerte. */
-  onOpenPlayer?: (playerId: string) => void
   getAvailability: (pid: string) => AvailabilityStatus | undefined
   initialSelection: string[]
   selectionData: SelectionData
@@ -73,6 +71,7 @@ export function CaptainSelectionSheet({
   onClose: () => void
 }) {
   const [selection, setSelection] = useState<string[]>(initialSelection)
+  const [quickViewId, setQuickViewId] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
   const {
@@ -192,9 +191,8 @@ export function CaptainSelectionSheet({
         <TouchableOpacity
           testID={`selection-open-${p.id}`}
           style={sel.nameTarget}
-          onPress={() => onOpenPlayer?.(p.id)}
-          disabled={!onOpenPlayer}
-          accessibilityRole={onOpenPlayer ? 'button' : undefined}
+          onPress={() => setQuickViewId(p.id)}
+          accessibilityRole="button"
         >
           <View style={sel.nameCell}>
             <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
@@ -271,6 +269,21 @@ export function CaptainSelectionSheet({
           <Text style={sel.saveTxt}>Enregistrer</Text>
         </TouchableOpacity>
       </View>
+      {/* Rendu **dans** cette feuille, et non à côté d'elle : `Sheet` est un
+          `Modal`, et iOS ne présente pas un second modal par-dessus un modal
+          déjà présenté — en frère, l'aperçu s'ouvrait sans jamais se voir.
+
+          Sans « Profil » : partir d'ici abandonnerait la composition en cours.
+          La question qu'on se pose en composant est « qui est-ce ? », et elle
+          se referme là où elle s'est posée (#585). */}
+      {quickViewId && (
+        <PlayerQuickView
+          playerId={quickViewId}
+          team={team}
+          showProfile={false}
+          onClose={() => setQuickViewId(null)}
+        />
+      )}
     </Sheet>
   )
 }

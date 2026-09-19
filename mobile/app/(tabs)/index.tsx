@@ -459,7 +459,6 @@ export default function HomeScreen() {
           teamPlayers={roster}
           clubs={clubs}
           playersPerGame={getPlayersPerGame(myActiveTeam)}
-          onOpenPlayer={setQuickViewId}
           getAvailability={(pid) => getAvailability(pid, composeGame.id)}
           initialSelection={getSelectedForGame(myActiveTeam.id, composeGame.id)}
           selectionData={{

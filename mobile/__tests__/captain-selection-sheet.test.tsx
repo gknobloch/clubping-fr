@@ -5,6 +5,23 @@ import type {
 } from '@shared/types'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 
+// L'aperçu que la feuille ouvre depuis un nom (#585) lit le store. La feuille
+// elle-même reste sans dépendance : tout ce qu'elle affiche lui est passé.
+const mockData = {
+  players: [] as Player[],
+  teams: [] as Team[],
+  clubs: [] as Club[],
+  phases: [] as never[],
+  matchDays: [] as MatchDay[],
+  games: [] as never[],
+  gameSelections: [] as never[],
+  playerPhasePoints: [] as never[],
+  seasons: [] as never[],
+  playerSeasonLicences: [] as never[],
+}
+jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }))
+
 // ---------------------------------------------------------------------------
 // Feuille de sélection — #454. Two things this app got wrong: it offered
 // archived players (someone who has left the club) for a line-up, where the
@@ -62,12 +79,18 @@ type Eligibility = {
   seasonId?: string
 }
 
+beforeEach(() => {
+  mockData.players = [...roster, ...others]
+  mockData.teams = [team]
+  mockData.clubs = [club]
+  mockData.matchDays = [matchDay]
+})
+
 function renderSheet({
   teamPlayers = roster,
   clubPlayers = others,
   initialSelection = [] as string[],
   onSave = jest.fn(),
-  onOpenPlayer = jest.fn(),
   eligibility = {} as Eligibility,
 } = {}) {
   render(
@@ -77,7 +100,6 @@ function renderSheet({
       clubs={[club]}
       playersPerGame={4}
       getAvailability={() => undefined}
-      onOpenPlayer={onOpenPlayer}
       initialSelection={initialSelection}
       selectionData={{
         matchDayId: matchDay.id,
@@ -92,7 +114,7 @@ function renderSheet({
       onClose={jest.fn()}
     />,
   )
-  return { onSave, onOpenPlayer }
+  return { onSave }
 }
 
 describe('Feuille de sélection — joueurs archivés (#454)', () => {
@@ -236,24 +258,35 @@ describe('Feuille de sélection — l’éligibilité aux compétitions (#498)',
 // ---------------------------------------------------------------------------
 describe('la case et le nom', () => {
   it('retient depuis la case', () => {
-    const { onSave, onOpenPlayer } = renderSheet()
+    const { onSave } = renderSheet()
 
     fireEvent.press(screen.getByTestId('selection-toggle-p1'))
     fireEvent.press(screen.getByText('Enregistrer'))
 
     expect(onSave).toHaveBeenCalledWith(['p1'])
-    expect(onOpenPlayer).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('player-sheet')).toBeNull()
   })
 
   it('ouvre l’aperçu depuis le nom, sans rien retenir', () => {
-    const { onSave, onOpenPlayer } = renderSheet()
+    const { onSave } = renderSheet()
 
     fireEvent.press(screen.getByTestId('selection-open-p1'))
 
-    expect(onOpenPlayer).toHaveBeenCalledWith('p1')
+    expect(screen.getByTestId('player-sheet')).toBeTruthy()
     // Et surtout : la composition n'a pas bougé sous le doigt.
     fireEvent.press(screen.getByText('Enregistrer'))
     expect(onSave).toHaveBeenCalledWith([])
+  })
+
+  it('n’y propose pas « Profil »', () => {
+    // Partir d'ici abandonnerait la composition en cours : l'aperçu répond à
+    // « qui est-ce ? » et se referme là où il s'est ouvert.
+    renderSheet()
+
+    fireEvent.press(screen.getByTestId('selection-open-p1'))
+
+    expect(screen.queryByTestId('player-sheet-profile')).toBeNull()
+    expect(screen.getByText('Fermer')).toBeTruthy()
   })
 
   it('décoche aussi depuis la case', () => {
