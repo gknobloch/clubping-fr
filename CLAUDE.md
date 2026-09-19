@@ -506,6 +506,42 @@ invisible dans le diff comme dans la revue.
   « Writes still require a session » : vrai, et insuffisant — une session, oui,
   mais celle de n'importe qui.
 
+### Ce qu'un club possède, et ce que deux clubs partagent (#577)
+- Vingt routes de plus ne regardaient pas l'appelant : la fiche d'un club, ses
+  adresses, ses canaux, son logo, ses équipes, son calendrier. N'importe quel
+  licencié connecté renommait le club d'à côté ou lui supprimait une équipe.
+- Ce qu'**un** club possède suit `administers` (#558), et le `clubId` vient de
+  trois endroits selon la route : de l'URL (`/clubs/:clubId/…`), du **corps**
+  (`POST /teams`, `POST /teams/import` — jugé sans lecture préalable, comme
+  `POST /players`), ou de la **ligne visée** (`DELETE /teams/:id`,
+  `/teams/batch`).
+- **Ce que deux clubs partagent est jugé par `administersAny` : l'un OU
+  l'autre.** Un créneau négocié (#294) concerne les deux équipes, et les écrans
+  ont toujours laissé l'une comme l'autre le poser —
+  `gameEditOpponentOptions` le suppose déjà. Nommer le club recevant seul était
+  défendable et n'est pas ce que fait l'app ; le choix se voit dans le
+  comportement, donc il est énoncé ici plutôt que laissé au code.
+- **Une poule que personne n'a rejointe n'admet qu'un administrateur général** —
+  `administersAny([])` est faux pour tout le monde d'autre. C'est là que
+  commence l'import d'une division neuve, et c'est cohérent avec #576.
+- **Repointer une rencontre et déplacer une journée se jugent aux deux bouts** :
+  les côtés qu'on quitte et ceux qu'on rejoint, exactement la règle du `clubId`
+  d'un patch en #558.
+- **`POST /games/import` exige *chaque* poule**, pas l'une d'elles : la passe
+  écrit les deux côtés de chaque rencontre qu'elle crée, et `removeObsolete`
+  peut supprimer un calendrier entier.
+- **`POST /schedule-documents/import` porte deux règles dans une route.** Un
+  document classé dans une poule existante regarde les clubs de cette poule ;
+  un document qui *créerait* une division ou une poule (`divisionId` ou
+  `groupId` nul) bâtit le squelette de la compétition, donc #576 s'applique. La
+  même requête peut contenir les deux, d'où la décision par `schedule` et non
+  par requête.
+- Les clubs d'une poule se lisent sur `teams.group_id` et non sur
+  `groups.team_ids` : ici la question est « mon club aligne-t-il une équipe
+  ici ? », à laquelle l'équipe répond d'elle-même. `groups.team_ids` reste la
+  *composition* que les imports élaguent (#422) — deux questions voisines, deux
+  sources.
+
 ### Ce qu'aucun club ne possède (#570, #576)
 - `DELETE` sur `/clubs/:id`, `/seasons/:id`, `/phases/:id`, `/divisions/:id`,
   `/groups/:id` et `/groups/:id/games` ne demandait qu'une session valide. Le
