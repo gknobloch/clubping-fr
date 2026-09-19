@@ -17,6 +17,7 @@ import { PlayerRow } from '@/components/PlayerRow'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { PlayerSheet } from '@/components/PlayerSheet'
 import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
+import { playerPhaseHistory } from '@/utils/playerHistory'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
 import { buildMatchEvent } from '@/utils/calendar'
@@ -202,33 +203,16 @@ export default function MatchDetailScreen() {
 
 
   // Game history (this phase, across the club's teams) for the quick-view sheet.
-  function historyFor(player: Player): PlayerHistoryEntry[] {
-    const rows: { e: PlayerHistoryEntry; raw: string }[] = []
-    for (const t of clubTeamsInPhase) {
-      for (const g of games) {
-        if (g.homeTeamId !== t.id && g.awayTeamId !== t.id) continue
-        const s = gameSelections.find((x) => x.teamId === t.id && x.gameId === g.id)
-        if (!s?.playerIds.includes(player.id)) continue
-        const md = matchDays.find((m) => m.id === g.matchDayId)
-        if (!md) continue
-        const home = g.homeTeamId === t.id
-        const opp = teams.find((x) => x.id === (home ? g.awayTeamId : g.homeTeamId))
-        const gDate = gameDate(g, md)
-        rows.push({
-          raw: gDate,
-          e: {
-            jNumber: md.number,
-            icon: home ? 'home' : 'paper-plane-outline',
-            text: opp ? getTeamName(opp, clubs) : '—',
-            team: t,
-            date: new Date(gDate + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-            isPast: gDate < today,
-          },
-        })
-      }
-    }
-    return rows.sort((a, b) => a.raw.localeCompare(b.raw)).map((r) => r.e)
-  }
+  const historyFor = (player: Player): PlayerHistoryEntry[] =>
+    playerPhaseHistory({
+      playerId: player.id,
+      clubTeamsInPhase,
+      matchDays,
+      games,
+      gameSelections,
+      teams,
+      clubs,
+    })
 
   return (
     <Screen>

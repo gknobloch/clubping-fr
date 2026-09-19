@@ -192,6 +192,8 @@ export function MatchDayMatrix({
   onEditAvailability,
   onEditComposition,
   onOpenGame,
+  onOpenPlayer,
+  onOpenTeam,
 }: {
   /**
    * Absent for «Autres joueurs du club» (#476): those players are in no
@@ -215,6 +217,18 @@ export function MatchDayMatrix({
   onEditComposition: (playerId: string, dayIndex: number) => void
   /** The journée header leads to the match itself, where there is one. */
   onOpenGame?: (game: Game) => void
+  /**
+   * A name leads to the player (#581), as a name does everywhere else in the
+   * app. Given in every section, «Autres joueurs du club» included: those are
+   * licensees of the club like any other, and the column beside them is about
+   * fielding them.
+   */
+  onOpenPlayer?: (playerId: string) => void
+  /**
+   * The section's title leads to the team's fiche (#581) — absent in a section
+   * with no team, which has no fiche to lead to.
+   */
+  onOpenTeam?: () => void
 }) {
   const c = columns
   /** A roster section counts and answers; the club's leftovers do neither. */
@@ -224,10 +238,20 @@ export function MatchDayMatrix({
     <View style={s.section}>
       {/* Section header — the coloured edge, the name, and the pager */}
       <View style={[s.head, team?.color ? { borderLeftColor: team.color } : null]}>
-        <View style={s.heading}>
+        {/* Only the title is the target, not the whole header: the pager's
+            chevrons live in this row, and a press area wrapping them would
+            swallow the taps that page the journées. */}
+        <TouchableOpacity
+          style={s.heading}
+          testID="matrix-open-team"
+          disabled={!onOpenTeam}
+          onPress={onOpenTeam}
+          accessibilityRole={onOpenTeam ? 'button' : undefined}
+          accessibilityLabel={onOpenTeam ? `Fiche de ${title}` : undefined}
+        >
           <Text style={s.teamName} numberOfLines={1}>{title}</Text>
           {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
-        </View>
+        </TouchableOpacity>
         {divisionLabel ? <Text style={s.division}>{divisionLabel}</Text> : null}
         {pager && (
           <View style={s.pager}>
@@ -321,7 +345,18 @@ export function MatchDayMatrix({
 
           {rows.map((row) => (
             <View key={row.player.id} style={s.row} testID={`matrix-row-${row.player.id}`}>
-              <View style={[s.cell, { width: c.joueur }]}>
+              <TouchableOpacity
+                style={[s.cell, { width: c.joueur }]}
+                testID={`open-player-${row.player.id}`}
+                disabled={!onOpenPlayer}
+                onPress={() => onOpenPlayer?.(row.player.id)}
+                accessibilityRole={onOpenPlayer ? 'button' : undefined}
+                accessibilityLabel={
+                  onOpenPlayer
+                    ? `${row.player.firstName} ${row.player.lastName}`
+                    : undefined
+                }
+              >
                 <Text style={[s.name, row.isCaptain && s.nameCaptain]} numberOfLines={1}>
                   {row.player.firstName} {row.player.lastName}
                   {row.points ? <Text style={s.points}> ({row.points})</Text> : null}
@@ -338,7 +373,7 @@ export function MatchDayMatrix({
                     ) : null}
                   </Text>
                 ) : null}
-              </View>
+              </TouchableOpacity>
               <Text style={[s.count, { width: c.dispo }]}>
                 {isTeamSection ? `${row.availableCount}/${row.totalGames}` : '—'}
               </Text>

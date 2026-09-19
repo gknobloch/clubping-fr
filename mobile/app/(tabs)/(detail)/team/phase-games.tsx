@@ -12,12 +12,13 @@ import { computeBrulage } from '@shared/lib/brulage'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
+import { todayIso } from '@/utils/weeks'
+import { playerPhaseHistory } from '@/utils/playerHistory'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
 import { PlayerSheet } from '@/components/PlayerSheet'
-import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -111,41 +112,21 @@ export default function PhaseGamesScreen() {
   )
 
   // Per-player history across ALL club teams in the phase (not just current team)
-  const playerHistory = useMemo(() => {
-    if (!selectedPlayer) return []
-    const todayStr = new Date().toISOString().slice(0, 10)
-    const rows: Array<{
-      rawDate: string; jNumber?: number; isHome: boolean
-      oppName: string; team: typeof clubTeamsInPhase[0]; date: string; isPast: boolean
-    }> = []
-    for (const t of clubTeamsInPhase) {
-      const mdInGroup = new Set(
-        matchDays.filter((md) => md.groupId === t.groupId).map((md) => md.id),
-      )
-      for (const g of games) {
-        if ((g.homeTeamId !== t.id && g.awayTeamId !== t.id) || !mdInGroup.has(g.matchDayId)) continue
-        const sel = gameSelections.find((s) => s.teamId === t.id && s.gameId === g.id)
-        if (!sel?.playerIds.includes(selectedPlayer.id)) continue
-        const md = matchDays.find((day) => day.id === g.matchDayId)
-        if (!md) continue
-        const isHome = g.homeTeamId === t.id
-        const oppTeam = teams.find((ot) => ot.id === (isHome ? g.awayTeamId : g.homeTeamId))
-        const gDate = gameDate(g, md)
-        rows.push({
-          rawDate: gDate,
-          jNumber: md.number,
-          isHome,
-          oppName: oppTeam ? getTeamName(oppTeam, clubs) : '—',
-          team: t,
-          date: new Date(gDate + 'T12:00:00').toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'short',
-          }),
-          isPast: gDate < todayStr,
-        })
-      }
-    }
-    return rows.sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [selectedPlayer, clubTeamsInPhase, matchDays, games, gameSelections, teams, clubs])
+  const playerHistory = useMemo(
+    () =>
+      selectedPlayer
+        ? playerPhaseHistory({
+            playerId: selectedPlayer.id,
+            clubTeamsInPhase,
+            matchDays,
+            games,
+            gameSelections,
+            teams,
+            clubs,
+          })
+        : [],
+    [selectedPlayer, clubTeamsInPhase, matchDays, games, gameSelections, teams, clubs],
+  )
 
   const brulageInfo = useMemo(() => {
     if (!selectedPlayer || !team) return null
@@ -155,7 +136,7 @@ export default function PhaseGamesScreen() {
   }, [selectedPlayer, team, clubTeamsInPhase, matchDays, games, gameSelections, teams])
 
   const totalGames = teamGames.length
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayIso()
 
   if (!baseTeam) {
     return (
@@ -298,16 +279,7 @@ export default function PhaseGamesScreen() {
           }).length}
           team={team}
           brulageTeam={brulageInfo}
-          history={playerHistory.map(
-            (e): PlayerHistoryEntry => ({
-              jNumber: e.jNumber,
-              icon: e.isHome ? 'home' : 'paper-plane-outline',
-              text: e.oppName,
-              team: e.team,
-              date: e.date,
-              isPast: e.isPast,
-            }),
-          )}
+          history={playerHistory}
           onClose={() => setSelectedPlayer(null)}
           onProfile={() => openProfile(selectedPlayer)}
         />
