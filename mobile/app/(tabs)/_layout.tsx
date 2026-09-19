@@ -1,3 +1,4 @@
+import type { ColorValue } from 'react-native'
 import type { ComponentProps } from 'react'
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -10,7 +11,9 @@ type IconName = ComponentProps<typeof Ionicons>['name']
 
 // Monochrome tab icons, tinted by the active/inactive tab color.
 function tabIcon(name: IconName) {
-  return ({ color, size }: { color: string; size: number }) => (
+  // `color` est un `ColorValue` depuis RN 0.86 — il peut être un
+  // `OpaqueColorValue` (PlatformColor) et non plus seulement une chaîne.
+  return ({ color, size }: { color: ColorValue; size: number }) => (
     <Ionicons name={name} color={color} size={size} />
   )
 }

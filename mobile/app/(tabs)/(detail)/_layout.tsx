@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Stack, useNavigation } from 'expo-router'
-import { CommonActions } from '@react-navigation/native'
 import { AppHeader } from '@/components/AppHeader'
 
 // Shared "detail" screens (player, team, match, match list) live in this Stack,
@@ -34,6 +33,7 @@ const detailHeader = ({ options, route }: { options: { title?: string }; route: 
 // still what a phone does everywhere, and what a tablet does for anything that
 // is not in the list beside it.
 type NavState = { routes: { name: string; key: string; state?: unknown }[]; index: number }
+const resetTo = (state: NavState) => ({ type: 'RESET' as const, payload: state })
 type Nav = {
   getState?: () => NavState
   getParent?: () => Nav | undefined
@@ -54,15 +54,19 @@ function useResetDetailStackOnBlur() {
         while (nav) {
           const state = nav.getState?.()
           if (state?.routes?.some((r) => r.name === '(detail)')) {
+            // `{ type: 'RESET', payload }` written out rather than imported.
+            // expo-router 57 vendored React Navigation into itself and stops
+            // re-exporting `CommonActions`; reaching into its `build/` for a
+            // two-field object would be a worse dependency than the object.
             nav.dispatch((s: NavState) =>
-              CommonActions.reset({
+              resetTo({
                 ...s,
                 routes: s.routes.map((r) =>
                   r.name === '(detail)'
                     ? { ...r, state: undefined, key: `(detail)-${Date.now()}` }
                     : r,
                 ),
-              } as Parameters<typeof CommonActions.reset>[0]),
+              }),
             )
             break
           }
