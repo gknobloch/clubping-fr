@@ -11,8 +11,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
 import { mayManageTeam } from '@shared/lib/teamAuthority'
 import { sortByName } from '@shared/lib/sortByName'
-import { computeBrulage } from '@shared/lib/brulage'
-import { pointsFor } from '@shared/lib/phasePoints'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import {
   PLAYER_SEARCH_LABEL,
@@ -20,9 +18,6 @@ import {
   filterPlayersBySearch,
 } from '@shared/lib/playerSearch'
 import { selectablePlayers } from '@shared/lib/playerVisibility'
-import { gameDate } from '@/utils/matchdays'
-import { todayIso } from '@/utils/weeks'
-import { playerPhaseHistory } from '@/utils/playerHistory'
 import { colors } from '@/constants/colors'
 import { LicenceTag } from '@/components/LicenceTag'
 import { unlicensedIds } from '@shared/lib/seasonLicences'
@@ -31,7 +26,7 @@ import { teamEligibility } from '@shared/lib/competitionEligibility'
 import { Screen, contentWidth } from '@/components/Screen'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
-import { PlayerSheet } from '@/components/PlayerSheet'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -63,8 +58,7 @@ export function TeamDetail({
 }) {
   const id = teamId
   const {
-    teams, players, clubs, seasons, phases, divisions, matchDays, games, gameSelections,
-    playerPhasePoints, playerSeasonLicences, playerSeasonCategories,
+    teams, players, clubs, seasons, phases, divisions, matchDays, games, playerSeasonLicences, playerSeasonCategories,
     competitions, competitionEligibilities, updateTeam,
   } = useAppData()
   const { user } = useAuth()
@@ -81,7 +75,6 @@ export function TeamDetail({
   const team = teams.find((t) => t.id === id)
   const club = clubs.find((c) => c.id === team?.clubId)
   const division = divisions.find((d) => d.id === team?.divisionId)
-  const phase = phases.find((p) => p.id === team?.phaseId)
   const isCaptain = !!(user && team && mayManageTeam(user, team))
 
   // The FFTT did not list these licences this season (#488): a squad list is
@@ -103,12 +96,6 @@ export function TeamDetail({
           .filter(Boolean) as Player[],
       ),
     [team, players],
-  )
-
-  // Club teams in the same phase (for brûlage + cross-team history)
-  const clubTeamsInPhase = useMemo(
-    () => (team ? teams.filter((t) => t.clubId === team.clubId && t.phaseId === team.phaseId) : []),
-    [team, teams],
   )
 
   // Whether this team (by club+number) has any games across phases — drives the
@@ -159,32 +146,6 @@ export function TeamDetail({
   const shownEligiblePlayers = rosterSearchable
     ? filterPlayersBySearch(eligiblePlayers, rosterQuery)
     : eligiblePlayers
-
-  // --- Player quick-view (PlayerSheet) data, computed for the tapped player ---
-  const today = todayIso()
-
-  const playerHistory = useMemo(
-    () =>
-      selectedPlayer
-        ? playerPhaseHistory({
-            playerId: selectedPlayer.id,
-            clubTeamsInPhase,
-            matchDays,
-            games,
-            gameSelections,
-            teams,
-            clubs,
-          })
-        : [],
-    [selectedPlayer, clubTeamsInPhase, matchDays, games, gameSelections, teams, clubs],
-  )
-
-  const brulageInfo = useMemo(() => {
-    if (!selectedPlayer || !team) return null
-    const info = computeBrulage(selectedPlayer.id, clubTeamsInPhase, matchDays, games, gameSelections)
-    if (!info.burnedIntoTeamId) return null
-    return teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
-  }, [selectedPlayer, team, clubTeamsInPhase, matchDays, games, gameSelections, teams])
 
   // The pushed screen names itself after the team. In a pane there is no such
   // header to set — the one above belongs to the section, and is «Équipes».
@@ -356,25 +317,10 @@ export function TeamDetail({
 
       {/* Player quick view */}
       {selectedPlayer && (
-        <PlayerSheet
-          player={selectedPlayer}
-          phaseLabel={phase ? `Saison ${phase.displayName}` : undefined}
-          phasePoints={pointsFor(playerPhasePoints, team.phaseId, selectedPlayer.id)}
-          gamesPlayed={playerHistory.filter((e) => e.isPast).length}
-          gamesTotal={games.filter((g) => {
-            if (g.homeTeamId !== team.id && g.awayTeamId !== team.id) return false
-            const md = matchDays.find((m) => m.id === g.matchDayId)
-            return !!md && gameDate(g, md) < today
-          }).length}
+        <PlayerQuickView
+          playerId={selectedPlayer.id}
           team={team}
-          brulageTeam={brulageInfo}
-          history={playerHistory}
           onClose={() => setSelectedPlayer(null)}
-          onProfile={() => {
-            const p = selectedPlayer
-            setSelectedPlayer(null)
-            router.push({ pathname: '/player/[id]', params: { id: p.id } })
-          }}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gameAxisFromParam, gameNeighbours } from './gameNeighbours'
+import { gameAxisFromParam, gameAxisSteps, gameNeighbours } from './gameNeighbours'
 import type { Team, Phase, MatchDay, Game } from '@/types'
 
 const makeTeam = (
@@ -159,6 +159,38 @@ describe('gameNeighbours — nothing to page through', () => {
     expect(gameNeighbours({ gameId: 'nope', teamId: 't1' }, 'team', data)).toBeNull()
     expect(gameNeighbours({ gameId: 'j1-t1', teamId: 'nope' }, 'team', data)).toBeNull()
     expect(gameNeighbours({ gameId: 'j1-t1', teamId: 't1' }, 'team', { ...data, matchDays: [] })).toBeNull()
+  })
+})
+
+describe('gameAxisSteps — the list a rail prints', () => {
+  // The tablet's «Journée X» lists these rows and the pager picks the two
+  // either side of the current one (#585). Same derivation on purpose: two
+  // would eventually disagree about an exempt team, and the rail and the
+  // swipe would then hold different calendars.
+  it('is the whole axis, in the order the pager walks it', () => {
+    const data = club()
+
+    const steps = gameAxisSteps({ gameId: 'j1-t2', teamId: 't2' }, 'round', data)
+
+    expect(steps.map((s) => s.teamId)).toEqual(['t1', 't2', 't3'])
+    const n = gameNeighbours({ gameId: 'j1-t2', teamId: 't2' }, 'round', data)
+    expect(steps[n!.index - 1]).toEqual(n!.previous)
+    expect(steps[n!.index + 1]).toEqual(n!.next)
+    expect(steps).toHaveLength(n!.total)
+  })
+
+  it('keeps the one stop the pager refuses to page', () => {
+    // `gameNeighbours` returns null on a one-stop axis — a control that cannot
+    // move is one nobody should see. A rail still has a row to draw.
+    const data = club()
+    data.games = data.games.filter((g) => g.id === 'j1-t1')
+
+    expect(gameNeighbours({ gameId: 'j1-t1', teamId: 't1' }, 'round', data)).toBeNull()
+    expect(gameAxisSteps({ gameId: 'j1-t1', teamId: 't1' }, 'round', data)).toHaveLength(1)
+  })
+
+  it('is empty when the fixture is unknown', () => {
+    expect(gameAxisSteps({ gameId: 'nope', teamId: 't1' }, 'round', club())).toEqual([])
   })
 })
 

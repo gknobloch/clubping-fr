@@ -19,6 +19,7 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { CARD_SPLIT_MIN_WIDTH, NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
@@ -48,6 +49,7 @@ export default function HomeScreen() {
   const { width, contentMaxWidth, isTablet } = useLayout()
 
   const [composeGameId, setComposeGameId] = useState<string | null>(null)
+  const [quickViewId, setQuickViewId] = useState<string | null>(null)
   const [matchPage, setMatchPage] = useState(0)
 
   const today = todayIso()
@@ -366,7 +368,10 @@ export default function HomeScreen() {
                                 overrideFor(myActiveTeam, pid),
                               ),
                             onClear: (pid) => clearAvailability(pid, h.game.id),
-                            onOpenPlayer: (pid) => router.push(`/player/${pid}`),
+                            // The aperçu first, as everywhere else (#585):
+                            // this was the last screen that pushed straight
+                            // past it into a full fiche.
+                            onOpenPlayer: setQuickViewId,
                           }}
                           onCompose={() => setComposeGameId(h.game.id)}
                           onOpenDetail={() => router.push({ pathname: '/match/[id]', params: { id: h.game.id, teamId: myActiveTeam.id } })}
@@ -438,6 +443,14 @@ export default function HomeScreen() {
           </>
         )}
       </ScrollView>
+
+      {quickViewId && (
+        <PlayerQuickView
+          playerId={quickViewId}
+          team={myActiveTeam ?? null}
+          onClose={() => setQuickViewId(null)}
+        />
+      )}
 
       {/* Captain line-up sheet for the selected upcoming match */}
       {composeGame && myActiveTeam && (

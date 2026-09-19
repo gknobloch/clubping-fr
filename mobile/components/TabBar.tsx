@@ -39,6 +39,9 @@ export function pathToTab(
   if (path.startsWith('/mes-matchs')) return params.playerId ? 'joueurs' : 'index'
   if (path.startsWith('/player')) return 'joueurs'
   if (path.startsWith('/team')) return 'equipes'
+  // La journée d'un club, tous ses matchs (#585). L'axe est dit par la route
+  // elle-même, là où `/match` le lit dans `from` — donc rien à déduire.
+  if (path.startsWith('/round')) return 'journees'
   if (path.startsWith('/match')) {
     return gameAxisFromParam(params.from) === 'round' ? 'journees' : 'equipes'
   }

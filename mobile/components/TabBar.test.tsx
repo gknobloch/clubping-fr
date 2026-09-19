@@ -40,6 +40,12 @@ describe('pathToTab', () => {
     expect(pathToTab(path)).toBe(tab)
   })
 
+  it('lights Journées for a journée, which says its own axis', () => {
+    // «Journée X» (#585) *is* the round axis, so there is nothing to deduce:
+    // unlike `/match`, which has to read `from`.
+    expect(pathToTab('/round')).toBe('journees')
+  })
+
   it('lights a match by the axis it pages, not by being a match', () => {
     // #552: the match screen is the one you can swipe along, and what it pages
     // is what it belongs to. `from` is the axis, read through the same helper

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
 import { Sheet } from '@/components/Sheet'
 import { TeamBadge } from '@/components/TeamBadge'
 import { LicenceTag } from '@/components/LicenceTag'
@@ -49,6 +50,7 @@ export function PlayerSheet({
   history,
   onClose,
   onProfile,
+  showProfile = true,
 }: {
   player: Player
   /** e.g. "Saison 2025/2026 Phase 2" — used as section heading above phase stats */
@@ -62,8 +64,14 @@ export function PlayerSheet({
   history: PlayerHistoryEntry[]
   onClose: () => void
   /** Overrides the "Profil" action. When omitted, it closes the sheet and opens
-   *  the player's profile in the Joueurs tab. The button is always shown. */
+   *  the player's profile in the Joueurs tab. */
   onProfile?: () => void
+  /**
+   * Proposer « Profil ». Vrai partout sauf là où partir serait abandonner ce
+   * qu'on est en train de faire — une composition en cours (#585). L'aperçu y
+   * répond à « qui est-ce ? » et rien de plus.
+   */
+  showProfile?: boolean
 }) {
   const { clubs, players, seasons, playerSeasonLicences } = useAppData()
 
@@ -75,9 +83,23 @@ export function PlayerSheet({
     players.filter((p) => p.clubId === player.clubId),
   ).has(player.id)
   const router = useRouter()
+  const { isTwoPane } = useLayout()
 
+  // «Profil» lands in the Joueurs tab with this licensee selected beside the
+  // club's list, rather than pushing a fiche over whatever section you were in
+  // (#585). On a phone there is no list to land beside, so it stays the push it
+  // has always been.
+  //
+  // The default is the whole of it: every screen that opens this sheet gets the
+  // same destination, which is the point. An `onProfile` of your own is for a
+  // caller that must do something *first* — closing its own sheet, say.
   const openProfile =
-    onProfile ?? (() => { onClose(); router.push(`/player/${player.id}`) })
+    onProfile ??
+    (() => {
+      onClose()
+      if (isTwoPane) router.push({ pathname: '/joueurs', params: { selected: player.id } })
+      else router.push(`/player/${player.id}`)
+    })
 
   return (
     <Sheet onClose={onClose} testID="player-sheet">
@@ -171,13 +193,15 @@ export function PlayerSheet({
           <TouchableOpacity style={[s.footerBtn, s.footerClose]} onPress={onClose}>
             <Text style={s.footerCloseTxt}>Fermer</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            testID="player-sheet-profile"
-            style={[s.footerBtn, s.footerProfile]}
-            onPress={openProfile}
-          >
-            <Text style={s.footerProfileTxt}>Profil</Text>
-          </TouchableOpacity>
+          {showProfile && (
+            <TouchableOpacity
+              testID="player-sheet-profile"
+              style={[s.footerBtn, s.footerProfile]}
+              onPress={openProfile}
+            >
+              <Text style={s.footerProfileTxt}>Profil</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </Sheet>

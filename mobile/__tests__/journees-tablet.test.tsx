@@ -259,18 +259,19 @@ describe('sur une tablette', () => {
     expect(screen.queryByTestId('availability-sheet')).toBeNull()
   })
 
-  it('mène au match, où se compose l’équipe', () => {
+  it('mène à la journée, pas au seul match', () => {
     setWindowSize(TABLET_SMALL)
     render(<JourneesScreen />, { metrics: TABLET })
     layoutAt(LANDSCAPE)
 
     fireEvent.press(screen.getByText('J2'))
 
-    // `from` names the axis the match screen then pages along (#552): coming
-    // from a journée, that is the club's other matches of the same round.
+    // Ce qu'on tient en cliquant une colonne, c'est la journée : les
+    // rencontres du club ce jour-là, dont celle-ci (#585). L'écran s'ouvre
+    // dessus et le rail porte les autres.
     expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/match/[id]',
-      params: { id: 'g2', teamId: 't1', from: 'round' },
+      pathname: '/round',
+      params: { gameId: 'g2', teamId: 't1' },
     })
   })
 })
@@ -644,12 +645,17 @@ describe('ouvrir depuis la grille', () => {
     expect(within(screen.getByTestId('player-sheet')).getByText('Hugo Bernard')).toBeTruthy()
   })
 
-  it('mène à la fiche de l’équipe depuis son en-tête', () => {
+  it('mène à l’équipe dans sa section, liste à côté', () => {
+    // #584 poussait la fiche par-dessus la matrice ; #585 la fait atterrir
+    // dans l'onglet Équipes, sélectionnée à côté de la liste des équipes.
     renderTablet()
 
     fireEvent.press(screen.getByTestId('matrix-open-team'))
 
-    expect(mockPush).toHaveBeenCalledWith('/team/t1')
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/equipes',
+      params: { selected: 't1' },
+    })
   })
 
   it('laisse l’en-tête des « autres joueurs » inerte', () => {

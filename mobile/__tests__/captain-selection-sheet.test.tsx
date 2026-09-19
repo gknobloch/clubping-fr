@@ -5,6 +5,23 @@ import type {
 } from '@shared/types'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 
+// L'aperçu que la feuille ouvre depuis un nom (#585) lit le store. La feuille
+// elle-même reste sans dépendance : tout ce qu'elle affiche lui est passé.
+const mockData = {
+  players: [] as Player[],
+  teams: [] as Team[],
+  clubs: [] as Club[],
+  phases: [] as never[],
+  matchDays: [] as MatchDay[],
+  games: [] as never[],
+  gameSelections: [] as never[],
+  playerPhasePoints: [] as never[],
+  seasons: [] as never[],
+  playerSeasonLicences: [] as never[],
+}
+jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }))
+
 // ---------------------------------------------------------------------------
 // Feuille de sélection — #454. Two things this app got wrong: it offered
 // archived players (someone who has left the club) for a line-up, where the
@@ -61,6 +78,13 @@ type Eligibility = {
   playerSeasonCategories?: PlayerSeasonCategory[]
   seasonId?: string
 }
+
+beforeEach(() => {
+  mockData.players = [...roster, ...others]
+  mockData.teams = [team]
+  mockData.clubs = [club]
+  mockData.matchDays = [matchDay]
+})
 
 function renderSheet({
   teamPlayers = roster,
@@ -145,7 +169,8 @@ describe('Feuille de sélection — filtrer par nom (#454)', () => {
     const { onSave } = renderSheet()
 
     fireEvent.changeText(screen.getByPlaceholderText('Rechercher un joueur'), 'zilbermann')
-    fireEvent.press(screen.getByText('Frédéric Zilbermann'))
+    // La case, et elle seule, retient (#585) : le nom ouvre l'aperçu.
+    fireEvent.press(screen.getByTestId('selection-toggle-o2'))
     fireEvent.press(screen.getByText('Enregistrer'))
 
     expect(onSave).toHaveBeenCalledWith(['o2'])
@@ -221,5 +246,55 @@ describe('Feuille de sélection — l’éligibilité aux compétitions (#498)',
     renderSheet({ eligibility: { divisions: [{ ...division, competitionId: undefined }] } })
 
     expect(screen.getByText('Pascal Afflard')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Deux cibles sur une ligne (#585)
+//
+// The row was one big toggle, so there was nowhere left to ask «qui est-ce ?» —
+// which is the question a captain has *while* composing, not after. The box
+// picks; the name opens the aperçu, as a name does everywhere else in the app.
+// ---------------------------------------------------------------------------
+describe('la case et le nom', () => {
+  it('retient depuis la case', () => {
+    const { onSave } = renderSheet()
+
+    fireEvent.press(screen.getByTestId('selection-toggle-p1'))
+    fireEvent.press(screen.getByText('Enregistrer'))
+
+    expect(onSave).toHaveBeenCalledWith(['p1'])
+    expect(screen.queryByTestId('player-sheet')).toBeNull()
+  })
+
+  it('ouvre l’aperçu depuis le nom, sans rien retenir', () => {
+    const { onSave } = renderSheet()
+
+    fireEvent.press(screen.getByTestId('selection-open-p1'))
+
+    expect(screen.getByTestId('player-sheet')).toBeTruthy()
+    // Et surtout : la composition n'a pas bougé sous le doigt.
+    fireEvent.press(screen.getByText('Enregistrer'))
+    expect(onSave).toHaveBeenCalledWith([])
+  })
+
+  it('n’y propose pas « Profil »', () => {
+    // Partir d'ici abandonnerait la composition en cours : l'aperçu répond à
+    // « qui est-ce ? » et se referme là où il s'est ouvert.
+    renderSheet()
+
+    fireEvent.press(screen.getByTestId('selection-open-p1'))
+
+    expect(screen.queryByTestId('player-sheet-profile')).toBeNull()
+    expect(screen.getByText('Fermer')).toBeTruthy()
+  })
+
+  it('décoche aussi depuis la case', () => {
+    const { onSave } = renderSheet({ initialSelection: ['p1'] })
+
+    fireEvent.press(screen.getByTestId('selection-toggle-p1'))
+    fireEvent.press(screen.getByText('Enregistrer'))
+
+    expect(onSave).toHaveBeenCalledWith([])
   })
 })

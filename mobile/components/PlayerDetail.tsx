@@ -4,6 +4,7 @@ import { useNavigation, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
+import { useOpenTeam } from '@/utils/openFiche'
 import { getTeamName } from '@/utils/roles'
 import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
@@ -45,6 +46,7 @@ export function PlayerDetail({
   } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
+  const openTeam = useOpenTeam()
   const [avatarOpen, setAvatarOpen] = useState(false)
 
   const player = players.find((p) => p.id === id)
@@ -164,7 +166,7 @@ export function PlayerDetail({
               <TouchableOpacity
                 key={t.id}
                 style={styles.teamRow}
-                onPress={() => router.push({ pathname: '/team/[id]', params: { id: t.id } })}
+                onPress={() => openTeam(t.id)}
               >
                 <View style={[styles.colorDot, { backgroundColor: t.color ?? colors.accent }]} />
                 <Text style={styles.teamName}>{getTeamName(t, clubs)}</Text>

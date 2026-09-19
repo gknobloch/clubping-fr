@@ -119,6 +119,29 @@ function teamSteps(team: Team, data: GameNeighbourData): GameStep[] {
 }
 
 /**
+ * Every stop on the axis, in order.
+ *
+ * What a *rail* lists and what a swipe walks are the same list, so they are
+ * the same derivation (#585): the tablet's «Journée X» prints these rows and
+ * `gameNeighbours` picks the two either side of the one on screen. Two
+ * derivations of "the club's matches this round" would eventually disagree
+ * about an exempt team, and the rail and the pager would then hold different
+ * calendars.
+ */
+export function gameAxisSteps(
+  current: { gameId: string; teamId: string },
+  axis: GameAxis,
+  data: GameNeighbourData,
+): GameStep[] {
+  const team = data.teams.find((t) => t.id === current.teamId)
+  const game = data.games.find((g) => g.id === current.gameId)
+  if (!team || !game) return []
+  const matchDay = data.matchDays.find((md) => md.id === game.matchDayId)
+  if (!matchDay) return []
+  return axis === 'round' ? roundSteps(team, matchDay, data) : teamSteps(team, data)
+}
+
+/**
  * The stops either side of the fixture on screen, or `null` when there is
  * nowhere to go.
  *
@@ -131,13 +154,7 @@ export function gameNeighbours(
   axis: GameAxis,
   data: GameNeighbourData,
 ): GameNeighbours | null {
-  const team = data.teams.find((t) => t.id === current.teamId)
-  const game = data.games.find((g) => g.id === current.gameId)
-  if (!team || !game) return null
-  const matchDay = data.matchDays.find((md) => md.id === game.matchDayId)
-  if (!matchDay) return null
-
-  const steps = axis === 'round' ? roundSteps(team, matchDay, data) : teamSteps(team, data)
+  const steps = gameAxisSteps(current, axis, data)
   const index = steps.findIndex((s) => s.gameId === current.gameId && s.teamId === current.teamId)
   if (index < 0 || steps.length < 2) return null
 

@@ -1,6 +1,7 @@
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useMemo, useState } from 'react'
 import { Sheet } from '@/components/Sheet'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
@@ -70,6 +71,7 @@ export function CaptainSelectionSheet({
   onClose: () => void
 }) {
   const [selection, setSelection] = useState<string[]>(initialSelection)
+  const [quickViewId, setQuickViewId] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
   const {
@@ -168,31 +170,47 @@ export function CaptainSelectionSheet({
     const lockedTeam = !picked ? committedElsewhere.get(p.id) : undefined
     const locked = lockedTeam !== undefined
     return (
-      <TouchableOpacity
-        key={p.id}
-        style={[sel.playerRow, locked && sel.playerRowLocked]}
-        onPress={() => toggle(p.id)}
-        disabled={locked}
-      >
-        <View style={[sel.check, picked && sel.checkActive]}>
-          {picked && <Text style={sel.checkMark}>✓</Text>}
-        </View>
-        <View style={sel.nameCell}>
-          <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
-            {p.firstName} {p.lastName}
-          </Text>
-          {unlicensed.has(p.id) && <LicenceTag />}
-        </View>
-        {locked ? (
-          <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
-        ) : cfg ? (
-          <View style={[sel.availChip, { backgroundColor: cfg.bg }]}>
-            <Text style={[sel.availTxt, { color: cfg.color }]}>{cfg.short}</Text>
+      // Two targets, not one (#585). The box alone picks; the name opens the
+      // aperçu, as a name does everywhere else in the app. The row used to be
+      // one big toggle, so there was nowhere left to ask «who is this?» —
+      // which is the question a captain has while composing, not after.
+      <View key={p.id} style={[sel.playerRow, locked && sel.playerRowLocked]}>
+        <TouchableOpacity
+          testID={`selection-toggle-${p.id}`}
+          style={sel.checkTarget}
+          onPress={() => toggle(p.id)}
+          disabled={locked}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: picked, disabled: locked }}
+          accessibilityLabel={`${p.firstName} ${p.lastName}`}
+        >
+          <View style={[sel.check, picked && sel.checkActive]}>
+            {picked && <Text style={sel.checkMark}>✓</Text>}
           </View>
-        ) : (
-          <Text style={sel.noAvail}>—</Text>
-        )}
-      </TouchableOpacity>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID={`selection-open-${p.id}`}
+          style={sel.nameTarget}
+          onPress={() => setQuickViewId(p.id)}
+          accessibilityRole="button"
+        >
+          <View style={sel.nameCell}>
+            <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
+              {p.firstName} {p.lastName}
+            </Text>
+            {unlicensed.has(p.id) && <LicenceTag />}
+          </View>
+          {locked ? (
+            <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
+          ) : cfg ? (
+            <View style={[sel.availChip, { backgroundColor: cfg.bg }]}>
+              <Text style={[sel.availTxt, { color: cfg.color }]}>{cfg.short}</Text>
+            </View>
+          ) : (
+            <Text style={sel.noAvail}>—</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     )
   }
 
@@ -251,6 +269,21 @@ export function CaptainSelectionSheet({
           <Text style={sel.saveTxt}>Enregistrer</Text>
         </TouchableOpacity>
       </View>
+      {/* Rendu **dans** cette feuille, et non à côté d'elle : `Sheet` est un
+          `Modal`, et iOS ne présente pas un second modal par-dessus un modal
+          déjà présenté — en frère, l'aperçu s'ouvrait sans jamais se voir.
+
+          Sans « Profil » : partir d'ici abandonnerait la composition en cours.
+          La question qu'on se pose en composant est « qui est-ce ? », et elle
+          se referme là où elle s'est posée (#585). */}
+      {quickViewId && (
+        <PlayerQuickView
+          playerId={quickViewId}
+          team={team}
+          showProfile={false}
+          onClose={() => setQuickViewId(null)}
+        />
+      )}
     </Sheet>
   )
 }
@@ -280,8 +313,18 @@ const sel = StyleSheet.create({
     textAlign: 'center', paddingVertical: 24,
   },
   playerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center',
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  // The box is a small mark in a large target: 44pt, the project's rule below
+  // `md:`, which the row used to give it by being the target itself.
+  checkTarget: {
+    width: 44, minHeight: 44, alignItems: 'flex-start', justifyContent: 'center',
+  },
+  // Everything else on the row, so «qui est-ce ?» has the space the box does
+  // not need.
+  nameTarget: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44,
   },
   check: {
     width: 22, height: 22, borderRadius: 11, borderWidth: 2,

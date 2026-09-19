@@ -13,9 +13,8 @@ import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import { AvailabilitySheet } from '@/components/AvailabilitySheet'
 import { CompositionSheet, type CompositionOption } from '@/components/CompositionSheet'
-import { PlayerSheet } from '@/components/PlayerSheet'
-import { playerPhaseHistory } from '@/utils/playerHistory'
-import { todayIso } from '@/utils/weeks'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
+import { useOpenTeam } from '@/utils/openFiche'
 import {
   MatchDayMatrix,
   matrixColumns,
@@ -124,6 +123,7 @@ export default function JourneesScreen() {
     [playerSeasonLicences, seasons, players, user?.clubId],
   )
   const router = useRouter()
+  const openTeam = useOpenTeam()
 
   const myClubId = user?.clubId
   const myPlayerId = user?.isPlayer ? user.id : undefined
@@ -612,57 +612,17 @@ export default function JourneesScreen() {
     />
   )
 
-  /**
-   * L'aperçu d'un joueur, ouvert depuis son nom dans la grille (#581).
-   *
-   * The same `PlayerSheet` as the team fiche, the match screen and «tous les
-   * matchs» — the point being that a name opens the same thing wherever it is
-   * printed, rather than the matrix growing a quick view of its own.
-   */
-  const quickView = (() => {
-    const player = quickViewId ? players.find((p) => p.id === quickViewId) : undefined
-    if (!player) return null
-
-    // The phase team whose roster holds them — «Autres joueurs du club» is
-    // precisely nobody's, and the sheet takes null for that.
-    const playerTeam = clubTeams.find((t) => t.playerIds.includes(player.id)) ?? null
-    const brulage = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
-    const history = playerPhaseHistory({
-      playerId: player.id,
-      clubTeamsInPhase: clubTeams,
-      matchDays,
-      games,
-      gameSelections,
-      teams,
-      clubs,
-    })
-    const today = todayIso()
-
-    return (
-      <PlayerSheet
-        player={player}
-        phaseLabel={phase ? `Saison ${phase.displayName}` : undefined}
-        phasePoints={phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined}
-        gamesPlayed={history.filter((e) => e.isPast).length}
-        gamesTotal={
-          playerTeam
-            ? teamGames(playerTeam).filter((g) => {
-                const md = matchDays.find((m) => m.id === g.matchDayId)
-                return !!md && gameDate(g, md) < today
-              }).length
-            : undefined
-        }
-        team={playerTeam}
-        brulageTeam={
-          brulage.burnedIntoTeamId
-            ? teams.find((t) => t.id === brulage.burnedIntoTeamId) ?? null
-            : null
-        }
-        history={history}
-        onClose={() => setQuickViewId(null)}
-      />
-    )
-  })()
+  /** L'aperçu d'un joueur, ouvert depuis son nom dans la grille (#581). */
+  const quickView = quickViewId ? (
+    <PlayerQuickView
+      playerId={quickViewId}
+      // The phase team whose roster holds them — «Autres joueurs du club» is
+      // precisely nobody's, and the sheet says less for them.
+      team={clubTeams.find((t) => t.playerIds.includes(quickViewId)) ?? null}
+      phaseId={phase?.id}
+      onClose={() => setQuickViewId(null)}
+    />
+  ) : null
 
   /** One pager for the screen: every section shows the same journées. */
   const pager =
@@ -725,18 +685,17 @@ export default function JourneesScreen() {
                         const group = visibleGroups[dayIndex]
                         if (player && day && group) setComposing({ player, day, group })
                       }}
+                      // La journée, pas seulement ce match : ce qu'on tient en
+                      // cliquant une colonne, ce sont les rencontres du club ce
+                      // jour-là (#585).
                       onOpenGame={(game) =>
                         router.push({
-                          pathname: '/match/[id]',
-                          params: { id: game.id, teamId: team.id, from: 'round' },
+                          pathname: '/round',
+                          params: { gameId: game.id, teamId: team.id },
                         })
                       }
                       onOpenPlayer={setQuickViewId}
-                      // Pushed over the section, never selected in the Équipes
-                      // list beside it: that list is on another tab, and this
-                      // is exactly the case `(detail)` exists for — a fiche
-                      // reached from somewhere that is not the list holding it.
-                      onOpenTeam={() => router.push(`/team/${team.id}`)}
+                      onOpenTeam={() => openTeam(team.id)}
                     />
                   )
                 })}
