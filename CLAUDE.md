@@ -486,6 +486,32 @@ invisible dans le diff comme dans la revue.
   rien qu'un club rencontre — et un lot écrit à moitié serait la pire réponse à
   celui qui le ferait.
 
+### Ce qu'aucun club ne possède (#570)
+- `DELETE` sur `/clubs/:id`, `/seasons/:id`, `/phases/:id`, `/divisions/:id`,
+  `/groups/:id` et `/groups/:id/games` ne demandait qu'une session valide. Le
+  premier efface le club, ses adresses, ses canaux et son logo **dans un seul
+  batch** : n'importe quel licencié connecté supprimait n'importe quel club.
+- La règle est la moitié la plus simple de #558 : **administrateur général, et
+  personne d'autre** — une saison, une phase, une division, le calendrier d'une
+  poule et l'existence d'un club ne sont la propriété d'aucun club. Un
+  administrateur de club n'y touche pas davantage qu'un joueur.
+- **`isGeneralAdmin` est posé comme sa propre question**, jamais comme
+  `administers(viewer, undefined)`, qui rend aujourd'hui la même réponse : ce
+  qu'on demande est « est-ce un administrateur général ? » et non « n'administre-
+  t-il aucun club en particulier ? », et les deux divergeraient au premier cas
+  nouveau qu'apprendrait `administers`.
+- Il existait déjà, pour les compétitions (#482) et la file d'onboarding (#474),
+  mais **déclaré au milieu des routes d'onboarding** — assez loin de ses
+  appelants pour que le commentaire de #482 doive expliquer où le trouver. Il
+  remonte auprès de `managingViewer` et `administers`, dont il est le voisin.
+- **Ce qui compte autant que le 403, c'est que rien n'atteigne le batch.** Ces
+  routes suppriment en un `db.batch` : un garde qui refuserait après avoir
+  écrit serait indiscernable du dehors, d'où un test par route qui vérifie
+  qu'aucun `DELETE` n'est parti.
+- Les **créations et modifications** des mêmes objets restent ouvertes, ainsi
+  que les routes `import` : c'est le même correctif, sans l'irréversibilité, et
+  il attend son ticket.
+
 ### Répondre, composer, diriger une équipe (#569)
 - **La règle existait ; elle n'était nulle part.** Dispos, compositions et
   `PATCH /teams/:id` ne demandaient qu'une session valide : n'importe quel
