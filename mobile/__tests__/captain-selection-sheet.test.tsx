@@ -67,6 +67,7 @@ function renderSheet({
   clubPlayers = others,
   initialSelection = [] as string[],
   onSave = jest.fn(),
+  onOpenPlayer = jest.fn(),
   eligibility = {} as Eligibility,
 } = {}) {
   render(
@@ -76,6 +77,7 @@ function renderSheet({
       clubs={[club]}
       playersPerGame={4}
       getAvailability={() => undefined}
+      onOpenPlayer={onOpenPlayer}
       initialSelection={initialSelection}
       selectionData={{
         matchDayId: matchDay.id,
@@ -90,7 +92,7 @@ function renderSheet({
       onClose={jest.fn()}
     />,
   )
-  return { onSave }
+  return { onSave, onOpenPlayer }
 }
 
 describe('Feuille de sélection — joueurs archivés (#454)', () => {
@@ -145,7 +147,8 @@ describe('Feuille de sélection — filtrer par nom (#454)', () => {
     const { onSave } = renderSheet()
 
     fireEvent.changeText(screen.getByPlaceholderText('Rechercher un joueur'), 'zilbermann')
-    fireEvent.press(screen.getByText('Frédéric Zilbermann'))
+    // La case, et elle seule, retient (#585) : le nom ouvre l'aperçu.
+    fireEvent.press(screen.getByTestId('selection-toggle-o2'))
     fireEvent.press(screen.getByText('Enregistrer'))
 
     expect(onSave).toHaveBeenCalledWith(['o2'])
@@ -221,5 +224,44 @@ describe('Feuille de sélection — l’éligibilité aux compétitions (#498)',
     renderSheet({ eligibility: { divisions: [{ ...division, competitionId: undefined }] } })
 
     expect(screen.getByText('Pascal Afflard')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Deux cibles sur une ligne (#585)
+//
+// The row was one big toggle, so there was nowhere left to ask «qui est-ce ?» —
+// which is the question a captain has *while* composing, not after. The box
+// picks; the name opens the aperçu, as a name does everywhere else in the app.
+// ---------------------------------------------------------------------------
+describe('la case et le nom', () => {
+  it('retient depuis la case', () => {
+    const { onSave, onOpenPlayer } = renderSheet()
+
+    fireEvent.press(screen.getByTestId('selection-toggle-p1'))
+    fireEvent.press(screen.getByText('Enregistrer'))
+
+    expect(onSave).toHaveBeenCalledWith(['p1'])
+    expect(onOpenPlayer).not.toHaveBeenCalled()
+  })
+
+  it('ouvre l’aperçu depuis le nom, sans rien retenir', () => {
+    const { onSave, onOpenPlayer } = renderSheet()
+
+    fireEvent.press(screen.getByTestId('selection-open-p1'))
+
+    expect(onOpenPlayer).toHaveBeenCalledWith('p1')
+    // Et surtout : la composition n'a pas bougé sous le doigt.
+    fireEvent.press(screen.getByText('Enregistrer'))
+    expect(onSave).toHaveBeenCalledWith([])
+  })
+
+  it('décoche aussi depuis la case', () => {
+    const { onSave } = renderSheet({ initialSelection: ['p1'] })
+
+    fireEvent.press(screen.getByTestId('selection-toggle-p1'))
+    fireEvent.press(screen.getByText('Enregistrer'))
+
+    expect(onSave).toHaveBeenCalledWith([])
   })
 })

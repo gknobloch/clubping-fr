@@ -53,6 +53,7 @@ export function CaptainSelectionSheet({
   teamPlayers,
   clubs,
   playersPerGame,
+  onOpenPlayer,
   getAvailability,
   initialSelection,
   selectionData,
@@ -63,6 +64,8 @@ export function CaptainSelectionSheet({
   teamPlayers: Player[]
   clubs: Club[]
   playersPerGame: number
+  /** Ouvre l'aperçu d'un licencié (#585). Sans lui, le nom reste inerte. */
+  onOpenPlayer?: (playerId: string) => void
   getAvailability: (pid: string) => AvailabilityStatus | undefined
   initialSelection: string[]
   selectionData: SelectionData
@@ -168,31 +171,48 @@ export function CaptainSelectionSheet({
     const lockedTeam = !picked ? committedElsewhere.get(p.id) : undefined
     const locked = lockedTeam !== undefined
     return (
-      <TouchableOpacity
-        key={p.id}
-        style={[sel.playerRow, locked && sel.playerRowLocked]}
-        onPress={() => toggle(p.id)}
-        disabled={locked}
-      >
-        <View style={[sel.check, picked && sel.checkActive]}>
-          {picked && <Text style={sel.checkMark}>✓</Text>}
-        </View>
-        <View style={sel.nameCell}>
-          <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
-            {p.firstName} {p.lastName}
-          </Text>
-          {unlicensed.has(p.id) && <LicenceTag />}
-        </View>
-        {locked ? (
-          <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
-        ) : cfg ? (
-          <View style={[sel.availChip, { backgroundColor: cfg.bg }]}>
-            <Text style={[sel.availTxt, { color: cfg.color }]}>{cfg.short}</Text>
+      // Two targets, not one (#585). The box alone picks; the name opens the
+      // aperçu, as a name does everywhere else in the app. The row used to be
+      // one big toggle, so there was nowhere left to ask «who is this?» —
+      // which is the question a captain has while composing, not after.
+      <View key={p.id} style={[sel.playerRow, locked && sel.playerRowLocked]}>
+        <TouchableOpacity
+          testID={`selection-toggle-${p.id}`}
+          style={sel.checkTarget}
+          onPress={() => toggle(p.id)}
+          disabled={locked}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: picked, disabled: locked }}
+          accessibilityLabel={`${p.firstName} ${p.lastName}`}
+        >
+          <View style={[sel.check, picked && sel.checkActive]}>
+            {picked && <Text style={sel.checkMark}>✓</Text>}
           </View>
-        ) : (
-          <Text style={sel.noAvail}>—</Text>
-        )}
-      </TouchableOpacity>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID={`selection-open-${p.id}`}
+          style={sel.nameTarget}
+          onPress={() => onOpenPlayer?.(p.id)}
+          disabled={!onOpenPlayer}
+          accessibilityRole={onOpenPlayer ? 'button' : undefined}
+        >
+          <View style={sel.nameCell}>
+            <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
+              {p.firstName} {p.lastName}
+            </Text>
+            {unlicensed.has(p.id) && <LicenceTag />}
+          </View>
+          {locked ? (
+            <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
+          ) : cfg ? (
+            <View style={[sel.availChip, { backgroundColor: cfg.bg }]}>
+              <Text style={[sel.availTxt, { color: cfg.color }]}>{cfg.short}</Text>
+            </View>
+          ) : (
+            <Text style={sel.noAvail}>—</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     )
   }
 
@@ -280,8 +300,18 @@ const sel = StyleSheet.create({
     textAlign: 'center', paddingVertical: 24,
   },
   playerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row', alignItems: 'center',
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  // The box is a small mark in a large target: 44pt, the project's rule below
+  // `md:`, which the row used to give it by being the target itself.
+  checkTarget: {
+    width: 44, minHeight: 44, alignItems: 'flex-start', justifyContent: 'center',
+  },
+  // Everything else on the row, so «qui est-ce ?» has the space the box does
+  // not need.
+  nameTarget: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44,
   },
   check: {
     width: 22, height: 22, borderRadius: 11, borderWidth: 2,

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { useLayout } from '@/constants/layout'
 import { Sheet } from '@/components/Sheet'
 import { TeamBadge } from '@/components/TeamBadge'
 import { LicenceTag } from '@/components/LicenceTag'
@@ -75,9 +76,23 @@ export function PlayerSheet({
     players.filter((p) => p.clubId === player.clubId),
   ).has(player.id)
   const router = useRouter()
+  const { isTwoPane } = useLayout()
 
+  // «Profil» lands in the Joueurs tab with this licensee selected beside the
+  // club's list, rather than pushing a fiche over whatever section you were in
+  // (#585). On a phone there is no list to land beside, so it stays the push it
+  // has always been.
+  //
+  // The default is the whole of it: every screen that opens this sheet gets the
+  // same destination, which is the point. An `onProfile` of your own is for a
+  // caller that must do something *first* — closing its own sheet, say.
   const openProfile =
-    onProfile ?? (() => { onClose(); router.push(`/player/${player.id}`) })
+    onProfile ??
+    (() => {
+      onClose()
+      if (isTwoPane) router.push({ pathname: '/joueurs', params: { selected: player.id } })
+      else router.push(`/player/${player.id}`)
+    })
 
   return (
     <Sheet onClose={onClose} testID="player-sheet">

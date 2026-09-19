@@ -15,15 +15,12 @@ import { GamePager } from '@/components/GamePager'
 import { usePagerSwipe } from '@/components/Pager'
 import { PlayerRow } from '@/components/PlayerRow'
 import { clubLicences } from '@shared/lib/seasonLicences'
-import { PlayerSheet } from '@/components/PlayerSheet'
-import type { PlayerHistoryEntry } from '@/components/PlayerSheet'
-import { playerPhaseHistory } from '@/utils/playerHistory'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
 import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
-import { computeBrulage } from '@shared/lib/brulage'
 import { gameAxisFromParam, gameNeighbours, type GameStep } from '@shared/lib/gameNeighbours'
 import { sortByName } from '@shared/lib/sortByName'
 import { pointsFor } from '@shared/lib/phasePoints'
@@ -202,18 +199,6 @@ export default function MatchDetailScreen() {
   })
 
 
-  // Game history (this phase, across the club's teams) for the quick-view sheet.
-  const historyFor = (player: Player): PlayerHistoryEntry[] =>
-    playerPhaseHistory({
-      playerId: player.id,
-      clubTeamsInPhase,
-      matchDays,
-      games,
-      gameSelections,
-      teams,
-      clubs,
-    })
-
   return (
     <Screen>
       <View style={styles.pan} {...swipe}>
@@ -373,6 +358,10 @@ export default function MatchDetailScreen() {
           teamPlayers={roster}
           clubs={clubs}
           playersPerGame={playersPerGame}
+          onOpenPlayer={(pid) => {
+            const p = playerMap.get(pid)
+            if (p) setQuickViewPlayer(p)
+          }}
           getAvailability={(pid) => getAvail(pid)}
           initialSelection={selection}
           selectionData={{
@@ -395,33 +384,17 @@ export default function MatchDetailScreen() {
         />
       )}
 
-      {quickViewPlayer && (() => {
-        const viewTeam = clubTeamsInPhase.find((t) => t.playerIds.includes(quickViewPlayer.id)) ?? team
-        const viewPhase = phases.find((p) => p.id === team.phaseId)
-        const brulage = computeBrulage(quickViewPlayer.id, clubTeamsInPhase, matchDays, games, gameSelections)
-        const brulageTeam = brulage.burnedIntoTeamId
-          ? teams.find((t) => t.id === brulage.burnedIntoTeamId) ?? null
-          : null
-        const history = historyFor(quickViewPlayer)
-        const totalPlayed = games.filter((g) => {
-          if (g.homeTeamId !== viewTeam.id && g.awayTeamId !== viewTeam.id) return false
-          const md = matchDays.find((m) => m.id === g.matchDayId)
-          return !!md && gameDate(g, md) < today
-        }).length
-        return (
-          <PlayerSheet
-            player={quickViewPlayer}
-            phaseLabel={viewPhase ? `Saison ${viewPhase.displayName}` : undefined}
-            phasePoints={pointsFor(playerPhasePoints, viewTeam.phaseId, quickViewPlayer.id)}
-            gamesPlayed={history.filter((e) => e.isPast).length}
-            gamesTotal={totalPlayed}
-            team={viewTeam}
-            brulageTeam={brulageTeam}
-            history={history}
-            onClose={() => setQuickViewPlayer(null)}
-          />
-        )
-      })()}
+      {quickViewPlayer && (
+        <PlayerQuickView
+          playerId={quickViewPlayer.id}
+          // Their own team, not the one whose screen this is: an opponent's
+          // roster is read from here too, and «Équipe» must name theirs.
+          team={
+            clubTeamsInPhase.find((t) => t.playerIds.includes(quickViewPlayer.id)) ?? team
+          }
+          onClose={() => setQuickViewPlayer(null)}
+        />
+      )}
 
       {showSheet && (() => {
         const club = clubs.find((c) => c.id === team.clubId)

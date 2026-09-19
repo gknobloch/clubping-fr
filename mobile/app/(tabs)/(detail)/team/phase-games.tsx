@@ -8,17 +8,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
-import { computeBrulage } from '@shared/lib/brulage'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
-import { pointsFor } from '@shared/lib/phasePoints'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
-import { todayIso } from '@/utils/weeks'
-import { playerPhaseHistory } from '@/utils/playerHistory'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
-import { PlayerSheet } from '@/components/PlayerSheet'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -31,7 +27,7 @@ import { fonts } from '@/constants/typography'
 // ---------------------------------------------------------------------------
 export default function PhaseGamesScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>()
-  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections, playerPhasePoints } = useAppData()
+  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
 
@@ -106,37 +102,7 @@ export default function PhaseGamesScreen() {
   }, [team, teamSelections, players])
 
   // Club teams in the same phase (for brûlage computation)
-  const clubTeamsInPhase = useMemo(
-    () => team ? teams.filter((t) => t.clubId === team.clubId && t.phaseId === team.phaseId) : [],
-    [team, teams],
-  )
-
-  // Per-player history across ALL club teams in the phase (not just current team)
-  const playerHistory = useMemo(
-    () =>
-      selectedPlayer
-        ? playerPhaseHistory({
-            playerId: selectedPlayer.id,
-            clubTeamsInPhase,
-            matchDays,
-            games,
-            gameSelections,
-            teams,
-            clubs,
-          })
-        : [],
-    [selectedPlayer, clubTeamsInPhase, matchDays, games, gameSelections, teams, clubs],
-  )
-
-  const brulageInfo = useMemo(() => {
-    if (!selectedPlayer || !team) return null
-    const info = computeBrulage(selectedPlayer.id, clubTeamsInPhase, matchDays, games, gameSelections)
-    if (!info.burnedIntoTeamId) return null
-    return teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
-  }, [selectedPlayer, team, clubTeamsInPhase, matchDays, games, gameSelections, teams])
-
   const totalGames = teamGames.length
-  const today = todayIso()
 
   if (!baseTeam) {
     return (
@@ -144,11 +110,6 @@ export default function PhaseGamesScreen() {
         <Text style={styles.empty}>Équipe introuvable.</Text>
       </Screen>
     )
-  }
-
-  function openProfile(player: Player) {
-    setSelectedPlayer(null)
-    router.push({ pathname: '/player/[id]', params: { id: player.id } })
   }
 
   return (
@@ -267,21 +228,11 @@ export default function PhaseGamesScreen() {
       </ScrollView>
 
       {selectedPlayer && team && (
-        <PlayerSheet
-          player={selectedPlayer}
-          phaseLabel={currentEntry?.label}
-          phasePoints={pointsFor(playerPhasePoints, team.phaseId, selectedPlayer.id)}
-          gamesPlayed={playerHistory.filter((e) => e.isPast).length}
-          gamesTotal={games.filter((g) => {
-            if (g.homeTeamId !== team.id && g.awayTeamId !== team.id) return false
-            const md = matchDays.find((m) => m.id === g.matchDayId)
-            return !!md && gameDate(g, md) < today
-          }).length}
+        <PlayerQuickView
+          playerId={selectedPlayer.id}
           team={team}
-          brulageTeam={brulageInfo}
-          history={playerHistory}
+          phaseLabel={currentEntry?.label}
           onClose={() => setSelectedPlayer(null)}
-          onProfile={() => openProfile(selectedPlayer)}
         />
       )}
     </Screen>

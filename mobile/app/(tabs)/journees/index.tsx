@@ -13,9 +13,7 @@ import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import { AvailabilitySheet } from '@/components/AvailabilitySheet'
 import { CompositionSheet, type CompositionOption } from '@/components/CompositionSheet'
-import { PlayerSheet } from '@/components/PlayerSheet'
-import { playerPhaseHistory } from '@/utils/playerHistory'
-import { todayIso } from '@/utils/weeks'
+import { PlayerQuickView } from '@/components/PlayerQuickView'
 import {
   MatchDayMatrix,
   matrixColumns,
@@ -612,57 +610,17 @@ export default function JourneesScreen() {
     />
   )
 
-  /**
-   * L'aperçu d'un joueur, ouvert depuis son nom dans la grille (#581).
-   *
-   * The same `PlayerSheet` as the team fiche, the match screen and «tous les
-   * matchs» — the point being that a name opens the same thing wherever it is
-   * printed, rather than the matrix growing a quick view of its own.
-   */
-  const quickView = (() => {
-    const player = quickViewId ? players.find((p) => p.id === quickViewId) : undefined
-    if (!player) return null
-
-    // The phase team whose roster holds them — «Autres joueurs du club» is
-    // precisely nobody's, and the sheet takes null for that.
-    const playerTeam = clubTeams.find((t) => t.playerIds.includes(player.id)) ?? null
-    const brulage = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
-    const history = playerPhaseHistory({
-      playerId: player.id,
-      clubTeamsInPhase: clubTeams,
-      matchDays,
-      games,
-      gameSelections,
-      teams,
-      clubs,
-    })
-    const today = todayIso()
-
-    return (
-      <PlayerSheet
-        player={player}
-        phaseLabel={phase ? `Saison ${phase.displayName}` : undefined}
-        phasePoints={phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined}
-        gamesPlayed={history.filter((e) => e.isPast).length}
-        gamesTotal={
-          playerTeam
-            ? teamGames(playerTeam).filter((g) => {
-                const md = matchDays.find((m) => m.id === g.matchDayId)
-                return !!md && gameDate(g, md) < today
-              }).length
-            : undefined
-        }
-        team={playerTeam}
-        brulageTeam={
-          brulage.burnedIntoTeamId
-            ? teams.find((t) => t.id === brulage.burnedIntoTeamId) ?? null
-            : null
-        }
-        history={history}
-        onClose={() => setQuickViewId(null)}
-      />
-    )
-  })()
+  /** L'aperçu d'un joueur, ouvert depuis son nom dans la grille (#581). */
+  const quickView = quickViewId ? (
+    <PlayerQuickView
+      playerId={quickViewId}
+      // The phase team whose roster holds them — «Autres joueurs du club» is
+      // precisely nobody's, and the sheet says less for them.
+      team={clubTeams.find((t) => t.playerIds.includes(quickViewId)) ?? null}
+      phaseId={phase?.id}
+      onClose={() => setQuickViewId(null)}
+    />
+  ) : null
 
   /** One pager for the screen: every section shows the same journées. */
   const pager =
