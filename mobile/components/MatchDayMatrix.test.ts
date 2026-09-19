@@ -2,6 +2,7 @@ import {
   MATRIX_DAY_WIDTH,
   MATRIX_FIXED_WIDTH,
   matrixColumns,
+  summaryVerdict,
   visibleMatchDayCount,
 } from './MatchDayMatrix'
 
@@ -99,5 +100,57 @@ describe('matrixColumns', () => {
     expect(c.joueur).toBe(180) // no slack to hand out
     expect(c.total).toBe(772)
     expect(c.total).toBeGreaterThan(712)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// La ligne « Résumé » (#580)
+//
+// The grid's Compo cells each state one player's team, so a line-up with five
+// names in a four-place division looks correct on all five rows. This row is
+// the only thing that answers about the journée, and the `===` below is what
+// makes it answer at all.
+// ---------------------------------------------------------------------------
+describe('summaryVerdict', () => {
+  it('turns a compo red when it holds one too many', () => {
+    // The case #580 was filed on: four in the section plus a fifth fielded
+    // from «Autres joueurs du club».
+    expect(summaryVerdict({ available: 4, selected: 5, required: 4 })).toEqual({
+      availableOk: true,
+      selectedOk: false,
+    })
+  })
+
+  it('turns a compo red when it is short too', () => {
+    expect(summaryVerdict({ available: 4, selected: 3, required: 4 }).selectedOk).toBe(false)
+  })
+
+  it('is green only on the exact count', () => {
+    expect(summaryVerdict({ available: 4, selected: 4, required: 4 }).selectedOk).toBe(true)
+  })
+
+  // The asymmetry, which is the whole point: availability is a floor and a
+  // line-up is an exact count. A club with nine willing players has done
+  // nothing wrong; a feuille de match with nine names is not a feuille.
+  it('treats spare availability as fine and spare selection as wrong', () => {
+    const plenty = summaryVerdict({ available: 9, selected: 9, required: 4 })
+
+    expect(plenty.availableOk).toBe(true)
+    expect(plenty.selectedOk).toBe(false)
+  })
+
+  it('is red on availability only below the requirement', () => {
+    expect(summaryVerdict({ available: 3, selected: 4, required: 4 }).availableOk).toBe(false)
+    expect(summaryVerdict({ available: 4, selected: 4, required: 4 }).availableOk).toBe(true)
+  })
+
+  // A three-player division is the other half of the seed data (GE 6, GE 7),
+  // so the rule must not be 4 in disguise.
+  it('reads the division, not a constant', () => {
+    expect(summaryVerdict({ available: 3, selected: 3, required: 3 })).toEqual({
+      availableOk: true,
+      selectedOk: true,
+    })
+    expect(summaryVerdict({ available: 3, selected: 4, required: 3 }).selectedOk).toBe(false)
   })
 })
