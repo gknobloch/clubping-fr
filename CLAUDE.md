@@ -486,6 +486,26 @@ invisible dans le diff comme dans la revue.
   rien qu'un club rencontre — et un lot écrit à moitié serait la pire réponse à
   celui qui le ferait.
 
+### Une photo est à celui qu'elle montre (#571)
+- `PUT` et `DELETE /users/:id/avatar` ne regardaient pas l'appelant : n'importe
+  quel licencié connecté remplaçait ou effaçait la photo de n'importe qui, dans
+  n'importe quel club — une image affichée à côté d'un nom, partout où l'une ou
+  l'autre app imprime un membre.
+- La règle est la plus étroite de l'API, et étroite exprès : **soi-même, et
+  personne d'autre**. Ni le capitaine, ni l'administrateur du club, ni
+  l'administrateur général. Les deux seuls appelants sont « Mon compte »
+  (`ComptePage`, `compte.tsx`) et tous deux résolvent la ligne par
+  `p.id === user.id`, donc aucune écriture légitime n'y perd rien.
+- Qu'un administrateur puisse retirer une image inconvenante est une **décision
+  à prendre**, pas une conséquence de la règle — et `administers` dit déjà
+  comment l'écrire le jour où on la prend.
+- **La lecture reste publique**, et c'est le piège à ne pas refermer par
+  mégarde : un `<img>` ne porte pas d'en-tête `Authorization`, donc `GET` est
+  hors `needsSession` (#320) et une erreur ici ferait disparaître tous les
+  avatars en silence au lieu d'échouer bruyamment. `authGuard.ts` disait
+  « Writes still require a session » : vrai, et insuffisant — une session, oui,
+  mais celle de n'importe qui.
+
 ### Ce qu'aucun club ne possède (#570)
 - `DELETE` sur `/clubs/:id`, `/seasons/:id`, `/phases/:id`, `/divisions/:id`,
   `/groups/:id` et `/groups/:id/games` ne demandait qu'une session valide. Le

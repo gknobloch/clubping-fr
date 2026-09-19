@@ -162,6 +162,23 @@ const isGeneralAdmin = (c: { get: (k: 'user') => UserRow | undefined }) => {
 }
 
 /**
+ * Whether the caller is that member themselves (#571).
+ *
+ * The narrowest rule in this file, and narrower on purpose: nobody puts a
+ * picture on somebody else's name, not a captain and not their club's admin.
+ * `OWN_PROFILE_FIELDS` is the nearest thing to it (#558) and even that has an
+ * administrator's side; this one has none. Should an admin ever need to take
+ * an unsuitable image down, that is a decision to make rather than a
+ * consequence of the rule — and `administers` already says how to say it.
+ *
+ * A missing viewer is the local hatch (#138).
+ */
+const isSelf = (c: { get: (k: 'user') => UserRow | undefined }, userId: string) => {
+  const u = c.get('user')
+  return !u || u.id === userId
+}
+
+/**
  * The caller as the match rules read them (#569), or `null` under
  * AUTH_GUARD_DISABLED.
  *
@@ -4284,6 +4301,11 @@ app.get('/users/:id/avatar', async (c) => {
 
 app.put('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
+  // The GET beside this one is public on purpose — an <img> carries no
+  // Authorization header (`authGuard.ts`) — and the writes "still require a
+  // session", which was true and not enough: a session, yes, but anybody's
+  // (#571).
+  if (!isSelf(c, id)) return c.json(notAllowed, 403)
   const body = await c.req.json() as { data?: string; contentType?: string }
   if (!body.data) return c.json({ error: 'missing data' }, 400)
   const updatedAt = new Date().toISOString()
@@ -4298,6 +4320,7 @@ app.put('/users/:id/avatar', async (c) => {
 
 app.delete('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
+  if (!isSelf(c, id)) return c.json(notAllowed, 403)
   await c.env.DB.prepare('DELETE FROM user_avatars WHERE user_id = ?').bind(id).run()
   return c.json({ ok: true })
 })
