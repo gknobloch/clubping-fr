@@ -13,6 +13,9 @@ import { MatchHeader } from '@/components/MatchHeader'
 import { Switcher } from '@/components/Switcher'
 import { AvailabilitySheet } from '@/components/AvailabilitySheet'
 import { CompositionSheet, type CompositionOption } from '@/components/CompositionSheet'
+import { PlayerSheet } from '@/components/PlayerSheet'
+import { playerPhaseHistory } from '@/utils/playerHistory'
+import { todayIso } from '@/utils/weeks'
 import {
   MatchDayMatrix,
   matrixColumns,
@@ -254,6 +257,7 @@ export default function JourneesScreen() {
   const [otherQuery, setOtherQuery] = useState('')
   const [editing, setEditing] = useState<{ player: Player; team: Team; game: Game; day: MatrixDay } | null>(null)
   const [composing, setComposing] = useState<{ player: Player; day: MatrixDay; group: MatchDayGroup } | null>(null)
+  const [quickViewId, setQuickViewId] = useState<string | null>(null)
 
   const dayCount = visibleMatchDayCount(paneWidth ?? 0)
   const maxOffset = Math.max(0, matchDayGroups.length - dayCount)
@@ -608,6 +612,58 @@ export default function JourneesScreen() {
     />
   )
 
+  /**
+   * L'aperçu d'un joueur, ouvert depuis son nom dans la grille (#581).
+   *
+   * The same `PlayerSheet` as the team fiche, the match screen and «tous les
+   * matchs» — the point being that a name opens the same thing wherever it is
+   * printed, rather than the matrix growing a quick view of its own.
+   */
+  const quickView = (() => {
+    const player = quickViewId ? players.find((p) => p.id === quickViewId) : undefined
+    if (!player) return null
+
+    // The phase team whose roster holds them — «Autres joueurs du club» is
+    // precisely nobody's, and the sheet takes null for that.
+    const playerTeam = clubTeams.find((t) => t.playerIds.includes(player.id)) ?? null
+    const brulage = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
+    const history = playerPhaseHistory({
+      playerId: player.id,
+      clubTeamsInPhase: clubTeams,
+      matchDays,
+      games,
+      gameSelections,
+      teams,
+      clubs,
+    })
+    const today = todayIso()
+
+    return (
+      <PlayerSheet
+        player={player}
+        phaseLabel={phase ? `Saison ${phase.displayName}` : undefined}
+        phasePoints={phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined}
+        gamesPlayed={history.filter((e) => e.isPast).length}
+        gamesTotal={
+          playerTeam
+            ? teamGames(playerTeam).filter((g) => {
+                const md = matchDays.find((m) => m.id === g.matchDayId)
+                return !!md && gameDate(g, md) < today
+              }).length
+            : undefined
+        }
+        team={playerTeam}
+        brulageTeam={
+          brulage.burnedIntoTeamId
+            ? teams.find((t) => t.id === brulage.burnedIntoTeamId) ?? null
+            : null
+        }
+        history={history}
+        onClose={() => setQuickViewId(null)}
+      />
+    )
+  })()
+
   /** One pager for the screen: every section shows the same journées. */
   const pager =
     matchDayGroups.length > dayCount
@@ -675,6 +731,12 @@ export default function JourneesScreen() {
                           params: { id: game.id, teamId: team.id, from: 'round' },
                         })
                       }
+                      onOpenPlayer={setQuickViewId}
+                      // Pushed over the section, never selected in the Équipes
+                      // list beside it: that list is on another tab, and this
+                      // is exactly the case `(detail)` exists for — a fiche
+                      // reached from somewhere that is not the list holding it.
+                      onOpenTeam={() => router.push(`/team/${team.id}`)}
                     />
                   )
                 })}
@@ -703,6 +765,9 @@ export default function JourneesScreen() {
                     const group = visibleGroups[dayIndex]
                     if (player && day && group) setComposing({ player, day, group })
                   }}
+                  // No `onOpenTeam`: this section is the club's leftovers and
+                  // has no fiche. The names still lead somewhere.
+                  onOpenPlayer={setQuickViewId}
                 />
               )
             })()}
@@ -710,6 +775,7 @@ export default function JourneesScreen() {
         </ScrollView>
         {sheet}
         {composeSheet}
+        {quickView}
       </Screen>
     )
   }

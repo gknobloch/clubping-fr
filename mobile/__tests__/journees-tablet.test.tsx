@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native'
 import { render, TABLET } from '@/__tests__/support/render'
 import {
   PHONE_WIDTH,
@@ -601,5 +601,65 @@ describe('la ligne « Résumé »', () => {
 
     expect(screen.getByText('Autres joueurs du club')).toBeTruthy()
     expect(screen.getAllByTestId('matrix-summary')).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Ce qu'un nom ouvre, et ce qu'ouvre un en-tête (#581)
+//
+// Only the journée headers and the two controls of a cell reacted to a touch.
+// The matrix is where a dirigeant spends the most time, and it was the one
+// place in the app where a printed name opened nothing.
+// ---------------------------------------------------------------------------
+describe('ouvrir depuis la grille', () => {
+  const spare: Player = {
+    ...captain, id: 'p8', firstName: 'Hugo', lastName: 'Bernard', licenseNumber: '9900088',
+  }
+
+  const renderTablet = () => {
+    setWindowSize(TABLET_SMALL)
+    render(<JourneesScreen />, { metrics: TABLET })
+    layoutAt(LANDSCAPE)
+  }
+
+  it('ouvre l’aperçu du joueur depuis son nom', () => {
+    renderTablet()
+
+    fireEvent.press(screen.getByTestId('open-player-p1'))
+
+    // The tapped one, not merely a sheet: the grid has a row per player, and
+    // the name is printed in both, so the lookup is scoped to the sheet.
+    const sheet = within(screen.getByTestId('player-sheet'))
+    expect(sheet.getByText('Louis Thomas')).toBeTruthy()
+  })
+
+  it('ouvre aussi celui d’un joueur d’aucune équipe', () => {
+    // «Autres joueurs du club»: no roster, so the sheet gets no team — which
+    // it takes, and which is the whole reason the prop is nullable.
+    mockData.players = [captain, mate, spare]
+    renderTablet()
+
+    fireEvent.press(screen.getByTestId('open-player-p8'))
+
+    expect(within(screen.getByTestId('player-sheet')).getByText('Hugo Bernard')).toBeTruthy()
+  })
+
+  it('mène à la fiche de l’équipe depuis son en-tête', () => {
+    renderTablet()
+
+    fireEvent.press(screen.getByTestId('matrix-open-team'))
+
+    expect(mockPush).toHaveBeenCalledWith('/team/t1')
+  })
+
+  it('laisse l’en-tête des « autres joueurs » inerte', () => {
+    // That section is the club's leftovers: no team, so no fiche to lead to.
+    mockData.players = [captain, mate, spare]
+    renderTablet()
+
+    const headers = screen.getAllByTestId('matrix-open-team')
+
+    // One team on screen, so one live header — the other section's is disabled.
+    expect(headers.filter((h) => h.props.accessibilityRole === 'button')).toHaveLength(1)
   })
 })
