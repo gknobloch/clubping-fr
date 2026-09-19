@@ -644,12 +644,17 @@ describe('ouvrir depuis la grille', () => {
     expect(within(screen.getByTestId('player-sheet')).getByText('Hugo Bernard')).toBeTruthy()
   })
 
-  it('mène à la fiche de l’équipe depuis son en-tête', () => {
+  it('mène à l’équipe dans sa section, liste à côté', () => {
+    // #584 poussait la fiche par-dessus la matrice ; #585 la fait atterrir
+    // dans l'onglet Équipes, sélectionnée à côté de la liste des équipes.
     renderTablet()
 
     fireEvent.press(screen.getByTestId('matrix-open-team'))
 
-    expect(mockPush).toHaveBeenCalledWith('/team/t1')
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/equipes',
+      params: { selected: 't1' },
+    })
   })
 
   it('laisse l’en-tête des « autres joueurs » inerte', () => {

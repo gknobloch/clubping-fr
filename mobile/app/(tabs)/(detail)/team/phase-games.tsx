@@ -14,6 +14,7 @@ import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
+import { useOpenTeam } from '@/utils/openFiche'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -30,6 +31,7 @@ export default function PhaseGamesScreen() {
   const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
+  const openTeam = useOpenTeam()
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
@@ -160,7 +162,7 @@ export default function PhaseGamesScreen() {
         {team && (
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => router.push({ pathname: '/team/[id]', params: { id: team.id } })}
+            onPress={() => openTeam(team.id)}
           >
             <View style={styles.linkLeft}>
               <Ionicons name="people-outline" size={16} color={colors.textSecondary} />

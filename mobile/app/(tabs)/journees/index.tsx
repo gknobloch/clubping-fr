@@ -14,6 +14,7 @@ import { Switcher } from '@/components/Switcher'
 import { AvailabilitySheet } from '@/components/AvailabilitySheet'
 import { CompositionSheet, type CompositionOption } from '@/components/CompositionSheet'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
+import { useOpenTeam } from '@/utils/openFiche'
 import {
   MatchDayMatrix,
   matrixColumns,
@@ -122,6 +123,7 @@ export default function JourneesScreen() {
     [playerSeasonLicences, seasons, players, user?.clubId],
   )
   const router = useRouter()
+  const openTeam = useOpenTeam()
 
   const myClubId = user?.clubId
   const myPlayerId = user?.isPlayer ? user.id : undefined
@@ -690,11 +692,7 @@ export default function JourneesScreen() {
                         })
                       }
                       onOpenPlayer={setQuickViewId}
-                      // Pushed over the section, never selected in the Équipes
-                      // list beside it: that list is on another tab, and this
-                      // is exactly the case `(detail)` exists for — a fiche
-                      // reached from somewhere that is not the list holding it.
-                      onOpenTeam={() => router.push(`/team/${team.id}`)}
+                      onOpenTeam={() => openTeam(team.id)}
                     />
                   )
                 })}
