@@ -151,10 +151,11 @@ const notFound = { error: 'not_found' } as const
  * particular?", and the two would part company the first time `administers`
  * learned a new case.
  *
- * It answers for everything no club owns — a season, a phase, a division, a
- * poule's calendar, and the existence of a club (#570) — as well as for the
- * competitions of #482 and the onboarding queue of #474, which is where it used
- * to be declared, far from every caller but one.
+ * It answers for everything no club owns: the whole skeleton of the competition
+ * — seasons, phases, divisions, poules, and the existence of a club — whether
+ * it is being built (#576) or taken down (#570), as well as the competitions of
+ * #482 and the onboarding queue of #474, which is where it used to be declared,
+ * far from every caller but one.
  */
 const isGeneralAdmin = (c: { get: (k: 'user') => UserRow | undefined }) => {
   const u = c.get('user')
@@ -534,6 +535,7 @@ app.get('/seasons/fftt-current', async (c) => {
 // POST /seasons/import-current — import the FFTT current season, make it
 // active, and archive the previously active season(s).
 app.post('/seasons/import-current', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
   const fftt = await fetchFfttCurrentSeason()
   if (!fftt) return c.json({ error: 'fftt_unavailable' }, 502)
@@ -551,6 +553,7 @@ app.post('/seasons/import-current', async (c) => {
 })
 
 app.post('/seasons', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
   // The id is always derived from the name (FFTT convention), never trusted
   // from the client — this is what prevents garbage seasons.
@@ -568,6 +571,7 @@ app.post('/seasons', async (c) => {
 })
 
 app.patch('/seasons/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []
@@ -603,6 +607,7 @@ app.get('/fftt/organizations', async (c) => {
 
 // POST /fftt/organizations/refresh — re-fetch the list from FFTT and replace the cache.
 app.post('/fftt/organizations/refresh', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   let members: Array<{ '@type': string; id: number; identifier: string; name: string }>
   try {
     const res = await fetch('https://apiv2.fftt.com/api/organizations/all')
@@ -1136,6 +1141,7 @@ async function importDivisions(
 }
 
 app.post('/divisions/import', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const b = await c.req.json()
   const p = importParams(b.organizationId, b.seasonId, b.phase, b.contestId, b.contestIdentifier)
   if (!p) return c.json({ error: 'invalid_params' }, 400)
@@ -1618,6 +1624,7 @@ app.post('/fftt/groups-preview', async (c) => {
 // locally (by pool id, or by poule number when the id is unknown), leaving
 // existing groups (and their teams) untouched.
 app.post('/groups/import', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const b = await c.req.json()
   const divisionId = typeof b.divisionId === 'string' ? b.divisionId : ''
   if (!divisionId) return c.json({ error: 'invalid_params' }, 400)
@@ -2988,6 +2995,7 @@ async function activatePhaseCascade(db: Env['Bindings']['DB'], phaseId: string, 
 }
 
 app.post('/phases', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
   const existing = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
     .bind(d.seasonId, d.name).first()
@@ -3001,6 +3009,7 @@ app.post('/phases', async (c) => {
 })
 
 app.patch('/phases/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []
@@ -3045,6 +3054,7 @@ app.delete('/phases/:id', async (c) => {
 
 // --- Divisions ---
 app.post('/divisions', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
   await c.env.DB.prepare(
     'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -3053,6 +3063,7 @@ app.post('/divisions', async (c) => {
 })
 
 app.patch('/divisions/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []
@@ -3091,6 +3102,7 @@ app.delete('/divisions/:id', async (c) => {
 })
 
 app.post('/divisions/:id/move', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const { otherId, myNewRank, otherNewRank } = await c.req.json()
   const db = c.env.DB
@@ -3236,6 +3248,7 @@ app.put('/clubs/:clubId/competitions/:competitionId/eligibility', async (c) => {
 
 // --- Clubs ---
 app.post('/clubs', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
   await c.env.DB.prepare(
     'INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, ?)'
@@ -3419,6 +3432,7 @@ app.delete('/clubs/:id/logo', async (c) => {
 
 // --- Groups ---
 app.post('/groups', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
   await c.env.DB.prepare(
     'INSERT INTO groups (id, division_id, number, team_ids, is_archived, group_id) VALUES (?, ?, ?, ?, ?, ?)'
@@ -3427,6 +3441,7 @@ app.post('/groups', async (c) => {
 })
 
 app.patch('/groups/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
   const s: string[] = [], v: unknown[] = []

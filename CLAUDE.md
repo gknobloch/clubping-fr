@@ -506,7 +506,7 @@ invisible dans le diff comme dans la revue.
   « Writes still require a session » : vrai, et insuffisant — une session, oui,
   mais celle de n'importe qui.
 
-### Ce qu'aucun club ne possède (#570)
+### Ce qu'aucun club ne possède (#570, #576)
 - `DELETE` sur `/clubs/:id`, `/seasons/:id`, `/phases/:id`, `/divisions/:id`,
   `/groups/:id` et `/groups/:id/games` ne demandait qu'une session valide. Le
   premier efface le club, ses adresses, ses canaux et son logo **dans un seul
@@ -528,9 +528,18 @@ invisible dans le diff comme dans la revue.
   routes suppriment en un `db.batch` : un garde qui refuserait après avoir
   écrit serait indiscernable du dehors, d'où un test par route qui vérifie
   qu'aucun `DELETE` n'est parti.
-- Les **créations et modifications** des mêmes objets restent ouvertes, ainsi
-  que les routes `import` : c'est le même correctif, sans l'irréversibilité, et
-  il attend son ticket.
+- **Les créations et modifications ont suivi** (#576) : quatorze routes de plus
+  — saisons, phases, divisions, poules, `POST /clubs`, et les imports qui
+  bâtissent cette structure — toutes du même appel d'une ligne. Le squelette de
+  la compétition se démonte et se monte sous la même règle, ce qui est la seule
+  façon dont elle reste lisible.
+- **`/teams/import`, `/games/import` et `/schedule-documents/import` ne sont pas
+  de cette famille** : ils sont clavés sur un club et suivent `administers`
+  (#577). Les `/fftt/*-preview` non plus — elles ne font que lire la base pour
+  annoter ce que le navigateur a récupéré.
+- Un test qui admet un administrateur général sur une route qui appelle la FFTT
+  **stube `fetch`** : sans cela la suite compose un vrai serveur fédéral, ce qui
+  se voyait à un cas passé de 19 à 331 ms.
 
 ### Répondre, composer, diriger une équipe (#569)
 - **La règle existait ; elle n'était nulle part.** Dispos, compositions et
