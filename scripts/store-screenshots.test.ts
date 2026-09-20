@@ -11,6 +11,8 @@ import {
   withGradleMemory,
   androidPackage,
   pngWithoutOrientationMetadata,
+  clockComplaint,
+  CLOCK_TOLERANCE_SECONDS,
   REQUIRED_SCREENS,
 } from './store-screenshots.mjs'
 
@@ -305,5 +307,57 @@ describe('the orientation metadata a rotation leaves behind', () => {
 
   it('refuses anything that is not a PNG', () => {
     expect(() => pngWithoutOrientationMetadata(Buffer.from('nope'))).toThrow('not a PNG')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The capture device's clock (#595)
+//
+// The failure this guards against is not a crash but a plausible set: an
+// emulator eight days behind produced eight valid screenshots in which a
+// journée already played led the carousel under a « Aujourd'hui » badge. The
+// script judges PNG dimensions and cannot see that, and neither does a human
+// skimming the images — nobody checks a phone's date by looking at one.
+// ---------------------------------------------------------------------------
+
+describe('clockComplaint', () => {
+  const host = 1_789_000_000
+
+  it('says nothing when the clocks agree', () => {
+    expect(clockComplaint(host, host)).toBeNull()
+  })
+
+  it('tolerates the small drift of an emulator that has been sitting idle', () => {
+    expect(clockComplaint(host - CLOCK_TOLERANCE_SECONDS + 1, host)).toBeNull()
+    expect(clockComplaint(host + CLOCK_TOLERANCE_SECONDS - 1, host)).toBeNull()
+  })
+
+  it('complains just past the tolerance, in both directions', () => {
+    expect(clockComplaint(host - CLOCK_TOLERANCE_SECONDS - 1, host)).toMatch(/en retard/)
+    expect(clockComplaint(host + CLOCK_TOLERANCE_SECONDS + 1, host)).toMatch(/en avance/)
+  })
+
+  it('reports the real case in days — eight days behind, which shipped « Aujourd\'hui »', () => {
+    const complaint = clockComplaint(host - 8 * 86_400, host)
+    expect(complaint).toContain('8 jours')
+    expect(complaint).toContain('en retard')
+  })
+
+  it('says a single day in the singular', () => {
+    expect(clockComplaint(host - 86_400, host)).toContain('1 jour')
+    expect(clockComplaint(host - 86_400, host)).not.toContain('1 jours')
+  })
+
+  it('falls back to minutes below a day, rather than rounding to « 0 jour »', () => {
+    expect(clockComplaint(host - 3_600, host)).toContain('60 min')
+  })
+
+  it('names the only remedy that works on a Play Store image', () => {
+    // `adb root` is refused there, so the clock cannot be set in place.
+    expect(clockComplaint(host - 8 * 86_400, host)).toContain('-wipe-data')
+  })
+
+  it('treats an unreadable clock as a problem, not as agreement', () => {
+    expect(clockComplaint(Number.NaN, host)).toMatch(/illisible/)
   })
 })

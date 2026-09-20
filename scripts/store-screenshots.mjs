@@ -451,6 +451,58 @@ function runningAndroidSerial() {
   return line ? line.trim().split(/\s+/)[0] : null
 }
 
+/**
+ * How far a capture device's clock may sit from this machine's before the
+ * screenshots stop meaning anything.
+ *
+ * Five minutes is slack for a sleepy emulator, not for a real disagreement:
+ * everything this set is meant to show turns on the device's idea of "today".
+ */
+export const CLOCK_TOLERANCE_SECONDS = 300
+
+/**
+ * `null` when the device's clock can be trusted, otherwise what is wrong and
+ * what to do about it.
+ *
+ * `scripts/demo-data.mjs` anchors the demo club to the HOST's today — a
+ * journée just played, one this week, one a fortnight out — and the capture
+ * then assumes the device agrees. Nothing checked that, and an emulator eight
+ * days behind captured a perfectly valid-looking set in which the home
+ * carousel sat on the journée already played, badged « Aujourd'hui »: exactly
+ * the claim #561 exists to stop the app making. A wrong set is worse than a
+ * failed run, because it is the one outcome nobody re-reads — the dates look
+ * like dates.
+ *
+ * Pure, and separate from the adb call, because the arithmetic is the part
+ * worth pinning down: the I/O around it is one `date +%s`.
+ */
+export function clockComplaint(deviceEpoch, hostEpoch, tolerance = CLOCK_TOLERANCE_SECONDS) {
+  if (!Number.isFinite(deviceEpoch)) {
+    return "L'horloge de l'appareil est illisible (`adb shell date +%s`)."
+  }
+  const skew = deviceEpoch - hostEpoch
+  if (Math.abs(skew) <= tolerance) return null
+  const days = Math.round(Math.abs(skew) / 86400)
+  const gap = days >= 1
+    ? `${days} jour${days > 1 ? 's' : ''}`
+    : `${Math.round(Math.abs(skew) / 60)} min`
+  return (
+    `L'horloge de l'appareil est ${skew < 0 ? 'en retard' : 'en avance'} de ${gap} sur celle ` +
+    `de cette machine. Les captures montreraient le mauvais jour : le club de démo est ancré ` +
+    `sur aujourd'hui, donc « Aujourd'hui », « Dans N jours » et la journée en tête du ` +
+    `carrousel seraient faux sans que rien n'en ait l'air.\n` +
+    `  Une image Play Store refuse \`adb root\`, donc l'horloge ne se règle pas en place : ` +
+    `relancez l'émulateur avec \`-wipe-data\`, puis réinstallez l'app.`
+  )
+}
+
+/** Stops the run rather than capturing a set dated some other day. */
+function assertAndroidClock(env) {
+  const raw = sh(adbPath(), ['shell', 'date', '+%s'], { env }).trim()
+  const problem = clockComplaint(Number(raw), Math.floor(Date.now() / 1000))
+  if (problem) throw new Error(problem)
+}
+
 /** `adb devices` reports a device the moment it starts booting, long before
  *  it can install an app — this is the check that actually means "ready". */
 function androidFullyBooted(serial) {
@@ -816,6 +868,9 @@ function main(argv) {
   for (const target of androidTargets) {
     if (!skipBuild) installAndLaunchAndroid(target.avdNamePrefix)
     const serial = runningAndroidSerial()
+    // After the install, so --skip-build is covered too: the clock is a
+    // property of the device, not of the build sitting on it.
+    assertAndroidClock(androidEnv(androidHome()))
     const captured = runFlow(target, { email, code, deviceArg: serial })
     validateAndInstall(target, captured)
   }

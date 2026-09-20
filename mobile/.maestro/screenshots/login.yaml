@@ -114,6 +114,24 @@ appId: fr.clubping.app
       id: "tab-bar"
     timeout: 15000
 
+# …and that it is the REVIEW account's tab bar (#595).
+#
+# The wait above is satisfied by any landing state, as the comment on it says —
+# including a session some other run left behind. During the 1.5.0 captures
+# that was Expo Go, in the foreground with a dev session open on a real club:
+# `clearState` is keyed to fr.clubping.app and never touched it, so Maestro
+# read its hierarchy and reported a screen belonging to somebody else.
+#
+# The run did fail, but late and in the wrong place — `team-row-demo-team-1`,
+# four screenshots further on, saying only "element not found". Three runs went
+# by before the cause was legible. This says it at the point it goes wrong.
+#
+# `demo-club` and not the printed name: iOS puts almost no text in the
+# accessibility tree (#520), so the club's name is unassertable there while a
+# testID works on both.
+- assertVisible:
+    id: "identity-club-demo-club"
+
 # A prompt left un-answered by an earlier run survives `clearState` and
 # `clearKeychain` both — it is SpringBoard's, not the app's — and it comes back
 # over the next launch, where it owns the accessibility hierarchy and hides
