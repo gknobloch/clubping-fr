@@ -54,7 +54,14 @@ export function PlayerIdentityCard({
       )}
       <View style={s.text}>
         <Text style={s.name} numberOfLines={1}>{name}</Text>
-        {club ? <Text style={s.club} numberOfLines={1}>{club.displayName}</Text> : null}
+        {/* Keyed by id, not a bare `identity-club`: the capture flow (#595) asks
+            "is this the demo club?", and on iOS the printed name is not in the
+            accessibility tree to assert on — testIDs are (#520). */}
+        {club ? (
+          <Text testID={`identity-club-${club.id}`} style={s.club} numberOfLines={1}>
+            {club.displayName}
+          </Text>
+        ) : null}
         {status && status !== 'active' ? (
           <View style={s.statusBadge}>
             <Text style={s.statusText}>{STATUS_LABELS[status] ?? status}</Text>
