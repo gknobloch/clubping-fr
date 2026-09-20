@@ -773,13 +773,45 @@ de tous les utilisateurs* added to it (see above).
 
 `deliver` and `pilot` need an App Store Connect API key of their own — EAS never hands
 its own key back out. Create one in App Store Connect (**Users and Access → Integrations**),
-role **App Manager**, and export:
+role **App Manager**, and provide three variables:
 
 ```
 ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT   # the .p8, base64-encoded
 ```
 
 Never commit the `.p8`; `mobile/.gitignore` already refuses `*.p8`.
+
+#### Put them in a file, not in an `export`
+
+An `export` lives only in the shell that ran it, which is how 1.4.0 reached the
+stores with the key unset (#519) and how 1.5.0 met the same missing variable.
+fastlane reads a `.env` on its own — from the `fastlane/` folder and from its
+parent — so the durable home is:
+
+```
+mobile/fastlane/.env
+```
+
+`mobile/.gitignore` already ignores it: a slashless `.env` matches the name at any
+depth. That matters more here than for an ordinary env file, because
+`ASC_KEY_CONTENT` is the base64 of the `.p8` — the private key itself, the very
+thing the `*.p8` rule beside it exists to keep out of the repository.
+
+**Not `mobile/.env`**, although fastlane would read that too. That file's own
+header says its contents are embedded in the build and are PUBLIC; a signing key
+does not belong in the file whose first line invites people to treat it as
+harmless.
+
+**The environment beats the file.** fastlane's dotenv does not overwrite a
+variable that is already set, so a stale or empty `export ASC_KEY_ID` in a shell
+profile silently wins over a perfectly good `.env`, and `preflight` then reports
+the variable as missing while the file sits there looking correct. Same direction
+as the review account's `.dev.vars` (#520): what you pass deliberately overrides
+what is stored, never the other way round. If preflight names a variable you can
+see in the file, look for an `export` of it first.
+
+`npm run store:fastlane -- preflight` confirms all three parse, in about three
+seconds and without touching the network.
 
 An `eas update` (OTA) has no notes anywhere — nothing tells a member the app changed
 under them. That is a reason to prefer a real release for anything a member would
