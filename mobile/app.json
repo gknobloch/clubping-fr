@@ -65,7 +65,6 @@
         }
       ],
       "./plugins/withoutAndroidCalendarPermissions",
-      "./plugins/withDisableScriptSandboxing",
       "./plugins/withoutAppleSignInEntitlement",
       "expo-font",
       [
