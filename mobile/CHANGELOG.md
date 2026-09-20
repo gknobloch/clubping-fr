@@ -27,6 +27,58 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.5.0 — 20 septembre 2026
+
+Mettre son effectif à jour depuis le gymnase, et passer d'un match à l'autre
+d'un geste.
+
+- **Les licenciés s'importent depuis la FFTT dans l'application.** La liste du
+  club s'ouvre un licencié par carte, qu'on feuillette au doigt : chaque champ
+  se coche ou se décoche, et la carte entière s'ignore d'un geste. Un champ en
+  tête cherche une licence précise, pour quelqu'un qui vient d'arriver au club
+  et lit son numéro à voix haute.
+- **Un homonyme déjà au club est proposé plutôt qu'un doublon.** Quand la FFTT
+  donne un numéro de licence différent de celui que le club avait noté,
+  l'import propose de rattacher les deux au lieu de créer une seconde fiche —
+  archives comprises, qui est justement où un doublon dort. Rien n'est
+  rattaché tout seul : c'est une question, jamais une réponse.
+- **On passe d'un match au suivant d'un balayage.** Depuis les journées, ce
+  sont les autres matchs du club ce jour-là ; partout ailleurs, les matchs de
+  l'équipe dans sa phase. Des points sous la carte disent où l'on en est.
+- **La matrice des journées ouvre ce qu'elle nomme** : un nom ouvre la fiche du
+  joueur, un en-tête celle de l'équipe.
+- **Une ligne « Résumé » dit ce que la composition tient**, et signale celle
+  qui nomme un joueur de trop ou de moins — y compris un joueur aligné depuis
+  « Autres joueurs du club », qui n'apparaît dans aucune section.
+- **La matrice se lit à la taille du web**, d'un à trois points de plus
+  qu'avant sur chaque ligne.
+- **Une fiche s'ouvre d'où qu'on vienne** : un tap dans la matrice ouvre la
+  même fiche d'équipe que l'onglet Équipes, et un lien reçu ouvre l'écran
+  qu'il nomme.
+- **Un match joué hier n'est plus annoncé comme celui d'aujourd'hui.** Il
+  tenait la tête de « Prochains matchs » jusqu'au dimanche suivant, en
+  demandant une disponibilité pour une rencontre déjà jouée.
+- **L'accueil ne liste plus que les journées de votre club**, et non le
+  calendrier de tous les clubs de la base.
+- **Ouvrir l'application sans réseau affiche vos données, et celles de personne
+  d'autre** : la mémoire hors ligne est désormais rattachée au membre
+  connecté, ce qui compte sur un téléphone que le club se passe.
+- Le bandeau « Une mise à jour est disponible » se distingue enfin de
+  l'en-tête qu'il surplombe.
+
+### Play
+
+Mettre son effectif à jour depuis le gymnase, et passer d'un match à l'autre
+d'un geste.
+
+- Les licenciés s'importent depuis la FFTT, un par carte, avec la recherche
+  par numéro de licence.
+- Un homonyme déjà au club est proposé plutôt qu'un doublon.
+- Un balayage passe d'un match au suivant.
+- La matrice des journées ouvre ses noms et résume la composition.
+- L'accueil ne liste que les journées de votre club, et un match déjà joué
+  n'y est plus annoncé comme prochain.
+
 ## 1.4.1 — 14 septembre 2026
 
 - **La fiche d'un licencié indique son brûlage.** L'aperçu rapide et la matrice
