@@ -101,7 +101,13 @@ const s = StyleSheet.create({
   body: { padding: 20, gap: 10 },
   title: { fontSize: 17, fontFamily: fonts.semiBold, color: colors.textPrimary },
   subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: -6, marginBottom: 4 },
-  list: { flexGrow: 0 },
+  // `flexGrow: 0` empêche la liste de s'étirer quand il y a deux équipes ;
+  // `flexShrink: 1` l'oblige à céder quand il y en a neuf. React Native met
+  // `flexShrink` à 0 par défaut (contrairement au web), donc sans lui la liste
+  // réclame toute la hauteur de son contenu et pousse « Ne pas aligner »
+  // *hors* du panneau, par-dessus le fond. Invisible sur un club de deux
+  // équipes, ce qui est exactement le club de démo.
+  list: { flexGrow: 0, flexShrink: 1 },
   listContent: { gap: 10 },
   option: {
     flexDirection: 'row',
