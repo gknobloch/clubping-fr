@@ -2,6 +2,12 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // TypeScript 6 n'inclut plus automatiquement les paquets `@types/*` : sans
+    // cette ligne, `describe`, `it` et `expect` n'existent plus et chaque
+    // fichier de test devient un mur d'erreurs. Les autres types (React, RN)
+    // arrivent par les imports des fichiers eux-mêmes et n'ont rien à faire
+    // ici — seuls les globaux se déclarent.
+    "types": ["jest", "node"],
     "paths": {
       "@/*": [
         "./*"

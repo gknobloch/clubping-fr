@@ -12,7 +12,7 @@ import { colors } from '@/constants/colors'
 // tested there (`GamePager.test.tsx` for the match axis).
 // ---------------------------------------------------------------------------
 const dots = () =>
-  screen.getByTestId('pager-dots').children as { props: { style: StyleProp<ViewStyle> } }[]
+  screen.getByTestId('pager-dots').children as unknown as { props: { style: StyleProp<ViewStyle> } }[]
 /** The current dot is the accent-filled one — the accueil's own rule. */
 const isActive = (i: number) =>
   StyleSheet.flatten(dots()[i].props.style)?.backgroundColor === colors.accent

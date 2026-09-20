@@ -158,6 +158,14 @@ invisible dans le diff comme dans la revue.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
+- **Une liste défilante dans une feuille déclare `flexShrink`.** React Native
+  met `flexShrink` à 0 par défaut, contrairement au web : sous le panneau
+  plafonné de `Sheet`, une `ScrollView` réclame alors toute la hauteur de son
+  contenu et pousse le pied de page *dehors*, par-dessus le fond. Trouvé sur la
+  feuille de composition d'un club à neuf équipes — invisible sur le club de
+  démo, qui en a deux, et invisible à tout test de rendu, jest n'ayant pas de
+  moteur de mise en page. `__tests__/sheet-scroll-shrink.test.ts` lit les
+  sources et casse le build sur la suivante.
 - **A licensee's coordinates are `EmailRow` / `PhoneRow`** in the app
   (`mobile/components/ContactRows.tsx`, #503) — the fiche joueur and Mon compte
   had drifted into two identical copies of them, wa.me URL included. Copying is
@@ -800,6 +808,39 @@ invisible dans le diff comme dans la revue.
   posée quand les licences arrivent, et non un `useMemo` sur `players` : la
   règle de #555 tient toujours, un rafraîchissement qui atterrit en pleine
   revue ne doit pas reconstruire le deck sous le doigt.
+
+### iOS 27 exige le cycle de vie par scènes (#588)
+
+- Une app construite avec le **SDK iOS 27** qui ne l'a pas adopté est refusée
+  au lancement : `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`
+  lève et le processus meurt sur EXC_BREAKPOINT, avant qu'une ligne de
+  JavaScript ne tourne. Vu du dehors, c'est un plantage au démarrage sans
+  message.
+- **Ce n'était pas « appareil contre simulateur », c'était iOS 27 contre
+  iOS 26**, et c'est la leçon à garder. Le même binaire se lance sans broncher
+  sur un simulateur resté en 26.5 et meurt sur un iPad en 27. S'être arrêté sur
+  l'axe appareil/simulateur a coûté une demi-journée à innocenter le réseau,
+  expo-updates, la signature, le verrouillage, le greffon Babel de Reanimated
+  et la saveur du React core préconstruit. **Devant un plantage qui n'arrive
+  que sur l'appareil, comparer d'abord les versions d'OS des deux côtés** :
+  trente secondes, et cela désigne la bonne famille de causes.
+- Expo 57 livre `ExpoAppSceneDelegate` exprès, et le dit dans son propre
+  commentaire, mais son gabarit de prebuild génère encore l'`AppDelegate`
+  d'avant les scènes et n'offre aucun interrupteur. D'où
+  `plugins/withSceneLifecycle.js`, qui refait les trois gestes de la migration
+  à chaque prebuild : le `UIApplicationSceneManifest`, un `SceneDelegate`
+  ajouté à la cible, et le retrait de la fenêtre de l'`AppDelegate` — sous les
+  scènes elle vient de la `UIWindowScene` qui se connecte, et en bâtir une au
+  `didFinishLaunchingWithOptions` en laisserait une seconde, vide.
+- **Le greffon lève si le gabarit cesse de correspondre**, au lieu de ne rien
+  faire : un no-op silencieux livrerait une app qui meurt au lancement sur tout
+  appareil en iOS 27, depuis un prebuild d'apparence saine.
+- À supprimer le jour où Expo génère les scènes lui-même — en le vérifiant par
+  un prebuild **propre** et sur un appareil en **iOS 27**, jamais sur un
+  simulateur resté en 26.
+- Corollaire pour toute vérification sur simulateur : `xcrun simctl list
+  runtimes` dit sur quel iOS on regarde vraiment. Un parc de simulateurs en
+  retard d'une version ne prouve rien de ce que fait l'app sur le dernier iOS.
 
 ### Version des clients (#508)
 - **Le serveur publie un plancher, jamais un verdict.** `GET

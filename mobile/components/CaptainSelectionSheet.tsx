@@ -307,7 +307,10 @@ const sel = StyleSheet.create({
     // explicit value is set; pin it to 0 so they track normally (#118).
     letterSpacing: 0,
   },
-  list: { marginBottom: 16 },
+  // Même raison que la feuille de composition : sans `flexShrink`, une liste
+  // plus haute que le panneau pousse « Annuler / Enregistrer » dehors. Un
+  // effectif de soixante licenciés y arrive.
+  list: { marginBottom: 16, flexShrink: 1 },
   empty: {
     fontSize: 13, color: colors.textSecondary,
     textAlign: 'center', paddingVertical: 24,

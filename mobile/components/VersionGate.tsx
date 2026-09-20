@@ -108,7 +108,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    // `absoluteFillObject` a disparu en RN 0.86 ; c'était ces quatre lignes.
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,

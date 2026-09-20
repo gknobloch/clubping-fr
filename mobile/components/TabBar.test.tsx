@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context'
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import {
   PHONE_WIDTH,
   TABLET_LANDSCAPE,
@@ -11,7 +10,7 @@ import {
 } from '@/__tests__/support/window'
 import { HEADER_HEIGHT } from './AppHeader'
 import { colors } from '@/constants/colors'
-import { TabBar, pathToTab } from './TabBar'
+import { TabBar, pathToTab, type TabBarProps } from './TabBar'
 
 jest.mock('expo-router', () => ({
   usePathname: () => '/equipes',
@@ -96,7 +95,7 @@ describe('the tab bar on a tablet', () => {
   const navigate = jest.fn()
 
   /** The five real tabs plus the hidden (detail) stack, as the navigator passes them. */
-  function tabBarProps(): BottomTabBarProps {
+  function tabBarProps(): TabBarProps {
     const routes = [...Object.keys(TITLES), '(detail)'].map((name) => ({ key: `key-${name}`, name }))
     const descriptors = Object.fromEntries(
       routes.map((r) => [
@@ -113,7 +112,7 @@ describe('the tab bar on a tablet', () => {
       state: { index: 2, routes },
       descriptors,
       navigation: { emit: () => ({ defaultPrevented: false }), navigate },
-    } as unknown as BottomTabBarProps
+    } as unknown as TabBarProps
   }
 
   /** No notch on a slab; a home indicator at the foot and a status bar on top. */
@@ -227,7 +226,7 @@ describe('the tab bar names its destinations', () => {
 
   const navigate = jest.fn()
 
-  function props(): BottomTabBarProps {
+  function props(): TabBarProps {
     const routes = [...Object.keys(TITLES), '(detail)'].map((name) => ({ key: `key-${name}`, name }))
     const descriptors = Object.fromEntries(
       routes.map((r) => [
@@ -244,7 +243,7 @@ describe('the tab bar names its destinations', () => {
       state: { index: 2, routes },
       descriptors,
       navigation: { emit: () => ({ defaultPrevented: false }), navigate },
-    } as unknown as BottomTabBarProps
+    } as unknown as TabBarProps
   }
 
   const renderBar = () => {

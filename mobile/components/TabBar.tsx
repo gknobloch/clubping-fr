@@ -1,7 +1,17 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { usePathname, useGlobalSearchParams } from 'expo-router'
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { Tabs, usePathname, useGlobalSearchParams } from 'expo-router'
+import type { ComponentProps } from 'react'
+
+/**
+ * Ce qu'un `tabBar` reçoit, lu sur `Tabs` lui-même.
+ *
+ * expo-router 57 a internalisé React Navigation : `BottomTabBarProps` n'est
+ * plus importable, et sa copie vit sous `build/`. Le dériver du composant
+ * public dit la même chose sans dépendre d'un chemin interne, et suit
+ * l'éventuel prochain remaniement tout seul.
+ */
+export type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0]
 import { HEADER_HEIGHT } from '@/components/AppHeader'
 import { gameAxisFromParam } from '@shared/lib/gameNeighbours'
 import { colors } from '@/constants/colors'
@@ -67,7 +77,7 @@ const TAB_ROW_MAX_WIDTH = 560
  */
 const RAIL_WIDTH = 88
 
-export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets()
   const { isTablet, hasSideRail } = useLayout()
   const params = useGlobalSearchParams<{ playerId?: string; from?: string }>()
