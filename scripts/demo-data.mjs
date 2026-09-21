@@ -183,6 +183,39 @@ export const DEMO_LAST_SEEN = {
 /** The journée whose match the Accueil hero card shows: the one coming up. */
 export const UPCOMING_JOURNEE = 2
 
+/**
+ * The journée already played — the club's past, and the other half of the
+ * matrix a store screenshot shows.
+ *
+ * Declared rather than inherited, for the reason the dates are (#520): what
+ * this script does not state drifts, and nobody notices, because four names
+ * and five names look alike. `seed-demo.sql` puts four players on
+ * `demo-g-1-1`; production had five, so the journées matrix printed
+ * « Résumé — Compo 5/4 » in red onto both store listings — the impossible
+ * line-up that #583 added that row to catch (#598).
+ */
+export const PLAYED_JOURNEE = 1
+
+/**
+ * Who played it. Four, because that is what the division asks for.
+ *
+ * Two of these names are load-bearing and must not be swapped out:
+ *
+ * - **Camille Durand** is what makes her brûlée — this match plus the coming
+ *   one, across two of the club's teams, is exactly what `computeBrulage`
+ *   counts. Her badge is the subject of two of the eight screenshots, and
+ *   `DEMO_LINEUP` names her for the same reason.
+ * - **The review account** keeps « Matchs joués 1/1 » true on the first screen
+ *   of the listing. Drop him and his own card reads 0/1: a captain who played
+ *   none of his matches.
+ */
+export const DEMO_PLAYED_LINEUP = [
+  'user-appstore-demo', //  Julien Mercier — capitaine, et « 1/1 » sur sa carte
+  'demo-player-2', //       Camille Durand — et brûlée par la journée à venir
+  'demo-player-3', //       Sam Petit
+  'demo-player-4', //       Léa Moreau
+]
+
 // ---------------------------------------------------------------------------
 // Pure — the offsets, which are the actual subject
 // ---------------------------------------------------------------------------
@@ -305,6 +338,7 @@ function main(argv) {
     ...Object.keys(DEMO_PROFILE),
     ...Object.keys(DEMO_LAST_SEEN),
     ...DEMO_LINEUP,
+    ...DEMO_PLAYED_LINEUP,
     team.id,
     DEMO_USER,
   ])
@@ -315,6 +349,11 @@ function main(argv) {
     (g) => g.journee === UPCOMING_JOURNEE && g.id.startsWith('demo-g-1-'),
   )
   if (!upcoming) throw new Error(`Aucun match de ${DEMO_TEAM} en journée ${UPCOMING_JOURNEE}.`)
+
+  const played = games.find(
+    (g) => g.journee === PLAYED_JOURNEE && g.id.startsWith('demo-g-1-'),
+  )
+  if (!played) throw new Error(`Aucun match de ${DEMO_TEAM} en journée ${PLAYED_JOURNEE}.`)
 
   const roster = JSON.parse(team.player_ids)
   const newRoster = roster.includes(DEMO_USER) ? roster : [...roster, DEMO_USER]
@@ -361,6 +400,26 @@ function main(argv) {
     `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
       `VALUES (${sqlStr(upcoming.id)}, ${sqlStr(DEMO_TEAM)}, ${sqlStr(JSON.stringify(DEMO_LINEUP))}) ` +
       `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
+    // The journée already played, stated for the same reason (#598). Upserted
+    // like the one above rather than left alone: an inherited line-up is how
+    // the matrix came to print « Compo 5/4 » onto two store listings.
+    `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
+      `VALUES (${sqlStr(played.id)}, ${sqlStr(DEMO_TEAM)}, ${sqlStr(JSON.stringify(DEMO_PLAYED_LINEUP))}) ` +
+      `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
+    // …and its availabilities, so the played journée reads as settled rather
+    // than as a match nobody answered for. Everyone who played said yes, which
+    // is the only story a finished fixture tells. Rewritten, not merged, for
+    // the reason the upcoming one is.
+    //
+    // No « sans réponse » here, deliberately: the absent row is the point on
+    // the COMING journée, where the captain is still waiting on somebody. On a
+    // match already played it would read as a fixture fielded without a squad.
+    `DELETE FROM game_availabilities WHERE game_id = ${sqlStr(played.id)}`,
+    ...DEMO_PLAYED_LINEUP.map(
+      (playerId) =>
+        `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) ` +
+        `VALUES (${sqlStr(played.id)}, ${sqlStr(playerId)}, 'available', NULL)`,
+    ),
     // The slot the team declares, which the team screen prints under
     // « Calendrier » — see KICK_OFF.
     `UPDATE teams SET default_day = ${sqlStr(KICK_OFF_DAY)}, default_time = ${sqlStr(KICK_OFF)} ` +
@@ -404,6 +463,12 @@ function main(argv) {
       `peut-être, ${counts.unavailable ?? 0} non, ${silent} sans réponse`,
   )
   console.log(`  composition → ${DEMO_LINEUP.length} joueurs, coup d'envoi ${KICK_OFF}`)
+  // Stated, because this is the line that was wrong on two store listings and
+  // nobody could see it: the plan has to say what it writes (#598).
+  console.log(
+    `  journée ${PLAYED_JOURNEE} (${played.id}) → composition de ${DEMO_PLAYED_LINEUP.length} ` +
+      `joueurs, tous disponibles`,
+  )
   console.log(
     `  créneau déclaré des équipes → ${KICK_OFF_DAY} ${KICK_OFF} ` +
       `(le même que les matchs, sinon la fiche équipe les contredit)`,
