@@ -13,6 +13,10 @@ import {
   DEMO_LAST_SEEN,
   KICK_OFF,
   KICK_OFF_DAY,
+  DEMO_LINEUP,
+  DEMO_PLAYED_LINEUP,
+  PLAYED_JOURNEE,
+  UPCOMING_JOURNEE,
 } from './demo-data.mjs'
 import { normalizeCategory } from '../src/lib/playerCategories'
 
@@ -223,5 +227,53 @@ describe('the declared slot and the fixtures agree', () => {
     // left that card saying 17h00 over a match at 16h00.
     expect(KICK_OFF).toBe('16h00')
     expect(KICK_OFF_DAY).toBe('Samedi')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The journée already played (#598)
+//
+// Left undeclared, it drifted: seed-demo.sql puts four players on it and
+// production held five, so the journées matrix — one of the eight store
+// screenshots — printed « Résumé — Compo 5/4 » in red onto both listings.
+// That is the impossible line-up #583 added the row to catch, illustrating
+// the feature by failing it.
+//
+// The size is the defect, so the size is what is pinned. The two names are
+// pinned as well, because each carries a screen somewhere else in the set and
+// a well-meaning edit would take it away silently.
+// ---------------------------------------------------------------------------
+
+describe('the journée already played', () => {
+  it('fields exactly what the division asks for — the 5/4 is the bug', () => {
+    expect(DEMO_PLAYED_LINEUP).toHaveLength(4)
+  })
+
+  it('names nobody twice', () => {
+    expect(new Set(DEMO_PLAYED_LINEUP).size).toBe(DEMO_PLAYED_LINEUP.length)
+  })
+
+  it('names only demo rows — this writes to production', () => {
+    for (const id of DEMO_PLAYED_LINEUP) expect(isDemoId(id)).toBe(true)
+  })
+
+  it('keeps Camille Durand, whose brûlage needs both matches', () => {
+    // computeBrulage counts two games across the club's teams; her badge is
+    // the subject of screenshots 06 and 07.
+    expect(DEMO_PLAYED_LINEUP).toContain('demo-player-2')
+    expect(DEMO_LINEUP).toContain('demo-player-2')
+  })
+
+  it('keeps the review account, so his card still reads « 1/1 » and not « 0/1 »', () => {
+    expect(DEMO_PLAYED_LINEUP).toContain(DEMO_USER)
+  })
+
+  it('is a different journée from the one being composed', () => {
+    expect(PLAYED_JOURNEE).not.toBe(UPCOMING_JOURNEE)
+  })
+
+  it('sits in the past of the calendar the offsets build', () => {
+    const dates = journeeDates('2026-09-20')
+    expect(dates[PLAYED_JOURNEE] < dates[UPCOMING_JOURNEE]).toBe(true)
   })
 })
