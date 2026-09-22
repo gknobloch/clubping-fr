@@ -494,6 +494,44 @@ invisible dans le diff comme dans la revue.
   rien qu'un club rencontre — et un lot écrit à moitié serait la pire réponse à
   celui qui le ferait.
 
+### Corriger les coordonnées d'un licencié (#600)
+- **Le serveur savait refuser ; l'app ne savait pas demander.** `PATCH
+  /players/:id` suit `administers` depuis #558, mais la fiche joueur de l'app
+  était entièrement en lecture seule : un administrateur de club qui relevait
+  un numéro faux dans le gymnase devait rentrer ouvrir le site. Lacune
+  d'écran, pas de règle — il n'y a rien eu à ouvrir côté API.
+- **E-mail et téléphone, et rien d'autre.** Ce sont les deux champs qu'un club
+  saisit à la main : la FFTT n'en donne aucun, et l'import écrit tout le reste.
+  Le nom, la licence, le club et le statut ne sont donc pas de ce formulaire —
+  ils viennent de la fédération ou décident de l'éligibilité (#482), et les
+  reprendre à la main déferait ce que l'import vient de poser.
+- Et l'e-mail n'est pas un champ comme un autre : **c'est par lui qu'on entre**,
+  le code de connexion y étant envoyé. Une adresse fausse est quelqu'un qui
+  reste dehors — la même raison qui faisait reporter e-mail et téléphone avant
+  de supprimer un doublon en #566.
+- **Les coordonnées sont une section à elles**, et non deux lignes au milieu
+  d'« Informations » : un « Modifier » à côté d'un titre doit dire exactement
+  ce qu'il modifie, et la licence, la catégorie et les points qui les
+  entouraient ne se modifient pas ici.
+- **La section s'ouvre sur du vide pour qui peut l'écrire.** La conditionner à
+  la présence des valeurs n'offrirait rien au licencié qui n'en a aucune —
+  c'est-à-dire précisément celui qu'on vient en doter.
+- **Un seul formulaire pour les deux écrans** (`components/ContactEditor.tsx`),
+  parce que « Mon compte » en portait déjà un sur ces champs-là. Deux copies
+  sur ces deux écrans-là est exactement ce que #503 a eu à défaire pour les
+  lignes d'affichage ; `fields` porte le seul écart, quatre champs contre deux.
+- Le formulaire est **monté à l'ouverture, démonté à la fermeture** : c'est ce
+  qui sème le brouillon sur le licencié affiché. Gardé monté et masqué, il se
+  figerait sur le premier — et sur une tablette la fiche change de licencié
+  sans que l'écran change.
+- Vidé, un e-mail ou un téléphone part comme la **chaîne vide** (l'API en fait
+  un NULL) là où une date de naissance part comme `undefined`. La différence
+  tient à la colonne, pas à l'écran, donc elle est dans `patchOf` et pas chez
+  l'appelant.
+- `canManageClub` pose la question côté app, comme `administers` côté serveur.
+  Un coéquipier qui lit la fiche voit les coordonnées et pas le déclencheur —
+  **la lecture n'a pas bougé**.
+
 ### Une photo est à celui qu'elle montre (#571)
 - `PUT` et `DELETE /users/:id/avatar` ne regardaient pas l'appelant : n'importe
   quel licencié connecté remplaçait ou effaçait la photo de n'importe qui, dans

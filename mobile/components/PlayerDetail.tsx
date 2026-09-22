@@ -3,9 +3,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { colors } from '@/constants/colors'
 import { useOpenTeam } from '@/utils/openFiche'
-import { getTeamName } from '@/utils/roles'
+import { getTeamName, canManageClub } from '@/utils/roles'
 import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
@@ -16,6 +17,7 @@ import { categoryDisplay } from '@shared/lib/playerCategories'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
+import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
 
@@ -31,6 +33,15 @@ import { computeBrulage } from '@shared/lib/brulage'
 // the header title (a pane has no pushed screen to name), and the safe-area
 // frame (a pane sits inside one already).
 // ---------------------------------------------------------------------------
+
+/**
+ * Ce qu'un administrateur de club corrige sur un licencié : ses coordonnées
+ * (#600). Ni le nom, ni la licence, ni le club, ni le statut — ceux-là
+ * viennent de la FFTT ou décident de l'éligibilité (#482), et l'import est
+ * leur chemin. « Mon compte » en montre deux de plus, et c'est le seul écart.
+ */
+const CONTACT_FIELDS: readonly ContactField[] = ['email', 'phone']
+
 export function PlayerDetail({
   playerId,
   /** Rendered in a section's detail pane rather than pushed on a stack. */
@@ -43,15 +54,23 @@ export function PlayerDetail({
   const {
     players, teams, clubs, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
+    updatePlayer,
   } = useAppData()
+  const { user } = useAuth()
   const navigation = useNavigation()
   const router = useRouter()
   const openTeam = useOpenTeam()
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [editingContact, setEditingContact] = useState(false)
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
   const activeSeason = seasons.find((s) => s.status === 'active')
+
+  // Qui administre le club du licencié, et personne d'autre — la même question
+  // que `administers` côté API, qui refuse déjà le reste depuis #558. Un
+  // coéquipier qui lit la fiche ne voit donc pas le déclencheur.
+  const mayEditContact = !!user && !!player && canManageClub(user, player.clubId)
 
   const activePhase = phases.find((p) => p.status === 'active')
   const playerTeams = teams.filter(
@@ -143,10 +162,6 @@ export function PlayerDetail({
           {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
           <InfoRow label="Catégorie" value={category || 'Inconnue'} />
           {phasePoints && <InfoRow label="Points" value={phasePoints} />}
-          {/* Copiables, both of them (#503) — the tap on the number still
-              opens WhatsApp. */}
-          {player.email && <EmailRow email={player.email} />}
-          {player.phone && <PhoneRow phone={player.phone} />}
           {/* Same badge as the quick view, `danger` and all: the two screens
               show one licensee, and a rule that looked different depending on
               which you opened would be worse than one screen not showing it. */}
@@ -157,6 +172,44 @@ export function PlayerDetail({
             </View>
           )}
         </View>
+
+        {/* Coordonnées — ce qu'un club saisit à la main, et donc ce qu'il
+            corrige (#600). Une section à elles plutôt que deux lignes au
+            milieu d'« Informations » : le « Modifier » à côté du titre doit
+            dire exactement ce qu'il modifie, et la licence, la catégorie et
+            les points qui les entouraient viennent de la FFTT.
+
+            Elle s'affiche vide pour qui peut l'écrire : un licencié sans
+            coordonnées est précisément celui qu'on vient en donner, et une
+            section conditionnée aux valeurs n'offrirait rien dans le seul cas
+            qui compte. */}
+        {(player.email || player.phone || mayEditContact) && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Coordonnées</Text>
+              {/* hitSlop rather than padding, like the app's other bare text
+                  buttons: 13pt of text is ~18pt tall, and 44 is the floor
+                  below the tablet threshold. */}
+              {mayEditContact && (
+                <TouchableOpacity
+                  onPress={() => setEditingContact(true)}
+                  hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+                  accessibilityRole="button"
+                  testID="edit-contact"
+                >
+                  <Text style={styles.editLink}>Modifier</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {/* Copiables, both of them (#503) — the tap on the number still
+                opens WhatsApp. */}
+            {player.email ? <EmailRow email={player.email} /> : null}
+            {player.phone ? <PhoneRow phone={player.phone} /> : null}
+            {!player.email && !player.phone ? (
+              <Text style={styles.contactEmpty}>Aucune coordonnée enregistrée.</Text>
+            ) : null}
+          </View>
+        )}
 
         {/* Active phase teams — list style, aligned with the team detail roster */}
         {playerTeams.length > 0 && (
@@ -202,6 +255,19 @@ export function PlayerDetail({
           onClose={() => setAvatarOpen(false)}
         />
       )}
+
+      {/* Le même formulaire que « Mon compte », deux champs de moins (#600).
+          Monté à l'ouverture : c'est ce qui le sème sur le licencié affiché,
+          qui change sans que l'écran change quand la fiche est un volet. */}
+      {editingContact && (
+        <ContactEditor
+          title="Modifier les coordonnées"
+          fields={CONTACT_FIELDS}
+          subject={player}
+          onSave={(patch) => updatePlayer(player.id, patch)}
+          onClose={() => setEditingContact(false)}
+        />
+      )}
     </Screen>
   )
 }
@@ -240,6 +306,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  // Same header/link pair as « Mon compte », which is the other screen that
+  // opens this very form.
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  editLink: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
+  contactEmpty: { fontSize: 14, color: colors.textSecondary },
 
   // List-style section (Équipe) — matches the team detail roster
   sectionList: {

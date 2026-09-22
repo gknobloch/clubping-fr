@@ -15,7 +15,11 @@ import { PlayerDetail } from '@/components/PlayerDetail'
 // pose, pas qu'elle la recalcule.
 // ---------------------------------------------------------------------------
 const mockData: Record<string, unknown> = {}
+// #600 : la fiche lit la session pour décider qui peut écrire les coordonnées.
+const mockAuth = { user: { id: 'u1', role: 'player', isPlayer: true, clubId: 'c1' } }
+
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
   useNavigation: () => ({ setOptions: jest.fn() }),
