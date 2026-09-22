@@ -27,7 +27,12 @@ const mockData: {
   playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
 }
 
+// La fiche demande qui regarde depuis #600 — elle n'offre « Modifier » qu'à
+// qui administre le club. Ces cas-ci ne parlent que de lecture : un joueur.
+const mockAuth = { user: { id: 'u1', role: 'player', isPlayer: true, clubId: 'c1' } }
+
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
   useNavigation: () => ({ setOptions: jest.fn() }),

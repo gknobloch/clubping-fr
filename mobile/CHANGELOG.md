@@ -27,6 +27,13 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+- **Un administrateur de club corrige l'e-mail et le téléphone d'un licencié
+  depuis l'application.** La fiche joueur porte désormais une section
+  Coordonnées avec son bouton Modifier, y compris pour quelqu'un qui n'en a
+  aucune. C'était jusqu'ici réservé au site — or l'e-mail est l'adresse à
+  laquelle arrive le code de connexion, donc une erreur y laissait un
+  coéquipier à la porte.
+
 ## 1.5.0 — 20 septembre 2026
 
 Mettre son effectif à jour depuis le gymnase, et passer d'un match à l'autre

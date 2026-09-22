@@ -1,32 +1,34 @@
 import {
   ScrollView, View, Text, StyleSheet,
-  TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Switch,
+  TouchableOpacity, Alert, ActivityIndicator, Switch,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
 import { getTeamName, getRoleLabel } from '@/utils/roles'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
-import type { Player } from '@shared/types'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { setNotificationsEnabled } from '@/utils/push'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
+import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
 
-type EditableFields = Required<Pick<Player, 'phone' | 'birthDate' | 'birthPlace'>> & { email: string }
+/**
+ * Ce qu'un membre change sur lui-même — `OWN_PROFILE_FIELDS` côté API (#558),
+ * et rien qui décide d'où il joue. La fiche joueur ouvre le même formulaire
+ * avec les deux premiers seulement (#600).
+ */
+const OWN_FIELDS: readonly ContactField[] = ['email', 'phone', 'birthDate', 'birthPlace']
 
 export default function MonCompteScreen() {
   const { user, logout } = useAuth()
   const { players, teams, clubs, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [form, setForm] = useState<EditableFields>({ email: '', phone: '', birthDate: '', birthPlace: '' })
   // Seeded from the session's own user, which is the only payload that carries
   // it (#495) — GET /api/data describes the club, not what its members want
   // pushed to them. Absent reads as on, matching the column's default.
@@ -41,28 +43,6 @@ export default function MonCompteScreen() {
     ? teams.filter((t) => t.phaseId === activePhase?.id && t.playerIds?.includes(player.id))
     : []
   const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, player?.id)
-
-  function openEdit() {
-    if (!player) return
-    setForm({
-      email: player.email ?? '',
-      phone: player.phone ?? '',
-      birthDate: player.birthDate ?? '',
-      birthPlace: player.birthPlace ?? '',
-    })
-    setEditing(true)
-  }
-
-  async function saveEdit() {
-    if (!player) return
-    const patch: Partial<EditableFields> = {}
-    if (form.email !== (player.email ?? '')) patch.email = form.email
-    if (form.phone !== (player.phone ?? '')) patch.phone = form.phone
-    if (form.birthDate !== (player.birthDate ?? '')) patch.birthDate = form.birthDate || undefined
-    if (form.birthPlace !== (player.birthPlace ?? '')) patch.birthPlace = form.birthPlace || undefined
-    if (Object.keys(patch).length > 0) await updatePlayer(player.id, patch)
-    setEditing(false)
-  }
 
   // Optimistic, and put back on failure: a switch that stays where it was put
   // while the server never heard is the one thing this must not do.
@@ -174,7 +154,7 @@ export default function MonCompteScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Coordonnées</Text>
-              <TouchableOpacity onPress={openEdit}>
+              <TouchableOpacity onPress={() => setEditing(true)}>
                 <Text style={styles.editLink}>Modifier</Text>
               </TouchableOpacity>
             </View>
@@ -236,55 +216,18 @@ export default function MonCompteScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Edit modal */}
-      <Modal visible={editing} animationType="slide" presentationStyle="pageSheet">
-        <KeyboardAvoidingView
-          style={styles.modalContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
-            {/* Modal header */}
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setEditing(false)}>
-                <Text style={styles.modalCancel}>Annuler</Text>
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>Modifier mon profil</Text>
-              <TouchableOpacity onPress={saveEdit}>
-                <Text style={styles.modalSave}>Enregistrer</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={[styles.modalScroll, contentWidth()]}>
-              <Field
-                label="Email"
-                value={form.email}
-                onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <Field
-                label="Téléphone"
-                value={form.phone}
-                onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
-                keyboardType="phone-pad"
-              />
-              <Field
-                label="Date de naissance"
-                value={form.birthDate ?? ''}
-                onChangeText={(v) => setForm((f) => ({ ...f, birthDate: v }))}
-                placeholder="JJ/MM/AAAA"
-              />
-              <Field
-                label="Lieu de naissance"
-                value={form.birthPlace ?? ''}
-                onChangeText={(v) => setForm((f) => ({ ...f, birthPlace: v }))}
-                placeholder="Ville, Pays"
-                autoCapitalize="words"
-              />
-            </ScrollView>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* Le même formulaire que la fiche joueur, deux champs de plus (#600) :
+          ici c'est le membre qui écrit sur lui-même, là un administrateur de
+          club qui corrige un licencié. */}
+      {editing && player && (
+        <ContactEditor
+          title="Modifier mon profil"
+          fields={OWN_FIELDS}
+          subject={player}
+          onSave={(patch) => updatePlayer(player.id, patch)}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </Screen>
   )
 }
@@ -298,33 +241,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  )
-}
-
-function Field({
-  label, value, onChangeText, keyboardType, autoCapitalize, placeholder,
-}: {
-  label: string
-  value: string
-  onChangeText: (v: string) => void
-  keyboardType?: 'default' | 'email-address' | 'phone-pad'
-  autoCapitalize?: 'none' | 'words' | 'sentences'
-  placeholder?: string
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={styles.fieldInput}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType ?? 'default'}
-        autoCapitalize={autoCapitalize ?? 'sentences'}
-        autoCorrect={false}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-      />
     </View>
   )
 }
@@ -384,22 +300,4 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center',
   },
   logoutText: { fontSize: 15, fontFamily: fonts.semiBold, color: '#dc2626' },
-  // Modal
-  modalContainer: { flex: 1, backgroundColor: colors.bg },
-  modalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  modalTitle: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
-  modalCancel: { fontSize: 15, color: colors.textSecondary },
-  modalSave: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.accent },
-  modalScroll: { padding: 16, gap: 16 },
-  field: {
-    backgroundColor: colors.card, borderRadius: 12,
-    borderWidth: 1, borderColor: colors.border, padding: 14, gap: 6,
-  },
-  fieldLabel: { fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
-  // letterSpacing pinned to 0 so iOS placeholders track normally (#118).
-  fieldInput: { fontSize: 16, color: colors.textPrimary, letterSpacing: 0 },
 })
