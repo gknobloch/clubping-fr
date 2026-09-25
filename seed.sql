@@ -484,6 +484,22 @@ INSERT INTO player_season_licences (season_id, player_id)
 SELECT season_id, player_id FROM player_season_categories
 WHERE player_id <> 'p2-player-3';
 
+-- Member groups (#602): two overlapping groups at Rixheim, so both the AND and
+-- the OR filter have something to tell apart locally — Grégory and Quentin are
+-- in both, Joris and Enzo in one each.
+INSERT INTO member_groups (id, club_id, display_name) VALUES
+  ('mgroup-bureau', 'club-fftt-06680011', 'Bureau'),
+  ('mgroup-entraineurs', 'club-fftt-06680011', 'Entraîneurs');
+
+INSERT INTO member_group_members (group_id, user_id) VALUES
+  ('mgroup-bureau', 'user-2'),
+  ('mgroup-bureau', 'p2-player-5'),
+  ('mgroup-bureau', 'p2-player-1'),
+  ('mgroup-bureau', 'p2-player-2'),
+  ('mgroup-entraineurs', 'p2-player-1'),
+  ('mgroup-entraineurs', 'p2-player-2'),
+  ('mgroup-entraineurs', 'p2-player-4');
+
 -- user_avatars — a sample avatar so the authed-image round trip (GET/PUT
 -- /api/users/:id/avatar) is exercisable locally. 1x1 transparent PNG.
 INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES

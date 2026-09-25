@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView } from '@/components/ClubDetailView'
 import { ClubAdmins } from '@/components/ClubAdmins'
+import { ClubMemberGroups } from '@/components/ClubMemberGroups'
 import { ClubCompetitions } from '@/components/ClubCompetitions'
 import { ClubImportPreview } from '@/components/ClubImportPreview'
 import { ModalShell } from '@/components/ModalShell'
@@ -145,6 +146,7 @@ export function ClubDetailPage() {
       {/* Who runs this club (#474). Archived clubs keep the list visible but
           not editable — the same reasoning as the detail view above. */}
       <ClubAdmins clubId={club.id} idPrefix="admin-club" />
+      <ClubMemberGroups clubId={club.id} idPrefix="admin-club" />
       <ClubCompetitions clubId={club.id} idPrefix="admin-club" />
 
       <div className="rounded-xl border border-slate-200 bg-white p-6">

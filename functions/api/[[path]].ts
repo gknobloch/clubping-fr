@@ -7,9 +7,11 @@ import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubChannel
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, CompetitionEligibilityRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
+  MemberGroupRow, MemberGroupMemberRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { canClubAdd } from '../../src/lib/competitionEligibility'
+import { groupNameTaken, normalizeGroupName } from '../../src/lib/memberGroups'
 import {
   fixtureOverride, mayAnswerOnFixture, mayManageTeam,
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
@@ -106,6 +108,21 @@ function lastSeenVisibleTo(viewer: UserRow | undefined): (row: UserRow) => boole
 /** The `lastSeenAt` field for a member row, or nothing at all. */
 const lastSeenField = (r: UserRow, visible: (row: UserRow) => boolean) =>
   r.last_seen_at && visible(r) ? { lastSeenAt: new Date(r.last_seen_at).toISOString() } : {}
+
+/**
+ * Which clubs' member groups `viewer` is sent (#602).
+ *
+ * A group is how a club sorts its own people — « Bureau », « Jeunes » — and not
+ * part of the sporting life every club can read about every other. So it goes
+ * to the club's own members, whatever their role, and to a general admin, who
+ * sees everything. A member with no club sees none. No viewer is the local
+ * hatch (#138), same reasoning as `lastSeenVisibleTo`.
+ */
+function memberGroupsVisibleTo(viewer: UserRow | undefined): (clubId: string) => boolean {
+  if (!viewer || viewer.role === 'general_admin') return () => true
+  const own = viewer.club_id
+  return own ? (clubId) => clubId === own : () => false
+}
 
 /**
  * The viewer the routes that write on somebody else judge against.
@@ -290,7 +307,7 @@ app.get('/data', async (c) => {
     seasonsR, phasesR, divisionsR, clubsR, addressesR, channelsR,
     groupsR, teamsR, phasePointsR, seasonCategoriesR, seasonLicencesR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
-    competitionsR, eligibilitiesR,
+    competitionsR, eligibilitiesR, memberGroupsR, memberGroupMembersR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -314,6 +331,8 @@ app.get('/data', async (c) => {
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
     db.prepare('SELECT * FROM competitions ORDER BY sort_order').all<CompetitionRow>(),
     db.prepare('SELECT * FROM club_competition_eligibility').all<CompetitionEligibilityRow>(),
+    db.prepare('SELECT * FROM member_groups').all<MemberGroupRow>(),
+    db.prepare('SELECT * FROM member_group_members').all<MemberGroupMemberRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -348,6 +367,13 @@ app.get('/data', async (c) => {
   // 24 of 148 production rows. Still projected onto the Team payload so the UI
   // can read it directly — derived here, never stored.
   const divisionByGroup = new Map(groupsR.results.map(g => [g.id, g.division_id]))
+
+  // A club's groups go to that club only (#602) — see memberGroupsVisibleTo.
+  const canSeeGroupsOf = memberGroupsVisibleTo(c.get('user'))
+  const membersByGroup = new Map<string, string[]>()
+  for (const m of memberGroupMembersR.results) {
+    membersByGroup.set(m.group_id, [...(membersByGroup.get(m.group_id) ?? []), m.user_id])
+  }
 
   // Annotated with the shared contract (#285) so a field renamed or dropped
   // here fails the build instead of reaching the client as undefined.
@@ -440,6 +466,10 @@ app.get('/data', async (c) => {
     // A row is the whole content: the FFTT listed this licence (#488).
     playerSeasonLicences: seasonLicencesR.results.map(r => ({
       seasonId: r.season_id, playerId: r.player_id,
+    })),
+    memberGroups: memberGroupsR.results.filter((r) => canSeeGroupsOf(r.club_id)).map((r) => ({
+      id: r.id, clubId: r.club_id, displayName: r.display_name,
+      memberIds: membersByGroup.get(r.id) ?? [],
     })),
     matchDays: matchDaysR.results.map(r => ({
       id: r.id, groupId: r.group_id, number: r.number, date: r.date,
@@ -3376,6 +3406,10 @@ app.delete('/clubs/:id', async (c) => {
     db.prepare('DELETE FROM club_addresses WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM club_channels WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM club_logos WHERE club_id = ?').bind(id),
+    db.prepare(
+      'DELETE FROM member_group_members WHERE group_id IN (SELECT id FROM member_groups WHERE club_id = ?)',
+    ).bind(id),
+    db.prepare('DELETE FROM member_groups WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM clubs WHERE id = ?').bind(id),
   ])
   return c.json({ ok: true })
@@ -3475,6 +3509,159 @@ app.put('/clubs/:clubId/channels/reorder', async (c) => {
     await c.env.DB.batch(stmts)
   }
   return c.json({ ok: true })
+})
+
+// --- Member groups (#602) ---
+//
+// A club's own groups — « Bureau », « Jeunes » — and who is in them. Everything
+// here is one club's, so everything asks `administers` (#558), with the club
+// read off the URL. Every statement is then pinned to that club as well: a
+// group id from another club, or a member of another club, is simply not found
+// rather than written through a URL that names somebody else's club.
+
+/** The club's groups, as `groupNameTaken` reads them. */
+async function clubGroupNames(db: D1Database, clubId: string) {
+  const r = await db
+    .prepare('SELECT id, club_id, display_name FROM member_groups WHERE club_id = ?')
+    .bind(clubId)
+    .all<MemberGroupRow>()
+  return r.results.map((g) => ({ id: g.id, clubId: g.club_id, displayName: g.display_name, memberIds: [] }))
+}
+
+/** Whether this group exists and is this club's. */
+const groupOfClub = async (db: D1Database, clubId: string, groupId: string) =>
+  !!(await db
+    .prepare('SELECT id FROM member_groups WHERE id = ? AND club_id = ?')
+    .bind(groupId, clubId)
+    .first<{ id: string }>())
+
+/** The unique index answers a race the check above lost. */
+const isNameClash = (e: unknown) => /UNIQUE/i.test(e instanceof Error ? e.message : String(e))
+
+app.post('/clubs/:clubId/member-groups', async (c) => {
+  const clubId = c.req.param('clubId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const d = await c.req.json<{ id?: string; displayName?: string }>()
+  const displayName = normalizeGroupName(d.displayName ?? '')
+  if (!displayName) return c.json({ error: 'bad_request' }, 400)
+  if (groupNameTaken(await clubGroupNames(db, clubId), clubId, displayName)) {
+    return c.json({ error: 'name_taken' }, 409)
+  }
+  const id = d.id || newId('mgroup')
+  try {
+    await db
+      .prepare('INSERT INTO member_groups (id, club_id, display_name) VALUES (?, ?, ?)')
+      .bind(id, clubId, displayName)
+      .run()
+  } catch (e) {
+    if (isNameClash(e)) return c.json({ error: 'name_taken' }, 409)
+    throw e
+  }
+  return c.json({ ok: true, group: { id, clubId, displayName, memberIds: [] } })
+})
+
+app.patch('/clubs/:clubId/member-groups/:groupId', async (c) => {
+  const clubId = c.req.param('clubId')
+  const groupId = c.req.param('groupId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const d = await c.req.json<{ displayName?: string }>()
+  const displayName = normalizeGroupName(d.displayName ?? '')
+  if (!displayName) return c.json({ error: 'bad_request' }, 400)
+  const groups = await clubGroupNames(db, clubId)
+  if (!groups.some((g) => g.id === groupId)) return c.json(notFound, 404)
+  if (groupNameTaken(groups, clubId, displayName, groupId)) return c.json({ error: 'name_taken' }, 409)
+  try {
+    await db
+      .prepare('UPDATE member_groups SET display_name = ? WHERE id = ? AND club_id = ?')
+      .bind(displayName, groupId, clubId)
+      .run()
+  } catch (e) {
+    if (isNameClash(e)) return c.json({ error: 'name_taken' }, 409)
+    throw e
+  }
+  return c.json({ ok: true })
+})
+
+// Deleting a group removes nobody from the club: only the grouping goes.
+app.delete('/clubs/:clubId/member-groups/:groupId', async (c) => {
+  const clubId = c.req.param('clubId')
+  const groupId = c.req.param('groupId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  if (!(await groupOfClub(db, clubId, groupId))) return c.json({ ok: true })
+  await db.batch([
+    db.prepare('DELETE FROM member_group_members WHERE group_id = ?').bind(groupId),
+    db.prepare('DELETE FROM member_groups WHERE id = ? AND club_id = ?').bind(groupId, clubId),
+  ])
+  return c.json({ ok: true })
+})
+
+/**
+ * Replace who is in one group — the group's own screen, a checklist of the
+ * club. A replacement and not a toggle, so two admins ticking boxes at once
+ * end on one of their lists rather than on a mix of both.
+ *
+ * Only the club's own members are kept: the body names people, and one club
+ * must not file another's licensees (the same care as #488's licence set).
+ */
+app.put('/clubs/:clubId/member-groups/:groupId/members', async (c) => {
+  const clubId = c.req.param('clubId')
+  const groupId = c.req.param('groupId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const { memberIds } = await c.req.json<{ memberIds?: string[] }>()
+  if (!Array.isArray(memberIds)) return c.json({ error: 'bad_request' }, 400)
+  if (!(await groupOfClub(db, clubId, groupId))) return c.json(notFound, 404)
+
+  const members = await db
+    .prepare('SELECT id FROM users WHERE club_id = ?')
+    .bind(clubId)
+    .all<{ id: string }>()
+  const ours = new Set(members.results.map((r) => r.id))
+  const keep = [...new Set(memberIds)].filter((id) => ours.has(id))
+
+  await db.batch([
+    db.prepare('DELETE FROM member_group_members WHERE group_id = ?').bind(groupId),
+    ...keep.map((userId) => db.prepare(
+      'INSERT OR IGNORE INTO member_group_members (group_id, user_id) VALUES (?, ?)',
+    ).bind(groupId, userId)),
+  ])
+  return c.json({ ok: true, memberIds: keep })
+})
+
+/**
+ * Replace which of the club's groups one member is in — the member's own
+ * fiche. Only this club's groups are touched: the member leaves the club's
+ * groups not listed and joins the ones listed, and nothing else moves.
+ */
+app.put('/clubs/:clubId/members/:userId/member-groups', async (c) => {
+  const clubId = c.req.param('clubId')
+  const userId = c.req.param('userId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const { groupIds } = await c.req.json<{ groupIds?: string[] }>()
+  if (!Array.isArray(groupIds)) return c.json({ error: 'bad_request' }, 400)
+  const member = await db
+    .prepare('SELECT id FROM users WHERE id = ? AND club_id = ?')
+    .bind(userId, clubId)
+    .first<{ id: string }>()
+  if (!member) return c.json(notFound, 404)
+
+  const ours = new Set((await clubGroupNames(db, clubId)).map((g) => g.id))
+  const keep = [...new Set(groupIds)].filter((id) => ours.has(id))
+
+  await db.batch([
+    db.prepare(
+      `DELETE FROM member_group_members
+       WHERE user_id = ? AND group_id IN (SELECT id FROM member_groups WHERE club_id = ?)`,
+    ).bind(userId, clubId),
+    ...keep.map((groupId) => db.prepare(
+      'INSERT OR IGNORE INTO member_group_members (group_id, user_id) VALUES (?, ?)',
+    ).bind(groupId, userId)),
+  ])
+  return c.json({ ok: true, groupIds: keep })
 })
 
 // --- Club logos (#135) ---
@@ -3795,6 +3982,14 @@ app.patch('/players/:id', async (c) => {
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  // A member who changes club leaves the old club's groups (#602): those are
+  // how the club they left sorts its own people, and it no longer lists them.
+  if ('clubId' in p) {
+    await c.env.DB.prepare(
+      `DELETE FROM member_group_members
+       WHERE user_id = ? AND group_id IN (SELECT id FROM member_groups WHERE club_id IS NOT ?)`,
+    ).bind(id, p.clubId ?? null).run()
+  }
   return c.json({ ok: true })
 })
 

@@ -41,7 +41,7 @@ const testData = {
   groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,
-  playerSeasonLicences: mockPlayerSeasonLicences,
+  playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [],
   playerSeasonCategories: mockPlayerSeasonCategories,
   playerPhasePoints: mockPlayerPhasePoints,
 }

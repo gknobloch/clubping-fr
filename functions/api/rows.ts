@@ -273,3 +273,15 @@ export interface UserRow {
   /** 0 silences every push to this member's devices (#495). Defaults to 1. */
   notifications_enabled: number
 }
+
+/** A club's own group of members (#602). */
+export interface MemberGroupRow {
+  id: string
+  club_id: string
+  display_name: string
+}
+
+export interface MemberGroupMemberRow {
+  group_id: string
+  user_id: string
+}

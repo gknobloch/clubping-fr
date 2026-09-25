@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
@@ -20,6 +20,8 @@ import { LicenceBadge } from '@/components/LicenceBadge'
 import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
+import { MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@/lib/memberGroups'
 
 const STATUS_LABELS: Record<PlayerType['status'], string> = {
   active: 'Actif',
@@ -31,7 +33,7 @@ export function PlayersPage() {
   const {
     players: allPlayers, clubs, seasons, updatePlayer, addPlayer,
     playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
-    playerSeasonLicences,
+    playerSeasonLicences, memberGroups,
   } = useAppData()
 
   // A category belongs to a season (#482). This screen edits the one being
@@ -87,16 +89,52 @@ export function PlayersPage() {
     [players, user?.role, activeOnly],
   )
 
+  // The group filter (#602) lives in the URL, so a group on the club's page can
+  // link straight to its members, and the back button returns to the same
+  // filtered list rather than the whole club.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedGroupIds = useMemo(
+    () => (searchParams.get('groupes') ?? '').split(',').filter(Boolean),
+    [searchParams],
+  )
+  const groupMatch: GroupMatch = searchParams.get('mode') === 'tous' ? 'all' : 'any'
+  const setGroupFilter = (ids: string[], mode: GroupMatch) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (ids.length) next.set('groupes', ids.join(','))
+      else next.delete('groupes')
+      if (mode === 'all') next.set('mode', 'tous')
+      else next.delete('mode')
+      return next
+    }, { replace: true })
+
+  // Whose groups the chips offer: the member's own club — and, for a general
+  // admin, who sees every club here, the club of a group they arrived filtered
+  // on from that club's page.
+  const groupClubId = hasClubScope
+    ? userClubId
+    : memberGroups.find((g) => selectedGroupIds.includes(g.id))?.clubId
+  const filterGroups = useMemo(
+    () => clubMemberGroups(memberGroups, groupClubId),
+    [memberGroups, groupClubId],
+  )
+  const inGroups = useMemo(
+    () => memberGroupFilter(filterGroups, selectedGroupIds, groupMatch),
+    [filterGroups, selectedGroupIds, groupMatch],
+  )
+  const groupFilterActive = filterGroups.some((g) => selectedGroupIds.includes(g.id))
+
   const filteredPlayers = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return playersByStatus
     return playersByStatus.filter(
       (p) =>
-        p.lastName.toLowerCase().includes(q) ||
-        p.firstName.toLowerCase().includes(q) ||
-        p.email?.toLowerCase().includes(q),
+        inGroups(p.id) &&
+        (!q ||
+          p.lastName.toLowerCase().includes(q) ||
+          p.firstName.toLowerCase().includes(q) ||
+          p.email?.toLowerCase().includes(q)),
     )
-  }, [playersByStatus, query])
+  }, [playersByStatus, query, inGroups])
 
   const clubsForSelect =
     hasClubScope && adminClubIds.length
@@ -266,12 +304,18 @@ export function PlayersPage() {
         {canSeeArchivedPlayers(user?.role) && (
           <Toggle checked={activeOnly} onChange={setActiveOnly} label={ACTIVE_ONLY_LABEL} />
         )}
-        {query && (
+        {(query || groupFilterActive) && (
           <span className="text-sm text-slate-500">
             {filteredPlayers.length} résultat{filteredPlayers.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
+      <MemberGroupFilter
+        groups={filterGroups}
+        selected={selectedGroupIds}
+        mode={groupMatch}
+        onChange={setGroupFilter}
+      />
       {/* Singular at zero as well as at one, which is the French rule and not an
           edge case here: the day the app is shared with the club, nobody has
           opened it yet and this line is the first thing it says. */}

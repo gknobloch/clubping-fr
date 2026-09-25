@@ -13,7 +13,7 @@ import {
   resetWindowSize,
   setWindowSize,
 } from '@/__tests__/support/window'
-import type { Club, Phase, Player, Role, Season, Team, User } from '@shared/types'
+import type { Club, Phase, Player, Role, Season, Team, User, MemberGroup } from '@shared/types'
 import JoueursScreen from '@/app/(tabs)/joueurs'
 
 // ---------------------------------------------------------------------------
@@ -35,9 +35,11 @@ const mockData: {
   // Per-season facts about a licensee (#482, #488) — none in these fixtures.
   playerSeasonCategories: never[]
   playerSeasonLicences: never[]
+  // A club's groups (#602) — none unless a test gives some.
+  memberGroups: MemberGroup[]
 } = {
   players: [], clubs: [], teams: [], phases: [], seasons: [],
-  playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
+  playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
 }
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))

@@ -31,9 +31,14 @@ import type {
   CompetitionEligibility,
   PlayerSeasonCategory,
   PlayerSeasonLicence,
+  MemberGroup,
   User,
 } from '@shared/types'
 import type { PlayerImportWrites } from '@shared/lib/ffttPlayers'
+import {
+  MEMBER_GROUP_MESSAGES, groupNameTaken, normalizeGroupName, withGroupMembers, withMemberGroups,
+  type MemberGroupResult,
+} from '@shared/lib/memberGroups'
 import { apiUrl } from '@/constants/api'
 import { dataHeaders, getSessionToken, getSessionUserId, onSessionChange } from '@/utils/api'
 import { clearCache, readCache, writeCache } from '@/utils/offlineCache'
@@ -52,6 +57,8 @@ interface DataState {
   playerPhasePoints: PlayerPhasePoints[]
   playerSeasonCategories: PlayerSeasonCategory[]
   playerSeasonLicences: PlayerSeasonLicence[]
+  /** The member's own club's groups (#602) — every club's for a general admin. */
+  memberGroups: MemberGroup[]
   competitions: Competition[]
   competitionEligibilities: CompetitionEligibility[]
   matchDays: MatchDay[]
@@ -72,6 +79,7 @@ const emptyState: DataState = {
   playerPhasePoints: [],
   playerSeasonCategories: [],
   playerSeasonLicences: [],
+  memberGroups: [],
   competitions: [],
   competitionEligibilities: [],
   matchDays: [],
@@ -90,13 +98,15 @@ const emptyState: DataState = {
  * them off `undefined`.
  *
  * An empty `competitions` is the right answer for such a cache, and harmless:
- * a team whose division belongs to no competition is restricted by nobody.
+ * a team whose division belongs to no competition is restricted by nobody. The
+ * same goes for `memberGroups` (#602): a club with no group filters nothing.
  */
 const withDefaults = (data: DataState): DataState => ({
   ...data,
   playerPhasePoints: data.playerPhasePoints ?? [],
   playerSeasonCategories: data.playerSeasonCategories ?? [],
   playerSeasonLicences: data.playerSeasonLicences ?? [],
+  memberGroups: data.memberGroups ?? [],
   competitions: data.competitions ?? [],
   competitionEligibilities: data.competitionEligibilities ?? [],
 })
@@ -157,6 +167,19 @@ interface DataContextValue extends DataState {
    * knows what the club now holds.
    */
   applyPlayerImport: (writes: PlayerImportWrites) => Promise<void>
+  /**
+   * Create or rename one of a club's groups (#602). Awaited, like on the web:
+   * a name the club already uses is the API's to refuse, and the sheet has to
+   * stay open to say so.
+   */
+  addMemberGroup: (clubId: string, displayName: string) => Promise<MemberGroupResult>
+  renameMemberGroup: (clubId: string, groupId: string, displayName: string) => Promise<MemberGroupResult>
+  /** Removes the grouping only — nobody leaves the club. */
+  deleteMemberGroup: (clubId: string, groupId: string) => void
+  /** Replace who is in one group. */
+  setMemberGroupMembers: (clubId: string, groupId: string, memberIds: string[]) => void
+  /** Replace which of the club's groups one member is in. */
+  setGroupsOfMember: (clubId: string, memberId: string, groupIds: string[]) => void
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -535,6 +558,111 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [write, load],
   )
 
+  // --- Member groups (#602) --------------------------------------------------
+
+  /** A create or rename whose refusal the sheet shows. `null` is success. */
+  const groupWrite = useCallback(
+    async (path: string, method: 'POST' | 'PATCH', body: unknown): Promise<string | null> => {
+      try {
+        const res = await fetch(apiUrl(path), {
+          method,
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(body),
+        })
+        if (res.status === 409) return MEMBER_GROUP_MESSAGES.nameTaken
+        return res.ok ? null : MEMBER_GROUP_MESSAGES.failed
+      } catch {
+        return MEMBER_GROUP_MESSAGES.failed
+      }
+    },
+    [],
+  )
+
+  const addMemberGroup = useCallback(
+    async (clubId: string, rawName: string): Promise<MemberGroupResult> => {
+      const displayName = normalizeGroupName(rawName)
+      if (!displayName) return { ok: false, message: MEMBER_GROUP_MESSAGES.empty }
+      if (groupNameTaken(state.memberGroups, clubId, displayName)) {
+        return { ok: false, message: MEMBER_GROUP_MESSAGES.nameTaken }
+      }
+      const group: MemberGroup = {
+        id: `mgroup-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        clubId, displayName, memberIds: [],
+      }
+      const refusal = await groupWrite(`/clubs/${clubId}/member-groups`, 'POST', {
+        id: group.id, displayName,
+      })
+      if (refusal) return { ok: false, message: refusal }
+      setState((prev) => ({ ...prev, memberGroups: [...prev.memberGroups, group] }))
+      return { ok: true, group }
+    },
+    [state.memberGroups, groupWrite],
+  )
+
+  const renameMemberGroup = useCallback(
+    async (clubId: string, groupId: string, rawName: string): Promise<MemberGroupResult> => {
+      const displayName = normalizeGroupName(rawName)
+      if (!displayName) return { ok: false, message: MEMBER_GROUP_MESSAGES.empty }
+      const current = state.memberGroups.find((g) => g.id === groupId)
+      if (!current) return { ok: false, message: MEMBER_GROUP_MESSAGES.failed }
+      if (groupNameTaken(state.memberGroups, clubId, displayName, groupId)) {
+        return { ok: false, message: MEMBER_GROUP_MESSAGES.nameTaken }
+      }
+      const refusal = await groupWrite(`/clubs/${clubId}/member-groups/${groupId}`, 'PATCH', { displayName })
+      if (refusal) return { ok: false, message: refusal }
+      setState((prev) => ({
+        ...prev,
+        memberGroups: prev.memberGroups.map((g) => (g.id === groupId ? { ...g, displayName } : g)),
+      }))
+      return { ok: true, group: { ...current, displayName } }
+    },
+    [state.memberGroups, groupWrite],
+  )
+
+  const deleteMemberGroup = useCallback(
+    (clubId: string, groupId: string) => {
+      setState((prev) => ({ ...prev, memberGroups: prev.memberGroups.filter((g) => g.id !== groupId) }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/member-groups/${groupId}`), {
+          method: 'DELETE',
+          headers: dataHeaders(),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  const setMemberGroupMembers = useCallback(
+    (clubId: string, groupId: string, memberIds: string[]) => {
+      setState((prev) => ({ ...prev, memberGroups: withGroupMembers(prev.memberGroups, groupId, memberIds) }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/member-groups/${groupId}/members`), {
+          method: 'PUT',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ memberIds }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  const setGroupsOfMember = useCallback(
+    (clubId: string, memberId: string, groupIds: string[]) => {
+      setState((prev) => ({
+        ...prev,
+        memberGroups: withMemberGroups(prev.memberGroups, clubId, memberId, groupIds),
+      }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/members/${memberId}/member-groups`), {
+          method: 'PUT',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ groupIds }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
   const value = useMemo<DataContextValue>(
     () => ({
       ...state,
@@ -553,8 +681,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       removeAvatar,
       setClubSeasonLicences,
       applyPlayerImport,
+      addMemberGroup,
+      renameMemberGroup,
+      deleteMemberGroup,
+      setMemberGroupMembers,
+      setGroupsOfMember,
     }),
-    [state, loading, refreshing, error, stale, lastSyncedAt, refresh, updatePlayer, updateTeam, setAvailability, clearAvailability, setGameSelection, setAvatar, removeAvatar, setClubSeasonLicences, applyPlayerImport],
+    [
+      state, loading, refreshing, error, stale, lastSyncedAt, refresh, updatePlayer, updateTeam,
+      setAvailability, clearAvailability, setGameSelection, setAvatar, removeAvatar,
+      setClubSeasonLicences, applyPlayerImport,
+      addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers, setGroupsOfMember,
+    ],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -675,6 +675,55 @@ invisible dans le diff comme dans la revue.
   saisie de disponibilité impossible en local — exactement ce que l'échappatoire
   de #138 existe pour éviter.
 
+### Groupes de membres (#602)
+- **« Groupe » est déjà pris** : dans le code, `groups` / `Group` sont les
+  poules d'une division. Les groupes d'un club sont donc `member_groups` /
+  `MemberGroup` partout — table, type, `DataState.memberGroups`. L'interface
+  dit « Groupes », les poules y restant des « Poules ».
+- Un groupe appartient à **un club et à aucune saison** : le Bureau de
+  septembre est encore le Bureau en janvier, et un groupe à recréer chaque
+  août est un groupe qu'on cesse d'entretenir.
+- **L'appartenance porte sur le membre, pas sur la licence** : un président de
+  Bureau peut n'en avoir aucune. Les écrans proposent donc tous les membres du
+  club (`users`), non licenciés compris ; la liste Joueurs, qui est une liste
+  de joueurs, ne les montre simplement pas.
+- **Lire est à tout le club, écrire à ses administrateurs.** Les cinq routes
+  `/clubs/:clubId/member-groups…` suivent `administers` (#558), et chaque
+  requête est **épinglée au club de l'URL** : un groupe ou un membre d'un
+  autre club n'y est pas trouvé, plutôt qu'écrit par l'URL de quelqu'un
+  d'autre.
+- **`GET /api/data` ne porte que les groupes du club de celui qui regarde**
+  (tous pour un administrateur général) — à la différence de presque tout le
+  reste de ce payload. C'est la façon dont un club range ses propres gens, pas
+  de la vie sportive que chaque club lit sur les autres.
+- **Deux remplacements, jamais des bascules** : les membres d'un groupe (depuis
+  le club) et les groupes d'un membre (depuis sa fiche). Deux administrateurs
+  qui cochent en même temps finissent sur la liste de l'un d'eux, pas sur un
+  mélange. Le second ne touche **que les groupes de ce club**.
+- Et donc **un remplacement ne doit rien perdre de ce qu'il n'a pas montré** :
+  `ChecklistDialog` (web) et `ChecklistSheet` / `MemberGroupEditor` (app)
+  gardent ce qui était coché sans être proposé — un archivé, un membre que
+  l'écran ne liste pas. Une case que personne n'a vue n'est pas une case que
+  quelqu'un a décochée.
+- **Créer et renommer sont attendus**, sur le web comme dans l'app : le seul
+  refus qui compte — un nom que le club utilise déjà, casse et espaces
+  ignorés (`groupNameTaken`) — appartient à l'API (409 `name_taken`, plus un
+  index unique `COLLATE NOCASE` pour la course). Supprimer et ranger restent
+  optimistes.
+- **Changer de club fait quitter les groupes de l'ancien** — dans `PATCH
+  /players/:id` comme dans le `DataContext` du web.
+- **Le filtre vit dans l'URL** (`?groupes=a,b&mode=tous`, et les paramètres de
+  route dans l'app) : un groupe, sur la page du club ou sur une fiche, mène à
+  la liste déjà filtrée, et le retour ramène à la même liste.
+  `memberGroupFilter` est la seule dérivation : **rien de choisi garde tout le
+  monde**, dans les deux modes — « tous » de rien serait vrai, « au moins un »
+  de rien faux, et la liste se viderait au dernier choix levé. Un identifiant
+  choisi qui n'existe plus est ignoré plutôt que de vider la liste en ET pour
+  une raison invisible.
+- Les deux modes se disent comme une phrase sur le membre — « Au moins un
+  groupe » / « Tous les groupes » — et non ET / OU ; le choix n'apparaît qu'à
+  la deuxième pastille, avant quoi les deux réponses sont les mêmes.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per

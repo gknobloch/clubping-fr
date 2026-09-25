@@ -33,6 +33,11 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   aucune. C'était jusqu'ici réservé au site — or l'e-mail est l'adresse à
   laquelle arrive le code de connexion, donc une erreur y laissait un
   coéquipier à la porte.
+- **Les groupes du club.** Bureau, jeunes, loisirs, entraîneurs : un
+  administrateur crée les groupes de son club depuis l'onglet Club et y range
+  les membres, un membre pouvant être dans plusieurs. Chacun filtre ensuite la
+  liste des joueurs par groupe — dans au moins un des groupes choisis, ou dans
+  tous — et la fiche d'un joueur dit dans quels groupes il est.
 
 ## 1.5.0 — 20 septembre 2026
 

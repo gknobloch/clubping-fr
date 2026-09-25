@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView, ChannelIcon, channelTypeLabel } from '@/components/ClubDetailView'
 import { ClubAdmins } from '@/components/ClubAdmins'
+import { ClubMemberGroups } from '@/components/ClubMemberGroups'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
 import { HeaderAction, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -47,6 +48,7 @@ export function MyClubPage() {
         </div>
         <ClubDetailView club={currentClub} canEdit idPrefix="my-club" />
         <ClubAdmins clubId={currentClub.id} idPrefix="my-club" variant="section" />
+        <ClubMemberGroups clubId={currentClub.id} idPrefix="my-club" variant="section" />
       </div>
     )
   }
@@ -127,6 +129,10 @@ export function MyClubPage() {
       {/* Who to ask, for everyone; the controls appear only for those who may
           use them (#474). */}
       <ClubAdmins clubId={currentClub.id} idPrefix="my-club" variant="section" />
+
+      {/* The club's groups (#602): everyone reads them and follows one to its
+          members; only an admin creates and fills them. */}
+      <ClubMemberGroups clubId={currentClub.id} idPrefix="my-club" variant="section" />
     </div>
   )
 }

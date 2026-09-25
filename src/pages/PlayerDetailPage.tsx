@@ -20,6 +20,8 @@ import {
 } from '@/lib/competitionEligibility'
 import { assignmentSummary, assignmentsByPlayer } from '@/lib/competitionAssignments'
 import { useConfirm } from '@/components/useConfirm'
+import { ChecklistDialog } from '@/components/ChecklistDialog'
+import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@/lib/memberGroups'
 
 export function PlayerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -27,11 +29,13 @@ export function PlayerDetailPage() {
   const {
     players, clubs, competitions, competitionEligibilities, setCompetitionEligibility,
     teams, divisions, gameSelections, playerSeasonCategories, playerSeasonLicences, seasons,
+    memberGroups, setGroupsOfMember,
   } = useAppData()
   const [zoom, setZoom] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirm, confirmDialog] = useConfirm()
+  const [editingGroups, setEditingGroups] = useState(false)
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
@@ -76,6 +80,12 @@ export function PlayerDetailPage() {
       ),
     }))
     : []
+
+  // The club's groups (#602), and the ones this member is in. The payload only
+  // carries the viewer's own club's, so a member of another club reads none.
+  const clubGroups = clubMemberGroups(memberGroups, player?.clubId)
+  const memberOf = groupsOfMember(clubGroups, player?.id)
+  const canFileGroups = mayManageMemberGroups(user, player?.clubId)
 
   // Only the club's own admins amend, and only their own club's licensees; a
   // general admin does it from the club's page, where the whole list is.
@@ -174,6 +184,46 @@ export function PlayerDetailPage() {
         </dl>
       </section>
 
+      {/* Groups (#602) — only once the club has any: before that there is
+          nothing to be in, and nothing to file anybody into. */}
+      {clubGroups.length > 0 && (
+        <section
+          aria-labelledby="player-groups-title"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 id="player-groups-title" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Groupes
+            </h2>
+            {canFileGroups && (
+              <button
+                type="button"
+                onClick={() => setEditingGroups(true)}
+                className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+              >
+                Modifier
+              </button>
+            )}
+          </div>
+          {memberOf.length === 0 ? (
+            <p className="text-sm text-slate-400">Dans aucun groupe.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {memberOf.map((g) => (
+                <li key={g.id}>
+                  <Link
+                    to={`/joueurs?groupes=${encodeURIComponent(g.id)}`}
+                    className="inline-flex min-h-11 items-center rounded-full bg-slate-100 px-3 text-sm font-medium text-slate-700 hover:bg-slate-200 md:min-h-0 md:py-1"
+                  >
+                    {g.displayName}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* Competitions (#482) — only once a general admin has defined any;
           before that nothing is restricted and the section would say nothing. */}
       {ordered.length > 0 && (
@@ -233,6 +283,19 @@ export function PlayerDetailPage() {
       <PlayerPhaseHistory playerId={player.id} />
 
       {confirmDialog}
+
+      {editingGroups && (
+        <ChecklistDialog
+          idPrefix="player-groups"
+          title="Groupes"
+          subtitle={`${player.firstName} ${player.lastName}`}
+          options={clubGroups.map((g) => ({ id: g.id, label: g.displayName }))}
+          selected={memberOf.map((g) => g.id)}
+          emptyLabel="Ce club n'a aucun groupe."
+          onSave={(ids) => setGroupsOfMember(player.clubId, player.id, ids)}
+          onClose={() => setEditingGroups(false)}
+        />
+      )}
 
       {/* Avatar lightbox */}
       {zoom && player.avatarUpdatedAt && (

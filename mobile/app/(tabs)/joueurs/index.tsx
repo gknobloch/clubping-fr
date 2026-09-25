@@ -8,7 +8,7 @@ import {
   Switch,
   StyleSheet,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -28,6 +28,8 @@ import { Avatar } from '@/components/Avatar'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
 import { canManageClub } from '@/utils/roles'
+import { MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@shared/lib/memberGroups'
 
 const STATUS_LABELS = {
   active: 'Actif',
@@ -47,7 +49,7 @@ const STATUS_LABELS = {
 // what the search box at the top says this tab is for.
 // ---------------------------------------------------------------------------
 export default function JoueursScreen() {
-  const { players, clubs } = useAppData()
+  const { players, clubs, memberGroups } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -84,12 +86,31 @@ export default function JoueursScreen() {
   /** The roster this member may see — the actif/archivé rule (#438), unsearched. */
   const roster = sortByName(visiblePlayers(clubPlayers, { role: user?.role, activeOnly }))
 
+  // The group filter (#602) rides in the route, like the selection (#585): the
+  // club tab opens this list already narrowed to one of its groups. Cleared
+  // with the empty string rather than `undefined`, which is the one value a
+  // merge cannot be trusted to drop.
+  const params = useLocalSearchParams<{ groupes?: string; mode?: string }>()
+  const selectedGroupIds = (params.groupes ?? '').split(',').filter(Boolean)
+  const groupMatch: GroupMatch = params.mode === 'tous' ? 'all' : 'any'
+  const setGroupFilter = (ids: string[], mode: GroupMatch) =>
+    router.setParams({ groupes: ids.join(','), mode: mode === 'all' ? 'tous' : '' })
+  // Whose groups: the member's own club — or, for a general admin, who sees
+  // every club here, the club of a group they arrived filtered on.
+  const groupClubId = user?.role === 'general_admin'
+    ? memberGroups.find((g) => selectedGroupIds.includes(g.id))?.clubId
+    : user?.clubId
+  const filterGroups = clubMemberGroups(memberGroups, groupClubId)
+  const inGroups = memberGroupFilter(filterGroups, selectedGroupIds, groupMatch)
+  const groupFilterActive = filterGroups.some((g) => selectedGroupIds.includes(g.id))
+
   const filtered = roster.filter((p) => {
     const q = query.toLowerCase()
     return (
-      p.firstName.toLowerCase().includes(q) ||
-      p.lastName.toLowerCase().includes(q) ||
-      p.email?.toLowerCase().includes(q)
+      inGroups(p.id) &&
+      (p.firstName.toLowerCase().includes(q) ||
+        p.lastName.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q))
     )
   })
 
@@ -140,6 +161,19 @@ export default function JoueursScreen() {
             <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
             <Text style={styles.importLabel}>Importer les licenciés FFTT</Text>
           </TouchableOpacity>
+        )}
+        <MemberGroupFilter
+          groups={filterGroups}
+          selected={selectedGroupIds}
+          mode={groupMatch}
+          onChange={setGroupFilter}
+        />
+        {/* A narrowed list says so — the more so when it is empty, which would
+            otherwise read as a club with nobody in it. */}
+        {groupFilterActive && (
+          <Text style={styles.resultCount} testID="group-filter-count">
+            {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
+          </Text>
         )}
         {canSeeArchived && (
           <View style={styles.filterRow}>
@@ -261,6 +295,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  resultCount: { fontSize: 13, color: colors.textSecondary, marginTop: 8 },
   filterLabel: { fontSize: 13, color: colors.textSecondary },
   list: { padding: 12, gap: 8 },
 

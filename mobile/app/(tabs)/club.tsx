@@ -8,6 +8,8 @@ import {
   Linking,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useMemo, useState } from 'react'
+import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -15,14 +17,22 @@ import { ClubLogo } from '@/components/ClubLogo'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
 import { CHANNEL_LABELS, formatAddress, mapsUrl } from '@/utils/club'
-import type { Address, ClubChannel, ClubChannelType } from '@shared/types'
+import type { Address, ClubChannel, ClubChannelType, MemberGroup, User } from '@shared/types'
+import { MemberGroupEditor } from '@/components/MemberGroupEditor'
+import type { ChecklistOption } from '@/components/ChecklistSheet'
+import { clubMemberGroups, mayManageMemberGroups } from '@shared/lib/memberGroups'
+import { sortByName } from '@shared/lib/sortByName'
 
 // ---------------------------------------------------------------------------
 // Mon club — read-only view of the member's own club (#365)
 //
 // Mirrors what the web shows a player on /club (src/pages/MyClubPage.tsx):
-// identity, addresses, communication channels. Editing stays on the web for
-// now. Everything here is already in the GET /api/data payload.
+// identity, addresses, communication channels. Editing those stays on the web
+// for now. Everything here is already in the GET /api/data payload.
+//
+// The club's groups (#602) are the exception: every member reads them and
+// follows one to its players, and an admin creates and fills them right here —
+// « qui est au bureau cette saison » is a question asked in the gymnasium.
 // ---------------------------------------------------------------------------
 
 // The web draws these inline (it has no icon library); the names below are the
@@ -98,11 +108,76 @@ function ChannelRow({ channel }: { channel: ClubChannel }) {
   )
 }
 
+/** The club's members as checklist rows — archived ones only while still in. */
+function memberOptions(users: User[], clubId: string, current: string[]): ChecklistOption[] {
+  return sortByName(
+    users
+      .filter((u) => u.clubId === clubId && (u.status !== 'archived' || current.includes(u.id)))
+      .map((u) => ({ ...u, firstName: u.firstName ?? '', lastName: u.lastName ?? '' })),
+  ).map((u) => ({
+    id: u.id,
+    label: `${u.firstName} ${u.lastName}`.trim() || u.email || 'Sans nom',
+    hint: u.status === 'archived' ? 'Archivé' : !u.isPlayer ? 'Non licencié' : undefined,
+  }))
+}
+
+function GroupRow({
+  group,
+  onOpen,
+  onEdit,
+}: {
+  group: MemberGroup
+  onOpen: () => void
+  onEdit?: () => void
+}) {
+  const n = group.memberIds.length
+  return (
+    <View style={s.row}>
+      <TouchableOpacity
+        testID={`club-group-${group.id}`}
+        style={s.groupOpen}
+        onPress={onOpen}
+        accessibilityRole="link"
+        accessibilityLabel={`${group.displayName} — voir les joueurs`}
+      >
+        <Ionicons name="people-outline" size={20} color={colors.textSecondary} style={s.rowIcon} />
+        <View style={s.rowBody}>
+          <Text style={s.rowTitle}>{group.displayName}</Text>
+          <Text style={s.rowSubtitle}>{n} membre{n > 1 ? 's' : ''}</Text>
+        </View>
+      </TouchableOpacity>
+      {onEdit && (
+        <TouchableOpacity
+          testID={`club-group-edit-${group.id}`}
+          style={s.iconButton}
+          onPress={onEdit}
+          accessibilityRole="button"
+          accessibilityLabel={`Modifier ${group.displayName}`}
+        >
+          <Ionicons name="create-outline" size={20} color={colors.accent} />
+        </TouchableOpacity>
+      )}
+    </View>
+  )
+}
+
 export default function ClubScreen() {
   const { user } = useAuth()
-  const { clubs, refreshing, refresh } = useAppData()
+  const {
+    clubs, users, memberGroups, refreshing, refresh,
+    addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers,
+  } = useAppData()
+  const router = useRouter()
+  // `{}` is a new group, `{ group }` an existing one, null nothing open.
+  const [editing, setEditing] = useState<{ group?: MemberGroup } | null>(null)
 
   const club = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
+  const groups = clubMemberGroups(memberGroups, club?.id)
+  const canManageGroups = !!club && mayManageMemberGroups(user, club.id)
+  const editedMembers = useMemo(
+    () => (club && editing ? memberOptions(users, club.id, editing.group?.memberIds ?? []) : []),
+    [users, club, editing],
+  )
 
   if (!club) {
     // The tab is hidden for a member with no club, so this is the transient
@@ -153,7 +228,51 @@ export default function ClubScreen() {
             channels.map((ch) => <ChannelRow key={ch.id} channel={ch} />)
           )}
         </Section>
+
+        {/* Nothing to read and nothing to do: a member of a club with no group
+            is spared a section about a feature they cannot use. */}
+        {(groups.length > 0 || canManageGroups) && (
+          <View style={s.section} testID="club-groups">
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Groupes</Text>
+              {canManageGroups && (
+                <TouchableOpacity
+                  testID="club-group-new"
+                  onPress={() => setEditing({})}
+                  hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+                  accessibilityRole="button"
+                >
+                  <Text style={s.headerLink}>+ Nouveau</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {groups.length === 0 ? (
+              <Text style={s.sectionEmpty}>Aucun groupe.</Text>
+            ) : (
+              groups.map((g) => (
+                <GroupRow
+                  key={g.id}
+                  group={g}
+                  onOpen={() => router.push({ pathname: '/joueurs', params: { groupes: g.id } })}
+                  onEdit={canManageGroups ? () => setEditing({ group: g }) : undefined}
+                />
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
+
+      {editing && (
+        <MemberGroupEditor
+          group={editing.group}
+          members={editedMembers}
+          onCreate={(name) => addMemberGroup(club.id, name)}
+          onRename={(name) => renameMemberGroup(club.id, editing.group!.id, name)}
+          onSetMembers={(groupId, ids) => setMemberGroupMembers(club.id, groupId, ids)}
+          onDelete={() => editing.group && deleteMemberGroup(club.id, editing.group.id)}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </Screen>
   )
 }
@@ -189,6 +308,10 @@ const s = StyleSheet.create({
     letterSpacing: 0.6,
   },
   sectionEmpty: { fontSize: 14, color: colors.textSecondary },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerLink: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
+  groupOpen: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   rowIcon: { width: 20 },
   rowBody: { flex: 1 },

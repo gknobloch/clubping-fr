@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -200,6 +200,22 @@ const UNLICENSED = new Set(['p2-player-3'])
 export const mockPlayerSeasonLicences: PlayerSeasonLicence[] = basePlayers
   .filter((p) => !UNLICENSED.has(p.id))
   .map((p) => ({ seasonId: ACTIVE_SEASON_ID, playerId: p.id }))
+
+/**
+ * Two overlapping groups at Rixheim (#602), so the ET and OU filters give
+ * different answers: Grégory and Quentin are in both, Joris and Enzo in one
+ * each. Same shape as the local seed.
+ */
+export const mockMemberGroups: MemberGroup[] = [
+  {
+    id: 'mgroup-bureau', clubId: 'club-fftt-06680011', displayName: 'Bureau',
+    memberIds: ['user-2', 'p2-player-5', 'p2-player-1', 'p2-player-2'],
+  },
+  {
+    id: 'mgroup-entraineurs', clubId: 'club-fftt-06680011', displayName: 'Entraîneurs',
+    memberIds: ['p2-player-1', 'p2-player-2', 'p2-player-4'],
+  },
+]
 
 // ---------------------------------------------------------------------------
 // Competitions (#482)

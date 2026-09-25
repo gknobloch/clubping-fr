@@ -27,6 +27,7 @@ import type {
   PlayerPhasePoints,
   PlayerSeasonCategory,
   PlayerSeasonLicence,
+  MemberGroup,
   MatchDay,
   Game,
   GameAvailability,
@@ -53,6 +54,7 @@ import {
   mockUsers,
   mockCompetitions,
   mockCompetitionEligibilities,
+  mockMemberGroups,
 } from '@/mock/data'
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { seasonIdFromName } from '@/lib/season'
@@ -65,6 +67,10 @@ import {
   dafunkerClubTeamsUrl, dafunkerResultsUrl, parseDafunkerClubTeamsXml, parseDafunkerResultsXml,
 } from '@/lib/ffttGamesXml'
 import { deriveMatchDayDate } from '@/lib/matchdays'
+import {
+  MEMBER_GROUP_MESSAGES, groupNameTaken, normalizeGroupName, withGroupMembers, withMemberGroups,
+  type MemberGroupResult,
+} from '@/lib/memberGroups'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
 // older than what becomes active, back to 'upcoming' when newer (rollback).
@@ -402,6 +408,20 @@ function api(path: string, options?: RequestInit) {
 }
 
 /**
+ * A member-group write whose refusal the screen has to hear (#602). `null` is
+ * success; anything else is the sentence to show.
+ */
+async function memberGroupWrite(path: string, method: 'POST' | 'PATCH', body: unknown): Promise<string | null> {
+  try {
+    const res = await fetch(`/api${path}`, { method, headers: authHeaders(), body: JSON.stringify(body) })
+    if (res.status === 409) return MEMBER_GROUP_MESSAGES.nameTaken
+    return res.ok ? null : MEMBER_GROUP_MESSAGES.failed
+  } catch {
+    return MEMBER_GROUP_MESSAGES.failed
+  }
+}
+
+/**
  * The answer to an admin appointment: the API decides (the cap and the
  * never-zero rule are its to enforce), and its French refusal comes back for
  * display rather than being rebuilt here (#474).
@@ -519,6 +539,16 @@ interface DataContextValue extends DataState {
   playerSeasonLicences: PlayerSeasonLicence[]
   /** Replace what the FFTT listed for a club and season — see #488. */
   setClubSeasonLicences: (clubId: string, seasonId: string, playerIds: string[]) => void
+  memberGroups: MemberGroup[]
+  /** Create one of a club's groups (#602). Awaited: a clashing name is the API's to refuse. */
+  addMemberGroup: (clubId: string, displayName: string) => Promise<MemberGroupResult>
+  renameMemberGroup: (clubId: string, groupId: string, displayName: string) => Promise<MemberGroupResult>
+  /** Removes the grouping only — nobody leaves the club. */
+  deleteMemberGroup: (clubId: string, groupId: string) => void
+  /** Replace who is in one group. */
+  setMemberGroupMembers: (clubId: string, groupId: string, memberIds: string[]) => void
+  /** Replace which of the club's groups one member is in. */
+  setGroupsOfMember: (clubId: string, memberId: string, groupIds: string[]) => void
   setAvatar: (id: string, base64: string, contentType: string) => Promise<void>
   removeAvatar: (id: string) => Promise<void>
   matchDays: MatchDay[]
@@ -583,6 +613,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const [playerSeasonLicences, setPlayerSeasonLicencesState] = useState<PlayerSeasonLicence[]>(
     initialData?.playerSeasonLicences ?? [],
   )
+  const [memberGroups, setMemberGroups] = useState<MemberGroup[]>(initialData?.memberGroups ?? [])
   const [matchDays, setMatchDays] = useState<MatchDay[]>(initialData?.matchDays ?? [])
   const [games, setGames] = useState<Game[]>(initialData?.games ?? [])
   const [gameAvailabilities, setGameAvailabilities] = useState<GameAvailability[]>(
@@ -630,6 +661,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPlayerPhasePointsState(data.playerPhasePoints ?? [])
       setPlayerSeasonCategoriesState(data.playerSeasonCategories ?? [])
       setPlayerSeasonLicencesState(data.playerSeasonLicences ?? [])
+      // Defaulted like the tables before it: a cache written before #602
+      // carries none, and "no groups" is the right reading of that.
+      setMemberGroups(data.memberGroups ?? [])
       setMatchDays(data.matchDays)
       setGames(data.games)
       setGameAvailabilities(data.gameAvailabilities)
@@ -647,6 +681,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         playerPhasePoints: mockPlayerPhasePoints,
         playerSeasonCategories: mockPlayerSeasonCategories,
         playerSeasonLicences: mockPlayerSeasonLicences,
+        memberGroups: mockMemberGroups,
         matchDays: mockMatchDays, games: mockGames,
         gameAvailabilities: mockGameAvailabilities,
         gameSelections: mockGameSelections, users: mockUsers,
@@ -1781,6 +1816,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const updatePlayer = useCallback((id: string, patch: Partial<Player>) => {
     const local = withoutEmptyEmail(patch)
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...local } : p)))
+    // Changing club leaves the old club's groups — the API does the same (#602).
+    if (patch.clubId !== undefined) {
+      setMemberGroups((prev) => prev.map((g) => (
+        g.clubId !== patch.clubId && g.memberIds.includes(id)
+          ? { ...g, memberIds: g.memberIds.filter((m) => m !== id) }
+          : g
+      )))
+    }
     // The request keeps the empty key: PATCH only touches the columns it sees.
     if (persist) api(`/players/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
   }, [persist])
@@ -1913,6 +1956,80 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       if (persist) {
         api(`/clubs/${clubId}/seasons/${seasonId}/licences`, {
           method: 'PUT', body: JSON.stringify({ playerIds }),
+        })
+      }
+    },
+    [persist],
+  )
+
+  // --- Member groups (#602) ---
+  // Creating and renaming wait for the API, which alone can say a name is
+  // taken; the local check only spares the trip when this screen already knows.
+  // Deleting and filing members are optimistic like everything else here.
+  const addMemberGroup = useCallback(
+    async (clubId: string, rawName: string): Promise<MemberGroupResult> => {
+      const displayName = normalizeGroupName(rawName)
+      if (!displayName) return { ok: false, message: MEMBER_GROUP_MESSAGES.empty }
+      if (groupNameTaken(memberGroups, clubId, displayName)) {
+        return { ok: false, message: MEMBER_GROUP_MESSAGES.nameTaken }
+      }
+      const group: MemberGroup = { id: nextId('mgroup'), clubId, displayName, memberIds: [] }
+      if (persist) {
+        const refusal = await memberGroupWrite(
+          `/clubs/${clubId}/member-groups`, 'POST', { id: group.id, displayName },
+        )
+        if (refusal) return { ok: false, message: refusal }
+      }
+      setMemberGroups((prev) => [...prev, group])
+      return { ok: true, group }
+    },
+    [persist, memberGroups],
+  )
+
+  const renameMemberGroup = useCallback(
+    async (clubId: string, groupId: string, rawName: string): Promise<MemberGroupResult> => {
+      const displayName = normalizeGroupName(rawName)
+      if (!displayName) return { ok: false, message: MEMBER_GROUP_MESSAGES.empty }
+      if (groupNameTaken(memberGroups, clubId, displayName, groupId)) {
+        return { ok: false, message: MEMBER_GROUP_MESSAGES.nameTaken }
+      }
+      const current = memberGroups.find((g) => g.id === groupId)
+      if (!current) return { ok: false, message: MEMBER_GROUP_MESSAGES.failed }
+      if (persist) {
+        const refusal = await memberGroupWrite(
+          `/clubs/${clubId}/member-groups/${groupId}`, 'PATCH', { displayName },
+        )
+        if (refusal) return { ok: false, message: refusal }
+      }
+      setMemberGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, displayName } : g)))
+      return { ok: true, group: { ...current, displayName } }
+    },
+    [persist, memberGroups],
+  )
+
+  const deleteMemberGroup = useCallback((clubId: string, groupId: string) => {
+    setMemberGroups((prev) => prev.filter((g) => g.id !== groupId))
+    if (persist) api(`/clubs/${clubId}/member-groups/${groupId}`, { method: 'DELETE' })
+  }, [persist])
+
+  const setMemberGroupMembers = useCallback(
+    (clubId: string, groupId: string, memberIds: string[]) => {
+      setMemberGroups((prev) => withGroupMembers(prev, groupId, memberIds))
+      if (persist) {
+        api(`/clubs/${clubId}/member-groups/${groupId}/members`, {
+          method: 'PUT', body: JSON.stringify({ memberIds }),
+        })
+      }
+    },
+    [persist],
+  )
+
+  const setGroupsOfMember = useCallback(
+    (clubId: string, memberId: string, groupIds: string[]) => {
+      setMemberGroups((prev) => withMemberGroups(prev, clubId, memberId, groupIds))
+      if (persist) {
+        api(`/clubs/${clubId}/members/${memberId}/member-groups`, {
+          method: 'PUT', body: JSON.stringify({ groupIds }),
         })
       }
     },
@@ -2165,6 +2282,12 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPlayerSeasonCategories,
       clearPlayerSeasonCategory,
       setClubSeasonLicences,
+      memberGroups,
+      addMemberGroup,
+      renameMemberGroup,
+      deleteMemberGroup,
+      setMemberGroupMembers,
+      setGroupsOfMember,
       setAvatar,
       removeAvatar,
       updateMatchDay,
@@ -2185,6 +2308,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
       playerSeasonLicences, setClubSeasonLicences,
+      memberGroups, addMemberGroup, renameMemberGroup, deleteMemberGroup,
+      setMemberGroupMembers, setGroupsOfMember,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionEligibility,

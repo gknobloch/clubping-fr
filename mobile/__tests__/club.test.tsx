@@ -1,7 +1,7 @@
 import { Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
-import type { Club, User } from '@shared/types'
+import type { Club, MemberGroup, User } from '@shared/types'
 import ClubScreen from '@/app/(tabs)/club'
 
 // ---------------------------------------------------------------------------
@@ -13,14 +13,24 @@ import ClubScreen from '@/app/(tabs)/club'
 // file under app/, and a test there is bundled into the app.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null } = { user: null }
-const mockData: { clubs: Club[]; refreshing: boolean; refresh: () => void } = {
+const mockData: {
+  clubs: Club[]
+  users: User[]
+  memberGroups: MemberGroup[]
+  refreshing: boolean
+  refresh: () => void
+} = {
   clubs: [],
+  users: [],
+  memberGroups: [],
   refreshing: false,
   refresh: jest.fn(),
 }
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+const mockPush = jest.fn()
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 const member: User = {
   id: 'u1',
