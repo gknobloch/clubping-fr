@@ -124,7 +124,7 @@ const request = (
   )
 
 /** Every write a route made — the guard's own last_seen_at refresh is not one. */
-const wrote = (writes: { sql: string }[]) =>
+const wrote = <W extends { sql: string }>(writes: W[]) =>
   writes.filter((w) => !/UPDATE users SET last_seen_at/.test(w.sql))
 
 /** The rows a replacement inserted, as (group, member) pairs. */
