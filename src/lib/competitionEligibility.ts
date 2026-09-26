@@ -196,6 +196,36 @@ export function competitionOfDivision(
   return division.categories ? { ...competition, categories: division.categories } : competition
 }
 
+/**
+ * The competitions a club takes part in, and the rest (#604).
+ *
+ * Played: one of its active teams sits in a division filed under it, or the
+ * club has reserved it to a group — a choice it made is never hidden. The rest
+ * are what a general admin configured for other clubs' championships, and the
+ * club's screen folds them away rather than asking about each one.
+ * Both lists keep the competitions' own order; archived ones are in neither.
+ */
+export function competitionsOfClub(
+  clubId: string,
+  competitions: Competition[],
+  teams: Array<{ clubId: string; divisionId?: string; isArchived?: boolean }>,
+  divisions: Array<{ id: string; competitionId?: string; categories?: PlayerCategory[] }>,
+  competitionGroups: CompetitionGroup[],
+): { played: Competition[]; others: Competition[] } {
+  const ids = new Set<string>()
+  for (const t of teams) {
+    if (t.clubId !== clubId || t.isArchived) continue
+    const c = competitionOfDivision(t.divisionId, divisions, competitions)
+    if (c) ids.add(c.id)
+  }
+  for (const l of competitionGroups) if (l.clubId === clubId) ids.add(l.competitionId)
+  const active = competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder)
+  return {
+    played: active.filter((c) => ids.has(c.id)),
+    others: active.filter((c) => !ids.has(c.id)),
+  }
+}
+
 /** The subset of a team the rule below reads. */
 export interface EligibilityTeam {
   id: string

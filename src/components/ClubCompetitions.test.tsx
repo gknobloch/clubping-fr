@@ -21,6 +21,7 @@ const SEASON = '26'
 
 const data = vi.hoisted(() => ({
   setCompetitionGroup: vi.fn(),
+  setMemberGroupMembers: vi.fn(),
   competitions: [] as Competition[],
   players: [] as Player[],
   memberGroups: [] as MemberGroup[],
@@ -58,6 +59,10 @@ const youth: Competition = {
   id: 'comp-jeunes', displayName: 'Championnat jeunes',
   categories: ['B', 'M', 'C', 'J'], sortOrder: 1, isArchived: false,
 }
+const veterans: Competition = {
+  id: 'comp-veterans', displayName: 'Championnat vétérans',
+  categories: ['V50', 'V55'], sortOrder: 3, isArchived: false,
+}
 const seniors: Competition = {
   id: 'comp-seniors', displayName: 'Championnat par équipes',
   categories: [], sortOrder: 2, isArchived: false,
@@ -71,14 +76,24 @@ const competitors: MemberGroup = {
   id: 'g-comp', clubId: CLUB, displayName: 'Compétiteurs', memberIds: ['p-cadet', 'p-senior'],
 }
 
+const division = (id: string, competitionId: string): Division => ({
+  id, phaseId: 'ph', displayName: id, rank: 1, playersPerGame: 4, isArchived: false, competitionId,
+})
+const team = (id: string, number: number, divisionId: string, playerIds: string[]): Team => ({
+  id, clubId: CLUB, phaseId: 'ph', number, divisionId, groupId: 'grp',
+  gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', isArchived: false, playerIds,
+})
+
 beforeEach(() => {
   data.setCompetitionGroup.mockReset()
-  data.competitions = [youth, seniors]
+  data.setMemberGroupMembers.mockReset()
+  data.competitions = [youth, seniors, veterans]
   data.players = [CADET, SENIOR, VETERAN]
   data.memberGroups = [competitors]
   data.competitionGroups = []
-  data.teams = []
-  data.divisions = []
+  // The club plays the youth and the senior championships, not the veterans'.
+  data.divisions = [division('d-jeunes', 'comp-jeunes'), division('d-sen', 'comp-seniors')]
+  data.teams = [team('t-1', 1, 'd-sen', ['p-veteran']), team('t-6', 6, 'd-jeunes', ['p-cadet'])]
   data.gameSelections = []
   data.playerSeasonCategories = CATEGORIES
   auth.user = { id: 'ca', role: 'club_admin', isPlayer: false, clubId: CLUB }
@@ -86,93 +101,127 @@ beforeEach(() => {
 
 /** One competition's card, by its name. */
 const card = (name: string) => screen.getByText(name).closest('li')!
+/** The names the card's table lists. */
+const listed = (el: HTMLElement) => within(el).getAllByRole('link').map((a) => a.textContent)
 
 describe('ClubCompetitions — reserving a competition to a group (#604)', () => {
-  it('lists who the categories admit when no group is set, and nothing greyed', () => {
+  it('lists only the competitions the club plays, and folds the rest', async () => {
+    const user = userEvent.setup()
+    render(<ClubCompetitions clubId={CLUB} />)
+    expect(screen.queryByText('Championnat vétérans')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /compétitions où le club n'a pas d'équipe \(1\)/ }))
+    expect(screen.getByText('Championnat vétérans')).toBeInTheDocument()
+  })
+
+  it('lists who the categories admit when no group is set, with nothing to tick', () => {
     render(<ClubCompetitions clubId={CLUB} />)
     const jeunes = card('Championnat jeunes')
     expect(within(jeunes).getByText('1 joueur éligible')).toBeInTheDocument()
-    expect(within(jeunes).getByRole('link', { name: 'Samuel Canemolla' })).toBeInTheDocument()
-    expect(within(jeunes).getByRole('combobox')).toHaveValue('')
+    expect(listed(jeunes)).toEqual(['Samuel Canemolla'])
+    expect(within(jeunes).queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
-  it('narrows a competition with no category to the group', () => {
+  it('narrows a competition with no category to the group, and says who is in it', () => {
     data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
-    const card2 = card('Championnat par équipes')
-    expect(within(card2).getByText('2 joueurs éligibles')).toBeInTheDocument()
-    expect(within(card2).queryByText('Hervé Ceroni')).not.toBeInTheDocument()
+    const sen = card('Championnat par équipes')
+    expect(within(sen).getByText('2 joueurs éligibles')).toBeInTheDocument()
+    // Everyone the categories admit is listed — the group is made from them.
+    expect(listed(sen)).toEqual(['Samuel Canemolla', 'Hervé Ceroni', 'Joris Szulc'])
+    expect(within(sen).getByRole('row', { name: /Hervé Ceroni/ })).toHaveTextContent('—')
   })
 
-  // In the group, turned away by the categories: shown, greyed, and why.
-  it('greys a group member the categories turn away', () => {
+  it('greys a group member the categories turn away, and offers no box for them', () => {
     data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-jeunes', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
-    const jeunes = card('Championnat jeunes')
-    expect(within(jeunes).getByText(/1 joueur éligible · 1 hors catégorie/)).toBeInTheDocument()
-    const senior = within(jeunes).getByRole('link', { name: 'Joris Szulc' }).closest('li')!
-    expect(senior).toHaveClass('text-slate-400')
-    expect(senior).toHaveTextContent('Hors catégorie')
+    const row = within(card('Championnat jeunes')).getByRole('row', { name: /Joris Szulc/ })
+    expect(row).toHaveClass('text-slate-400')
+    expect(row).toHaveTextContent('Hors catégorie')
+    expect(within(row).queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
   it('sets and lifts the group', async () => {
     const user = userEvent.setup()
+    data.teams = []
+    data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
     const select = within(card('Championnat par équipes')).getByRole('combobox')
-    await user.selectOptions(select, 'g-comp')
-    expect(data.setCompetitionGroup).toHaveBeenCalledWith(CLUB, 'comp-seniors', 'g-comp')
-
     await user.selectOptions(select, '')
     expect(data.setCompetitionGroup).toHaveBeenLastCalledWith(CLUB, 'comp-seniors', null)
+    await user.selectOptions(select, 'g-comp')
+    expect(data.setCompetitionGroup).toHaveBeenLastCalledWith(CLUB, 'comp-seniors', 'g-comp')
   })
 
-  describe('a player an équipe already fields', () => {
+  describe('the table files people into the group', () => {
     beforeEach(() => {
-      data.divisions = [{
-        id: 'd-1', phaseId: 'ph', displayName: 'D1', rank: 1, playersPerGame: 4,
-        isArchived: false, competitionId: 'comp-seniors',
-      }]
-      data.teams = [{
-        id: 't-1', clubId: CLUB, phaseId: 'ph', number: 1, divisionId: 'd-1', groupId: 'grp',
-        gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', isArchived: false,
-        playerIds: ['p-veteran'],
-      }]
+      data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
+    })
+
+    it('adds whoever is ticked, keeping who was there', async () => {
+      const user = userEvent.setup()
+      render(<ClubCompetitions clubId={CLUB} />)
+      const sen = card('Championnat par équipes')
+      await user.click(within(sen).getByRole('checkbox', { name: 'Sélectionner Hervé Ceroni' }))
+      await user.click(within(sen).getByRole('button', { name: 'Ajouter au groupe (1)' }))
+      expect(data.setMemberGroupMembers).toHaveBeenCalledWith(CLUB, 'g-comp', ['p-cadet', 'p-senior', 'p-veteran'])
+    })
+
+    it('selects everyone shown at once', async () => {
+      const user = userEvent.setup()
+      render(<ClubCompetitions clubId={CLUB} />)
+      const sen = card('Championnat par équipes')
+      await user.click(within(sen).getByRole('checkbox', { name: 'Tout sélectionner' }))
+      expect(within(sen).getByRole('button', { name: 'Ajouter au groupe (1)' })).toBeEnabled()
+      expect(within(sen).getByRole('button', { name: 'Retirer du groupe (2)' })).toBeEnabled()
+    })
+
+    // The case the table is for: fielded, outside the group — two clicks.
+    it('selects the fielded players outside the group from the warning', async () => {
+      const user = userEvent.setup()
+      render(<ClubCompetitions clubId={CLUB} />)
+      const sen = card('Championnat par équipes')
+      const alert = within(sen).getByRole('alert')
+      expect(alert).toHaveTextContent('1 joueur engagé mais plus éligible')
+      await user.click(within(alert).getByRole('button', { name: 'Les sélectionner' }))
+      expect(listed(sen)).toEqual(['Hervé Ceroni'])
+      await user.click(within(sen).getByRole('button', { name: 'Ajouter au groupe (1)' }))
+      expect(data.setMemberGroupMembers).toHaveBeenCalledWith(CLUB, 'g-comp', ['p-cadet', 'p-senior', 'p-veteran'])
     })
 
     // Nothing is taken off a team: the question says so, and names them.
-    it('asks before reserving to a group that leaves them out, and writes nothing on « Annuler »', async () => {
+    it('asks before taking out of the group someone a team fields', async () => {
       const user = userEvent.setup()
+      data.memberGroups = [{ ...competitors, memberIds: ['p-cadet', 'p-senior', 'p-veteran'] }]
       render(<ClubCompetitions clubId={CLUB} />)
-      await user.selectOptions(within(card('Championnat par équipes')).getByRole('combobox'), 'g-comp')
+      const sen = card('Championnat par équipes')
+      await user.click(within(sen).getByRole('checkbox', { name: 'Sélectionner Hervé Ceroni' }))
+      await user.click(within(sen).getByRole('button', { name: 'Retirer du groupe (1)' }))
 
       const dialog = screen.getByRole('dialog')
       expect(dialog).toHaveTextContent('Hervé Ceroni')
       expect(dialog).toHaveTextContent('Rien ne les retire')
       await user.click(within(dialog).getByRole('button', { name: 'Annuler' }))
-      expect(data.setCompetitionGroup).not.toHaveBeenCalled()
+      expect(data.setMemberGroupMembers).not.toHaveBeenCalled()
     })
+  })
 
-    it('flags them once the competition is reserved', () => {
-      data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
-      render(<ClubCompetitions clubId={CLUB} />)
-      const alert = within(card('Championnat par équipes')).getByRole('alert')
-      expect(alert).toHaveTextContent('Engagés mais plus éligibles')
-      expect(alert).toHaveTextContent("Hervé Ceroni — Déjà dans l'équipe 1")
-    })
+  it('asks before reserving to a group that leaves a fielded player out', async () => {
+    const user = userEvent.setup()
+    render(<ClubCompetitions clubId={CLUB} />)
+    await user.selectOptions(within(card('Championnat par équipes')).getByRole('combobox'), 'g-comp')
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Hervé Ceroni')
+    await user.click(within(dialog).getByRole('button', { name: 'Annuler' }))
+    expect(data.setCompetitionGroup).not.toHaveBeenCalled()
   })
 
   it('shows a plain member the group, and no way to change it', () => {
     auth.user = { id: 'p-senior', role: 'player', isPlayer: true, clubId: CLUB }
     data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
-    const card2 = card('Championnat par équipes')
-    expect(within(card2).queryByRole('combobox')).not.toBeInTheDocument()
-    expect(within(card2).getByText('Compétiteurs')).toBeInTheDocument()
-  })
-
-  it('points an admin whose club has no group to where groups are made', () => {
-    data.memberGroups = []
-    render(<ClubCompetitions clubId={CLUB} />)
-    expect(screen.getByRole('link', { name: 'Créer des groupes' })).toHaveAttribute('href', '/club')
+    const sen = card('Championnat par équipes')
+    expect(within(sen).queryByRole('combobox')).not.toBeInTheDocument()
+    expect(within(sen).queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(sen).getByText('Compétiteurs')).toBeInTheDocument()
   })
 })

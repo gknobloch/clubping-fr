@@ -11,7 +11,6 @@ import { SeasonsPage } from '@/pages/admin/SeasonsPage'
 import { PhasesPage } from '@/pages/admin/PhasesPage'
 import { DivisionsPage } from '@/pages/admin/DivisionsPage'
 import { CompetitionsPage } from '@/pages/admin/CompetitionsPage'
-import { ClubCompetitionsPage } from '@/pages/ClubCompetitionsPage'
 import { GroupsPage } from '@/pages/admin/GroupsPage'
 import { TeamsPage } from '@/pages/admin/TeamsPage'
 import { PlayersPage } from '@/pages/admin/PlayersPage'
@@ -27,10 +26,16 @@ import { ConfirmRequestPage } from '@/pages/ConfirmRequestPage'
 import { RequestsPage } from '@/pages/admin/RequestsPage'
 import { DeleteAccountPage } from '@/pages/DeleteAccountPage'
 
-/** /competitions means something different to a general admin and to a club. */
+/**
+ * /competitions is the general admin's global configuration. A club's side of
+ * it — which group each competition is reserved to — is a section of /club
+ * since #604, so an old link or bookmark lands there.
+ */
 function CompetitionsRoute() {
   const { user } = useAuth()
-  return user?.role === 'general_admin' ? <CompetitionsPage /> : <ClubCompetitionsPage />
+  return user?.role === 'general_admin'
+    ? <CompetitionsPage />
+    : <Navigate to="/club#competitions" replace />
 }
 
 function AuthLoading() {

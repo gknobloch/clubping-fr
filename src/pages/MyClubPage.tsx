@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView, ChannelIcon, channelTypeLabel } from '@/components/ClubDetailView'
 import { ClubAdmins } from '@/components/ClubAdmins'
 import { ClubMemberGroups } from '@/components/ClubMemberGroups'
+import { ClubCompetitions } from '@/components/ClubCompetitions'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
 import { HeaderAction, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -20,6 +21,14 @@ export function MyClubPage() {
     ? (clubs.find((c) => c.id === clubId) ?? null)
     : null
   const canEdit = user !== null && user.role === 'club_admin'
+
+  // A link to one section (/club#competitions, where the old Compétitions
+  // screen now leads) lands on it. React Router does not follow an anchor by
+  // itself, and the section only exists once the club has loaded.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (hash && currentClub) document.getElementById(hash.slice(1))?.scrollIntoView()
+  }, [hash, currentClub])
 
   if (!clubId) {
     return <Navigate to="/" replace />
@@ -49,6 +58,7 @@ export function MyClubPage() {
         <ClubDetailView club={currentClub} canEdit idPrefix="my-club" />
         <ClubAdmins clubId={currentClub.id} idPrefix="my-club" variant="section" />
         <ClubMemberGroups clubId={currentClub.id} idPrefix="my-club" variant="section" />
+        <ClubCompetitions clubId={currentClub.id} idPrefix="my-club" variant="section" />
       </div>
     )
   }
@@ -133,6 +143,10 @@ export function MyClubPage() {
       {/* The club's groups (#602): everyone reads them and follows one to its
           members; only an admin creates and fills them. */}
       <ClubMemberGroups clubId={currentClub.id} idPrefix="my-club" variant="section" />
+
+      {/* Which group each competition is reserved to (#604) — after the groups,
+          since that is what it chooses among. Its own screen until #604. */}
+      <ClubCompetitions clubId={currentClub.id} idPrefix="my-club" variant="section" />
     </div>
   )
 }

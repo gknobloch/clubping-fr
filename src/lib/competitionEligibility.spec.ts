@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   competitionGroupOf,
   competitionRoster,
+  competitionsOfClub,
   competitionOfDivision,
   eligiblePlayers,
   isPlayerEligible,
@@ -256,5 +257,34 @@ describe('legacyCompetitionExclusions', () => {
     expect(legacyCompetitionExclusions(
       [{ clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-gone' }], [seniors], players,
     )).toEqual([])
+  })
+})
+
+describe('competitionsOfClub (#604)', () => {
+  const veterans = competition({ id: 'comp-vet', sortOrder: 3 })
+  const archived = competition({ id: 'comp-old', sortOrder: 4, isArchived: true })
+  const all = [veterans, youth, competition(), archived]
+  const divisions = [{ id: 'd-sen', competitionId: 'comp-seniors' }, { id: 'd-old', competitionId: 'comp-old' }]
+
+  it('lists what its active teams play, and folds the rest, in the competitions\' order', () => {
+    const teams = [
+      { clubId: 'club-1', divisionId: 'd-sen' },
+      { clubId: 'club-1', divisionId: 'd-old' },
+      { clubId: 'club-2', divisionId: 'd-sen' },
+    ]
+    const { played, others } = competitionsOfClub('club-1', all, teams, divisions, [])
+    expect(played.map((c) => c.id)).toEqual(['comp-seniors'])
+    expect(others.map((c) => c.id)).toEqual(['comp-jeunes', 'comp-vet'])
+  })
+
+  it('ignores an archived team', () => {
+    const teams = [{ clubId: 'club-1', divisionId: 'd-sen', isArchived: true }]
+    expect(competitionsOfClub('club-1', all, teams, divisions, []).played).toEqual([])
+  })
+
+  // A choice the club made is never hidden, whatever its teams play.
+  it('keeps a competition the club reserved to a group', () => {
+    const links = [{ clubId: 'club-1', competitionId: 'comp-vet', groupId: 'g' }]
+    expect(competitionsOfClub('club-1', all, [], divisions, links).played.map((c) => c.id)).toEqual(['comp-vet'])
   })
 })

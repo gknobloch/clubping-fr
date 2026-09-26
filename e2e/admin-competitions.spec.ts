@@ -195,23 +195,34 @@ test.describe('Club admin — reserving a competition to a group (#604)', () => 
     await loginAs(page, 'canaque')
   })
 
-  /** One competition's card on the club's screen. */
+  /** The Compétitions section of the club's page. */
+  const section = (page: import('@playwright/test').Page) =>
+    page.getByRole('region', { name: 'Compétitions' })
+  /** One competition's card in it. */
   const card = (page: import('@playwright/test').Page, name: string) =>
-    page.getByRole('listitem').filter({ has: page.getByText(name, { exact: true }) })
+    section(page).getByRole('listitem').filter({ has: page.getByText(name, { exact: true }) })
 
-  test('has its own screen in the navigation, not a section buried in the club', async ({ page }) => {
+  test('is a section of the club, and the old screen leads there', async ({ page }) => {
     await page.goto('/club')
-    await expect(page.getByRole('region', { name: 'Compétitions' })).toHaveCount(0)
+    await expect(section(page)).toBeVisible()
+    await expect(page.getByRole('navigation').getByRole('link', { name: 'Compétitions' })).toHaveCount(0)
 
-    await page.getByRole('link', { name: 'Compétitions' }).click()
-    await expect(page).toHaveURL('/competitions')
-    await expect(page.getByRole('heading', { name: 'Compétitions', level: 1 })).toBeVisible()
-    // The club's own screen, not the general admin's global configuration.
-    await expect(page.getByRole('button', { name: 'Importer depuis la FFTT' })).toHaveCount(0)
+    await page.goto('/competitions')
+    await expect(page).toHaveURL(/\/club#competitions$/)
   })
 
-  test('asks before leaving out a player an équipe already fields, then flags them', async ({ page }) => {
-    await page.goto('/competitions')
+  // Every mock division is filed under the senior championship: the youth and
+  // veterans ones are for other clubs, and folded away.
+  test('shows the competitions the club plays, and folds the rest', async ({ page }) => {
+    await page.goto('/club')
+    await expect(card(page, 'Championnat par équipes')).toBeVisible()
+    await expect(section(page).getByText('Championnat jeunes', { exact: true })).toHaveCount(0)
+    await section(page).getByRole('button', { name: /compétitions où le club n'a pas d'équipe \(2\)/ }).click()
+    await expect(card(page, 'Championnat jeunes')).toBeVisible()
+  })
+
+  test('reserves a competition, then files the fielded players into the group from the warning', async ({ page }) => {
+    await page.goto('/club')
     const seniors = card(page, 'Championnat par équipes')
     await seniors.getByLabel('Réservée au groupe').selectOption({ label: 'Entraîneurs' })
 
@@ -219,29 +230,27 @@ test.describe('Club admin — reserving a competition to a group (#604)', () => 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toContainText('Joris Szulc')
     await expect(dialog).toContainText('Rien ne les retire')
-    await dialog.getByRole('button', { name: 'Annuler' }).click()
-    await expect(seniors.getByLabel('Réservée au groupe')).toHaveValue('')
-
-    await seniors.getByLabel('Réservée au groupe').selectOption({ label: 'Entraîneurs' })
-    await page.getByRole('dialog').getByRole('button', { name: 'Réserver' }).click()
+    await dialog.getByRole('button', { name: 'Réserver' }).click()
     await expect(seniors.getByText('3 joueurs éligibles')).toBeVisible()
-    // Reserved, and the contradiction is flagged rather than hidden.
-    await expect(seniors.getByRole('alert')).toContainText('Joris Szulc')
+
+    // The contradiction is flagged, and two clicks settle it.
+    await seniors.getByRole('alert').getByRole('button', { name: 'Les sélectionner' }).click()
+    await seniors.getByRole('button', { name: /Ajouter au groupe/ }).click()
+    await expect(seniors.getByRole('alert')).toHaveCount(0)
   })
 
   // The group can only narrow: a coach the categories turn away stays out,
   // greyed, with the reason.
   test('greys the group members a competition\'s categories turn away', async ({ page }) => {
-    await page.goto('/competitions')
+    await page.goto('/club')
+    await section(page).getByRole('button', { name: /compétitions où le club n'a pas d'équipe/ }).click()
     const youth = card(page, 'Championnat jeunes')
     await youth.getByLabel('Réservée au groupe').selectOption({ label: 'Entraîneurs' })
-    // No mock division belongs to the youth championship, so no team fields
-    // anyone there: nothing to confirm.
+    // No team plays it, so nobody is left out: nothing to confirm.
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
-    await youth.getByText(/1 joueur éligible · 2 hors catégorie/).click()
-    await expect(youth.getByRole('link', { name: 'Enzo Lotz' })).toBeVisible()
-    await expect(youth.getByRole('listitem').filter({ hasText: 'Quentin Colle' })).toContainText('Hors catégorie')
+    await expect(youth.getByText('1 joueur éligible')).toBeVisible()
+    await expect(youth.getByRole('row', { name: /Quentin Colle/ })).toContainText('Hors catégorie')
   })
 
   // The journées matrix is the third way a club fields somebody, after the
@@ -252,20 +261,19 @@ test.describe('Club admin — reserving a competition to a group (#604)', () => 
 
     // In-app navigation throughout: without the API the choice lives in
     // DataContext, and a reload would drop it.
-    await page.getByRole('link', { name: 'Compétitions' }).click()
+    await page.getByRole('link', { name: 'Club' }).first().click()
     await card(page, 'Championnat par équipes').getByLabel('Réservée au groupe')
       .selectOption({ label: 'Entraîneurs' })
     await page.getByRole('dialog').getByRole('button', { name: 'Réserver' }).click()
 
-    await page.getByRole('link', { name: 'Journées' }).click()
+    await page.getByRole('link', { name: 'Journées' }).first().click()
     await expect(page.locator('#other-players').getByText('Jordan Pesenti')).toHaveCount(0)
   })
 
-  test('reads the same on a phone', async ({ page }) => {
+  test('reads on a phone without scrolling sideways', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
-    await page.goto('/competitions')
-    const seniors = card(page, 'Championnat par équipes')
-    await expect(seniors.getByLabel('Réservée au groupe')).toBeVisible()
+    await page.goto('/club')
+    await expect(card(page, 'Championnat par équipes').getByLabel('Réservée au groupe')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   })
 })
