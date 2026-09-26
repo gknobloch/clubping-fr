@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { Sheet } from '@/components/Sheet'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
@@ -22,7 +21,13 @@ export interface ChecklistOption {
   hint?: string
 }
 
-/** Une ligne cochable — partagée avec l'éditeur de groupe du club. */
+/**
+ * Une ligne cochable — partagée avec l'éditeur de groupe du club.
+ *
+ * La ligne du capitaine qui compose (`CaptainSelectionSheet`) : un rond qui se
+ * remplit de rouge, le nom qui passe en gras avec lui. Une seule façon de
+ * choisir des gens dans cette app, quoi qu'on choisisse.
+ */
 export function CheckRow({
   option,
   checked,
@@ -43,13 +48,13 @@ export function CheckRow({
       accessibilityState={{ checked }}
       accessibilityLabel={option.label}
     >
-      <Ionicons
-        name={checked ? 'checkbox' : 'square-outline'}
-        size={22}
-        color={checked ? colors.accent : colors.textSecondary}
-      />
+      <View style={[s.check, checked && s.checkActive]}>
+        {checked && <Text style={s.checkMark}>✓</Text>}
+      </View>
       <View style={s.rowBody}>
-        <Text style={s.rowLabel} numberOfLines={1}>{option.label}</Text>
+        <Text style={[s.rowLabel, checked && s.rowLabelPicked]} numberOfLines={1}>
+          {option.label}
+        </Text>
         {option.hint ? <Text style={s.rowHint}>{option.hint}</Text> : null}
       </View>
     </TouchableOpacity>
@@ -151,6 +156,14 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, paddingVertical: 6 },
   rowBody: { flex: 1 },
   rowLabel: { fontSize: 15, color: colors.textPrimary },
+  rowLabelPicked: { fontFamily: fonts.semiBold, color: colors.accent },
+  // Same mark as the captain's sheet, measure for measure.
+  check: {
+    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+  },
+  checkActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkMark: { color: '#fff', fontSize: 12, fontFamily: fonts.bold },
   rowHint: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 6 },
   button: { flex: 1, minHeight: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

@@ -3,7 +3,7 @@ import { Alert } from 'react-native'
 import { render } from '@/__tests__/support/render'
 import type { PlayerImportWrites } from '@shared/lib/ffttPlayers'
 import type { Club, Phase, Player, Role, User } from '@shared/types'
-import ImportPlayersScreen from '@/app/(tabs)/joueurs/import'
+import ImportPlayersScreen from '@/app/(tabs)/club/import'
 
 // ---------------------------------------------------------------------------
 // Importer les licenciés FFTT depuis l'app (#555)

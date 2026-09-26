@@ -38,6 +38,9 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   les membres, un membre pouvant être dans plusieurs. Chacun filtre ensuite la
   liste des joueurs par groupe — dans au moins un des groupes choisis, ou dans
   tous — et la fiche d'un joueur dit dans quels groupes il est.
+- **L'import des licenciés FFTT est passé dans l'onglet Club**, où un
+  administrateur gère déjà le reste du club. La liste des joueurs redevient la
+  liste où l'on se cherche.
 
 ## 1.5.0 — 20 septembre 2026
 

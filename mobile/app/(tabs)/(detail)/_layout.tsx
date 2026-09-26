@@ -82,6 +82,7 @@ export default function DetailLayout() {
   return (
     <Stack screenOptions={{ header: detailHeader }}>
       <Stack.Screen name="player/[id]" options={{ title: 'Joueur' }} />
+      <Stack.Screen name="membres" options={{ title: 'Joueurs' }} />
       <Stack.Screen name="team/[id]" options={{ title: 'Équipe' }} />
       <Stack.Screen name="team/phase-games" options={{ title: 'Matchs' }} />
       <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />

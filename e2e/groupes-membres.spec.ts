@@ -70,8 +70,8 @@ test.describe('Groupes — un administrateur de club les gère', () => {
     await row.getByRole('button', { name: 'Membres' }).click()
 
     const members = page.getByRole('dialog', { name: 'Membres — Loisirs' })
-    await members.getByLabel(/Cédric Cunin/).check()
-    await members.getByLabel(/Hervé Ceroni/).check()
+    await members.getByRole('button', { name: /Cédric Cunin/ }).click()
+    await members.getByRole('button', { name: /Hervé Ceroni/ }).click()
     await members.getByRole('button', { name: 'Enregistrer' }).click()
     await expect(row.getByText('2 membres')).toBeVisible()
 
@@ -95,7 +95,7 @@ test.describe('Groupes — un administrateur de club les gère', () => {
     await section.getByRole('button', { name: 'Modifier' }).click()
 
     const dialog = page.getByRole('dialog', { name: 'Groupes' })
-    await dialog.getByLabel('Entraîneurs').check()
+    await dialog.getByRole('button', { name: 'Entraîneurs' }).click()
     await dialog.getByRole('button', { name: 'Enregistrer' }).click()
     await expect(section.getByRole('link', { name: 'Entraîneurs' })).toBeVisible()
   })

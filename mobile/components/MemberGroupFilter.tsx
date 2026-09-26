@@ -104,10 +104,10 @@ const s = StyleSheet.create({
   clearText: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   modes: {
     flexDirection: 'row', alignSelf: 'flex-start',
-    borderRadius: 10, borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
+    borderRadius: 10, borderWidth: 1, borderColor: colors.accent, overflow: 'hidden',
   },
   mode: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, backgroundColor: colors.card },
-  modeOn: { backgroundColor: colors.primary },
+  modeOn: { backgroundColor: colors.accent },
   modeText: { fontSize: 13, fontFamily: fonts.medium, color: colors.textSecondary },
   modeTextOn: { color: '#ffffff', fontFamily: fonts.semiBold },
 })

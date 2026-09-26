@@ -119,12 +119,15 @@ describe('managing them', () => {
     await user.click(screen.getAllByRole('button', { name: 'Membres' })[0])
     const dialog = screen.getByRole('dialog', { name: 'Membres — Bureau' })
     // The archived member is offered because they are still in the group.
-    expect(within(dialog).getAllByRole('checkbox')).toHaveLength(4)
+    // The captain's pattern: rows are toggle buttons, not checkboxes.
+    const rows = within(dialog).getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed'))
+    expect(rows).toHaveLength(4)
+    expect(rows.filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(3)
     expect(within(dialog).getByText('Non licencié')).toBeInTheDocument()
     expect(within(dialog).queryByText('Autre Club')).not.toBeInTheDocument()
 
-    await user.click(within(dialog).getByLabelText(/Enzo Lotz/))
-    await user.click(within(dialog).getByLabelText(/Ancien Membre/))
+    await user.click(within(dialog).getByRole('button', { name: /Enzo Lotz/ }))
+    await user.click(within(dialog).getByRole('button', { name: /Ancien Membre/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
 
     expect(data.setMemberGroupMembers).toHaveBeenCalledWith(CLUB, 'g-bureau', ['ca', 'p1', 'p2'])

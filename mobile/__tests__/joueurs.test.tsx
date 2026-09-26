@@ -228,46 +228,12 @@ describe('Joueurs — la fiche à côté de la liste (#466)', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// L'entrée de l'import FFTT (#555)
-//
-// The import writes into one club, so the trigger only appears to somebody who
-// administers one — a general admin sees every club's licensees on this tab
-// and has no target, the same reason the web's own trigger asks for a scoped
-// club.
-// ---------------------------------------------------------------------------
-describe("Joueurs — l'import FFTT (#555)", () => {
-  it('offers it to the club admin, onto the Joueurs stack', () => {
-    signIn('club_admin')
-    render(<JoueursScreen />)
+// L'import FFTT est passé sur l'onglet Club en #602 : voir club.test.tsx.
+it("n'offre plus l'import FFTT, passé sur l'onglet Club (#602)", () => {
+  signIn('club_admin')
+  render(<JoueursScreen />)
 
-    fireEvent.press(screen.getByTestId('import-players'))
-
-    expect(mockPush).toHaveBeenCalledWith('/joueurs/import')
-  })
-
-  it('does not offer it to a player', () => {
-    signIn('player')
-    render(<JoueursScreen />)
-
-    expect(screen.queryByTestId('import-players')).toBeNull()
-  })
-
-  it('does not offer it to a general admin, who has no club to import into', () => {
-    signIn('general_admin')
-    mockAuth.user = { id: 'u1', role: 'general_admin', isPlayer: false }
-    render(<JoueursScreen />)
-
-    expect(screen.queryByTestId('import-players')).toBeNull()
-  })
-
-  it('does not offer it for a club with no FFTT affiliation number', () => {
-    signIn('club_admin')
-    mockData.clubs = [{ ...club, affiliationNumber: '' }]
-    render(<JoueursScreen />)
-
-    expect(screen.queryByTestId('import-players')).toBeNull()
-  })
+  expect(screen.queryByTestId('import-players')).toBeNull()
 })
 
 // ---------------------------------------------------------------------------

@@ -80,7 +80,7 @@ describe('PlayerDetailPage — groups (#602)', () => {
 
     await user.click(within(groupsSection()).getByRole('button', { name: 'Modifier' }))
     const dialog = screen.getByRole('dialog', { name: 'Groupes' })
-    await user.click(within(dialog).getByLabelText('Entraîneurs'))
+    await user.click(within(dialog).getByRole('button', { name: 'Entraîneurs', pressed: false }))
     await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
 
     expect(within(groupsSection()).getAllByRole('link').map((l) => l.textContent)).toEqual(['Entraîneurs'])

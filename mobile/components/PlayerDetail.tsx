@@ -81,6 +81,16 @@ export function PlayerDetail({
   const memberOf = groupsOfMember(clubGroups, player?.id)
   const mayFileGroups = !!player && mayManageMemberGroups(user, player.clubId)
 
+  // Un groupe mène à ses membres (#602). Dans un volet, la liste est juste à
+  // côté : on la filtre en place, la fiche reste ouverte, rien à défaire.
+  // Poussée, la fiche n'a pas de liste à côté : on pousse celle du groupe par
+  // dessus, sur la même pile, pour que le retour ramène ici — `/joueurs` est un
+  // onglet, et changer d'onglet n'a pas de retour.
+  function openGroup(groupId: string) {
+    if (embedded) router.setParams({ groupes: groupId, mode: '' })
+    else router.push({ pathname: '/membres', params: { groupes: groupId } })
+  }
+
   const activePhase = phases.find((p) => p.status === 'active')
   const playerTeams = teams.filter(
     (t) => t.phaseId === activePhase?.id && t.playerIds?.includes(id ?? ''),
@@ -247,7 +257,7 @@ export function PlayerDetail({
                     key={g.id}
                     testID={`player-group-${g.id}`}
                     style={styles.groupChip}
-                    onPress={() => router.push({ pathname: '/joueurs', params: { groupes: g.id } })}
+                    onPress={() => openGroup(g.id)}
                     accessibilityRole="link"
                   >
                     <Text style={styles.groupChipText}>{g.displayName}</Text>

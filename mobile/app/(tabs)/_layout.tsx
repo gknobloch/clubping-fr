@@ -53,6 +53,9 @@ export default function TabLayout() {
         name="club"
         options={{
           title: 'Club',
+          // A stack since #602 (the FFTT import is pushed on it), which draws
+          // its own header like the other section stacks.
+          headerShown: false,
           href: hasClub ? undefined : null,
           tabBarIcon: tabIcon('business-outline'),
         }}

@@ -33,6 +33,9 @@ describe('pathToTab', () => {
 
   it.each([
     ['/player/p1', 'joueurs'],
+    // A group's members, pushed (#602) — the Joueurs list, and lit as such.
+    ['/membres', 'joueurs'],
+    ['/club/import', 'club'],
     ['/team/t1', 'equipes'],
     ['/team/phase-games', 'equipes'],
   ])('keeps the section highlighted while drilling into %s', (path, tab) => {

@@ -19,7 +19,8 @@ import JoueursScreen from '@/app/(tabs)/joueurs'
 const mockData: Record<string, unknown> = {}
 const mockAuth: { user: User | null } = { user: null }
 const mockPush = jest.fn()
-const mockSetParams = setParams
+// Recorded as well as applied: the fiche in a pane filters the list beside it.
+const mockSetParams = jest.fn((next: Record<string, string | undefined>) => setParams(next))
 const mockUseParams = useParams
 
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
@@ -140,8 +141,18 @@ describe('la fiche — ses groupes', () => {
     expect(within(section).getByText('Bureau')).toBeTruthy()
     expect(within(section).getByText('Jeunes')).toBeTruthy()
 
+    // Pushed onto the same stack as the fiche, so the chevron comes back to
+    // it — `/joueurs` is a tab, and switching tabs has no way back.
     fireEvent.press(screen.getByTestId('player-group-g-jeunes'))
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/joueurs', params: { groupes: 'g-jeunes' } })
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/membres', params: { groupes: 'g-jeunes' } })
+  })
+
+  it('filtre la liste d’à côté, en place, quand la fiche est un volet', () => {
+    render(<PlayerDetail playerId="p2" embedded />)
+    fireEvent.press(screen.getByTestId('player-group-g-jeunes'))
+
+    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockSetParams).toHaveBeenCalledWith({ groupes: 'g-jeunes', mode: '' })
   })
 
   it('le dit aussi quand il n’est dans aucun', () => {
@@ -178,7 +189,7 @@ describe('l’onglet Club — les groupes', () => {
     expect(within(screen.getByTestId('club-groups')).getByText('3 membres')).toBeTruthy()
 
     fireEvent.press(screen.getByTestId('club-group-g-bureau'))
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/joueurs', params: { groupes: 'g-bureau' } })
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/membres', params: { groupes: 'g-bureau' } })
   })
 
   it('ne donne à un joueur aucun moyen de les changer', () => {

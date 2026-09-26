@@ -77,22 +77,39 @@ export function ChecklistDialog({
 
         <ul className="mt-3 min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
           {options.length === 0 && <li className="py-3 text-sm text-slate-500">{emptyLabel}</li>}
-          {shown.map((o) => (
-            <li key={o.id}>
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={draft.has(o.id)}
-                  onChange={() => toggle(o.id)}
-                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-accent-600 focus:ring-accent-500"
-                />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm text-slate-800">{o.label}</span>
-                  {o.hint && <span className="block text-xs text-slate-500">{o.hint}</span>}
-                </span>
-              </label>
-            </li>
-          ))}
+          {shown.map((o) => {
+            const picked = draft.has(o.id)
+            return (
+              <li key={o.id}>
+                {/* The captain's roster row (SelectionSheet): a round mark
+                    that fills red, the name bolding with it. One way to pick
+                    people in this app, whatever is being picked for. */}
+                <button
+                  type="button"
+                  aria-pressed={picked}
+                  onClick={() => toggle(o.id)}
+                  className="flex min-h-11 w-full items-center gap-3 py-2 text-left hover:bg-slate-50"
+                >
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
+                      picked
+                        ? 'border-accent-600 bg-accent-600 text-white'
+                        : 'border-slate-300 text-transparent'
+                    }`}
+                    aria-hidden
+                  >
+                    ✓
+                  </span>
+                  <span className="min-w-0">
+                    <span className={`block truncate text-sm ${picked ? 'font-semibold text-slate-900' : 'text-slate-800'}`}>
+                      {o.label}
+                    </span>
+                    {o.hint && <span className="block text-xs text-slate-500">{o.hint}</span>}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
         </ul>
 
         <div className="mt-5 flex items-center justify-between gap-2">

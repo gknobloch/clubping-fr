@@ -54,7 +54,7 @@ export function MemberGroupFilter({
         <div
           role="radiogroup"
           aria-label="Membres de"
-          className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm"
+          className="inline-flex overflow-hidden rounded-lg border border-accent-600 text-sm"
         >
           {(['any', 'all'] as const).map((m) => (
             <button
@@ -64,7 +64,7 @@ export function MemberGroupFilter({
               aria-checked={mode === m}
               onClick={() => onChange(chosen, m)}
               className={`min-h-[44px] md:min-h-0 px-3 py-1 font-medium ${
-                mode === m ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                mode === m ? 'bg-accent-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               {GROUP_MATCH_LABELS[m]}

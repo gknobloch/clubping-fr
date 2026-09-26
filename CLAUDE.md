@@ -722,7 +722,19 @@ invisible dans le diff comme dans la revue.
   une raison invisible.
 - Les deux modes se disent comme une phrase sur le membre — « Au moins un
   groupe » / « Tous les groupes » — et non ET / OU ; le choix n'apparaît qu'à
-  la deuxième pastille, avant quoi les deux réponses sont les mêmes.
+  la deuxième pastille, avant quoi les deux réponses sont les mêmes. En rouge,
+  comme les pastilles : c'est un réglage du même filtre, pas une autre chose.
+- **On choisit des membres comme un capitaine choisit ses joueurs** : un rond
+  qui se remplit de rouge, le nom qui passe en gras (`SelectionSheet` sur le
+  web, `CaptainSelectionSheet` dans l'app). Une case carrée à côté d'un rond,
+  dans la même app, dit deux gestes là où il n'y en a qu'un.
+- **Un groupe ouvert depuis l'app doit avoir un retour.** Pousser `/joueurs`
+  changeait d'onglet, et un onglet est une racine : la liste filtrée
+  s'affichait sans chevron vers la fiche ou le Club d'où l'on venait. Un
+  groupe s'ouvre donc sur `/membres`, la liste des Joueurs poussée sur la pile
+  `(detail)` — le même écran, pas une copie. Seule exception : la fiche en
+  volet, à côté de la liste, qui filtre la liste **en place** (`setParams`) et
+  n'a rien à défaire.
 
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
@@ -839,10 +851,13 @@ invisible dans le diff comme dans la revue.
 - « Déjà à jour » se dit **au singulier** après une recherche : la phrase du
   club — « tout ce que la FFTT liste » — serait une affirmation sur soixante
   personnes tirée d'en avoir regardé une.
-- L'entrée est **sous le champ de recherche des Joueurs**, pas dans l'en-tête :
-  `AppHeader` porte la marque et l'avatar, et « Importer les licenciés FFTT »
-  est de toute façon une étiquette bien trop longue pour une barre de 52 pt —
-  la mesure même qui tient le déclencheur du web hors de son `PageHeader`.
+- **L'entrée est sur la page du club** depuis #602 — l'onglet Club de l'app
+  (`club/import`, poussé sur la pile du Club) et `/club` sur le web, à côté de
+  « Modifier » : l'import fait entrer les licenciés *d'un club*, et la liste
+  des Joueurs est l'endroit où les membres se cherchent entre eux. Dans l'app
+  c'est un bouton à part entière et non une action d'en-tête : `AppHeader`
+  porte la marque et l'avatar, et « Importer les licenciés FFTT » est bien
+  trop long pour une barre de 52 pt.
 
 ### Un homonyme déjà au club (#566)
 - **Un numéro de licence faux fabrique un doublon.** Un club portait Nathan

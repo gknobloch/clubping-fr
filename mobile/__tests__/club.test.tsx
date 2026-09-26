@@ -153,3 +153,35 @@ describe('Mon club', () => {
     expect(screen.getByText('Club introuvable.')).toBeTruthy()
   })
 })
+
+// ---------------------------------------------------------------------------
+// L'entrée de l'import FFTT (#555), sur l'onglet Club depuis #602
+//
+// The import brings a club's licensees in as a whole, so it hangs off the
+// club; it needs the club's FFTT number to ask for, and only somebody who
+// administers the club may write what it brings.
+// ---------------------------------------------------------------------------
+describe("Mon club — l'import FFTT", () => {
+  it('offers it to the club admin, pushed onto the Club stack', () => {
+    mockAuth.user = { ...member, role: 'club_admin', isPlayer: false }
+    render(<ClubScreen />)
+
+    fireEvent.press(screen.getByTestId('import-players'))
+
+    expect(mockPush).toHaveBeenCalledWith('/club/import')
+  })
+
+  it('does not offer it to a player', () => {
+    render(<ClubScreen />)
+
+    expect(screen.queryByTestId('import-players')).toBeNull()
+  })
+
+  it('does not offer it for a club with no FFTT affiliation number', () => {
+    mockAuth.user = { ...member, role: 'club_admin', isPlayer: false }
+    mockData.clubs = [{ ...club, affiliationNumber: '' }]
+    render(<ClubScreen />)
+
+    expect(screen.queryByTestId('import-players')).toBeNull()
+  })
+})

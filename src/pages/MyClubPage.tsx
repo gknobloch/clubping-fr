@@ -8,12 +8,14 @@ import { ClubMemberGroups } from '@/components/ClubMemberGroups'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
 import { HeaderAction, TEXT_TARGET_CLASS } from '@/components/Button'
-import { EditIcon } from '@/components/icons'
+import { EditIcon, ImportIcon } from '@/components/icons'
+import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 
 export function MyClubPage() {
   const { user } = useAuth()
   const { clubs } = useAppData()
   const [editing, setEditing] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const clubId = user?.clubId ?? null
   const currentClub = clubId
@@ -64,7 +66,22 @@ export function MyClubPage() {
         title={currentClub.displayName}
         trailing={
           canEdit && (
-            <HeaderAction icon={<EditIcon />} label="Modifier" onClick={() => setEditing(true)} />
+            <div className="flex gap-2">
+              {/* The club's licensees, from the FFTT, as a whole (#555) — on
+                  the club's page since #602 rather than on the Joueurs list.
+                  Desktop only: the review is a dense comparison table
+                  (#381/#384), which the app does as a card deck instead. */}
+              {currentClub.affiliationNumber && (
+                <HeaderAction
+                  desktopOnly
+                  variant="secondary"
+                  icon={<ImportIcon />}
+                  label="Importer les licenciés FFTT"
+                  onClick={() => setImporting(true)}
+                />
+              )}
+              <HeaderAction icon={<EditIcon />} label="Modifier" onClick={() => setEditing(true)} />
+            </div>
           )
         }
       >
@@ -133,6 +150,10 @@ export function MyClubPage() {
       {/* The club's groups (#602): everyone reads them and follows one to its
           members; only an admin creates and fills them. */}
       <ClubMemberGroups clubId={currentClub.id} idPrefix="my-club" variant="section" />
+
+      {importing && (
+        <ImportPlayersModal clubId={currentClub.id} onClose={() => setImporting(false)} />
+      )}
     </div>
   )
 }
