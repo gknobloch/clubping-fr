@@ -741,7 +741,9 @@ invisible dans le diff comme dans la revue.
   `ChecklistSheet` aussi, et l'éditeur de groupe n'est que ce dernier avec le
   nom du groupe en tête. Créer, renommer et remplir un groupe se font donc
   dans **une seule** feuille, sur les deux plateformes : un groupe se crée avec
-  ses gens. La recherche passe par `matchesSearch`, la règle même du
+  ses gens. **Supprimer n'en est pas** : c'est une action sur la ligne du
+  groupe (le « … » du web, la corbeille de l'app), jamais dans l'éditeur — on
+  supprime un groupe, on ne le fait pas en le remplissant. La recherche passe par `matchesSearch`, la règle même du
   capitaine, étendue à un libellé quelconque.
 - **Un groupe ouvert depuis l'app doit avoir un retour, qui dit où il mène.**
   Pousser `/joueurs` changeait d'onglet, et un onglet est une racine : la

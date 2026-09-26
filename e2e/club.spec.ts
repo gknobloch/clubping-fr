@@ -31,7 +31,9 @@ test.describe('Club admin — Club (edit)', () => {
   test('club admin sees a Modifier button and can open the edit form', async ({ page }) => {
     await page.goto('/club')
     await expect(page.getByRole('heading', { name: 'PPA Rixheim' })).toBeVisible()
-    await page.getByRole('button', { name: 'Modifier' }).click()
+    // The club's own button, in its identity card at the top — each of the
+    // club's groups (#602) has a « Modifier » of its own further down.
+    await page.getByRole('button', { name: 'Modifier' }).first().click()
     await expect(page.getByLabel(/Nom/i)).toHaveValue(/PPA Rixheim|Rixheim/i)
     await page.getByRole('button', { name: 'Terminé' }).click()
     await expect(page.getByLabel(/Nom/i)).toHaveCount(0)

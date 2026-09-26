@@ -1,4 +1,5 @@
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -126,10 +127,12 @@ function GroupRow({
   group,
   onOpen,
   onEdit,
+  onDelete,
 }: {
   group: MemberGroup
   onOpen: () => void
   onEdit?: () => void
+  onDelete?: () => void
 }) {
   const n = group.memberIds.length
   return (
@@ -156,6 +159,27 @@ function GroupRow({
           accessibilityLabel={`Modifier ${group.displayName}`}
         >
           <Ionicons name="create-outline" size={20} color={colors.accent} />
+        </TouchableOpacity>
+      )}
+      {/* On the row, not inside the editor (#602): deleting is done to a
+          group, not while filling one — the web's « … » says the same. */}
+      {onDelete && (
+        <TouchableOpacity
+          testID={`club-group-delete-${group.id}`}
+          style={s.iconButton}
+          onPress={() =>
+            Alert.alert(
+              `Supprimer « ${group.displayName} » ?`,
+              'Ses membres restent au club : seul le groupe disparaît.',
+              [
+                { text: 'Annuler', style: 'cancel' },
+                { text: 'Supprimer', style: 'destructive', onPress: onDelete },
+              ],
+            )}
+          accessibilityRole="button"
+          accessibilityLabel={`Supprimer ${group.displayName}`}
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
         </TouchableOpacity>
       )}
     </View>
@@ -273,6 +297,7 @@ export default function ClubScreen() {
                   // chevron returns here, and Club stays lit.
                   onOpen={() => router.push({ pathname: '/club/membres', params: { groupes: g.id } })}
                   onEdit={canManageGroups ? () => setEditing({ group: g }) : undefined}
+                  onDelete={canManageGroups ? () => deleteMemberGroup(club.id, g.id) : undefined}
                 />
               ))
             )}
@@ -287,7 +312,6 @@ export default function ClubScreen() {
           onCreate={(name) => addMemberGroup(club.id, name)}
           onRename={(name) => renameMemberGroup(club.id, editing.group!.id, name)}
           onSetMembers={(groupId, ids) => setMemberGroupMembers(club.id, groupId, ids)}
-          onDelete={() => editing.group && deleteMemberGroup(club.id, editing.group.id)}
           onClose={() => setEditing(null)}
         />
       )}

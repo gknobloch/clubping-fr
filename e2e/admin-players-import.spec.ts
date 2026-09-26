@@ -155,7 +155,7 @@ test.describe('Joueurs FFTT import — mobile', () => {
   test('the import trigger is not offered below md:', async ({ page }) => {
     await loginAs(page, 'club.admin')
     await page.goto('/club')
-    await expect(page.getByRole('button', { name: 'Modifier' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Modifier' }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Importer les licenciés FFTT' })).toBeHidden()
   })
 

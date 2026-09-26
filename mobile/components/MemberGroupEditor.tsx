@@ -1,16 +1,16 @@
 import { useState } from 'react'
-import { Alert, View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TextInput } from 'react-native'
 import { colors } from '@/constants/colors'
-import { fonts } from '@/constants/typography'
 import { ChecklistSheet, type ChecklistOption } from '@/components/ChecklistSheet'
 import type { MemberGroup } from '@shared/types'
 import type { MemberGroupResult } from '@shared/lib/memberGroups'
 
 // ---------------------------------------------------------------------------
-// Créer, renommer, remplir ou supprimer un groupe du club (#602)
+// Créer, renommer ou remplir un groupe du club (#602)
 //
-// Une seule feuille pour les quatre gestes, parce qu'un groupe se crée *avec*
-// ses membres. C'est la feuille de composition du capitaine (`ChecklistSheet`,
+// Une seule feuille pour les trois gestes, parce qu'un groupe se crée *avec*
+// ses membres. Supprimer n'en est pas : c'est une action sur la ligne du groupe,
+// dans l'onglet Club, comme le « … » du web. C'est la feuille de composition du capitaine (`ChecklistSheet`,
 // bâtie sur les mêmes pièces), avec le nom du groupe en tête — le web fait de
 // même avec `SelectionPanel`.
 //
@@ -24,7 +24,6 @@ export function MemberGroupEditor({
   onCreate,
   onRename,
   onSetMembers,
-  onDelete,
   onClose,
 }: {
   /** Absent pour un nouveau groupe. */
@@ -34,7 +33,6 @@ export function MemberGroupEditor({
   onCreate: (name: string) => Promise<MemberGroupResult>
   onRename: (name: string) => Promise<MemberGroupResult>
   onSetMembers: (groupId: string, memberIds: string[]) => void
-  onDelete: () => void
   onClose: () => void
 }) {
   const [name, setName] = useState(group?.displayName ?? '')
@@ -59,18 +57,6 @@ export function MemberGroupEditor({
     return true
   }
 
-  function confirmDelete() {
-    if (!group) return
-    Alert.alert(
-      `Supprimer « ${group.displayName} » ?`,
-      'Ses membres restent au club : seul le groupe disparaît.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: () => { onDelete(); onClose() } },
-      ],
-    )
-  }
-
   return (
     <ChecklistSheet
       testID="group-edit"
@@ -91,16 +77,6 @@ export function MemberGroupEditor({
             accessibilityLabel="Nom du groupe"
           />
           {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
-          {group && (
-            <TouchableOpacity
-              testID="group-edit-delete"
-              onPress={confirmDelete}
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-              accessibilityRole="button"
-            >
-              <Text style={styles.delete}>Supprimer le groupe</Text>
-            </TouchableOpacity>
-          )}
         </View>
       }
       options={members}
@@ -123,5 +99,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   error: { fontSize: 13, color: colors.danger },
-  delete: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.danger },
 })

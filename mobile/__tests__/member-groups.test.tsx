@@ -203,6 +203,7 @@ describe('l’onglet Club — les groupes', () => {
     render(<ClubScreen />)
     expect(screen.queryByTestId('club-group-new')).toBeNull()
     expect(screen.queryByTestId('club-group-edit-g-bureau')).toBeNull()
+    expect(screen.queryByTestId('club-group-delete-g-bureau')).toBeNull()
   })
 
   it('épargne la section à un joueur dont le club n’a aucun groupe', () => {
@@ -258,15 +259,22 @@ describe('l’onglet Club — les groupes', () => {
     expect(fns.setMemberGroupMembers).toHaveBeenCalledWith('c1', 'g-jeunes', ['p2'])
   })
 
-  it('demande avant de supprimer', () => {
+  it('n’offre plus de suppression dans l’éditeur', () => {
+    signIn('club_admin')
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-group-edit-g-jeunes'))
+    expect(screen.queryByTestId('group-edit-delete')).toBeNull()
+  })
+
+  it('demande avant de supprimer, depuis la ligne du groupe', () => {
     signIn('club_admin')
     const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
       buttons?.find((b) => b.style === 'destructive')?.onPress?.()
     })
     render(<ClubScreen />)
 
-    fireEvent.press(screen.getByTestId('club-group-edit-g-jeunes'))
-    fireEvent.press(screen.getByTestId('group-edit-delete'))
+    // Sur la ligne du groupe, plus dans l'éditeur.
+    fireEvent.press(screen.getByTestId('club-group-delete-g-jeunes'))
 
     expect(alert.mock.calls[0][1]).toContain('Ses membres restent au club')
     expect(fns.deleteMemberGroup).toHaveBeenCalledWith('c1', 'g-jeunes')
