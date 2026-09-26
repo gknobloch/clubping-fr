@@ -1,6 +1,8 @@
-import { Linking } from 'react-native'
+import { Alert, Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
+import { resetParams, setParams, useParams } from '@/__tests__/support/routeParams'
+import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type { Club, MemberGroup, User } from '@shared/types'
 import ClubScreen from '@/app/(tabs)/club'
 
@@ -13,16 +15,23 @@ import ClubScreen from '@/app/(tabs)/club'
 // file under app/, and a test there is bundled into the app.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null } = { user: null }
-const mockData: {
+const mockData: Record<string, unknown> & {
   clubs: Club[]
   users: User[]
   memberGroups: MemberGroup[]
-  refreshing: boolean
-  refresh: () => void
 } = {
   clubs: [],
   users: [],
   memberGroups: [],
+  // What the Compétitions section reads (#604) — nothing unless a test says so.
+  competitions: [],
+  competitionGroups: [],
+  players: [],
+  teams: [],
+  divisions: [],
+  gameSelections: [],
+  seasons: [],
+  playerSeasonCategories: [],
   refreshing: false,
   refresh: jest.fn(),
 }
@@ -30,7 +39,14 @@ const mockData: {
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
 const mockPush = jest.fn()
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }))
+// The section a tablet shows sits in the route (#604); the round trip matters
+// there, so the params come from the shared store.
+const mockSetParams = setParams
+const mockUseParams = useParams
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+  useLocalSearchParams: () => mockUseParams(),
+}))
 
 const member: User = {
   id: 'u1',
@@ -73,12 +89,16 @@ const club: Club = {
 let openURL: jest.SpiedFunction<typeof Linking.openURL>
 
 beforeEach(() => {
+  // A phone: the sections stack. The tablet's rail has its own tests.
+  setWindowSize(PHONE_WIDTH)
+  resetParams()
   mockAuth.user = member
   mockData.clubs = [club]
   openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
 })
 
 afterEach(() => {
+  resetWindowSize()
   openURL.mockRestore()
 })
 
@@ -119,12 +139,20 @@ describe('Mon club', () => {
     expect(labels).toEqual(['Notre site', 'WhatsApp'])
   })
 
-  it('opens a channel link', () => {
+  // A channel leaves the app — WhatsApp, a website — so it asks first (#604),
+  // with the address, and opens only on « Ouvrir ».
+  it('asks before opening a channel link, then opens it', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
     render(<ClubScreen />)
 
     fireEvent.press(screen.getByText('Notre site'))
-
+    expect(openURL).not.toHaveBeenCalled()
+    const [title, message, buttons] = alert.mock.calls[0]
+    expect(title).toBe('Notre site')
+    expect(message).toContain('https://rixheim-ppa.fr')
+    buttons?.find((b) => b.text === 'Ouvrir')?.onPress?.()
     expect(openURL).toHaveBeenCalledWith('https://rixheim-ppa.fr')
+    alert.mockRestore()
   })
 
   it('says so when the club has neither address nor channel', () => {

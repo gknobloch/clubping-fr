@@ -307,15 +307,10 @@ invisible dans le diff comme dans la revue.
   which is why the column is nullable and is read with an explicit null check
   (`jsonParseCategories(null)` is `[]`, i.e. "everyone", not "inherit"). Never
   read `competition.categories` for a team: `competitionOfDivision` returns the
-  competition already narrowed, keeping its id and lock so club derogations
-  still hang off the championship.
-- A club's overrides are exceptions to the global mapping, not a second list.
-  `included` / `excluded`, and the third state is the **absence of a row**.
-  A locked competition (`isCategoryLocked`) may only ever be narrowed by a club;
-  the API refuses the widening, and `playerEligibility` refuses to honour a row
-  that predates the lock.
-- **Read a club's own overrides only** (`e.clubId === clubId`). `GET /api/data`
-  carries every club's, and one club's exception must not decide another's list.
+  competition already narrowed, keeping its id so a club's group (#604) still
+  hangs off the championship.
+- The per-licensee overrides and the lock described in older issues are gone
+  since #604 — see *Réserver une compétition à un groupe*.
 - The FFTT `<cat>` code is stored **verbatim** and normalised on read
   (`src/lib/playerCategories.ts`): youth suffixes drop (`B2` → `B`), veteran
   bands stay apart (`V50` ≠ `V60`).
@@ -377,7 +372,7 @@ invisible dans le diff comme dans la revue.
   batch fuses them.
 - The id is per-season (18368 vs 15954 for the same championship), so keying on
   it would mint a new competition every August and orphan every category and
-  derogation. The identifier alone is not unique either: org 15 lists `TO` twice
+  club group. The identifier alone is not unique either: org 15 lists `TO` twice
   in one season. `fftt_contest_name` is kept apart from `display_name` so a
   rename cannot break the match — **never backfill one from the other**, which
   is exactly what 0048 got wrong.
@@ -393,45 +388,13 @@ invisible dans le diff comme dans la revue.
   made. A competition edited after the fact must not empty a squad.
 - That rule is what makes editing safe and also what makes it quiet, so the
   contradiction has to be **visible**: `src/lib/competitionAssignments.ts`
-  answers "who does this competition already field?", the screens flag a ⚠ on
-  any *ineligible* licensee an équipe still holds, and every exclusion of one
-  goes through `useConfirm` first. The wording states the fact, never a
+  answers "who does this competition already field?", the club's screen flags
+  a ⚠ on any *ineligible* licensee an équipe still holds, and any step that
+  leaves one out — reserving to a group, taking someone out of it — asks first. The wording states the fact, never a
   consequence — nothing is undone, so "sera retiré" would be a lie.
 - A team belongs to a competition **through its division**, so the assignment
   scan reads `competitionOfDivision`, and it is computed once per competition,
   not once per cell.
-- The grid's selection only ever means **what is on screen**: narrowing the
-  category filter drops the rows it hides out of the selection, or a bulk
-  action reaches players the club is no longer looking at.
-- **Every filter lives in the header of the column it narrows** — the name, the
-  category (its own column since the grid grew), and each competition's status
-  multi-select. They compound: two columns filtered is an AND, the statuses
-  within one column an OR.
-- `CellStatus` is the five verdicts **plus `conflict`**, which is not a verdict
-  at all — it is the ⚠ pairing, and "show me the contradictions" is a question
-  no reason answers on its own.
-- The status popover is `position: fixed` off its trigger's rect. The grid
-  scrolls sideways and `overflow-x-auto` clips both axes, so an absolutely
-  positioned panel is cut off at the first row.
-- The rule behind a column goes behind an **ⓘ**, never into the header: a club
-  admin reads it once, and `CompetitionInfo` spells the categories out in full
-  rather than reusing the admin table's compact codes.
-- A bulk action applies only to the selected players it would actually change
-  (`eligibilityCell(...).action` decides), which is why each button carries its
-  own count and why "Ajouter" reads 0 on a locked competition.
-- **`/competitions` is two screens behind one route.** A general admin gets the
-  global configuration (import, categories, the lock); anyone else gets their
-  own club's amendments. A club's eligibility is not part of its identity card,
-  so it is no longer a section at the bottom of `/club`.
-- **The club's screen is the journées trade**: the grid above `md:`, where the
-  question is comparative ("who is missing from the youth championship?"), and
-  `ClubCompetitions` — one competition at a time — below it. Forty rows by five
-  columns is not a phone screen.
-- One computation feeds the grid, the list and the player page:
-  `eligibilityCell` returns the verdict *and* the action offered
-  (`exclude` / `include` / `reset` / `none`). Never re-derive "can this be
-  clicked?" at a call site — `none` is exactly the locked competition a club may
-  not widen, and it must read the same everywhere.
 - **There are four ways to field somebody, and all four ask**: the roster picker
   (`TeamsPage`), the match sheet (`MatchDayDetailPage`), the accueil's next-match
   sheet, and the **journées matrix** — whose compo dropdown offers no team the
@@ -440,16 +403,16 @@ invisible dans le diff comme dans la revue.
   already holds stays on the list, and so does one a line-up already names.
 - **`teamEligibility(teams, ctx)` is that rule, and the only copy of it.** A
   factory, not a bare function, because a team reaches its competition through
-  its division — two lookups — and every caller asks it of a whole club against
-  every team. `admits` is the competition's verdict; `mayField` is what a picker
+  its division and its group through its club, and every caller asks it of a
+  whole club against every team. `admits` is the competition's verdict; `mayField` is what a picker
   offers, which is `admits` OR a roster that already holds them. Never rebuild
   the pair at a call site.
 - **The mobile app asks the same question** (#498): the journées matrix, the
   captain's line-up sheet and the roster picker all go through
   `@shared/lib/competitionEligibility`, so the verdict cannot depend on which
-  screen you are holding. `competitions` and `competitionEligibilities` ride in
-  its `DataState`, and `withDefaults` empties them for a cache written before
-  #498 — which restricts nobody, the right answer for a payload that never
+  screen you are holding. `competitions` and `competitionGroups` ride in its
+  `DataState`, and `withDefaults` empties them for a cache written before they
+  existed — which restricts nobody, the right answer for a payload that never
   carried the tables.
 - **`EligiblePlayer.category` is required, and may be undefined.** A licensee
   carries no category of their own, so it has to be resolved
@@ -458,6 +421,58 @@ invisible dans le diff comme dans la revue.
   read "sans catégorie", and a competition naming its categories admitted nobody
   at all — silently, because the empty-list case (the senior championship) is
   the one that still worked. Never loosen it back.
+
+### Réserver une compétition à un groupe (#604)
+- **La règle : les catégories de la compétition ET le groupe du club**, s'il en
+  a posé un — y compris sur une compétition sans restriction de catégorie.
+  `playerEligibility(joueur, compétition, groupe?)` ; la catégorie est lue
+  d'abord, de sorte qu'un membre du groupe hors catégorie se lit « Hors
+  catégorie » : c'est pour cela que l'écran du club le grise.
+- Elle a remplacé les dérogations licencié par licencié de #482 (`included` /
+  `excluded`), que chaque arrivée, chaque changement de catégorie en août et
+  chaque départ rendaient un peu plus fausses. Un groupe s'entretient une fois,
+  pour tout ce à quoi le club s'en sert.
+- **Un groupe ne peut que restreindre** : il ne fait jamais entrer une catégorie
+  que la compétition refuse. Le « verrou » (`isCategoryLocked`) n'empêchait rien
+  d'autre qu'un club élargisse une compétition ; il n'a plus d'objet et a
+  disparu du code. Rien ne doit plus nommer la colonne : elle tombe à l'étape 2.
+- **Trois déploiements, pas un** (#410). (1) Additif : `club_competition_groups`,
+  `users.last_client_version` ; le code cesse de lire et d'écrire
+  `club_competition_eligibility` et `is_category_locked`, qui restent en base.
+  (2) Une fois (1) **déployé** : les supprimer. (3) Bien plus tard : retirer les
+  lignes de compatibilité ci-dessous. Tout est suivi dans #604.
+- **Les apps ≤ 1.5 ne sont pas forcées à se mettre à jour.** Elles lisent
+  `competitionEligibilities`, et dans leur copie de la règle une ligne
+  `excluded` l'emporte sur tout : `/data` réexprime donc le groupe en une ligne
+  `excluded` par membre du club hors du groupe (`legacyCompetitionExclusions`).
+  Un vieux téléphone propose exactement les mêmes joueurs. Aucun écran actuel ne
+  lit ce champ — le `DataContext` du web l'exclut de son type.
+- **`users.last_client_version` dit quand retirer ce shim** : l'en-tête
+  `X-Client-Version` (#508) enfin enregistré, au changement seulement. Le web
+  n'envoie pas de version et laisse la valeur en place.
+- **Les liens sont de la portée des groupes** : `competitionGroups` ne va qu'au
+  club de celui qui regarde, comme `memberGroups` (#602), dont ils désignent
+  les ids. Supprimer un groupe lève la restriction — la confirmation le dit —,
+  et supprimer un club ou une compétition emporte ses liens.
+- **Plus d'écran Compétitions pour un club** : c'est une section de `/club`
+  (après les Groupes parmi lesquels elle choisit), et `/competitions` redevient
+  la seule configuration globale de l'administrateur général ; un membre de
+  club qui y arrive est renvoyé vers `/club#competitions`. Plus de section
+  Compétitions sur la fiche joueur non plus.
+- **Le tableau range dans le groupe** : une compétition réservée à un groupe
+  d'un seul membre, avec quarante licenciés déjà alignés, se règle en deux
+  clics — « Les sélectionner » sur l'avertissement, puis « Ajouter au groupe ».
+  Il liste ceux que la catégorie admet (c'est parmi eux qu'un groupe se
+  compose) et, grisés sans case, les membres du groupe qu'elle refuse.
+- **Seules les compétitions que le club joue sont montrées**
+  (`competitionsOfClub`) : une de ses équipes actives y est, ou il l'a réservée
+  à un groupe — un choix fait n'est jamais caché. Les autres sont repliées.
+- **L'app a les mêmes sections** (Aperçu, Canaux, Administrateurs, Groupes,
+  Compétitions) : empilées sur un téléphone, un rail et la section choisie sur
+  une tablette, le choix dans la route (`?section=`). Pas la largeur d'un
+  tableau : c'est la feuille du capitaine qui sert à ranger dans le groupe.
+  Les canaux s'y modifient ; en ouvrir un demande d'abord, lien affiché, parce
+  qu'on quitte l'app. Inviter un administrateur sans licence reste sur le web.
 
 ### Écrire sur un licencié (#558)
 - **Le navigateur n'est pas une autorisation.** `POST /players`,
@@ -887,13 +902,12 @@ invisible dans le diff comme dans la revue.
 - « Déjà à jour » se dit **au singulier** après une recherche : la phrase du
   club — « tout ce que la FFTT liste » — serait une affirmation sur soixante
   personnes tirée d'en avoir regardé une.
-- **L'entrée est sur la page du club** depuis #602 — l'onglet Club de l'app
-  (`club/import`, poussé sur la pile du Club) et `/club` sur le web, à côté de
-  « Modifier » : l'import fait entrer les licenciés *d'un club*, et la liste
-  des Joueurs est l'endroit où les membres se cherchent entre eux. Dans l'app
-  c'est un bouton à part entière et non une action d'en-tête : `AppHeader`
-  porte la marque et l'avatar, et « Importer les licenciés FFTT » est bien
-  trop long pour une barre de 52 pt.
+- **L'entrée est sur la liste des Joueurs** — elle y est revenue en #604 après
+  un passage par l'écran Club : l'import fait entrer l'effectif, et c'est là
+  qu'on vérifie ce qu'il a apporté. Web : une action d'en-tête, sur ordinateur
+  seulement. App : une icône à côté du champ de recherche — pas un bandeau
+  pleine largeur, qui poussait la liste pour une tâche de quelques fois par
+  saison, ni une action d'en-tête : `AppHeader` porte la marque et l'avatar.
 
 ### Un homonyme déjà au club (#566)
 - **Un numéro de licence faux fabrique un doublon.** Un club portait Nathan

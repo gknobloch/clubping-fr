@@ -2,6 +2,7 @@ import { Alert } from 'react-native'
 import { act, fireEvent, screen, within } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import { givenParams, resetParams, setParams, useParams } from '@/__tests__/support/routeParams'
+import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type { Club, MemberGroup, Phase, Player, Season, User } from '@shared/types'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import ClubScreen from '@/app/(tabs)/club'
@@ -222,6 +223,10 @@ describe('la fiche — ses groupes', () => {
 })
 
 describe('l’onglet Club — les groupes', () => {
+  // A phone: the sections stack. The tablet's rail has its own tests.
+  beforeEach(() => setWindowSize(PHONE_WIDTH))
+  afterEach(resetWindowSize)
+
   it('les liste pour tout membre, et ouvre les joueurs de l’un d’eux', () => {
     render(<ClubScreen />)
     expect(within(screen.getByTestId('club-groups')).getByText('3 membres')).toBeTruthy()
