@@ -29,8 +29,9 @@ const mockData = {
   playerSeasonCategories: [] as { seasonId: string; playerId: string; category: string }[],
   // Nothing restricted: a division under no competition restricts nobody (#498).
   competitions: [] as Competition[],
-  competitionEligibilities: [] as
-    { clubId: string; competitionId: string; playerId: string; effect: string }[],
+  // A club's group for a competition (#604) — none unless a test says so.
+  competitionGroups: [] as { clubId: string; competitionId: string; groupId: string }[],
+  memberGroups: [] as { id: string; clubId: string; displayName: string; memberIds: string[] }[],
   updateTeam,
 }
 
@@ -233,10 +234,20 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
     mockData.divisions = mockData.divisions.map((d) => ({ ...d, competitionId: 'comp1' }))
     mockData.competitions = [{
       id: 'comp1', displayName: 'Championnat par équipes',
-      categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+      categories: [], sortOrder: 1, isArchived: false,
     }]
-    mockData.competitionEligibilities = []
+    mockData.competitionGroups = []
+    mockData.memberGroups = []
   })
+
+  /** The competition reserved, for `clubId`, to a group of every player but one (#604). */
+  const reserveWithout = (playerId: string, clubId = 'c1') => {
+    mockData.competitionGroups = [{ clubId, competitionId: 'comp1', groupId: 'g1' }]
+    mockData.memberGroups = [{
+      id: 'g1', clubId, displayName: 'Compétiteurs',
+      memberIds: mockData.players.map((p) => p.id).filter((id) => id !== playerId),
+    }]
+  }
 
   it('offre le licencié que la compétition admet', () => {
     openPicker()
@@ -244,10 +255,8 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
     expect(screen.getByText('Hugo Bernard')).toBeTruthy()
   })
 
-  it('n’offre pas celui que le club en a exclu', () => {
-    mockData.competitionEligibilities = [
-      { clubId: 'c1', competitionId: 'comp1', playerId: 'p7', effect: 'excluded' },
-    ]
+  it('n’offre pas celui qui est hors du groupe réservé', () => {
+    reserveWithout('p7')
     openPicker()
 
     expect(screen.queryByText('Hugo Bernard')).toBeNull()
@@ -256,9 +265,7 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
   it('laisse sur la liste celui que l’effectif porte déjà', () => {
     // A competition edited after the fact must not empty a squad — and the
     // picker is the only way back off it.
-    mockData.competitionEligibilities = [
-      { clubId: 'c1', competitionId: 'comp1', playerId: 'p2', effect: 'excluded' },
-    ]
+    reserveWithout('p2')
     openPicker()
 
     // Twice: her row in the squad behind the modal, and her row on the picker —
@@ -266,11 +273,9 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
     expect(screen.getAllByText('Lou Dubois').length).toBeGreaterThan(1)
   })
 
-  it('ne laisse pas l’exception d’un autre club décider la sienne', () => {
-    // GET /api/data carries every club's overrides.
-    mockData.competitionEligibilities = [
-      { clubId: 'c2', competitionId: 'comp1', playerId: 'p7', effect: 'excluded' },
-    ]
+  it('ne laisse pas le groupe d’un autre club décider le sien', () => {
+    // Each team is read against its own club's group.
+    reserveWithout('p7', 'c2')
     openPicker()
 
     expect(screen.getByText('Hugo Bernard')).toBeTruthy()

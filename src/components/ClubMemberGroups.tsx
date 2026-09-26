@@ -6,7 +6,7 @@ import { RowActions } from '@/components/RowActions'
 import { ChecklistDialog, type ChecklistOption } from '@/components/ChecklistDialog'
 import { useConfirm } from '@/components/useConfirm'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
-import { clubMemberGroups, mayManageMemberGroups, type MemberGroupResult } from '@/lib/memberGroups'
+import { clubMemberGroups, groupDeletionMessage, mayManageMemberGroups, type MemberGroupResult } from '@/lib/memberGroups'
 import { sortByName } from '@/lib/sortByName'
 import type { MemberGroup, User } from '@/types'
 
@@ -35,6 +35,7 @@ export function ClubMemberGroups({
   const { user } = useAuth()
   const {
     users, memberGroups, addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers,
+    competitions, competitionGroups,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
   // `{}` is a new group, `{ group }` an existing one, null nothing open.
@@ -55,7 +56,7 @@ export function ClubMemberGroups({
   const handleDelete = async (group: MemberGroup) => {
     const ok = await confirm({
       title: `Supprimer le groupe « ${group.displayName} » ?`,
-      message: 'Ses membres restent au club : seul le groupe disparaît.',
+      message: groupDeletionMessage(group, competitionGroups, competitions),
       confirmLabel: 'Supprimer',
     })
     if (ok) deleteMemberGroup(clubId, group.id)

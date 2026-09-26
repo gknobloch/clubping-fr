@@ -18,7 +18,7 @@ import { LicenceTag } from '@/components/LicenceTag'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
 import type {
   AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection, PlayerSeasonLicence,
-  Division, Competition, CompetitionEligibility, PlayerSeasonCategory,
+  Division, Competition, CompetitionGroup, MemberGroup, PlayerSeasonCategory,
 } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -40,8 +40,9 @@ export interface SelectionData {
    */
   divisions?: Division[]
   competitions?: Competition[]
-  /** This club's own amendments: the payload carries every club's. */
-  competitionEligibilities?: CompetitionEligibility[]
+  /** The club's group for a competition, when it set one (#604). */
+  competitionGroups?: CompetitionGroup[]
+  memberGroups?: MemberGroup[]
   playerSeasonCategories?: PlayerSeasonCategory[]
 }
 
@@ -76,7 +77,7 @@ export function CaptainSelectionSheet({
   const {
     matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections,
     playerSeasonLicences = [], seasonId,
-    divisions = [], competitions = [], competitionEligibilities = [],
+    divisions = [], competitions = [], competitionGroups = [], memberGroups = [],
     playerSeasonCategories = [],
   } = selectionData
 
@@ -113,9 +114,10 @@ export function CaptainSelectionSheet({
     () => teamEligibility([team], {
       divisions,
       competitions,
-      overrides: competitionEligibilities.filter((e) => e.clubId === team.clubId),
+      competitionGroups,
+      memberGroups,
     }),
-    [team, divisions, competitions, competitionEligibilities],
+    [team, divisions, competitions, competitionGroups, memberGroups],
   )
   const categoryIndex = useMemo(
     () => seasonCategoryIndex(playerSeasonCategories),

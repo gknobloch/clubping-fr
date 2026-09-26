@@ -81,6 +81,7 @@ beforeEach(() => {
     playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
     matchDays: [], games: [], gameSelections: [],
     memberGroups: GROUPS, refreshing: false, refresh: jest.fn(), updatePlayer: jest.fn(),
+    competitions: [], competitionGroups: [],
     ...fns,
   })
   signIn('player')
@@ -309,6 +310,19 @@ describe('l’onglet Club — les groupes', () => {
 
     expect(alert.mock.calls[0][1]).toContain('Ses membres restent au club')
     expect(fns.deleteMemberGroup).toHaveBeenCalledWith('c1', 'g-jeunes')
+    alert.mockRestore()
+  })
+
+  // Deleting a group opens back up any competition reserved to it (#604).
+  it('dit quelle compétition rouvre quand on supprime son groupe', () => {
+    signIn('club_admin')
+    mockData.competitions = [{ id: 'comp-1', displayName: 'Championnat jeunes', categories: [], sortOrder: 1, isArchived: false }]
+    mockData.competitionGroups = [{ clubId: 'c1', competitionId: 'comp-1', groupId: 'g-jeunes' }]
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+    render(<ClubScreen />)
+
+    fireEvent.press(screen.getByTestId('club-group-delete-g-jeunes'))
+    expect(alert.mock.calls[0][1]).toContain('« Championnat jeunes » lui est réservée')
     alert.mockRestore()
   })
 })

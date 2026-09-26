@@ -20,7 +20,6 @@ import {
   mockTeams,
   mockUsers,
   mockCompetitions,
-  mockCompetitionEligibilities,
 } from '@/mock/data'
 
 // AuthContext is mocked rather than driven through the dev-login picker, so
@@ -37,7 +36,7 @@ const { HomePage } = await import('./HomePage')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-  competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
+  competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [],
   groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,

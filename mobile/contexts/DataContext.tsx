@@ -28,7 +28,7 @@ import type {
   AvailabilityOverriddenBy,
   AvailabilityStatus,
   Competition,
-  CompetitionEligibility,
+  CompetitionGroup,
   PlayerSeasonCategory,
   PlayerSeasonLicence,
   MemberGroup,
@@ -60,7 +60,12 @@ interface DataState {
   /** The member's own club's groups (#602) — every club's for a general admin. */
   memberGroups: MemberGroup[]
   competitions: Competition[]
-  competitionEligibilities: CompetitionEligibility[]
+  /**
+   * The club's competition → group links (#604). The payload also carries a
+   * legacy `competitionEligibilities`, for older builds only: nothing here
+   * reads it.
+   */
+  competitionGroups: CompetitionGroup[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -81,7 +86,7 @@ const emptyState: DataState = {
   playerSeasonLicences: [],
   memberGroups: [],
   competitions: [],
-  competitionEligibilities: [],
+  competitionGroups: [],
   matchDays: [],
   games: [],
   gameAvailabilities: [],
@@ -108,7 +113,7 @@ const withDefaults = (data: DataState): DataState => ({
   playerSeasonLicences: data.playerSeasonLicences ?? [],
   memberGroups: data.memberGroups ?? [],
   competitions: data.competitions ?? [],
-  competitionEligibilities: data.competitionEligibilities ?? [],
+  competitionGroups: data.competitionGroups ?? [],
 })
 
 // ---------------------------------------------------------------------------

@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canClubAdd,
-  eligibilityCell,
+  competitionGroupOf,
+  competitionRoster,
   competitionOfDivision,
-  eligibleCompetitions,
   eligiblePlayers,
   isPlayerEligible,
+  legacyCompetitionExclusions,
   playerEligibility,
+  teamEligibility,
 } from './competitionEligibility'
-import type { Competition, CompetitionEligibility } from '../types'
+import type { Competition, CompetitionGroup, MemberGroup } from '../types'
 import type { PlayerCategory } from './playerCategories'
+
+// #482, #604 — who may play in which competition: its categories, AND the
+// club's group for it when the club has set one.
 
 const competition = (over: Partial<Competition> = {}): Competition => ({
   id: 'comp-seniors',
   displayName: 'Championnat par équipes',
   categories: [],
-  isCategoryLocked: false,
   sortOrder: 1,
   isArchived: false,
   ...over,
@@ -25,22 +28,8 @@ const youth = competition({
   id: 'comp-jeunes',
   displayName: 'Championnat jeunes',
   categories: ['P', 'B', 'M', 'C', 'J'],
-  isCategoryLocked: true,
   sortOrder: 2,
 })
-
-const veterans = competition({
-  id: 'comp-veterans',
-  displayName: 'Championnat vétérans',
-  categories: ['V50', 'V55', 'V60'],
-  sortOrder: 3,
-})
-
-const override = (
-  competitionId: string,
-  playerId: string,
-  effect: 'included' | 'excluded',
-): CompetitionEligibility => ({ clubId: 'club-1', competitionId, playerId, effect })
 
 const cadet = { id: 'p-cadet', category: 'C1' }
 const senior = { id: 'p-senior', category: 'S' }
@@ -49,93 +38,107 @@ const veteran = { id: 'p-veteran', category: 'V55' }
 // no longer lets a caller express.
 const unknown = { id: 'p-unknown', category: undefined }
 
-describe('playerEligibility — the default mapping (#482)', () => {
+const seniors: MemberGroup = {
+  id: 'g-seniors', clubId: 'club-1', displayName: 'Compétiteurs Seniors', memberIds: ['p-senior', 'p-cadet'],
+}
+
+describe('playerEligibility — the categories alone', () => {
   it('admits everyone to a competition that lists no category', () => {
     for (const p of [cadet, senior, veteran, unknown]) {
-      expect(playerEligibility(p, competition(), [])).toEqual({ eligible: true, reason: 'category' })
+      expect(playerEligibility(p, competition())).toEqual({ eligible: true, reason: 'eligible' })
     }
   })
 
-  it('admits a player whose category is listed', () => {
-    expect(playerEligibility(cadet, youth, [])).toEqual({ eligible: true, reason: 'category' })
-    expect(playerEligibility(veteran, veterans, [])).toEqual({ eligible: true, reason: 'category' })
+  it('admits a player whose category is listed, suffixes and all', () => {
+    expect(isPlayerEligible(cadet, youth)).toBe(true)
   })
 
   it('turns away a player whose category is not, and says which of the two it is', () => {
-    expect(playerEligibility(senior, youth, [])).toEqual({
-      eligible: false, reason: 'category_mismatch',
-    })
-    expect(playerEligibility(unknown, youth, [])).toEqual({
-      eligible: false, reason: 'no_category',
-    })
-  })
-
-  // A cadet plays in their own category and with the adults — which is why
-  // eligibility is a list and never a field on the player.
-  it('lets one player belong to several competitions at once', () => {
-    const all = [competition(), youth, veterans]
-    expect(eligibleCompetitions(cadet, all, []).map((c) => c.id))
-      .toEqual(['comp-seniors', 'comp-jeunes'])
-    expect(eligibleCompetitions(veteran, all, []).map((c) => c.id))
-      .toEqual(['comp-seniors', 'comp-veterans'])
-  })
-
-  it('never offers an archived competition', () => {
-    expect(eligibleCompetitions(senior, [competition({ isArchived: true })], [])).toEqual([])
+    expect(playerEligibility(senior, youth)).toEqual({ eligible: false, reason: 'category_mismatch' })
+    expect(playerEligibility(unknown, youth)).toEqual({ eligible: false, reason: 'no_category' })
   })
 })
 
-describe('playerEligibility — what a club amends', () => {
-  it('excludes a licensee the default would have admitted', () => {
-    expect(playerEligibility(veteran, veterans, [override('comp-veterans', 'p-veteran', 'excluded')]))
-      .toEqual({ eligible: false, reason: 'club_excluded' })
+describe('playerEligibility — the club\'s group (#604)', () => {
+  it('restricts a competition that lists no category to the group', () => {
+    expect(playerEligibility(senior, competition(), seniors)).toEqual({ eligible: true, reason: 'eligible' })
+    expect(playerEligibility(veteran, competition(), seniors)).toEqual({ eligible: false, reason: 'not_in_group' })
   })
 
-  it('adds a licensee the default would have turned away', () => {
-    expect(playerEligibility(senior, veterans, [override('comp-veterans', 'p-senior', 'included')]))
-      .toEqual({ eligible: true, reason: 'club_added' })
+  it('needs both: the category and the group', () => {
+    expect(isPlayerEligible(cadet, youth, seniors)).toBe(true)
+    expect(isPlayerEligible({ id: 'p-other-cadet', category: 'C2' }, youth, seniors)).toBe(false)
   })
 
-  it('says "par sa catégorie" for an addition the default already covered', () => {
-    expect(playerEligibility(veteran, veterans, [override('comp-veterans', 'p-veteran', 'included')]))
-      .toEqual({ eligible: true, reason: 'category' })
+  // The greyed row on the club screen: in the group, out of category. The
+  // category is what the club has to see, not the group it is already in.
+  it('says « hors catégorie » for a group member the categories turn away', () => {
+    expect(playerEligibility(senior, youth, seniors)).toEqual({ eligible: false, reason: 'category_mismatch' })
   })
 
-  it('reads only the overrides of the competition at hand', () => {
-    expect(isPlayerEligible(veteran, veterans, [override('comp-jeunes', 'p-veteran', 'excluded')]))
-      .toBe(true)
-  })
-})
-
-describe('a locked competition', () => {
-  it('cannot be widened by a club', () => {
-    expect(canClubAdd(youth, senior)).toBe(false)
-    expect(canClubAdd(youth, cadet)).toBe(true)
-    expect(canClubAdd(veterans, senior)).toBe(true)
-  })
-
-  // The API refuses to write such a row; this does not rely on that, because
-  // locking a competition after the fact must not leave stale additions standing.
-  it('voids an addition that predates the lock', () => {
-    expect(playerEligibility(senior, youth, [override('comp-jeunes', 'p-senior', 'included')]))
-      .toEqual({ eligible: false, reason: 'category_mismatch' })
-  })
-
-  it('still lets a club exclude', () => {
-    expect(playerEligibility(cadet, youth, [override('comp-jeunes', 'p-cadet', 'excluded')]))
-      .toEqual({ eligible: false, reason: 'club_excluded' })
+  it('never widens: a group cannot admit a category the competition refuses', () => {
+    const everyone = { memberIds: ['p-senior', 'p-veteran', 'p-cadet', 'p-unknown'] }
+    expect(eligiblePlayers([cadet, senior, veteran, unknown], youth, everyone)).toEqual([cadet])
   })
 })
 
 describe('eligiblePlayers', () => {
-  it('filters a club list down to the competition', () => {
-    expect(eligiblePlayers([cadet, senior, veteran, unknown], youth, []).map((p) => p.id))
-      .toEqual(['p-cadet'])
+  it('filters a club list down to the competition and the group', () => {
+    expect(eligiblePlayers([cadet, senior, veteran], competition(), seniors)).toEqual([cadet, senior])
   })
 
   it('restricts nobody when the division belongs to no competition', () => {
-    const all = [cadet, senior, veteran, unknown]
-    expect(eligiblePlayers(all, undefined, [])).toEqual(all)
+    const all = [cadet, senior, veteran]
+    expect(eligiblePlayers(all, undefined, seniors)).toEqual(all)
+  })
+})
+
+describe('competitionRoster — what the club screen lists (#604)', () => {
+  const players = [cadet, senior, veteran, unknown]
+
+  it('lists who the categories admit when the club set no group, and nothing greyed', () => {
+    expect(competitionRoster(players, youth)).toEqual({ eligible: [cadet], outOfCategory: [] })
+  })
+
+  it('lists the group members the competition admits, and greys those it turns away', () => {
+    const group = { memberIds: ['p-cadet', 'p-senior', 'p-unknown'] }
+    expect(competitionRoster(players, youth, group)).toEqual({
+      eligible: [cadet],
+      outOfCategory: [
+        { player: senior, reason: 'category_mismatch' },
+        { player: unknown, reason: 'no_category' },
+      ],
+    })
+  })
+
+  // Nobody put them in the group, so nobody needs to be told why they are not in.
+  it('does not grey someone who is simply outside the group', () => {
+    expect(competitionRoster(players, competition(), seniors).outOfCategory).toEqual([])
+  })
+})
+
+describe('competitionGroupOf', () => {
+  const links: CompetitionGroup[] = [
+    { clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-seniors' },
+    { clubId: 'club-1', competitionId: 'comp-jeunes', groupId: 'g-gone' },
+    { clubId: 'club-2', competitionId: 'comp-jeunes', groupId: 'g-seniors' },
+  ]
+
+  it('finds the club\'s group for the competition', () => {
+    expect(competitionGroupOf('club-1', 'comp-seniors', links, [seniors])).toBe(seniors)
+  })
+
+  it('reads another club\'s link for nothing', () => {
+    expect(competitionGroupOf('club-3', 'comp-seniors', links, [seniors])).toBeUndefined()
+  })
+
+  // Deleting a group lifts the restriction rather than refusing everybody.
+  it('reads a link to a group that no longer exists as no group', () => {
+    expect(competitionGroupOf('club-1', 'comp-jeunes', links, [seniors])).toBeUndefined()
+  })
+
+  it('has nothing to say without a club', () => {
+    expect(competitionGroupOf(undefined, 'comp-seniors', links, [seniors])).toBeUndefined()
   })
 })
 
@@ -160,18 +163,16 @@ describe('competitionOfDivision', () => {
   it('lets a division narrow its competition, keeping the competition\'s identity', () => {
     const rule = competitionOfDivision('d-5', divisions, competitions)!
     expect(rule.categories).toEqual(['B', 'M'])
-    // Still the championship's id and lock: derogations hang off the
-    // competition, and the lock is the championship's policy.
+    // Still the championship's id: a club's group hangs off the competition.
     expect(rule.id).toBe('comp-jeunes')
-    expect(rule.isCategoryLocked).toBe(true)
 
-    expect(isPlayerEligible(cadet, rule, [])).toBe(false)
-    expect(isPlayerEligible({ id: 'p-benjamin', category: 'B2' }, rule, [])).toBe(true)
+    expect(isPlayerEligible(cadet, rule)).toBe(false)
+    expect(isPlayerEligible({ id: 'p-benjamin', category: 'B2' }, rule)).toBe(true)
   })
 
   it('lets a division admit everyone where its competition would not', () => {
     const rule = competitionOfDivision('d-6', divisions, competitions)!
-    expect(isPlayerEligible(senior, rule, [])).toBe(true)
+    expect(isPlayerEligible(senior, rule)).toBe(true)
   })
 
   it('inherits when the division says nothing', () => {
@@ -187,37 +188,73 @@ describe('competitionOfDivision', () => {
   })
 })
 
-// #482 — the one control a club admin gets, computed once so the list, the
-// matrix and the player page cannot offer three different things.
-describe('eligibilityCell', () => {
-  it('offers to exclude someone the default admits', () => {
-    expect(eligibilityCell(veteran, veterans, [])).toMatchObject({
-      eligible: true, reason: 'category', overridden: false, action: 'exclude',
-    })
+describe('teamEligibility', () => {
+  const divisions = [{ id: 'd-sen', competitionId: 'comp-seniors' }, { id: 'd-free' }]
+  const ctx = {
+    divisions,
+    competitions: [competition()],
+    competitionGroups: [{ clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-seniors' }],
+    memberGroups: [seniors],
+  }
+  const team1 = { id: 't-1', clubId: 'club-1', divisionId: 'd-sen', playerIds: ['p-veteran'] }
+  const team2 = { id: 't-2', clubId: 'club-1', divisionId: 'd-sen', playerIds: [] }
+  const free = { id: 't-free', clubId: 'club-1', divisionId: 'd-free', playerIds: [] }
+  // Another club in the same division: the link above is not theirs.
+  const theirs = { id: 't-theirs', clubId: 'club-2', divisionId: 'd-sen', playerIds: [] }
+
+  it('applies the team\'s own club\'s group', () => {
+    const rule = teamEligibility([team1, team2, theirs], ctx)
+    expect(rule.admits('t-2', senior)).toBe(true)
+    expect(rule.admits('t-2', veteran)).toBe(false)
+    expect(rule.admits('t-theirs', veteran)).toBe(true)
   })
 
-  it('offers to add someone the default turns away', () => {
-    expect(eligibilityCell(senior, veterans, [])).toMatchObject({
-      eligible: false, reason: 'category_mismatch', action: 'include',
-    })
+  // Eligibility bites on what can be added, never on a squad already made.
+  it('still lets a roster field whom it already holds', () => {
+    const rule = teamEligibility([team1, team2], ctx)
+    expect(rule.admits('t-1', veteran)).toBe(false)
+    expect(rule.mayField('t-1', veteran)).toBe(true)
+    expect(rule.mayField('t-2', veteran)).toBe(false)
   })
 
-  it('offers nothing but the reason on a locked competition', () => {
-    expect(eligibilityCell(senior, youth, [])).toMatchObject({
-      eligible: false, action: 'none',
-    })
+  it('restricts nobody in a division filed under no competition', () => {
+    expect(teamEligibility([free], ctx).admits('t-free', veteran)).toBe(true)
+  })
+})
+
+// The shim for app ≤ 1.5 (#604): its copy of the rule reads these rows, and an
+// `excluded` one beats everything in it.
+describe('legacyCompetitionExclusions', () => {
+  const players = [
+    { id: 'p-senior', clubId: 'club-1' },
+    { id: 'p-cadet', clubId: 'club-1' },
+    { id: 'p-veteran', clubId: 'club-1' },
+    { id: 'p-elsewhere', clubId: 'club-2' },
+  ]
+
+  it('excludes every member of the club outside the group, and no one else', () => {
+    const rows = legacyCompetitionExclusions(
+      [{ clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-seniors' }], [seniors], players,
+    )
+    expect(rows).toEqual([
+      { clubId: 'club-1', competitionId: 'comp-seniors', playerId: 'p-veteran', effect: 'excluded' },
+    ])
   })
 
-  it('offers to undo an amendment rather than to make a second', () => {
-    expect(eligibilityCell(veteran, veterans, [override('comp-veterans', 'p-veteran', 'excluded')]))
-      .toMatchObject({ eligible: false, reason: 'club_excluded', overridden: true, action: 'reset' })
-    expect(eligibilityCell(senior, veterans, [override('comp-veterans', 'p-senior', 'included')]))
-      .toMatchObject({ eligible: true, reason: 'club_added', overridden: true, action: 'reset' })
+  // A member of the group whose category does not fit gets no row — the old
+  // rule already turns them away by category, as the new one does.
+  it('leaves category mismatches to the categories, as the new rule does', () => {
+    const rows = legacyCompetitionExclusions(
+      [{ clubId: 'club-1', competitionId: 'comp-jeunes', groupId: 'g-seniors' }], [seniors], players,
+    )
+    expect(rows.map((r) => r.playerId)).toEqual(['p-veteran'])
+    expect(isPlayerEligible(senior, youth, seniors)).toBe(false)
   })
 
-  // Undoing beats the lock: a club may always take back its own exclusion.
-  it('lets a locked competition be reset once amended', () => {
-    expect(eligibilityCell(cadet, youth, [override('comp-jeunes', 'p-cadet', 'excluded')]))
-      .toMatchObject({ action: 'reset' })
+  it('says nothing for a competition with no group, or a group that is gone', () => {
+    expect(legacyCompetitionExclusions([], [seniors], players)).toEqual([])
+    expect(legacyCompetitionExclusions(
+      [{ clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-gone' }], [seniors], players,
+    )).toEqual([])
   })
 })

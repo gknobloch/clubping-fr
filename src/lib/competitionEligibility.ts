@@ -1,28 +1,39 @@
-// Who may play in which competition (#482).
+// Who may play in which competition (#482, #604).
 //
-// Shared domain logic — imported by the web app (@/lib/competitionEligibility)
-// and readable from the API, so keep it free of any browser/RN/Node deps. The
-// type imports below are type-only, so they carry no runtime dependency.
+// Shared domain logic — imported by the web app (@/lib/competitionEligibility),
+// by the mobile app (@shared/lib/competitionEligibility) and by the API, so
+// keep it free of any browser/RN/Node deps. The type imports below are
+// type-only, so they carry no runtime dependency.
 //
-// One rule, one place. The club screen greys a button, the API refuses a write
-// and the line-up sheet drops a name, and all three have to agree — the way
-// src/lib/clubAdmins.ts already does for the five-admin cap (#474).
+// One rule, one place. The club screen lists who a competition admits, the
+// line-up sheet drops a name, the journées matrix offers a team — and all of
+// them have to agree.
+//
+// The rule is two conditions, and both must hold (#604):
+//
+// - the competition's **categories**, set by a general admin — none listed
+//   means every category;
+// - the club's **group** for that competition, if the club has set one — one
+//   of its own member groups (#602).
+//
+// It replaced a per-licensee list of exclusions and additions (#482), which
+// each arrival, each August category change and each departure left a little
+// more wrong. A group is maintained once, for everything the club uses it for.
+// And because a group can only narrow, a club can no longer widen a
+// competition past its categories — which is what the "lock" existed to stop,
+// so the lock is gone with it.
 
-import type { Competition, CompetitionEligibility, EligibilityEffect } from '../types'
+import type { Competition, CompetitionEligibility, CompetitionGroup, MemberGroup } from '../types'
 import { normalizeCategory, type PlayerCategory } from './playerCategories'
 
 /**
- * Why a player is, or is not, eligible. The screens print this: "exclu par le
- * club" and "hors catégorie" are not the same answer, and the second is the
- * one a club admin can do something about.
+ * Why a player is, or is not, eligible. The club screen prints it: a member of
+ * the group whose category does not fit is shown greyed, with the reason.
  */
 export type EligibilityReason =
-  /** The competition's default mapping admits them. */
-  | 'category'
-  /** Their club added them, past a default that would not have. */
-  | 'club_added'
-  /** Their club took them out of a default that would have admitted them. */
-  | 'club_excluded'
+  | 'eligible'
+  /** Their category fits, but the club restricted the competition to a group they are not in. */
+  | 'not_in_group'
   /** They hold a category the competition does not admit. */
   | 'category_mismatch'
   /** They hold no category at all — nothing to match against. */
@@ -35,9 +46,8 @@ export interface EligibilityVerdict {
 
 /** French wording of a verdict, for a list that has to say why. */
 export const ELIGIBILITY_REASON_LABELS: Record<EligibilityReason, string> = {
-  category: 'Par sa catégorie',
-  club_added: 'Ajouté par le club',
-  club_excluded: 'Exclu par le club',
+  eligible: 'Éligible',
+  not_in_group: 'Hors du groupe',
   category_mismatch: 'Hors catégorie',
   no_category: 'Sans catégorie',
 }
@@ -59,12 +69,8 @@ export interface EligiblePlayer {
   category: string | undefined
 }
 
-const overrideFor = (
-  overrides: CompetitionEligibility[],
-  competitionId: string,
-  playerId: string,
-): EligibilityEffect | undefined =>
-  overrides.find((o) => o.competitionId === competitionId && o.playerId === playerId)?.effect
+/** A club's group, as the rule reads it: who is in it. */
+export type RestrictingGroup = Pick<MemberGroup, 'memberIds'>
 
 /** Whether the competition's own mapping admits this category. */
 export function categoryAdmitted(
@@ -78,138 +84,32 @@ export function categoryAdmitted(
 }
 
 /**
- * Whether a club may add this player to this competition by hand.
- *
- * A locked competition is reserved to its categories: the club can still take
- * someone out of it, never put someone in. That is the whole difference
- * between "the default is usually right" and "this is a youth championship".
- */
-export function canClubAdd(
-  competition: Pick<Competition, 'categories' | 'isCategoryLocked'>,
-  player: EligiblePlayer,
-): boolean {
-  if (!competition.isCategoryLocked) return true
-  return categoryAdmitted(competition, normalizeCategory(player.category))
-}
-
-/**
  * Whether this player may play in this competition, and on what grounds.
  *
- * Order matters, and it is the club's word first: an exclusion beats the
- * default mapping, because a club knows something about its own licensee that
- * a category code cannot say. An addition beats the default too — except on a
- * locked competition, where it is void. The API refuses to write such a row in
- * the first place, and this does not rely on that: a competition locked after
- * the fact must not leave stale additions standing.
+ * The category is asked first, so a member of the group whose category does
+ * not fit reads « Hors catégorie » — the thing the club screen greys them for
+ * — rather than as though the group were the problem.
  */
 export function playerEligibility(
   player: EligiblePlayer,
-  competition: Pick<Competition, 'id' | 'categories' | 'isCategoryLocked'>,
-  overrides: CompetitionEligibility[],
+  competition: Pick<Competition, 'categories'>,
+  group?: RestrictingGroup,
 ): EligibilityVerdict {
-  const override = overrideFor(overrides, competition.id, player.id)
-  if (override === 'excluded') return { eligible: false, reason: 'club_excluded' }
-
   const category = normalizeCategory(player.category)
-  const admitted = categoryAdmitted(competition, category)
-
-  if (override === 'included' && (admitted || !competition.isCategoryLocked)) {
-    return { eligible: true, reason: admitted ? 'category' : 'club_added' }
+  if (!categoryAdmitted(competition, category)) {
+    return { eligible: false, reason: category === undefined ? 'no_category' : 'category_mismatch' }
   }
-  if (admitted) return { eligible: true, reason: 'category' }
-  return {
-    eligible: false,
-    reason: category === undefined ? 'no_category' : 'category_mismatch',
-  }
+  if (group && !group.memberIds.includes(player.id)) return { eligible: false, reason: 'not_in_group' }
+  return { eligible: true, reason: 'eligible' }
 }
-
-/**
- * What a club admin may do next about one licensee and one competition.
- *
- * 'exclude' and 'include' are the two amendments; 'reset' drops an amendment
- * already made; 'none' is a locked competition they may only ever narrow.
- */
-export type EligibilityAction = 'exclude' | 'include' | 'reset' | 'none'
-
-export interface EligibilityCell extends EligibilityVerdict {
-  /** A club row exists for this pair — the amendment is theirs to undo. */
-  overridden: boolean
-  action: EligibilityAction
-}
-
-/**
- * One licensee against one competition: the verdict, and the single control a
- * club admin gets for it.
- *
- * Lives here rather than in a screen because three of them now show it — the
- * per-competition list, the matrix and the player's own page — and a screen
- * that computed the action itself would be a fourth place for the lock to be
- * forgotten.
- */
-export function eligibilityCell(
-  player: EligiblePlayer,
-  competition: Pick<Competition, 'id' | 'categories' | 'isCategoryLocked'>,
-  overrides: CompetitionEligibility[],
-): EligibilityCell {
-  const verdict = playerEligibility(player, competition, overrides)
-  const overridden = overrideFor(overrides, competition.id, player.id) !== undefined
-  const action: EligibilityAction = overridden
-    ? 'reset'
-    : verdict.eligible
-      ? 'exclude'
-      : canClubAdd(competition, player) ? 'include' : 'none'
-  return { ...verdict, overridden, action }
-}
-
-/** French wording of each control, so every screen offers the same words. */
-export const ELIGIBILITY_ACTION_LABELS: Record<EligibilityAction, string> = {
-  exclude: 'Exclure',
-  include: 'Ajouter',
-  reset: 'Rétablir le défaut',
-  none: 'Compétition réservée',
-}
-
-/**
- * A cell's state, as the club's grid lets you filter on it (#482).
- *
- * The five verdicts, plus the one thing that is not a verdict but is the whole
- * reason the grid exists: a licensee the competition refuses whom an équipe
- * fields anyway. "Show me the contradictions" is the question a club admin
- * comes here with, and no reason on its own answers it.
- */
-export type CellStatus = EligibilityReason | 'conflict'
-
-export const CELL_STATUS_LABELS: Record<CellStatus, string> = {
-  ...ELIGIBILITY_REASON_LABELS,
-  conflict: 'Non éligible mais déjà engagé',
-}
-
-export const CELL_STATUSES: CellStatus[] = [
-  'category', 'club_added', 'club_excluded', 'category_mismatch', 'no_category', 'conflict',
-]
 
 /** Shorthand for the many callers that only want the yes or the no. */
 export function isPlayerEligible(
   player: EligiblePlayer,
-  competition: Pick<Competition, 'id' | 'categories' | 'isCategoryLocked'>,
-  overrides: CompetitionEligibility[],
+  competition: Pick<Competition, 'categories'>,
+  group?: RestrictingGroup,
 ): boolean {
-  return playerEligibility(player, competition, overrides).eligible
-}
-
-/**
- * The competitions this player may take part in, in the order given.
- *
- * This is the "what is this licensee eligible for?" question, and its answer is
- * a list: a cadet plays in their own category AND with the adults, which is why
- * eligibility could never be a field on the player.
- */
-export function eligibleCompetitions<T extends Pick<Competition, 'id' | 'categories' | 'isCategoryLocked' | 'isArchived'>>(
-  player: EligiblePlayer,
-  competitions: T[],
-  overrides: CompetitionEligibility[],
-): T[] {
-  return competitions.filter((c) => !c.isArchived && isPlayerEligible(player, c, overrides))
+  return playerEligibility(player, competition, group).eligible
 }
 
 /**
@@ -221,11 +121,52 @@ export function eligibleCompetitions<T extends Pick<Competition, 'id' | 'categor
  */
 export function eligiblePlayers<T extends EligiblePlayer>(
   players: T[],
-  competition: Pick<Competition, 'id' | 'categories' | 'isCategoryLocked'> | undefined,
-  overrides: CompetitionEligibility[],
+  competition: Pick<Competition, 'categories'> | undefined,
+  group?: RestrictingGroup,
 ): T[] {
   if (!competition) return players
-  return players.filter((p) => isPlayerEligible(p, competition, overrides))
+  return players.filter((p) => isPlayerEligible(p, competition, group))
+}
+
+/**
+ * What the club's Compétitions screen lists for one competition (#604).
+ *
+ * `eligible` is who the competition admits. `outOfCategory` is who the club put
+ * in the group but the categories turn away — shown greyed, with the reason,
+ * so a club sees that its group says one thing and the competition another.
+ * Without a group there is no such list: nobody asked for them.
+ */
+export function competitionRoster<T extends EligiblePlayer>(
+  players: T[],
+  competition: Pick<Competition, 'categories'>,
+  group?: RestrictingGroup,
+): { eligible: T[]; outOfCategory: Array<{ player: T; reason: EligibilityReason }> } {
+  const eligible: T[] = []
+  const outOfCategory: Array<{ player: T; reason: EligibilityReason }> = []
+  for (const player of players) {
+    const verdict = playerEligibility(player, competition, group)
+    if (verdict.eligible) eligible.push(player)
+    else if (group?.memberIds.includes(player.id)) outOfCategory.push({ player, reason: verdict.reason })
+  }
+  return { eligible, outOfCategory }
+}
+
+/**
+ * The group a club restricted a competition to, or undefined when it set none.
+ *
+ * A link to a group that no longer exists reads as no group at all: deleting a
+ * group lifts the restriction (the API deletes the link with it, and the club
+ * screen says so before the group goes).
+ */
+export function competitionGroupOf(
+  clubId: string | undefined,
+  competitionId: string,
+  competitionGroups: CompetitionGroup[],
+  memberGroups: MemberGroup[],
+): MemberGroup | undefined {
+  if (!clubId) return undefined
+  const link = competitionGroups.find((l) => l.clubId === clubId && l.competitionId === competitionId)
+  return link ? memberGroups.find((g) => g.id === link.groupId) : undefined
 }
 
 /**
@@ -240,9 +181,8 @@ export function eligiblePlayers<T extends EligiblePlayer>(
  * because the more specific statement wins: a youth championship whose lowest
  * division is reserved to benjamins and minimes says so on the division, and
  * the competition's wider list is not consulted. The identity returned is still
- * the competition's — `id`, and the lock — so a club's derogations keep hanging
- * off the championship rather than fragmenting per division, and so the lock
- * stays a policy of the championship rather than of one of its levels.
+ * the competition's, so a club's group hangs off the championship rather than
+ * fragmenting per division.
  */
 export function competitionOfDivision(
   divisionId: string | undefined,
@@ -259,6 +199,7 @@ export function competitionOfDivision(
 /** The subset of a team the rule below reads. */
 export interface EligibilityTeam {
   id: string
+  clubId: string
   divisionId?: string
   playerIds?: string[]
 }
@@ -267,8 +208,9 @@ export interface EligibilityTeam {
 export interface TeamEligibilityContext {
   divisions: Array<{ id: string; competitionId?: string; categories?: PlayerCategory[] }>
   competitions: Competition[]
-  /** This club's own overrides — never every club's (see `GET /api/data`). */
-  overrides: CompetitionEligibility[]
+  /** The clubs' competition → group links. Read per team, by the team's own club. */
+  competitionGroups: CompetitionGroup[]
+  memberGroups: MemberGroup[]
 }
 
 export interface TeamEligibility {
@@ -278,10 +220,10 @@ export interface TeamEligibility {
    * Whether a picker may offer this team for this licensee: `admits`, or a
    * roster that already holds them.
    *
-   * Eligibility bites on what can be *added*, never on what exists — a
-   * competition edited after the fact must not empty a squad — so someone on
-   * the roster stays fieldable for their own team, and their exclusion shows
-   * as the ⚠ on the club's Compétitions grid rather than as a silent removal.
+   * Eligibility bites on what can be *added*, never on what exists — a group
+   * or a competition edited after the fact must not empty a squad — so
+   * someone on the roster stays fieldable for their own team, and shows as a
+   * ⚠ on the club's Compétitions screen rather than as a silent removal.
    */
   mayField(teamId: string, player: EligiblePlayer): boolean
 }
@@ -291,30 +233,68 @@ export interface TeamEligibility {
  * set of teams.
  *
  * A factory rather than a bare function because a team reaches its competition
- * through its division — two lookups — and the callers ask this of every
- * licensee against every team: the journées matrix on both apps, a roster
- * picker, a line-up sheet. Resolving each team's competition once is the same
- * move `assignmentsByPlayer` makes for the grid (#482).
+ * through its division — two lookups — and its group through its club, and
+ * the callers ask this of every licensee against every team: the journées
+ * matrix on both apps, a roster picker, a line-up sheet. Resolving each team's
+ * rule once is the same move `assignmentsByPlayer` makes.
  */
 export function teamEligibility(
   teams: EligibilityTeam[],
   ctx: TeamEligibilityContext,
 ): TeamEligibility {
   const byId = new Map(teams.map((t) => [t.id, t]))
-  const competitionByTeamId = new Map(
-    teams.map((t) => [t.id, competitionOfDivision(t.divisionId, ctx.divisions, ctx.competitions)]),
-  )
+  const ruleByTeamId = new Map(teams.map((t) => {
+    const competition = competitionOfDivision(t.divisionId, ctx.divisions, ctx.competitions)
+    const group = competition
+      ? competitionGroupOf(t.clubId, competition.id, ctx.competitionGroups, ctx.memberGroups)
+      : undefined
+    return [t.id, { competition, group }]
+  }))
   const admits = (teamId: string, player: EligiblePlayer): boolean => {
-    const competition = competitionByTeamId.get(teamId)
+    const rule = ruleByTeamId.get(teamId)
     // A division filed under no competition — every division until a general
     // admin says otherwise — restricts nobody. So does a team we know nothing
     // about: silence is not a refusal.
-    if (!competition) return true
-    return isPlayerEligible(player, competition, ctx.overrides)
+    if (!rule?.competition) return true
+    return isPlayerEligible(player, rule.competition, rule.group)
   }
   return {
     admits,
     mayField: (teamId, player) =>
       byId.get(teamId)?.playerIds?.includes(player.id) === true || admits(teamId, player),
   }
+}
+
+/**
+ * The group rule, restated as the per-licensee exclusions app ≤ 1.5 still
+ * reads (#604).
+ *
+ * An installed app is not updated when the server is. Those builds read
+ * `competitionEligibilities` from `GET /api/data`, and in their copy of the
+ * rule an `excluded` row beats everything. So one row per club member outside
+ * the group reproduces the group rule exactly: a member of the group whose
+ * category does not fit gets no row, and their own copy already says « Hors
+ * catégorie ». An old phone offers the same players as a new one, and no
+ * forced update is needed.
+ *
+ * **Temporary.** Removed with the field itself, once `users.last_client_version`
+ * shows no build older than the one that reads `competitionGroups` — see #604.
+ */
+export function legacyCompetitionExclusions(
+  competitionGroups: CompetitionGroup[],
+  memberGroups: MemberGroup[],
+  players: Array<{ id: string; clubId: string }>,
+): CompetitionEligibility[] {
+  const out: CompetitionEligibility[] = []
+  for (const link of competitionGroups) {
+    const group = memberGroups.find((g) => g.id === link.groupId)
+    if (!group) continue
+    const members = new Set(group.memberIds)
+    for (const p of players) {
+      if (p.clubId === link.clubId && !members.has(p.id)) {
+        out.push({ clubId: link.clubId, competitionId: link.competitionId, playerId: p.id, effect: 'excluded' })
+      }
+    }
+  }
+  return out
 }

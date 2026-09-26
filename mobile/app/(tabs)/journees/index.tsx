@@ -107,7 +107,7 @@ export default function JourneesScreen() {
   const {
     clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
-    playerSeasonCategories, competitions, competitionEligibilities,
+    playerSeasonCategories, competitions, competitionGroups, memberGroups,
     setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
   } = useAppData()
 
@@ -154,14 +154,10 @@ export default function JourneesScreen() {
     () => seasonCategoryIndex(playerSeasonCategories),
     [playerSeasonCategories],
   )
-  /** This club's own amendments: the payload carries every club's. */
-  const myEligibilities = useMemo(
-    () => competitionEligibilities.filter((e) => e.clubId === myClubId),
-    [competitionEligibilities, myClubId],
-  )
+  // The competition, and the club's group for it when it set one (#604).
   const eligibility = useMemo(
-    () => teamEligibility(clubTeams, { divisions, competitions, overrides: myEligibilities }),
-    [clubTeams, divisions, competitions, myEligibilities],
+    () => teamEligibility(clubTeams, { divisions, competitions, competitionGroups, memberGroups }),
+    [clubTeams, divisions, competitions, competitionGroups, memberGroups],
   )
   /** A licensee as the rule reads them — the category resolved for the season.
    *  Memoised because `otherPlayers` depends on it: rebuilt every render, it

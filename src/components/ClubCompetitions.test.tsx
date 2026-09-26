@@ -3,7 +3,7 @@ import { render as rtlRender, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type {
-  Competition, CompetitionEligibility, Division, GameSelection, Player,
+  Competition, CompetitionGroup, Division, GameSelection, MemberGroup, Player,
   PlayerSeasonCategory, Team,
 } from '@/types'
 import { ClubCompetitions } from './ClubCompetitions'
@@ -11,20 +11,20 @@ import { ClubCompetitions } from './ClubCompetitions'
 // Each name links to the player behind it, so the tree needs a router.
 const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>)
 
-// #482 — the club's half of the feature. The rule itself lives in
-// src/lib/competitionEligibility.spec.ts and the writes in the API's own suite;
-// what matters here is that the screen obeys it: it sorts the club into
-// eligible and not, it says on what grounds, it offers no way into a locked
-// competition, and it shows the API's refusal rather than inventing one.
+// #604 — the club's half of the feature: each competition reserved, or not, to
+// one of the club's groups. The rule lives in src/lib/competitionEligibility.spec.ts
+// and the write in the API's suite; here, that the screen lists what the rule
+// says, greys what it should, and asks before leaving a fielded player out.
 
 const CLUB = 'club-1'
 const SEASON = '26'
 
 const data = vi.hoisted(() => ({
-  setCompetitionEligibility: vi.fn(),
+  setCompetitionGroup: vi.fn(),
   competitions: [] as Competition[],
   players: [] as Player[],
-  competitionEligibilities: [] as CompetitionEligibility[],
+  memberGroups: [] as MemberGroup[],
+  competitionGroups: [] as CompetitionGroup[],
   teams: [] as Team[],
   divisions: [] as Division[],
   gameSelections: [] as GameSelection[],
@@ -39,20 +39,13 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 vi.mock('@/contexts/DataContext', () => ({
   useAppData: () => ({
-    competitions: data.competitions,
-    players: data.players,
-    competitionEligibilities: data.competitionEligibilities,
-    setCompetitionEligibility: data.setCompetitionEligibility,
-    // Engagements the list warns about (#482) — empty unless a test says so.
-    teams: data.teams,
-    divisions: data.divisions,
-    gameSelections: data.gameSelections,
+    ...data,
     // A category is stated per season (#482): the fixtures file theirs here.
     seasons: [{ id: SEASON, displayName: '2025/2026', status: 'active' }],
-    playerSeasonCategories: data.playerSeasonCategories,
   }),
 }))
 
+const CATEGORIES: PlayerSeasonCategory[] = []
 const player = (id: string, first: string, last: string, category?: string): Player => {
   if (category) CATEGORIES.push({ seasonId: SEASON, playerId: id, category })
   return {
@@ -60,26 +53,30 @@ const player = (id: string, first: string, last: string, category?: string): Pla
     status: 'active', clubId: CLUB,
   }
 }
-const CATEGORIES: PlayerSeasonCategory[] = []
 
 const youth: Competition = {
   id: 'comp-jeunes', displayName: 'Championnat jeunes',
-  categories: ['B', 'M', 'C', 'J'], isCategoryLocked: true, sortOrder: 1, isArchived: false,
+  categories: ['B', 'M', 'C', 'J'], sortOrder: 1, isArchived: false,
 }
-const veterans: Competition = {
-  id: 'comp-veterans', displayName: 'Championnat vétérans',
-  categories: ['V50', 'V55'], isCategoryLocked: false, sortOrder: 2, isArchived: false,
+const seniors: Competition = {
+  id: 'comp-seniors', displayName: 'Championnat par équipes',
+  categories: [], sortOrder: 2, isArchived: false,
 }
 
 const CADET = player('p-cadet', 'Samuel', 'Canemolla', 'C1')
 const SENIOR = player('p-senior', 'Joris', 'Szulc', 'S')
 const VETERAN = player('p-veteran', 'Hervé', 'Ceroni', 'V55')
 
+const competitors: MemberGroup = {
+  id: 'g-comp', clubId: CLUB, displayName: 'Compétiteurs', memberIds: ['p-cadet', 'p-senior'],
+}
+
 beforeEach(() => {
-  data.setCompetitionEligibility.mockReset().mockResolvedValue(true)
-  data.competitions = [youth, veterans]
+  data.setCompetitionGroup.mockReset()
+  data.competitions = [youth, seniors]
   data.players = [CADET, SENIOR, VETERAN]
-  data.competitionEligibilities = []
+  data.memberGroups = [competitors]
+  data.competitionGroups = []
   data.teams = []
   data.divisions = []
   data.gameSelections = []
@@ -87,143 +84,95 @@ beforeEach(() => {
   auth.user = { id: 'ca', role: 'club_admin', isPlayer: false, clubId: CLUB }
 })
 
-/** The list under a heading, so "Éligibles" and "Non éligibles" stay apart. */
-const listUnder = (heading: RegExp) =>
-  screen.getByRole('heading', { name: heading }).nextElementSibling as HTMLElement
+/** One competition's card, by its name. */
+const card = (name: string) => screen.getByText(name).closest('li')!
 
-describe('ClubCompetitions (#482)', () => {
-  it('sorts the club by the competition selected, and says on what grounds', () => {
+describe('ClubCompetitions — reserving a competition to a group (#604)', () => {
+  it('lists who the categories admit when no group is set, and nothing greyed', () => {
     render(<ClubCompetitions clubId={CLUB} />)
-    // The first competition is selected by default.
-    expect(within(listUnder(/^Éligibles/)).getByText('Samuel Canemolla')).toBeInTheDocument()
-    expect(within(listUnder(/^Éligibles/)).getByText(/Cadet \(C1\) · Par sa catégorie/)).toBeInTheDocument()
-    const rest = within(listUnder(/^Non éligibles/))
-    expect(rest.getByText('Joris Szulc')).toBeInTheDocument()
-    expect(rest.getByText(/Senior · Hors catégorie/)).toBeInTheDocument()
+    const jeunes = card('Championnat jeunes')
+    expect(within(jeunes).getByText('1 joueur éligible')).toBeInTheDocument()
+    expect(within(jeunes).getByRole('link', { name: 'Samuel Canemolla' })).toBeInTheDocument()
+    expect(within(jeunes).getByRole('combobox')).toHaveValue('')
   })
 
-  it('offers no way into a locked competition', () => {
+  it('narrows a competition with no category to the group', () => {
+    data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
-    const rest = within(listUnder(/^Non éligibles/))
-    expect(rest.queryByRole('button', { name: 'Ajouter' })).not.toBeInTheDocument()
-    expect(rest.getAllByText('Compétition réservée').length).toBeGreaterThan(0)
+    const card2 = card('Championnat par équipes')
+    expect(within(card2).getByText('2 joueurs éligibles')).toBeInTheDocument()
+    expect(within(card2).queryByText('Hervé Ceroni')).not.toBeInTheDocument()
   })
 
-  it('lets a club add someone to a competition that is not locked', async () => {
+  // In the group, turned away by the categories: shown, greyed, and why.
+  it('greys a group member the categories turn away', () => {
+    data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-jeunes', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
-    await userEvent.selectOptions(screen.getByLabelText('Compétition'), 'comp-veterans')
-
-    const rest = within(listUnder(/^Non éligibles/))
-    const row = rest.getByText('Joris Szulc').closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Ajouter' }))
-
-    expect(data.setCompetitionEligibility)
-      .toHaveBeenCalledWith(CLUB, 'comp-veterans', 'p-senior', 'included')
+    const jeunes = card('Championnat jeunes')
+    expect(within(jeunes).getByText(/1 joueur éligible · 1 hors catégorie/)).toBeInTheDocument()
+    const senior = within(jeunes).getByRole('link', { name: 'Joris Szulc' }).closest('li')!
+    expect(senior).toHaveClass('text-slate-400')
+    expect(senior).toHaveTextContent('Hors catégorie')
   })
 
-  it('lets a club exclude someone the default admits', async () => {
-    render(<ClubCompetitions clubId={CLUB} />)
-    const row = within(listUnder(/^Éligibles/)).getByText('Samuel Canemolla').closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Exclure' }))
-
-    expect(data.setCompetitionEligibility)
-      .toHaveBeenCalledWith(CLUB, 'comp-jeunes', 'p-cadet', 'excluded')
-  })
-
-  it('offers to undo an amendment rather than to make a second one', async () => {
-    data.competitionEligibilities = [
-      { clubId: CLUB, competitionId: 'comp-jeunes', playerId: 'p-cadet', effect: 'excluded' },
-    ]
-    render(<ClubCompetitions clubId={CLUB} />)
-    const row = within(listUnder(/^Non éligibles/)).getByText('Samuel Canemolla').closest('li')!
-    expect(within(row).getByText(/Exclu par le club/)).toBeInTheDocument()
-    await userEvent.click(within(row).getByRole('button', { name: 'Rétablir le défaut' }))
-
-    expect(data.setCompetitionEligibility)
-      .toHaveBeenCalledWith(CLUB, 'comp-jeunes', 'p-cadet', 'default')
-  })
-
-  // Another club's exception must not decide this club's list.
-  it('reads only its own club’s amendments', () => {
-    data.competitionEligibilities = [
-      { clubId: 'club-2', competitionId: 'comp-jeunes', playerId: 'p-cadet', effect: 'excluded' },
-    ]
-    render(<ClubCompetitions clubId={CLUB} />)
-    expect(within(listUnder(/^Éligibles/)).getByText('Samuel Canemolla')).toBeInTheDocument()
-  })
-
-  it('shows the API’s refusal rather than pretending it worked', async () => {
-    data.setCompetitionEligibility.mockResolvedValue(false)
-    render(<ClubCompetitions clubId={CLUB} />)
-    await userEvent.selectOptions(screen.getByLabelText('Compétition'), 'comp-veterans')
-    const row = within(listUnder(/^Non éligibles/)).getByText('Joris Szulc').closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Ajouter' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/réservée à certaines catégories/)
-  })
-
-  it('reads without amending for anyone who does not administer the club', () => {
-    auth.user = { id: 'p1', role: 'player', isPlayer: true, clubId: CLUB }
-    render(<ClubCompetitions clubId={CLUB} />)
-    expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Exclure' })).not.toBeInTheDocument()
-  })
-
-  it('says nothing is restricted when no competition exists', () => {
-    data.competitions = []
-    render(<ClubCompetitions clubId={CLUB} />)
-    expect(screen.getByText(/Aucune compétition n'est définie/)).toBeInTheDocument()
-  })
-
-  // #482 — the same two additions the desktop grid got: a category filter, and
-  // the warning that an exclusion contradicts a squad without undoing it.
-  it('filters the club by category, offering only the ones it holds', async () => {
+  it('sets and lifts the group', async () => {
     const user = userEvent.setup()
     render(<ClubCompetitions clubId={CLUB} />)
-    const filter = screen.getByLabelText('Catégorie')
-    expect(within(filter).getAllByRole('option').map((o) => o.textContent))
-      .toEqual(['Toutes les catégories', 'Cadet', 'Senior', 'Vétéran 55'])
+    const select = within(card('Championnat par équipes')).getByRole('combobox')
+    await user.selectOptions(select, 'g-comp')
+    expect(data.setCompetitionGroup).toHaveBeenCalledWith(CLUB, 'comp-seniors', 'g-comp')
 
-    await user.selectOptions(filter, 'C')
-    expect(screen.getByText('Samuel Canemolla')).toBeInTheDocument()
-    expect(screen.queryByText('Joris Szulc')).not.toBeInTheDocument()
+    await user.selectOptions(select, '')
+    expect(data.setCompetitionGroup).toHaveBeenLastCalledWith(CLUB, 'comp-seniors', null)
   })
 
-  it('says when a licensee it calls ineligible is already in an équipe', async () => {
-    const user = userEvent.setup()
-    data.divisions = [{ id: 'div-1', competitionId: 'comp-veterans' } as Division]
-    data.teams = [{
-      id: 't6', number: 6, clubId: CLUB, divisionId: 'div-1',
-      playerIds: ['p-senior'], isArchived: false,
-    } as Team]
+  describe('a player an équipe already fields', () => {
+    beforeEach(() => {
+      data.divisions = [{
+        id: 'd-1', phaseId: 'ph', displayName: 'D1', rank: 1, playersPerGame: 4,
+        isArchived: false, competitionId: 'comp-seniors',
+      }]
+      data.teams = [{
+        id: 't-1', clubId: CLUB, phaseId: 'ph', number: 1, divisionId: 'd-1', groupId: 'grp',
+        gameLocationId: '', defaultDay: '', defaultTime: '', captainId: '', isArchived: false,
+        playerIds: ['p-veteran'],
+      }]
+    })
 
-    render(<ClubCompetitions clubId={CLUB} />)
-    await user.selectOptions(screen.getByLabelText('Compétition'), 'comp-veterans')
-    const row = screen.getByText('Joris Szulc').closest('li')!
-    expect(row).toHaveTextContent("Déjà dans l'équipe 6")
+    // Nothing is taken off a team: the question says so, and names them.
+    it('asks before reserving to a group that leaves them out, and writes nothing on « Annuler »', async () => {
+      const user = userEvent.setup()
+      render(<ClubCompetitions clubId={CLUB} />)
+      await user.selectOptions(within(card('Championnat par équipes')).getByRole('combobox'), 'g-comp')
+
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent('Hervé Ceroni')
+      expect(dialog).toHaveTextContent('Rien ne les retire')
+      await user.click(within(dialog).getByRole('button', { name: 'Annuler' }))
+      expect(data.setCompetitionGroup).not.toHaveBeenCalled()
+    })
+
+    it('flags them once the competition is reserved', () => {
+      data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
+      render(<ClubCompetitions clubId={CLUB} />)
+      const alert = within(card('Championnat par équipes')).getByRole('alert')
+      expect(alert).toHaveTextContent('Engagés mais plus éligibles')
+      expect(alert).toHaveTextContent("Hervé Ceroni — Déjà dans l'équipe 1")
+    })
   })
 
-  it('asks before making that contradiction, and writes nothing if refused', async () => {
-    const user = userEvent.setup()
-    data.divisions = [{ id: 'div-1', competitionId: 'comp-veterans' } as Division]
-    data.teams = [{
-      id: 't6', number: 6, clubId: CLUB, divisionId: 'div-1',
-      playerIds: ['p-veteran'], isArchived: false,
-    } as Team]
-
+  it('shows a plain member the group, and no way to change it', () => {
+    auth.user = { id: 'p-senior', role: 'player', isPlayer: true, clubId: CLUB }
+    data.competitionGroups = [{ clubId: CLUB, competitionId: 'comp-seniors', groupId: 'g-comp' }]
     render(<ClubCompetitions clubId={CLUB} />)
-    await user.selectOptions(screen.getByLabelText('Compétition'), 'comp-veterans')
-    const row = screen.getByText('Hervé Ceroni').closest('li')!
-    await user.click(within(row).getByRole('button', { name: 'Exclure' }))
+    const card2 = card('Championnat par équipes')
+    expect(within(card2).queryByRole('combobox')).not.toBeInTheDocument()
+    expect(within(card2).getByText('Compétiteurs')).toBeInTheDocument()
+  })
 
-    const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveTextContent("Déjà dans l'équipe 6")
-    await user.click(within(dialog).getByRole('button', { name: 'Annuler' }))
-    expect(data.setCompetitionEligibility).not.toHaveBeenCalled()
-
-    await user.click(within(row).getByRole('button', { name: 'Exclure' }))
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Exclure' }))
-    expect(data.setCompetitionEligibility)
-      .toHaveBeenCalledWith(CLUB, 'comp-veterans', 'p-veteran', 'excluded')
+  it('points an admin whose club has no group to where groups are made', () => {
+    data.memberGroups = []
+    render(<ClubCompetitions clubId={CLUB} />)
+    expect(screen.getByRole('link', { name: 'Créer des groupes' })).toHaveAttribute('href', '/club')
   })
 })

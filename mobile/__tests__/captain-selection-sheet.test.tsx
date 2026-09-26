@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
 import type {
-  Club, Competition, CompetitionEligibility, Division, MatchDay, Player,
+  Club, Competition, CompetitionGroup, MemberGroup, Division, MatchDay, Player,
   PlayerSeasonCategory, Team,
 } from '@shared/types'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
@@ -74,7 +74,8 @@ const others = [
 type Eligibility = {
   divisions?: Division[]
   competitions?: Competition[]
-  competitionEligibilities?: CompetitionEligibility[]
+  competitionGroups?: CompetitionGroup[]
+  memberGroups?: MemberGroup[]
   playerSeasonCategories?: PlayerSeasonCategory[]
   seasonId?: string
 }
@@ -198,16 +199,21 @@ describe('Feuille de sélection — l’éligibilité aux compétitions (#498)',
   }
   const competition: Competition = {
     id: 'comp1', displayName: 'Championnat par équipes',
-    categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+    categories: [], sortOrder: 1, isArchived: false,
   }
   const base = { divisions: [division], competitions: [competition] }
 
-  const excluded = (playerId: string): CompetitionEligibility => ({
-    clubId: 'c1', competitionId: 'comp1', playerId, effect: 'excluded',
+  /** The competition reserved to a group of every club player but one (#604). */
+  const reservedWithout = (playerId: string) => ({
+    competitionGroups: [{ clubId: 'c1', competitionId: 'comp1', groupId: 'g1' }],
+    memberGroups: [{
+      id: 'g1', clubId: 'c1', displayName: 'Compétiteurs',
+      memberIds: [...roster, ...others].map((p) => p.id).filter((id) => id !== playerId),
+    }],
   })
 
-  it('n’offre pas un licencié que le club a exclu de la compétition', () => {
-    renderSheet({ eligibility: { ...base, competitionEligibilities: [excluded('o3')] } })
+  it('n’offre pas un licencié hors du groupe auquel le club a réservé la compétition', () => {
+    renderSheet({ eligibility: { ...base, ...reservedWithout('o3') } })
 
     expect(screen.queryByText('Pascal Afflard')).toBeNull()
     expect(screen.getByText('Ryan Alves')).toBeTruthy()
@@ -218,7 +224,7 @@ describe('Feuille de sélection — l’éligibilité aux compétitions (#498)',
     // would take him back out: hiding the row would strand him on it.
     renderSheet({
       initialSelection: ['o3'],
-      eligibility: { ...base, competitionEligibilities: [excluded('o3')] },
+      eligibility: { ...base, ...reservedWithout('o3') },
     })
 
     expect(screen.getByText('Pascal Afflard')).toBeTruthy()

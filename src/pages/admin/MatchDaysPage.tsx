@@ -176,7 +176,8 @@ export function MatchDaysPage() {
     clubs,
     players,
     competitions,
-    competitionEligibilities,
+    competitionGroups,
+    memberGroups,
     gameAvailabilities,
     gameSelections,
     playerPhasePoints,
@@ -249,20 +250,14 @@ export function MatchDaysPage() {
     [playerSeasonCategories],
   )
 
-  /** This club's amendments only: GET /api/data carries every club's, and one
-   *  club's exception must not decide another's line-ups. */
-  const myEligibilities = useMemo(
-    () => competitionEligibilities.filter((e) => e.clubId === userClubId),
-    [competitionEligibilities, userClubId],
-  )
-
-  /** The shared rule, bound to this club's teams so each one's competition is
-   *  resolved once rather than once per cell. */
+  /** The shared rule, bound to this club's teams so each one's competition —
+   *  and the club's group for it (#604) — is resolved once rather than once
+   *  per cell. */
   const eligibility = useMemo(
     () => teamEligibility(myClubTeamsInPhase, {
-      divisions, competitions, overrides: myEligibilities,
+      divisions, competitions, competitionGroups, memberGroups,
     }),
-    [myClubTeamsInPhase, divisions, competitions, myEligibilities],
+    [myClubTeamsInPhase, divisions, competitions, competitionGroups, memberGroups],
   )
 
   /** A licensee as the rule reads them: the category comes off the season. */

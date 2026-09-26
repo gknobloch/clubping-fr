@@ -21,7 +21,7 @@ import { CHANNEL_LABELS, formatAddress, mapsUrl } from '@/utils/club'
 import type { Address, ClubChannel, ClubChannelType, MemberGroup, User } from '@shared/types'
 import { MemberGroupEditor } from '@/components/MemberGroupEditor'
 import type { ChecklistOption } from '@/components/ChecklistSheet'
-import { clubMemberGroups, mayManageMemberGroups } from '@shared/lib/memberGroups'
+import { clubMemberGroups, groupDeletionMessage, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { canManageClub } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
 
@@ -125,11 +125,14 @@ function memberOptions(users: User[], clubId: string, current: string[]): Checkl
 
 function GroupRow({
   group,
+  deletionMessage,
   onOpen,
   onEdit,
   onDelete,
 }: {
   group: MemberGroup
+  /** What deleting it does — see `groupDeletionMessage`. */
+  deletionMessage: string
   onOpen: () => void
   onEdit?: () => void
   onDelete?: () => void
@@ -170,7 +173,7 @@ function GroupRow({
           onPress={() =>
             Alert.alert(
               `Supprimer « ${group.displayName} » ?`,
-              'Ses membres restent au club : seul le groupe disparaît.',
+              deletionMessage,
               [
                 { text: 'Annuler', style: 'cancel' },
                 { text: 'Supprimer', style: 'destructive', onPress: onDelete },
@@ -189,7 +192,7 @@ function GroupRow({
 export default function ClubScreen() {
   const { user } = useAuth()
   const {
-    clubs, users, memberGroups, refreshing, refresh,
+    clubs, users, memberGroups, competitionGroups, competitions, refreshing, refresh,
     addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers,
   } = useAppData()
   const router = useRouter()
@@ -293,6 +296,7 @@ export default function ClubScreen() {
                 <GroupRow
                   key={g.id}
                   group={g}
+                  deletionMessage={groupDeletionMessage(g, competitionGroups, competitions)}
                   // Pushed on this tab's own stack, not a tab switch: the
                   // chevron returns here, and Club stays lit.
                   onOpen={() => router.push({ pathname: '/club/membres', params: { groupes: g.id } })}
