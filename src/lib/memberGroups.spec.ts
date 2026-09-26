@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup } from '@/types'
 import {
-  clubMemberGroups, groupNameTaken, groupsOfMember, mayManageMemberGroups,
+  clubMemberGroups, groupNameTaken, groupsOfMember, inlineGroupChips, mayManageMemberGroups,
   memberGroupFilter, normalizeGroupName, withGroupMembers, withMemberGroups,
 } from './memberGroups'
 
@@ -108,5 +108,40 @@ describe('membership updates', () => {
   it('leaves a group untouched when nothing about it changes', () => {
     const next = withMemberGroups(ALL, 'c1', 'b', ['g-bureau', 'g-jeunes'])
     expect(next.find((g) => g.id === 'g-bureau')).toBe(bureau)
+  })
+})
+
+describe('inlineGroupChips', () => {
+  const g = (id: string, displayName: string): MemberGroup => ({ id, clubId: 'c1', displayName, memberIds: [] })
+  // Ten groups, as a well-organised club has them — alphabetical already.
+  const TEN = [
+    'Arbitres', 'Baby-ping', 'Bureau', 'Comité', 'Compétiteurs Jeunes', 'Compétiteurs Seniors',
+    'Entraîneurs', 'Féminines', 'Loisirs', 'Vétérans',
+  ].map((name, i) => g(`g${i}`, name))
+
+  it('shows every group, and no « +N », when they all fit', () => {
+    const three = TEN.slice(0, 3)
+    expect(inlineGroupChips(three, [])).toEqual({ inline: three, hidden: 0 })
+  })
+
+  it('folds what does not fit into « +N », in alphabetical order', () => {
+    const { inline, hidden } = inlineGroupChips(TEN, [])
+    // « Compétiteurs Jeunes » does not fit, so nothing after it shows either —
+    // not even the shorter « Entraîneurs », which would leave a gap.
+    expect(inline.map((x) => x.displayName)).toEqual(['Arbitres', 'Baby-ping', 'Bureau', 'Comité'])
+    expect(hidden).toBe(6)
+  })
+
+  // The row is how the list says what it is filtered on.
+  it('always gives a chosen group its chip, in its alphabetical place', () => {
+    const { inline, hidden } = inlineGroupChips(TEN, ['g9'])
+    expect(inline.map((x) => x.displayName)).toEqual([
+      'Arbitres', 'Baby-ping', 'Bureau', 'Comité', 'Vétérans',
+    ])
+    expect(hidden).toBe(5)
+  })
+
+  it('never shows fewer chips than fit, whatever is chosen', () => {
+    expect(inlineGroupChips(TEN, ['g0']).inline).toHaveLength(4)
   })
 })

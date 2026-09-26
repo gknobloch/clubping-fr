@@ -42,10 +42,13 @@ vi.mock('@/contexts/DataContext', () => ({
     updatePlayer: vi.fn(), addPlayer: vi.fn(),
     seasons: [{ id: '26', displayName: '2025/2026', status: 'active' }],
     playerSeasonCategories: [], playerSeasonLicences: [],
-    memberGroups: GROUPS,
+    memberGroups: [...GROUPS, ...extraGroups],
     setPlayerSeasonCategories: vi.fn(), clearPlayerSeasonCategory: vi.fn(),
   }),
 }))
+
+// More groups for the club, for the « +N » tests; none by default.
+let extraGroups: MemberGroup[] = []
 
 let search = ''
 function Location() {
@@ -72,6 +75,7 @@ const listed = () =>
     .map((r) => within(r).getAllByRole('cell')[0].textContent?.split(' ').pop())
 
 beforeEach(() => {
+  extraGroups = []
   auth.user = { id: 'p4', role: 'player', isPlayer: true, clubId: 'club-1' }
 })
 
@@ -141,5 +145,36 @@ describe('PlayersPage — filtering by group (#602)', () => {
     auth.user = { id: 'ga', role: 'general_admin', isPlayer: false }
     renderAt()
     expect(screen.queryByRole('group', { name: 'Filtrer par groupe' })).not.toBeInTheDocument()
+  })
+})
+
+describe('PlayersPage — a club with ten groups (#602)', () => {
+  beforeEach(() => {
+    extraGroups = [
+      'Arbitres', 'Baby-ping', 'Compétiteurs Seniors', 'Entraîneurs', 'Féminines', 'Loisirs', 'Vétérans', 'Comité',
+    ].map((displayName, i) => ({
+      id: `g-x${i}`, clubId: 'club-1', displayName, memberIds: displayName === 'Vétérans' ? ['p4'] : [],
+    }))
+  })
+
+  it('shows what fits on two lines and folds the rest into « +N »', () => {
+    renderAt()
+    const filter = screen.getByRole('group', { name: 'Filtrer par groupe' })
+    const chips = within(filter).getAllByRole('button').map((b) => b.textContent)
+    expect(chips).toEqual(['Arbitres', 'Baby-ping', 'Bureau', 'Comité', '+6'])
+    expect(within(filter).getByRole('button', { name: '6 autres groupes' })).toBeInTheDocument()
+  })
+
+  it('picks a folded group from the captain\'s sheet, which then gets its chip', async () => {
+    const user = renderAt()
+    await user.click(screen.getByRole('button', { name: '6 autres groupes' }))
+    const sheet = screen.getByRole('dialog', { name: /Groupes/ })
+    await user.click(within(sheet).getByRole('button', { name: 'Vétérans' }))
+    await user.click(within(sheet).getByRole('button', { name: 'Appliquer' }))
+
+    expect(listed()).toEqual(['Aucun'])
+    const filter = screen.getByRole('group', { name: 'Filtrer par groupe' })
+    expect(within(filter).getByRole('button', { name: 'Vétérans' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(filter).getByRole('button', { name: '5 autres groupes' })).toBeInTheDocument()
   })
 })

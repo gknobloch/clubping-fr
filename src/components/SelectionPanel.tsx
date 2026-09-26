@@ -23,6 +23,7 @@ export function SelectionPanel({
   onCancel,
   onSave,
   saveDisabled,
+  saveLabel = 'Enregistrer',
   footer,
 }: {
   titleId: string
@@ -35,6 +36,8 @@ export function SelectionPanel({
   onCancel: () => void
   onSave: () => void
   saveDisabled?: boolean
+  /** « Appliquer » for a filter, which records nothing. */
+  saveLabel?: string
   /** Under the buttons — « Composition complète. » */
   footer?: React.ReactNode
 }) {
@@ -81,7 +84,7 @@ export function SelectionPanel({
             disabled={saveDisabled}
             className={`flex-1 ${PRIMARY_BUTTON_CLASS} disabled:opacity-50`}
           >
-            Enregistrer
+            {saveLabel}
           </button>
         </div>
         {footer}

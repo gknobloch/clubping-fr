@@ -140,6 +140,37 @@ describe('Joueurs — filtrer par groupe', () => {
   })
 })
 
+describe('Joueurs — un club à dix groupes', () => {
+  beforeEach(() => {
+    mockData.memberGroups = [
+      ...GROUPS,
+      ...['Arbitres', 'Baby-ping', 'Compétiteurs Seniors', 'Entraîneurs', 'Féminines', 'Loisirs', 'Vétérans', 'Comité']
+        .map((displayName, i): MemberGroup => ({
+          id: `g-x${i}`, clubId: 'c1', displayName,
+          memberIds: displayName === 'Vétérans' ? ['p4'] : [],
+        })),
+    ]
+  })
+
+  it('montre ce qui tient sur deux lignes et replie le reste en « +N »', () => {
+    render(<JoueursScreen />)
+    expect(screen.getByTestId('group-chip-g-x0')).toBeTruthy() // Arbitres
+    expect(screen.queryByTestId('group-chip-g-x6')).toBeNull() // Vétérans, replié
+    expect(screen.getByTestId('group-filter-more')).toHaveTextContent('+6')
+  })
+
+  it('choisit un groupe replié dans la feuille, qui lui rend sa pastille', () => {
+    render(<JoueursScreen />)
+    fireEvent.press(screen.getByTestId('group-filter-more'))
+    fireEvent.press(screen.getByTestId('group-pick-g-x6'))
+    fireEvent.press(screen.getByTestId('group-filter-sheet-save'))
+
+    expect(listed()).toEqual(['Aucun'])
+    expect(screen.getByTestId('group-chip-g-x6')).toBeTruthy()
+    expect(screen.getByTestId('group-filter-more')).toHaveTextContent('+5')
+  })
+})
+
 describe('la fiche — ses groupes', () => {
   it('dit dans quels groupes est le licencié, chacun ouvrant la liste filtrée', () => {
     render(<PlayerDetail playerId="p2" />)

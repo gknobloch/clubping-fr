@@ -732,6 +732,15 @@ invisible dans le diff comme dans la revue.
   puis le compte « N joueurs », **toujours** affiché : c'est ainsi qu'on lit
   ce que les contrôles au-dessus ont fait, et une ligne qui va et vient
   déplace la liste sous le pouce.
+- **Deux lignes de pastilles au plus**, le reste replié en « +N » qui ouvre
+  tous les groupes dans la feuille du capitaine (« Appliquer », recherche
+  « Rechercher un groupe »). `inlineGroupChips` en décide avec un budget de
+  caractères, et non une mesure de mise en page : une mesure par plateforme
+  donnerait deux réponses, l'arithmétique une seule. C'est un **préfixe de
+  l'alphabet**, pas un remplissage — un groupe court après un long qui ne tient
+  pas resterait sinon affiché avec un trou avant lui. Et **un groupe choisi a
+  toujours sa pastille** : la rangée est aussi ce qui dit sur quoi la liste est
+  filtrée, et un filtre caché derrière « +3 » serait un filtre invisible.
 - **On choisit des membres comme un capitaine compose son équipe**, et avec
   les mêmes pièces, pas un sosie : `SelectionPanel` / `SelectionRow` sur le
   web, `Selection.tsx` dans l'app (rond qui se remplit de rouge, recherche

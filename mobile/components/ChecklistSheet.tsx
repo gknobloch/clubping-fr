@@ -70,6 +70,8 @@ export function ChecklistSheet({
   selected,
   emptyLabel,
   saveDisabled,
+  saveLabel,
+  searchLabel,
   onSave,
   onClose,
   testID = 'checklist-sheet',
@@ -82,6 +84,9 @@ export function ChecklistSheet({
   selected: readonly string[]
   emptyLabel: string
   saveDisabled?: boolean
+  saveLabel?: string
+  /** Le libellé de la recherche — « Rechercher un joueur » par défaut. */
+  searchLabel?: string
   /** `false` refuse l'enregistrement et garde la feuille ouverte. */
   onSave: (ids: string[]) => void | boolean | Promise<boolean>
   onClose: () => void
@@ -129,7 +134,12 @@ export function ChecklistSheet({
       </Text>
       {header}
       {searchable && (
-        <SelectionSearch testID={`${testID}-search`} value={query} onChangeText={setQuery} />
+        <SelectionSearch
+          testID={`${testID}-search`}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchLabel}
+        />
       )}
       <SelectionList>
         {options.length === 0 && <Text style={selection.empty}>{emptyLabel}</Text>}
@@ -150,6 +160,7 @@ export function ChecklistSheet({
         cancelTestID={`${testID}-cancel`}
         saveTestID={`${testID}-save`}
         saveDisabled={saveDisabled || busy}
+        saveLabel={saveLabel}
         onCancel={onClose}
         onSave={save}
       />

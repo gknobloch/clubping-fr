@@ -74,12 +74,15 @@ export function SelectionActions({
   onCancel,
   onSave,
   saveDisabled,
+  saveLabel = 'Enregistrer',
   cancelTestID,
   saveTestID,
 }: {
   onCancel: () => void
   onSave: () => void
   saveDisabled?: boolean
+  /** « Appliquer » pour un filtre, qui n'enregistre rien. */
+  saveLabel?: string
   cancelTestID?: string
   saveTestID?: string
 }) {
@@ -95,7 +98,7 @@ export function SelectionActions({
         disabled={saveDisabled}
         accessibilityState={{ disabled: !!saveDisabled }}
       >
-        <Text style={selection.saveTxt}>Enregistrer</Text>
+        <Text style={selection.saveTxt}>{saveLabel}</Text>
       </TouchableOpacity>
     </View>
   )

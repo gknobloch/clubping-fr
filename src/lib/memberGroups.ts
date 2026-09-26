@@ -143,3 +143,45 @@ export function withMemberGroups(
     }
   })
 }
+
+/**
+ * How much of the chip row the groups may take before the rest fold into
+ * « +N » (#602): about two lines of chips on a phone. Counted in characters,
+ * each chip paying {@link CHIP_OVERHEAD} more for its padding and gap, so the
+ * rule is the same arithmetic on the web and in the app rather than two
+ * layout measurements that would disagree. Room is left on the second line
+ * for « +N » and « Effacer ».
+ */
+export const INLINE_GROUP_BUDGET = 70
+const CHIP_OVERHEAD = 5
+
+/**
+ * Which groups get a chip of their own, and how many fold into « +N ».
+ *
+ * Alphabetical, as far as the budget goes — and a chosen group always has its
+ * chip, wherever it falls: the row is also how the list says what it is
+ * filtered on, and a filter hiding behind « +3 » would be one nobody can see.
+ * A club whose groups all fit shows them all, with no « +N » at all.
+ */
+export function inlineGroupChips(
+  groups: MemberGroup[],
+  selectedIds: readonly string[],
+  budget: number = INLINE_GROUP_BUDGET,
+): { inline: MemberGroup[]; hidden: number } {
+  const cost = (g: MemberGroup) => g.displayName.length + CHIP_OVERHEAD
+  if (groups.reduce((sum, g) => sum + cost(g), 0) <= budget) return { inline: groups, hidden: 0 }
+  // A prefix of the alphabet, not a packing: once one group does not fit, the
+  // shorter ones after it stay folded too, or « Entraîneurs » would show where
+  // « Compétiteurs Jeunes » is missing and the row would read as having gaps.
+  let used = 0
+  let full = false
+  const inline = groups.filter((g) => {
+    if (!full && used + cost(g) <= budget) {
+      used += cost(g)
+      return true
+    }
+    full = true
+    return selectedIds.includes(g.id)
+  })
+  return { inline, hidden: groups.length - inline.length }
+}

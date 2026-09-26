@@ -30,6 +30,7 @@ export function ChecklistDialog({
   emptyLabel,
   searchLabel = PLAYER_SEARCH_LABEL,
   saveDisabled,
+  saveLabel,
   onSave,
   onClose,
 }: {
@@ -41,6 +42,7 @@ export function ChecklistDialog({
   emptyLabel: string
   searchLabel?: string
   saveDisabled?: boolean
+  saveLabel?: string
   onSave: (ids: string[]) => void | boolean | Promise<boolean>
   onClose: () => void
 }) {
@@ -88,6 +90,7 @@ export function ChecklistDialog({
       onCancel={onClose}
       onSave={save}
       saveDisabled={saveDisabled || busy}
+      saveLabel={saveLabel}
     >
       {options.length === 0 && <p className="px-4 py-6 text-sm text-slate-500">{emptyLabel}</p>}
       <ul>

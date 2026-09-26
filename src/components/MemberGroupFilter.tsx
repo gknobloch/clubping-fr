@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { Toggle } from '@/components/Toggle'
-import { GROUP_MATCH_LABELS, type GroupMatch } from '@/lib/memberGroups'
+import { ChecklistDialog } from '@/components/ChecklistDialog'
+import { GROUP_MATCH_LABELS, inlineGroupChips, type GroupMatch } from '@/lib/memberGroups'
 import type { MemberGroup } from '@/types'
 
 /**
@@ -8,7 +10,9 @@ import type { MemberGroup } from '@/types'
  *
  * Chips rather than a multi-select: a club has a handful of groups, and a row
  * of named toggles says at a glance what the list is currently showing — a
- * closed dropdown does not. They wrap on a phone.
+ * closed dropdown does not. They wrap on a phone — up to about two lines:
+ * past that, the rest fold into « +N », which opens every group in the
+ * captain's picker (`inlineGroupChips` decides, the same way in the app).
  *
  * How several chosen groups combine is `GroupMatchToggle`, which sits with the
  * list's other switch rather than among the chips.
@@ -24,15 +28,17 @@ export function MemberGroupFilter({
   mode: GroupMatch
   onChange: (selected: string[], mode: GroupMatch) => void
 }) {
+  const [picking, setPicking] = useState(false)
   if (groups.length === 0) return null
   const chosen = groups.filter((g) => selected.includes(g.id)).map((g) => g.id)
+  const { inline, hidden } = inlineGroupChips(groups, chosen)
 
   const toggle = (id: string) =>
     onChange(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id], mode)
 
   return (
     <div role="group" aria-label="Filtrer par groupe" className="flex flex-wrap items-center gap-2">
-      {groups.map((g) => {
+      {inline.map((g) => {
         const on = chosen.includes(g.id)
         return (
           <button
@@ -50,6 +56,16 @@ export function MemberGroupFilter({
           </button>
         )
       })}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setPicking(true)}
+          aria-label={`${hidden} autre${hidden > 1 ? 's' : ''} groupe${hidden > 1 ? 's' : ''}`}
+          className="min-h-[44px] md:min-h-0 rounded-full border border-accent-300 bg-white px-3 py-1 text-sm font-medium text-accent-600 hover:bg-accent-50"
+        >
+          +{hidden}
+        </button>
+      )}
       {chosen.length > 0 && (
         <button
           type="button"
@@ -58,6 +74,19 @@ export function MemberGroupFilter({
         >
           Effacer
         </button>
+      )}
+      {picking && (
+        <ChecklistDialog
+          idPrefix="group-filter"
+          title="Groupes"
+          searchLabel="Rechercher un groupe"
+          saveLabel="Appliquer"
+          options={groups.map((g) => ({ id: g.id, label: g.displayName }))}
+          selected={chosen}
+          emptyLabel="Ce club n'a aucun groupe."
+          onSave={(ids) => onChange(ids, mode)}
+          onClose={() => setPicking(false)}
+        />
       )}
     </div>
   )

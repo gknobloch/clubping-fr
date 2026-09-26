@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { View, Text, TouchableOpacity, Switch, StyleSheet } from 'react-native'
+import { ChecklistSheet } from '@/components/ChecklistSheet'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
-import { GROUP_MATCH_LABELS, type GroupMatch } from '@shared/lib/memberGroups'
+import { GROUP_MATCH_LABELS, inlineGroupChips, type GroupMatch } from '@shared/lib/memberGroups'
 import type { MemberGroup } from '@shared/types'
 
 // ---------------------------------------------------------------------------
@@ -9,8 +11,9 @@ import type { MemberGroup } from '@shared/types'
 //
 // Des pastilles, comme sur le web, et qui passent à la ligne comme sur le web :
 // défilant de côté, la dernière se coupait au bord (« Compétiteurs S… ») et
-// rien ne disait qu'il en restait. Un club a une poignée de groupes ; les voir
-// tous vaut la ligne qu'ils coûtent.
+// rien ne disait qu'il en restait. Deux lignes au plus : au-delà, le reste se
+// replie en « +N », qui ouvre tous les groupes dans la feuille du capitaine.
+// `inlineGroupChips` en décide, de la même façon que sur le web.
 //
 // OU / ET n'est pas ici : c'est `GroupMatchSwitch`, rangé avec l'autre
 // interrupteur de la liste.
@@ -27,15 +30,17 @@ export function MemberGroupFilter({
   mode: GroupMatch
   onChange: (selected: string[], mode: GroupMatch) => void
 }) {
+  const [picking, setPicking] = useState(false)
   if (groups.length === 0) return null
   const chosen = groups.filter((g) => selected.includes(g.id)).map((g) => g.id)
+  const { inline, hidden } = inlineGroupChips(groups, chosen)
 
   const toggle = (id: string) =>
     onChange(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id], mode)
 
   return (
     <View style={s.chips} accessibilityLabel="Filtrer par groupe">
-      {groups.map((g) => {
+      {inline.map((g) => {
         const on = chosen.includes(g.id)
         return (
           <TouchableOpacity
@@ -51,6 +56,17 @@ export function MemberGroupFilter({
           </TouchableOpacity>
         )
       })}
+      {hidden > 0 && (
+        <TouchableOpacity
+          testID="group-filter-more"
+          style={[s.chip, s.more]}
+          onPress={() => setPicking(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`${hidden} autre${hidden > 1 ? 's' : ''} groupe${hidden > 1 ? 's' : ''}`}
+        >
+          <Text style={s.moreText}>+{hidden}</Text>
+        </TouchableOpacity>
+      )}
       {chosen.length > 0 && (
         <TouchableOpacity
           testID="group-filter-clear"
@@ -60,6 +76,20 @@ export function MemberGroupFilter({
         >
           <Text style={s.clearText}>Effacer</Text>
         </TouchableOpacity>
+      )}
+      {picking && (
+        <ChecklistSheet
+          testID="group-filter-sheet"
+          rowTestIDPrefix="group-pick-"
+          title="Groupes"
+          searchLabel="Rechercher un groupe"
+          saveLabel="Appliquer"
+          options={groups.map((g) => ({ id: g.id, label: g.displayName }))}
+          selected={chosen}
+          emptyLabel="Ce club n’a aucun groupe."
+          onSave={(ids) => onChange(ids, mode)}
+          onClose={() => setPicking(false)}
+        />
       )}
     </View>
   )
@@ -108,6 +138,8 @@ const s = StyleSheet.create({
   chipOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   chipText: { fontSize: 14, fontFamily: fonts.medium, color: colors.textSecondary },
   chipTextOn: { color: colors.accent, fontFamily: fonts.semiBold },
+  more: { borderColor: colors.accentSoftBorder },
+  moreText: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   clear: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
   clearText: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   // The same row as « Joueurs actifs uniquement » on the Joueurs screen.
