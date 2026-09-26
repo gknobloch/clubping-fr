@@ -226,9 +226,11 @@ test.describe('Club admin — reserving a competition to a group (#604)', () => 
     const seniors = card(page, 'Championnat par équipes')
     await seniors.getByLabel('Réservée au groupe').selectOption({ label: 'Entraîneurs' })
 
-    // Joris Szulc is on a roster playing that championship, and not a coach.
+    // Forty licensees the teams field are not coaches: the question counts them
+    // and names the first five rather than listing forty names.
     const dialog = page.getByRole('dialog')
-    await expect(dialog).toContainText('Joris Szulc')
+    await expect(dialog).toContainText('40 licenciés que vos équipes engagent déjà')
+    await expect(dialog).toContainText('et 35 autres')
     await expect(dialog).toContainText('Rien ne les retire')
     await dialog.getByRole('button', { name: 'Réserver' }).click()
     await expect(seniors.getByText('3 joueurs éligibles')).toBeVisible()
@@ -261,7 +263,8 @@ test.describe('Club admin — reserving a competition to a group (#604)', () => 
 
     // In-app navigation throughout: without the API the choice lives in
     // DataContext, and a reload would drop it.
-    await page.getByRole('link', { name: 'Club' }).first().click()
+    // Exact: « Club Ping », the brand link, would match too and lead home.
+    await page.getByRole('link', { name: 'Club', exact: true }).first().click()
     await card(page, 'Championnat par équipes').getByLabel('Réservée au groupe')
       .selectOption({ label: 'Entraîneurs' })
     await page.getByRole('dialog').getByRole('button', { name: 'Réserver' }).click()
