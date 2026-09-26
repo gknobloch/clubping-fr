@@ -91,24 +91,47 @@ describe('reading the club\'s groups', () => {
 })
 
 describe('managing them', () => {
-  it('creates a group and shows the API\'s refusal when the name is taken', async () => {
+  /** The rows of the editor: the captain's toggle buttons, by name. */
+  const rows = (dialog: HTMLElement) =>
+    within(dialog).getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed'))
+
+  it('creates a group with its members in one go', async () => {
+    auth.user = clubAdmin
+    data.addMemberGroup.mockResolvedValueOnce({
+      ok: true, group: { id: 'g-new', clubId: CLUB, displayName: 'Loisirs', memberIds: [] },
+    })
+    const user = userEvent.setup()
+    renderSection()
+
+    await user.click(screen.getByRole('button', { name: '+ Nouveau groupe' }))
+    const dialog = screen.getByRole('dialog', { name: /Nouveau groupe/ })
+    // Enregistrer waits for a name.
+    expect(within(dialog).getByRole('button', { name: 'Enregistrer' })).toBeDisabled()
+    await user.type(within(dialog).getByLabelText('Nom'), 'Loisirs')
+    await user.click(within(dialog).getByRole('button', { name: /Enzo Lotz/ }))
+    // Counted in the title, like the captain's « (2/4) ».
+    expect(within(dialog).getByRole('heading')).toHaveTextContent('Nouveau groupe (1)')
+    await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
+
+    expect(data.addMemberGroup).toHaveBeenCalledWith(CLUB, 'Loisirs')
+    expect(data.setMemberGroupMembers).toHaveBeenCalledWith(CLUB, 'g-new', ['p2'])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps the editor open on a name the club already uses, having written nothing', async () => {
     auth.user = clubAdmin
     data.addMemberGroup.mockResolvedValueOnce({ ok: false, message: 'Le club a déjà un groupe de ce nom.' })
     const user = userEvent.setup()
     renderSection()
 
     await user.click(screen.getByRole('button', { name: '+ Nouveau groupe' }))
-    const dialog = screen.getByRole('dialog')
+    const dialog = screen.getByRole('dialog', { name: /Nouveau groupe/ })
     await user.type(within(dialog).getByLabelText('Nom'), 'bureau')
-    await user.click(within(dialog).getByRole('button', { name: 'Créer' }))
+    await user.click(within(dialog).getByRole('button', { name: /Enzo Lotz/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
 
-    expect(data.addMemberGroup).toHaveBeenCalledWith(CLUB, 'bureau')
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Le club a déjà un groupe de ce nom.')
-
-    await user.clear(within(dialog).getByLabelText('Nom'))
-    await user.type(within(dialog).getByLabelText('Nom'), 'Loisirs')
-    await user.click(within(dialog).getByRole('button', { name: 'Créer' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(data.setMemberGroupMembers).not.toHaveBeenCalled()
   })
 
   it('files members from the whole club, non-licensees included', async () => {
@@ -116,13 +139,11 @@ describe('managing them', () => {
     const user = userEvent.setup()
     renderSection()
 
-    await user.click(screen.getAllByRole('button', { name: 'Membres' })[0])
-    const dialog = screen.getByRole('dialog', { name: 'Membres — Bureau' })
+    await user.click(screen.getAllByRole('button', { name: 'Modifier' })[0])
+    const dialog = screen.getByRole('dialog', { name: /Modifier le groupe/ })
     // The archived member is offered because they are still in the group.
-    // The captain's pattern: rows are toggle buttons, not checkboxes.
-    const rows = within(dialog).getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed'))
-    expect(rows).toHaveLength(4)
-    expect(rows.filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(3)
+    expect(rows(dialog)).toHaveLength(4)
+    expect(rows(dialog).filter((b) => b.getAttribute('aria-pressed') === 'true')).toHaveLength(3)
     expect(within(dialog).getByText('Non licencié')).toBeInTheDocument()
     expect(within(dialog).queryByText('Autre Club')).not.toBeInTheDocument()
 
@@ -130,15 +151,32 @@ describe('managing them', () => {
     await user.click(within(dialog).getByRole('button', { name: /Ancien Membre/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
 
+    // The name did not move, so only the members are written.
+    expect(data.renameMemberGroup).not.toHaveBeenCalled()
     expect(data.setMemberGroupMembers).toHaveBeenCalledWith(CLUB, 'g-bureau', ['ca', 'p1', 'p2'])
+  })
+
+  it('renames without touching the members when none moved', async () => {
+    auth.user = clubAdmin
+    const user = userEvent.setup()
+    renderSection()
+
+    await user.click(screen.getAllByRole('button', { name: 'Modifier' })[1])
+    const dialog = screen.getByRole('dialog', { name: /Modifier le groupe/ })
+    await user.clear(within(dialog).getByLabelText('Nom'))
+    await user.type(within(dialog).getByLabelText('Nom'), 'Cadets')
+    await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
+
+    expect(data.renameMemberGroup).toHaveBeenCalledWith(CLUB, 'g-jeunes', 'Cadets')
+    expect(data.setMemberGroupMembers).not.toHaveBeenCalled()
   })
 
   it('does not offer an archived member who is not already in the group', async () => {
     auth.user = clubAdmin
     const user = userEvent.setup()
     renderSection()
-    await user.click(screen.getAllByRole('button', { name: 'Membres' })[1])
-    const dialog = screen.getByRole('dialog', { name: 'Membres — Jeunes' })
+    await user.click(screen.getAllByRole('button', { name: 'Modifier' })[1])
+    const dialog = screen.getByRole('dialog', { name: /Modifier le groupe/ })
     expect(within(dialog).queryByText(/Ancien Membre/)).not.toBeInTheDocument()
   })
 

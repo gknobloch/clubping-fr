@@ -269,8 +269,9 @@ export default function ClubScreen() {
                 <GroupRow
                   key={g.id}
                   group={g}
-                  // Pushed, not a tab switch: the back chevron returns here.
-                  onOpen={() => router.push({ pathname: '/membres', params: { groupes: g.id } })}
+                  // Pushed on this tab's own stack, not a tab switch: the
+                  // chevron returns here, and Club stays lit.
+                  onOpen={() => router.push({ pathname: '/club/membres', params: { groupes: g.id } })}
                   onEdit={canManageGroups ? () => setEditing({ group: g }) : undefined}
                 />
               ))

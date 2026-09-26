@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ModalShell } from '@/components/ModalShell'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
+import { SelectionPanel, SelectionRow, SelectionSectionLabel } from '@/components/SelectionPanel'
 import { AVAILABILITY_COLORS, AVAILABILITY_LABELS } from '@/components/availabilityControls'
 import { sortByName } from '@/lib/sortByName'
 import {
@@ -101,35 +100,16 @@ export function SelectionSheet({
     const locked = lockedTeam !== undefined
     const status = availabilityOf(player.id)
     return (
-      <li key={player.id}>
-        <button
-          type="button"
-          disabled={locked}
-          onClick={() => toggle(player.id)}
-          aria-pressed={picked}
-          className="flex min-h-11 w-full items-center gap-3 border-b border-slate-100 px-4 py-2.5 text-left hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-white"
-        >
-          <span
-            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
-              picked
-                ? 'border-accent-600 bg-accent-600 text-white'
-                : 'border-slate-300 text-transparent'
-            }`}
-            aria-hidden
-          >
-            ✓
-          </span>
-          <span className="flex min-w-0 flex-1 items-center gap-2">
-            <span
-              className={`min-w-0 truncate text-sm ${
-                locked ? 'text-slate-400' : picked ? 'font-semibold text-slate-900' : 'text-slate-800'
-              }`}
-            >
-              {player.firstName} {player.lastName}
-            </span>
-            {unlicensed?.has(player.id) && <LicenceBadge />}
-          </span>
-          {locked ? (
+      <SelectionRow
+        key={player.id}
+        picked={picked}
+        disabled={locked}
+        dimmed={locked}
+        onToggle={() => toggle(player.id)}
+        label={`${player.firstName} ${player.lastName}`}
+        badge={unlicensed?.has(player.id) && <LicenceBadge />}
+        trailing={
+          locked ? (
             <span className="shrink-0 text-xs text-slate-500">Équipe {lockedTeam}</span>
           ) : status ? (
             <span
@@ -140,19 +120,18 @@ export function SelectionSheet({
             </span>
           ) : (
             <span className="shrink-0 text-xs text-slate-400">—</span>
-          )}
-        </button>
-      </li>
+          )
+        }
+      />
     )
   }
 
   return (
-    <ModalShell onClose={onClose} closeOnBackdrop labelledBy="selection-title" z={40}>
-      <div className="rounded-t-2xl bg-white sm:rounded-2xl">
-        <div className="border-b border-slate-100 px-4 pt-4 pb-3">
-          <h2 id="selection-title" className="font-display text-base font-bold text-slate-800">
-            Sélection — {teamLabel} ({selection.length}/{playersPerGame})
-          </h2>
+    <SelectionPanel
+      titleId="selection-title"
+      title={<>Sélection — {teamLabel} ({selection.length}/{playersPerGame})</>}
+      header={
+        <>
           {pickedUnlicensed.length > 0 && (
             <p role="alert" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               {pickedUnlicensed.length === 1
@@ -167,70 +146,41 @@ export function SelectionSheet({
               autre.
             </p>
           )}
-        </div>
+        </>
+      }
+      search={searchable
+        ? { id: 'selection-search', label: PLAYER_SEARCH_LABEL, value: query, onChange: setQuery }
+        : undefined}
+      onCancel={onClose}
+      onSave={() => {
+        onSave(selection)
+        onClose()
+      }}
+      footer={full && (
+        <p className="px-4 pb-4 text-center text-xs text-slate-500">Composition complète.</p>
+      )}
+    >
+      {/* Without a query the header shows even on an empty roster, as it always
+          has; while filtering an empty section is just noise. */}
+      {(shownRoster.length > 0 || query.trim() === '') && (
+        <>
+          <SelectionSectionLabel first>Cette équipe</SelectionSectionLabel>
+          <ul>{shownRoster.map(row)}</ul>
+        </>
+      )}
 
-        {searchable && (
-          <div className="border-b border-slate-100 px-4 py-3">
-            <label htmlFor="selection-search" className="sr-only">
-              {PLAYER_SEARCH_LABEL}
-            </label>
-            <input
-              id="selection-search"
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={PLAYER_SEARCH_LABEL}
-              autoComplete="off"
-              className="min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-            />
-          </div>
-        )}
+      {shownOthers.length > 0 && (
+        <>
+          <SelectionSectionLabel>Autres joueurs</SelectionSectionLabel>
+          <ul>{shownOthers.map(row)}</ul>
+        </>
+      )}
 
-        {/* Without a query the header shows even on an empty roster, as it always
-            has; while filtering an empty section is just noise. */}
-        {(shownRoster.length > 0 || query.trim() === '') && (
-          <>
-            <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Cette équipe
-            </p>
-            <ul>{shownRoster.map(row)}</ul>
-          </>
-        )}
-
-        {shownOthers.length > 0 && (
-          <>
-            <p className="px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Autres joueurs
-            </p>
-            <ul>{shownOthers.map(row)}</ul>
-          </>
-        )}
-
-        {noMatch && (
-          <p className="px-4 py-8 text-center text-sm text-slate-500">
-            Aucun joueur ne correspond à « {query.trim()} ».
-          </p>
-        )}
-
-        <div className="flex gap-2 border-t border-slate-100 p-4">
-          <button type="button" onClick={onClose} className={`flex-1 ${NEUTRAL_BUTTON_CLASS}`}>
-            Annuler
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onSave(selection)
-              onClose()
-            }}
-            className={`flex-1 ${PRIMARY_BUTTON_CLASS}`}
-          >
-            Enregistrer
-          </button>
-        </div>
-        {full && (
-          <p className="px-4 pb-4 text-center text-xs text-slate-500">Composition complète.</p>
-        )}
-      </div>
-    </ModalShell>
+      {noMatch && (
+        <p className="px-4 py-8 text-center text-sm text-slate-500">
+          Aucun joueur ne correspond à « {query.trim()} ».
+        </p>
+      )}
+    </SelectionPanel>
   )
 }

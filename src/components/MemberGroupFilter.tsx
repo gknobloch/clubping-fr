@@ -1,4 +1,5 @@
 import { TEXT_TARGET_CLASS } from '@/components/Button'
+import { Toggle } from '@/components/Toggle'
 import { GROUP_MATCH_LABELS, type GroupMatch } from '@/lib/memberGroups'
 import type { MemberGroup } from '@/types'
 
@@ -9,8 +10,8 @@ import type { MemberGroup } from '@/types'
  * of named toggles says at a glance what the list is currently showing — a
  * closed dropdown does not. They wrap on a phone.
  *
- * How several chosen groups combine only means something once there are
- * several, so the choice appears at the second chip and not before.
+ * How several chosen groups combine is `GroupMatchToggle`, which sits with the
+ * list's other switch rather than among the chips.
  */
 export function MemberGroupFilter({
   groups,
@@ -31,7 +32,6 @@ export function MemberGroupFilter({
 
   return (
     <div role="group" aria-label="Filtrer par groupe" className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-slate-500">Groupes</span>
       {groups.map((g) => {
         const on = chosen.includes(g.id)
         return (
@@ -50,28 +50,6 @@ export function MemberGroupFilter({
           </button>
         )
       })}
-      {chosen.length >= 2 && (
-        <div
-          role="radiogroup"
-          aria-label="Membres de"
-          className="inline-flex overflow-hidden rounded-lg border border-accent-600 text-sm"
-        >
-          {(['any', 'all'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="radio"
-              aria-checked={mode === m}
-              onClick={() => onChange(chosen, m)}
-              className={`min-h-[44px] md:min-h-0 px-3 py-1 font-medium ${
-                mode === m ? 'bg-accent-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {GROUP_MATCH_LABELS[m]}
-            </button>
-          ))}
-        </div>
-      )}
       {chosen.length > 0 && (
         <button
           type="button"
@@ -82,5 +60,33 @@ export function MemberGroupFilter({
         </button>
       )}
     </div>
+  )
+}
+
+/**
+ * OU or ET, as a switch like « Joueurs actifs uniquement » beside it (#602):
+ * off is « Au moins un groupe », on is « Tous les groupes », and the label
+ * says which one is in force. Only once two groups are chosen — before that the
+ * two answers are the same, and a switch that changes nothing is noise.
+ */
+export function GroupMatchToggle({
+  groups,
+  selected,
+  mode,
+  onChange,
+}: {
+  groups: MemberGroup[]
+  selected: readonly string[]
+  mode: GroupMatch
+  onChange: (selected: string[], mode: GroupMatch) => void
+}) {
+  const chosen = groups.filter((g) => selected.includes(g.id)).map((g) => g.id)
+  if (chosen.length < 2) return null
+  return (
+    <Toggle
+      checked={mode === 'all'}
+      onChange={(all) => onChange(chosen, all ? 'all' : 'any')}
+      label={GROUP_MATCH_LABELS[mode]}
+    />
   )
 }

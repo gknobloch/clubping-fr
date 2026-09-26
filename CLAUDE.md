@@ -721,18 +721,35 @@ invisible dans le diff comme dans la revue.
   choisi qui n'existe plus est ignoré plutôt que de vider la liste en ET pour
   une raison invisible.
 - Les deux modes se disent comme une phrase sur le membre — « Au moins un
-  groupe » / « Tous les groupes » — et non ET / OU ; le choix n'apparaît qu'à
-  la deuxième pastille, avant quoi les deux réponses sont les mêmes. En rouge,
-  comme les pastilles : c'est un réglage du même filtre, pas une autre chose.
-- **On choisit des membres comme un capitaine choisit ses joueurs** : un rond
-  qui se remplit de rouge, le nom qui passe en gras (`SelectionSheet` sur le
-  web, `CaptainSelectionSheet` dans l'app). Une case carrée à côté d'un rond,
-  dans la même app, dit deux gestes là où il n'y en a qu'un.
-- **Un groupe ouvert depuis l'app doit avoir un retour.** Pousser `/joueurs`
-  changeait d'onglet, et un onglet est une racine : la liste filtrée
-  s'affichait sans chevron vers la fiche ou le Club d'où l'on venait. Un
-  groupe s'ouvre donc sur `/membres`, la liste des Joueurs poussée sur la pile
-  `(detail)` — le même écran, pas une copie. Seule exception : la fiche en
+  groupe » / « Tous les groupes » — et non ET / OU, **en interrupteur** comme
+  « Joueurs actifs uniquement » : éteint, « au moins un » ; allumé, « tous » ;
+  et le libellé dit celui qui est en vigueur. Il n'apparaît qu'à la deuxième
+  pastille, avant quoi les deux réponses sont les mêmes.
+- **Les contrôles de la liste Joueurs sont dans le même ordre partout** — web
+  bureau, web téléphone, app téléphone, app tablette : la recherche
+  (`PLAYER_SEARCH_LABEL`, le libellé du capitaine), les pastilles de groupes
+  (qui passent à la ligne, jamais coupées au bord), les deux interrupteurs,
+  puis le compte « N joueurs », **toujours** affiché : c'est ainsi qu'on lit
+  ce que les contrôles au-dessus ont fait, et une ligne qui va et vient
+  déplace la liste sous le pouce.
+- **On choisit des membres comme un capitaine compose son équipe**, et avec
+  les mêmes pièces, pas un sosie : `SelectionPanel` / `SelectionRow` sur le
+  web, `Selection.tsx` dans l'app (rond qui se remplit de rouge, recherche
+  au-delà de `PLAYER_SEARCH_THRESHOLD`, titre qui compte, « Annuler /
+  Enregistrer » côte à côte en bas). `SelectionSheet` et
+  `CaptainSelectionSheet` en sont bâtis ; `ChecklistDialog` et
+  `ChecklistSheet` aussi, et l'éditeur de groupe n'est que ce dernier avec le
+  nom du groupe en tête. Créer, renommer et remplir un groupe se font donc
+  dans **une seule** feuille, sur les deux plateformes : un groupe se crée avec
+  ses gens. La recherche passe par `matchesSearch`, la règle même du
+  capitaine, étendue à un libellé quelconque.
+- **Un groupe ouvert depuis l'app doit avoir un retour, qui dit où il mène.**
+  Pousser `/joueurs` changeait d'onglet, et un onglet est une racine : la
+  liste filtrée s'affichait sans chevron. Depuis l'onglet Club, un groupe
+  s'ouvre donc sur `/club/membres`, poussé sur la pile du Club (l'en-tête dit
+  « Club », l'onglet Club reste allumé) ; depuis une fiche poussée, sur
+  `(detail)/membres`, poussé sur la même pile que la fiche. C'est chaque fois
+  l'écran des Joueurs lui-même, pas une copie. Seule exception : la fiche en
   volet, à côté de la liste, qui filtre la liste **en place** (`setParams`) et
   n'a rien à défaire.
 

@@ -87,21 +87,25 @@ describe('PlayersPage — filtering by group (#602)', () => {
     const user = renderAt()
     await user.click(screen.getByRole('button', { name: 'Bureau' }))
     expect(listed()).toEqual(['Both', 'Bureau'])
-    expect(screen.getByText('2 résultats')).toBeInTheDocument()
+    expect(screen.getByText('2 joueurs')).toBeInTheDocument()
     expect(search).toBe('?groupes=g-bureau')
   })
 
   it('combines two groups in OU by default, and in ET on request', async () => {
     const user = renderAt()
-    // The choice only appears once it means something.
+    // The switch only appears once it means something.
     await user.click(screen.getByRole('button', { name: 'Bureau' }))
-    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Au moins un groupe' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Jeunes' }))
 
-    expect(screen.getByRole('radio', { name: 'Au moins un groupe' })).toBeChecked()
+    // Off, and saying what off means.
+    const mode = screen.getByRole('checkbox', { name: 'Au moins un groupe' })
+    expect(mode).not.toBeChecked()
     expect(listed()).toEqual(['Both', 'Bureau', 'Jeune'])
 
-    await user.click(screen.getByRole('radio', { name: 'Tous les groupes' }))
+    await user.click(mode)
+    // On, and the label follows.
+    expect(screen.getByRole('checkbox', { name: 'Tous les groupes' })).toBeChecked()
     expect(listed()).toEqual(['Both'])
     expect(search).toBe('?groupes=g-bureau%2Cg-jeunes&mode=tous')
   })
@@ -118,7 +122,7 @@ describe('PlayersPage — filtering by group (#602)', () => {
 
   it('combines with the search box', async () => {
     const user = renderAt('/joueurs?groupes=g-bureau')
-    await user.type(screen.getByPlaceholderText('Rechercher par nom…'), 'anna')
+    await user.type(screen.getByPlaceholderText('Rechercher un joueur'), 'anna')
     expect(listed()).toEqual(['Bureau'])
   })
 
@@ -129,6 +133,7 @@ describe('PlayersPage — filtering by group (#602)', () => {
     renderAt('/joueurs?groupes=g-far')
     const filter = screen.getByRole('group', { name: 'Filtrer par groupe' })
     expect(within(filter).getAllByRole('button').map((b) => b.textContent)).toEqual(['Arbitres', 'Effacer'])
+    expect(screen.getByText('1 joueur')).toBeInTheDocument()
     expect(listed()).toEqual(['Ailleurs'])
   })
 

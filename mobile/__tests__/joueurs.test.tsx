@@ -201,7 +201,7 @@ describe('Joueurs — la fiche à côté de la liste (#466)', () => {
     render(<JoueursScreen />, { metrics: TABLET })
     fireEvent.press(screen.getByTestId('player-row-p1'))
 
-    fireEvent.changeText(screen.getByPlaceholderText('Rechercher…'), 'ancien')
+    fireEvent.changeText(screen.getByPlaceholderText('Rechercher un joueur'), 'ancien')
 
     // The list has narrowed past the selected licencié…
     expect(screen.queryByTestId('player-row-p1')).toBeNull()

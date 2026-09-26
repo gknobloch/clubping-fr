@@ -316,8 +316,9 @@ export function PlayerDetail({
       {editingGroups && (
         <ChecklistSheet
           testID="groups-sheet"
-          title="Groupes"
-          subtitle={`${player.firstName} ${player.lastName}`}
+          // Named like the captain's « Sélection — Rixheim PPA 5 »: who is
+          // being filed, then the count.
+          title={`Groupes — ${player.firstName} ${player.lastName}`}
           options={clubGroups.map((g) => ({ id: g.id, label: g.displayName }))}
           selected={memberOf.map((g) => g.id)}
           emptyLabel="Ce club n’a aucun groupe."

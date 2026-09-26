@@ -2,11 +2,10 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { ModalShell } from '@/components/ModalShell'
 import { RowActions } from '@/components/RowActions'
 import { ChecklistDialog, type ChecklistOption } from '@/components/ChecklistDialog'
 import { useConfirm } from '@/components/useConfirm'
-import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { clubMemberGroups, mayManageMemberGroups, type MemberGroupResult } from '@/lib/memberGroups'
 import { sortByName } from '@/lib/sortByName'
 import type { MemberGroup, User } from '@/types'
@@ -38,8 +37,8 @@ export function ClubMemberGroups({
     users, memberGroups, addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
-  const [naming, setNaming] = useState<{ group?: MemberGroup } | null>(null)
-  const [filing, setFiling] = useState<MemberGroup | null>(null)
+  // `{}` is a new group, `{ group }` an existing one, null nothing open.
+  const [editing, setEditing] = useState<{ group?: MemberGroup } | null>(null)
 
   const canManage = mayManageMemberGroups(user, clubId)
   const groups = clubMemberGroups(memberGroups, clubId)
@@ -90,7 +89,7 @@ export function ClubMemberGroups({
         {canManage && (
           <button
             type="button"
-            onClick={() => setNaming({})}
+            onClick={() => setEditing({})}
             className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
           >
             + Nouveau groupe
@@ -126,8 +125,7 @@ export function ClubMemberGroups({
                 <RowActions
                   label={`Actions — ${g.displayName}`}
                   actions={[
-                    { label: 'Membres', onClick: () => setFiling(g) },
-                    { label: 'Renommer', onClick: () => setNaming({ group: g }) },
+                    { label: 'Modifier', onClick: () => setEditing({ group: g }) },
                     { label: 'Supprimer', tone: 'danger', onClick: () => handleDelete(g) },
                   ]}
                 />
@@ -137,26 +135,15 @@ export function ClubMemberGroups({
         </ul>
       )}
 
-      {naming && (
-        <GroupNameDialog
-          idPrefix={`${idPrefix}-group-name`}
-          group={naming.group}
-          onClose={() => setNaming(null)}
-          onSubmit={(name) => (naming.group
-            ? renameMemberGroup(clubId, naming.group.id, name)
-            : addMemberGroup(clubId, name))}
-        />
-      )}
-
-      {filing && (
-        <ChecklistDialog
-          idPrefix={`${idPrefix}-group-members`}
-          title={`Membres — ${filing.displayName}`}
-          options={memberOptions(clubMembers, filing.memberIds)}
-          selected={filing.memberIds}
-          emptyLabel="Ce club n'a encore aucun membre."
-          onSave={(ids) => setMemberGroupMembers(clubId, filing.id, ids)}
-          onClose={() => setFiling(null)}
+      {editing && (
+        <MemberGroupEditor
+          idPrefix={`${idPrefix}-group-editor`}
+          group={editing.group}
+          options={memberOptions(clubMembers, editing.group?.memberIds ?? [])}
+          onCreate={(name) => addMemberGroup(clubId, name)}
+          onRename={(groupId, name) => renameMemberGroup(clubId, groupId, name)}
+          onSetMembers={(groupId, ids) => setMemberGroupMembers(clubId, groupId, ids)}
+          onClose={() => setEditing(null)}
         />
       )}
     </section>
@@ -177,71 +164,79 @@ function memberOptions(members: User[], current: string[]): ChecklistOption[] {
     }))
 }
 
-/** Create or rename — one field, and the API's refusal shown under it. */
-function GroupNameDialog({
+/**
+ * Create a group or change one — its name and its members in one place, as in
+ * the app: a group is made *with* its people, and a name alone followed by a
+ * second dialog to fill it would be two steps where one does.
+ *
+ * The name is written first, since it is the one thing the API may refuse (a
+ * name the club already uses); a refusal keeps the dialog open having written
+ * nothing else.
+ */
+function MemberGroupEditor({
   idPrefix,
   group,
-  onSubmit,
+  options,
+  onCreate,
+  onRename,
+  onSetMembers,
   onClose,
 }: {
   idPrefix: string
   group?: MemberGroup
-  onSubmit: (name: string) => Promise<MemberGroupResult>
+  options: ChecklistOption[]
+  onCreate: (name: string) => Promise<MemberGroupResult>
+  onRename: (groupId: string, name: string) => Promise<MemberGroupResult>
+  onSetMembers: (groupId: string, memberIds: string[]) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(group?.displayName ?? '')
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
 
-  const submit = async () => {
-    setBusy(true)
+  const save = async (ids: string[]) => {
     setError(null)
-    const result = await onSubmit(name)
-    setBusy(false)
-    if (result.ok) onClose()
-    else setError(result.message)
+    let groupId = group?.id
+    if (!group) {
+      const result = await onCreate(name)
+      if (!result.ok) { setError(result.message); return false }
+      groupId = result.group.id
+    } else if (name.trim() !== group.displayName) {
+      const result = await onRename(group.id, name)
+      if (!result.ok) { setError(result.message); return false }
+    }
+    const before = group?.memberIds ?? []
+    const changed = ids.length !== before.length || ids.some((id) => !before.includes(id))
+    if (groupId && changed) onSetMembers(groupId, ids)
+    return true
   }
 
   return (
-    <ModalShell onClose={onClose} labelledBy={`${idPrefix}-title`}>
-      <form
-        className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg"
-        onSubmit={(e) => {
-          e.preventDefault()
-          submit()
-        }}
-      >
-        <h2 id={`${idPrefix}-title`} className="font-display text-lg font-semibold text-slate-800">
-          {group ? 'Renommer le groupe' : 'Nouveau groupe'}
-        </h2>
-        <label htmlFor={`${idPrefix}-input`} className="mt-4 block text-sm font-medium text-slate-700">
-          Nom
-        </label>
-        <input
-          id={`${idPrefix}-input`}
-          type="text"
-          value={name}
-          maxLength={60}
-          placeholder="Bureau, Jeunes, Loisirs…"
-          onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-        />
-        {error && (
-          <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>
-        )}
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={NEUTRAL_BUTTON_CLASS}>
-            Annuler
-          </button>
-          <button
-            type="submit"
-            disabled={busy || !name.trim()}
-            className={`${PRIMARY_BUTTON_CLASS} disabled:opacity-50`}
-          >
-            {group ? 'Renommer' : 'Créer'}
-          </button>
+    <ChecklistDialog
+      idPrefix={idPrefix}
+      title={group ? 'Modifier le groupe' : 'Nouveau groupe'}
+      header={
+        <div className="mt-3">
+          <label htmlFor={`${idPrefix}-name`} className="block text-sm font-medium text-slate-700">
+            Nom
+          </label>
+          <input
+            id={`${idPrefix}-name`}
+            type="text"
+            value={name}
+            maxLength={60}
+            placeholder="Bureau, Jeunes, Loisirs…"
+            onChange={(e) => setName(e.target.value)}
+            className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+          />
+          {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
         </div>
-      </form>
-    </ModalShell>
+      }
+      options={options}
+      selected={group?.memberIds ?? []}
+      emptyLabel="Ce club n'a encore aucun membre."
+      saveDisabled={!name.trim()}
+      onSave={save}
+      onClose={onClose}
+    />
   )
 }

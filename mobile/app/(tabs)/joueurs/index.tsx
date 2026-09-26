@@ -27,7 +27,8 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
-import { MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { GroupMatchSwitch, MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { PLAYER_SEARCH_LABEL } from '@shared/lib/playerSearch'
 import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@shared/lib/memberGroups'
 
 const STATUS_LABELS = {
@@ -95,7 +96,6 @@ export default function JoueursScreen() {
     : user?.clubId
   const filterGroups = clubMemberGroups(memberGroups, groupClubId)
   const inGroups = memberGroupFilter(filterGroups, selectedGroupIds, groupMatch)
-  const groupFilterActive = filterGroups.some((g) => selectedGroupIds.includes(g.id))
 
   const filtered = roster.filter((p) => {
     const q = query.toLowerCase()
@@ -135,10 +135,12 @@ export default function JoueursScreen() {
 
   const list = (
     <>
+      {/* The list's controls, in the web's order (#602): search, the club's
+          groups, the two switches, and how many that leaves. */}
       <View style={[styles.searchBar, contentWidth()]}>
         <TextInput
           style={styles.input}
-          placeholder="Rechercher…"
+          placeholder={PLAYER_SEARCH_LABEL}
           placeholderTextColor={colors.textSecondary}
           value={query}
           onChangeText={setQuery}
@@ -150,13 +152,12 @@ export default function JoueursScreen() {
           mode={groupMatch}
           onChange={setGroupFilter}
         />
-        {/* A narrowed list says so — the more so when it is empty, which would
-            otherwise read as a club with nobody in it. */}
-        {groupFilterActive && (
-          <Text style={styles.resultCount} testID="group-filter-count">
-            {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
-          </Text>
-        )}
+        <GroupMatchSwitch
+          groups={filterGroups}
+          selected={selectedGroupIds}
+          mode={groupMatch}
+          onChange={setGroupFilter}
+        />
         {canSeeArchived && (
           <View style={styles.filterRow}>
             <Switch
@@ -168,6 +169,12 @@ export default function JoueursScreen() {
             <Text style={styles.filterLabel}>{ACTIVE_ONLY_LABEL}</Text>
           </View>
         )}
+        {/* Always said, as on the web: it is how a member reads what the
+            controls above have done — the more so when the list is empty,
+            which would otherwise read as a club with nobody in it. */}
+        <Text style={styles.resultCount} testID="players-count">
+          {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
+        </Text>
       </View>
       <FlatList
         ref={listRef}

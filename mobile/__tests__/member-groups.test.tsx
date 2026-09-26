@@ -91,8 +91,10 @@ const listed = () =>
   PLAYERS.filter((p) => screen.queryByTestId(`player-row-${p.id}`)).map((p) => p.lastName)
 
 describe('Joueurs — filtrer par groupe', () => {
-  it('offre les groupes du club, dans l’ordre alphabétique', () => {
+  it('offre les groupes du club, dans l’ordre alphabétique, et compte toujours', () => {
     render(<JoueursScreen />)
+    expect(screen.getByTestId('players-count')).toHaveTextContent('4 joueurs')
+    expect(screen.getByPlaceholderText('Rechercher un joueur')).toBeTruthy()
     expect(screen.getByTestId('group-chip-g-bureau')).toBeTruthy()
     expect(screen.getByTestId('group-chip-g-jeunes')).toBeTruthy()
     expect(listed()).toEqual(['Bureau', 'Both', 'Jeune', 'Aucun'])
@@ -102,20 +104,24 @@ describe('Joueurs — filtrer par groupe', () => {
     render(<JoueursScreen />)
     fireEvent.press(screen.getByTestId('group-chip-g-bureau'))
     expect(listed()).toEqual(['Bureau', 'Both'])
-    expect(screen.getByTestId('group-filter-count')).toHaveTextContent('2 joueurs')
+    expect(screen.getByTestId('players-count')).toHaveTextContent('2 joueurs')
   })
 
   it('combine deux groupes en OU, puis en ET à la demande', () => {
     render(<JoueursScreen />)
     fireEvent.press(screen.getByTestId('group-chip-g-bureau'))
-    // Le choix n'apparaît qu'une fois qu'il veut dire quelque chose.
-    expect(screen.queryByTestId('group-mode-all')).toBeNull()
+    // L'interrupteur n'apparaît qu'une fois qu'il veut dire quelque chose.
+    expect(screen.queryByTestId('group-match-switch')).toBeNull()
     fireEvent.press(screen.getByTestId('group-chip-g-jeunes'))
+    // Éteint, et le libellé dit ce qu'éteint veut dire.
+    expect(screen.getByTestId('group-match-switch').props.value).toBe(false)
+    expect(screen.getByText('Au moins un groupe')).toBeTruthy()
     expect(listed()).toEqual(['Bureau', 'Both', 'Jeune'])
 
-    fireEvent.press(screen.getByTestId('group-mode-all'))
+    fireEvent(screen.getByTestId('group-match-switch'), 'valueChange', true)
+    expect(screen.getByText('Tous les groupes')).toBeTruthy()
     expect(listed()).toEqual(['Both'])
-    expect(screen.getByTestId('group-filter-count')).toHaveTextContent('1 joueur')
+    expect(screen.getByTestId('players-count')).toHaveTextContent('1 joueur')
   })
 
   it('s’ouvre déjà filtré depuis l’onglet Club, et s’efface', () => {
@@ -189,7 +195,8 @@ describe('l’onglet Club — les groupes', () => {
     expect(within(screen.getByTestId('club-groups')).getByText('3 membres')).toBeTruthy()
 
     fireEvent.press(screen.getByTestId('club-group-g-bureau'))
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/membres', params: { groupes: 'g-bureau' } })
+    // Sur la pile du Club : le retour y ramène, et l'onglet Club reste allumé.
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/club/membres', params: { groupes: 'g-bureau' } })
   })
 
   it('ne donne à un joueur aucun moyen de les changer', () => {
@@ -209,10 +216,14 @@ describe('l’onglet Club — les groupes', () => {
     render(<ClubScreen />)
 
     fireEvent.press(screen.getByTestId('club-group-new'))
+    // La feuille du capitaine : compte dans le titre, Enregistrer en bas —
+    // qui attend un nom.
+    expect(screen.getByTestId('group-edit-save').props.accessibilityState).toMatchObject({ disabled: true })
     fireEvent.changeText(screen.getByTestId('group-edit-name'), 'Loisirs')
     // Les non-licenciés sont des membres aussi.
     fireEvent.press(screen.getByTestId('group-member-ca'))
     fireEvent.press(screen.getByTestId('group-member-p4'))
+    expect(screen.getByTestId('group-edit-title')).toHaveTextContent('Nouveau groupe (2)')
     await act(async () => { fireEvent.press(screen.getByTestId('group-edit-save')) })
 
     expect(fns.addMemberGroup).toHaveBeenCalledWith('c1', 'Loisirs')
@@ -230,6 +241,8 @@ describe('l’onglet Club — les groupes', () => {
     await act(async () => { fireEvent.press(screen.getByTestId('group-edit-save')) })
 
     expect(screen.getByText('Le club a déjà un groupe de ce nom.')).toBeTruthy()
+    // La feuille reste ouverte.
+    expect(screen.getByTestId('group-edit-name')).toBeTruthy()
     expect(fns.setMemberGroupMembers).not.toHaveBeenCalled()
   })
 

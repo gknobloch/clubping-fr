@@ -27,7 +27,7 @@ test.describe('Club admin — Joueurs list', () => {
     await dialog.getByLabel('Statut').selectOption('archived')
     await dialog.getByRole('button', { name: 'Enregistrer' }).click()
 
-    await page.getByPlaceholder(/Rechercher par nom/i).fill('Archivedplayer')
+    await page.getByPlaceholder('Rechercher un joueur').fill('Archivedplayer')
     await expect(page.getByText('Test Archivedplayer')).toHaveCount(0)
 
     await page.getByRole('checkbox', { name: ACTIVE_ONLY }).uncheck()
@@ -66,7 +66,7 @@ test.describe('Club admin — Joueurs list', () => {
     await create.getByLabel('Nom', { exact: true }).fill('Adresse')
     await create.getByRole('button', { name: 'Enregistrer' }).click()
 
-    await page.getByPlaceholder(/Rechercher par nom/i).fill('Adresse')
+    await page.getByPlaceholder('Rechercher un joueur').fill('Adresse')
     const added = page.getByRole('row', { name: /Sans Adresse/ })
     await expect(added).toBeVisible()
     await expect(added).not.toContainText('@')

@@ -286,9 +286,10 @@ export function PlayerDetailPage() {
 
       {editingGroups && (
         <ChecklistDialog
-          idPrefix="player-groups"
-          title="Groupes"
-          subtitle={`${player.firstName} ${player.lastName}`}
+          idPrefix="player-groups-editor"
+          // Named like the captain's « Sélection — Rixheim PPA 5 »: who is
+          // being filed, then the count.
+          title={`Groupes — ${player.firstName} ${player.lastName}`}
           options={clubGroups.map((g) => ({ id: g.id, label: g.displayName }))}
           selected={memberOf.map((g) => g.id)}
           emptyLabel="Ce club n'a aucun groupe."

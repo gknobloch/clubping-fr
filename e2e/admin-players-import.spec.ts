@@ -73,7 +73,7 @@ test.describe('Club admin — Joueurs FFTT import', () => {
     // Through the app's own link, not a reload: the dev server holds this
     // creation in memory only.
     await page.getByRole('navigation').getByRole('link', { name: 'Joueurs' }).first().click()
-    await page.getByPlaceholder(/Rechercher par nom/i).fill('Pont-Martin')
+    await page.getByPlaceholder('Rechercher un joueur').fill('Pont-Martin')
     await expect(page.getByRole('cell', { name: 'Alain Du Pont-Martin' })).toBeVisible()
   })
 
