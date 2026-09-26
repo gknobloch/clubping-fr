@@ -56,7 +56,7 @@ const games: Game[] = [
 function base() {
   return {
     players: [player], clubs: [club], teams: [team1, team2], phases: [phase], seasons: [season],
-    playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
+    playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     matchDays, games, gameSelections: [] as GameSelection[],
   }
 }

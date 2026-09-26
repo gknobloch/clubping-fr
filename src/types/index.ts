@@ -279,6 +279,25 @@ export interface PlayerSeasonLicence {
   playerId: string
 }
 
+/**
+ * One of a club's own groups of members (#602) — « Bureau », « Jeunes »,
+ * « Entraîneurs ».
+ *
+ * Named `MemberGroup` because `Group` is already the poule of a division. A
+ * group belongs to one club and to no season: the Bureau of September is still
+ * the Bureau in January.
+ *
+ * `memberIds` is the membership, carried the way a team carries its roster.
+ * A member may sit in several groups; `src/lib/memberGroups.ts` answers every
+ * question about who is in what.
+ */
+export interface MemberGroup {
+  id: string
+  clubId: string
+  displayName: string
+  memberIds: string[]
+}
+
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
 
 export type AvailabilityOverriddenBy = 'captain' | 'club_admin'
@@ -352,6 +371,12 @@ export interface DataState {
   playerPhasePoints: PlayerPhasePoints[]
   playerSeasonCategories: PlayerSeasonCategory[]
   playerSeasonLicences: PlayerSeasonLicence[]
+  /**
+   * The viewer's own club's groups (#602) — every club's for a general admin.
+   * Unlike most of this payload it is scoped: a club's internal sorting of its
+   * people is nobody else's business.
+   */
+  memberGroups: MemberGroup[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]

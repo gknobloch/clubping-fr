@@ -8,7 +8,7 @@ import {
   Switch,
   StyleSheet,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -27,7 +27,9 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
-import { canManageClub } from '@/utils/roles'
+import { GroupMatchSwitch, MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { PLAYER_SEARCH_LABEL } from '@shared/lib/playerSearch'
+import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@shared/lib/memberGroups'
 
 const STATUS_LABELS = {
   active: 'Actif',
@@ -47,7 +49,7 @@ const STATUS_LABELS = {
 // what the search box at the top says this tab is for.
 // ---------------------------------------------------------------------------
 export default function JoueursScreen() {
-  const { players, clubs } = useAppData()
+  const { players, clubs, memberGroups } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -57,12 +59,6 @@ export default function JoueursScreen() {
   // what this tab is for.
   const [activeOnly, setActiveOnly] = useState(true)
   const canSeeArchived = canSeeArchivedPlayers(user?.role)
-  // The FFTT import writes into one club, so it needs one to write into: a
-  // general admin sees every club's licensees here and has no target (#555),
-  // the same reason the web's own trigger asks for a scoped club.
-  const ownClub = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
-  const canImport =
-    !!user && !!ownClub && canManageClub(user, ownClub.id) && !!ownClub.affiliationNumber
   // The fiche beside the list rather than pushed over it (#466).
   const { isTwoPane } = useLayout()
   const listRef = useRef<FlatList<Player>>(null)
@@ -84,12 +80,30 @@ export default function JoueursScreen() {
   /** The roster this member may see — the actif/archivé rule (#438), unsearched. */
   const roster = sortByName(visiblePlayers(clubPlayers, { role: user?.role, activeOnly }))
 
+  // The group filter (#602) rides in the route, like the selection (#585): the
+  // club tab opens this list already narrowed to one of its groups. Cleared
+  // with the empty string rather than `undefined`, which is the one value a
+  // merge cannot be trusted to drop.
+  const params = useLocalSearchParams<{ groupes?: string; mode?: string }>()
+  const selectedGroupIds = (params.groupes ?? '').split(',').filter(Boolean)
+  const groupMatch: GroupMatch = params.mode === 'tous' ? 'all' : 'any'
+  const setGroupFilter = (ids: string[], mode: GroupMatch) =>
+    router.setParams({ groupes: ids.join(','), mode: mode === 'all' ? 'tous' : '' })
+  // Whose groups: the member's own club — or, for a general admin, who sees
+  // every club here, the club of a group they arrived filtered on.
+  const groupClubId = user?.role === 'general_admin'
+    ? memberGroups.find((g) => selectedGroupIds.includes(g.id))?.clubId
+    : user?.clubId
+  const filterGroups = clubMemberGroups(memberGroups, groupClubId)
+  const inGroups = memberGroupFilter(filterGroups, selectedGroupIds, groupMatch)
+
   const filtered = roster.filter((p) => {
     const q = query.toLowerCase()
     return (
-      p.firstName.toLowerCase().includes(q) ||
-      p.lastName.toLowerCase().includes(q) ||
-      p.email?.toLowerCase().includes(q)
+      inGroups(p.id) &&
+      (p.firstName.toLowerCase().includes(q) ||
+        p.lastName.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q))
     )
   })
 
@@ -121,26 +135,29 @@ export default function JoueursScreen() {
 
   const list = (
     <>
+      {/* The list's controls, in the web's order (#602): search, the club's
+          groups, the two switches, and how many that leaves. */}
       <View style={[styles.searchBar, contentWidth()]}>
         <TextInput
           style={styles.input}
-          placeholder="Rechercher…"
+          placeholder={PLAYER_SEARCH_LABEL}
           placeholderTextColor={colors.textSecondary}
           value={query}
           onChangeText={setQuery}
           clearButtonMode="while-editing"
         />
-        {canImport && (
-          <TouchableOpacity
-            testID="import-players"
-            style={styles.importButton}
-            onPress={() => router.push('/joueurs/import')}
-            accessibilityRole="button"
-          >
-            <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
-            <Text style={styles.importLabel}>Importer les licenciés FFTT</Text>
-          </TouchableOpacity>
-        )}
+        <MemberGroupFilter
+          groups={filterGroups}
+          selected={selectedGroupIds}
+          mode={groupMatch}
+          onChange={setGroupFilter}
+        />
+        <GroupMatchSwitch
+          groups={filterGroups}
+          selected={selectedGroupIds}
+          mode={groupMatch}
+          onChange={setGroupFilter}
+        />
         {canSeeArchived && (
           <View style={styles.filterRow}>
             <Switch
@@ -152,6 +169,26 @@ export default function JoueursScreen() {
             <Text style={styles.filterLabel}>{ACTIVE_ONLY_LABEL}</Text>
           </View>
         )}
+        {/* Always said, as on the web: it is how a member reads what the
+            controls above have done — the more so when the list is empty,
+            which would otherwise read as a club with nobody in it. */}
+        {/* « Effacer » by the count, as on the web: on the chip row it took a
+            line of its own as soon as a long group name filled the one before. */}
+        <View style={styles.countRow}>
+          <Text style={styles.resultCount} testID="players-count">
+            {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
+          </Text>
+          {filterGroups.some((g) => selectedGroupIds.includes(g.id)) && (
+            <TouchableOpacity
+              testID="group-filter-clear"
+              onPress={() => setGroupFilter([], groupMatch)}
+              hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.clearText}>Effacer</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       <FlatList
         ref={listRef}
@@ -236,17 +273,6 @@ export default function JoueursScreen() {
 
 const styles = StyleSheet.create({
   searchBar: { padding: 12, paddingBottom: 4 },
-  // Under the search box rather than in the header: `AppHeader` carries the
-  // brand mark and the avatar and has no room for an action, and "Importer les
-  // licenciés FFTT" is far too long a label to sit in a 52pt bar anyway — the
-  // same measurement that keeps the web's own trigger out of its PageHeader.
-  importButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44,
-    marginTop: 8, paddingHorizontal: 14, borderRadius: 10,
-    borderWidth: 1, borderColor: colors.accentSoftBorder,
-    backgroundColor: colors.accentSoft,
-  },
-  importLabel: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   input: {
     backgroundColor: colors.card,
     borderRadius: 10,
@@ -261,6 +287,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
+  resultCount: { fontSize: 13, color: colors.textSecondary },
+  clearText: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
   filterLabel: { fontSize: 13, color: colors.textSecondary },
   list: { padding: 12, gap: 8 },
 

@@ -42,9 +42,17 @@ export function matchesPlayerSearch(
   player: { firstName: string; lastName: string },
   query: string,
 ): boolean {
+  return matchesSearch(`${player.firstName} ${player.lastName}`, query)
+}
+
+/**
+ * The same rule over any label — a member who holds no licence, a group
+ * (#602). One rule, so a list of members searches exactly like a line-up.
+ */
+export function matchesSearch(text: string, query: string): boolean {
   const words = normalizeForSearch(query).split(/\s+/).filter(Boolean)
   if (words.length === 0) return true
-  const haystack = normalizeForSearch(`${player.firstName} ${player.lastName}`)
+  const haystack = normalizeForSearch(text)
   return words.every((word) => haystack.includes(word))
 }
 

@@ -20,6 +20,8 @@ import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
+import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared/lib/memberGroups'
+import { ChecklistSheet } from '@/components/ChecklistSheet'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -54,7 +56,7 @@ export function PlayerDetail({
   const {
     players, teams, clubs, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
-    updatePlayer,
+    updatePlayer, memberGroups, setGroupsOfMember,
   } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
@@ -62,6 +64,7 @@ export function PlayerDetail({
   const openTeam = useOpenTeam()
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [editingContact, setEditingContact] = useState(false)
+  const [editingGroups, setEditingGroups] = useState(false)
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
@@ -71,6 +74,22 @@ export function PlayerDetail({
   // que `administers` côté API, qui refuse déjà le reste depuis #558. Un
   // coéquipier qui lit la fiche ne voit donc pas le déclencheur.
   const mayEditContact = !!user && !!player && canManageClub(user, player.clubId)
+
+  // The club's groups (#602), and which of them this member is in. The payload
+  // only carries the viewer's own club's, so another club's fiche shows none.
+  const clubGroups = clubMemberGroups(memberGroups, player?.clubId)
+  const memberOf = groupsOfMember(clubGroups, player?.id)
+  const mayFileGroups = !!player && mayManageMemberGroups(user, player.clubId)
+
+  // Un groupe mène à ses membres (#602). Dans un volet, la liste est juste à
+  // côté : on la filtre en place, la fiche reste ouverte, rien à défaire.
+  // Poussée, la fiche n'a pas de liste à côté : on pousse celle du groupe par
+  // dessus, sur la même pile, pour que le retour ramène ici — `/joueurs` est un
+  // onglet, et changer d'onglet n'a pas de retour.
+  function openGroup(groupId: string) {
+    if (embedded) router.setParams({ groupes: groupId, mode: '' })
+    else router.push({ pathname: '/membres', params: { groupes: groupId } })
+  }
 
   const activePhase = phases.find((p) => p.status === 'active')
   const playerTeams = teams.filter(
@@ -211,6 +230,44 @@ export function PlayerDetail({
           </View>
         )}
 
+        {/* Groupes (#602) — dès que le club en a un : avant, il n'y a rien
+            où être, ni personne à y mettre. Chaque groupe ouvre la liste des
+            joueurs déjà filtrée dessus. */}
+        {clubGroups.length > 0 && (
+          <View style={styles.section} testID="player-groups">
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Groupes</Text>
+              {mayFileGroups && (
+                <TouchableOpacity
+                  onPress={() => setEditingGroups(true)}
+                  hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+                  accessibilityRole="button"
+                  testID="edit-groups"
+                >
+                  <Text style={styles.editLink}>Modifier</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {memberOf.length === 0 ? (
+              <Text style={styles.contactEmpty}>Dans aucun groupe.</Text>
+            ) : (
+              <View style={styles.groupChips}>
+                {memberOf.map((g) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    testID={`player-group-${g.id}`}
+                    style={styles.groupChip}
+                    onPress={() => openGroup(g.id)}
+                    accessibilityRole="link"
+                  >
+                    <Text style={styles.groupChipText}>{g.displayName}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Active phase teams — list style, aligned with the team detail roster */}
         {playerTeams.length > 0 && (
           <View style={styles.sectionList}>
@@ -253,6 +310,20 @@ export function PlayerDetail({
           playerId={player.id}
           avatarUpdatedAt={player.avatarUpdatedAt}
           onClose={() => setAvatarOpen(false)}
+        />
+      )}
+
+      {editingGroups && (
+        <ChecklistSheet
+          testID="groups-sheet"
+          // Named like the captain's « Sélection — Rixheim PPA 5 »: who is
+          // being filed, then the count.
+          title={`Groupes — ${player.firstName} ${player.lastName}`}
+          options={clubGroups.map((g) => ({ id: g.id, label: g.displayName }))}
+          selected={memberOf.map((g) => g.id)}
+          emptyLabel="Ce club n’a aucun groupe."
+          onSave={(ids) => setGroupsOfMember(player.clubId, player.id, ids)}
+          onClose={() => setEditingGroups(false)}
         />
       )}
 
@@ -311,6 +382,12 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   editLink: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
   contactEmpty: { fontSize: 14, color: colors.textSecondary },
+  groupChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  groupChip: {
+    minHeight: 44, justifyContent: 'center', paddingHorizontal: 14,
+    borderRadius: 22, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
+  },
+  groupChipText: { fontSize: 14, fontFamily: fonts.medium, color: colors.textPrimary },
 
   // List-style section (Équipe) — matches the team detail roster
   sectionList: {

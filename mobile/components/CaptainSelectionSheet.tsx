@@ -1,16 +1,15 @@
-import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { useMemo, useState } from 'react'
 import { Sheet } from '@/components/Sheet'
+import {
+  SelectMark, SelectionActions, SelectionList, SelectionSearch, selection as shared,
+} from '@/components/Selection'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
 import { isPlayerEligibleForTeam } from '@shared/lib/brulage'
-import {
-  PLAYER_SEARCH_LABEL,
-  PLAYER_SEARCH_THRESHOLD,
-  filterPlayersBySearch,
-} from '@shared/lib/playerSearch'
+import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { categoryFromIndex, seasonCategoryIndex } from '@shared/lib/seasonCategories'
@@ -174,19 +173,17 @@ export function CaptainSelectionSheet({
       // aperçu, as a name does everywhere else in the app. The row used to be
       // one big toggle, so there was nowhere left to ask «who is this?» —
       // which is the question a captain has while composing, not after.
-      <View key={p.id} style={[sel.playerRow, locked && sel.playerRowLocked]}>
+      <View key={p.id} style={[shared.row, locked && sel.playerRowLocked]}>
         <TouchableOpacity
           testID={`selection-toggle-${p.id}`}
-          style={sel.checkTarget}
+          style={shared.checkTarget}
           onPress={() => toggle(p.id)}
           disabled={locked}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: picked, disabled: locked }}
           accessibilityLabel={`${p.firstName} ${p.lastName}`}
         >
-          <View style={[sel.check, picked && sel.checkActive]}>
-            {picked && <Text style={sel.checkMark}>✓</Text>}
-          </View>
+          <SelectMark picked={picked} />
         </TouchableOpacity>
         <TouchableOpacity
           testID={`selection-open-${p.id}`}
@@ -195,7 +192,7 @@ export function CaptainSelectionSheet({
           accessibilityRole="button"
         >
           <View style={sel.nameCell}>
-            <Text style={[sel.playerName, picked && sel.playerNamePicked]} numberOfLines={1}>
+            <Text style={[shared.name, picked && shared.namePicked]} numberOfLines={1}>
               {p.firstName} {p.lastName}
             </Text>
             {unlicensed.has(p.id) && <LicenceTag />}
@@ -216,7 +213,7 @@ export function CaptainSelectionSheet({
 
   return (
     <Sheet onClose={onClose} testID="selection-sheet">
-      <Text style={sel.title}>
+      <Text style={shared.title}>
         Sélection — {getTeamName(team, clubs)} ({selection.length}/{playersPerGame})
       </Text>
       {pickedUnlicensed.length > 0 && (
@@ -227,48 +224,29 @@ export function CaptainSelectionSheet({
           {' '}Vérifiez avant la rencontre.
         </Text>
       )}
-      {searchable && (
-        <TextInput
-          style={sel.search}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={PLAYER_SEARCH_LABEL}
-          placeholderTextColor={colors.textSecondary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          clearButtonMode="while-editing"
-          returnKeyType="search"
-        />
-      )}
-      <ScrollView
-        style={sel.list}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+      {searchable && <SelectionSearch value={query} onChangeText={setQuery} />}
+      <SelectionList>
         {shownRoster.length > 0 && (
           <>
-            <Text style={sel.sectionLabel}>Cette équipe</Text>
+            <Text style={shared.sectionLabel}>Cette équipe</Text>
             {shownRoster.map(renderPlayerRow)}
           </>
         )}
         {shownOthers.length > 0 && (
           <>
-            <Text style={sel.sectionLabel}>Autres joueurs</Text>
+            <Text style={shared.sectionLabel}>Autres joueurs</Text>
             {shownOthers.map(renderPlayerRow)}
           </>
         )}
         {shownRoster.length === 0 && shownOthers.length === 0 && query.trim() !== '' && (
-          <Text style={sel.empty}>Aucun joueur ne correspond à « {query.trim()} ».</Text>
+          <Text style={shared.empty}>Aucun joueur ne correspond à « {query.trim()} ».</Text>
         )}
-      </ScrollView>
-      <View style={sel.actions}>
-        <TouchableOpacity testID="selection-cancel" style={sel.cancelBtn} onPress={onClose}>
-          <Text style={sel.cancelTxt}>Annuler</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={sel.saveBtn} onPress={() => { onSave(selection); onClose() }}>
-          <Text style={sel.saveTxt}>Enregistrer</Text>
-        </TouchableOpacity>
-      </View>
+      </SelectionList>
+      <SelectionActions
+        cancelTestID="selection-cancel"
+        onCancel={onClose}
+        onSave={() => { onSave(selection); onClose() }}
+      />
       {/* Rendu **dans** cette feuille, et non à côté d'elle : `Sheet` est un
           `Modal`, et iOS ne présente pas un second modal par-dessus un modal
           déjà présenté — en frère, l'aperçu s'ouvrait sans jamais se voir.
@@ -294,63 +272,14 @@ const sel = StyleSheet.create({
     marginBottom: 8, borderRadius: 8, backgroundColor: '#FEF3C7',
     paddingHorizontal: 12, paddingVertical: 8, fontSize: 12, color: '#92400E',
   },
-  title: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary, marginBottom: 8 },
-  sectionLabel: {
-    fontSize: 11, fontFamily: fonts.bold, color: colors.textSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4,
-  },
-  search: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    paddingHorizontal: 12, minHeight: 44, fontSize: 15,
-    color: colors.textPrimary, backgroundColor: colors.bg, marginTop: 4,
-    // iOS renders TextInput placeholders with stray letter-spacing unless an
-    // explicit value is set; pin it to 0 so they track normally (#118).
-    letterSpacing: 0,
-  },
-  // Même raison que la feuille de composition : sans `flexShrink`, une liste
-  // plus haute que le panneau pousse « Annuler / Enregistrer » dehors. Un
-  // effectif de soixante licenciés y arrive.
-  list: { marginBottom: 16, flexShrink: 1 },
-  empty: {
-    fontSize: 13, color: colors.textSecondary,
-    textAlign: 'center', paddingVertical: 24,
-  },
-  playerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  // The box is a small mark in a large target: 44pt, the project's rule below
-  // `md:`, which the row used to give it by being the target itself.
-  checkTarget: {
-    width: 44, minHeight: 44, alignItems: 'flex-start', justifyContent: 'center',
-  },
   // Everything else on the row, so «qui est-ce ?» has the space the box does
   // not need.
   nameTarget: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44,
   },
-  check: {
-    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
-  },
-  checkActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  checkMark: { color: '#fff', fontSize: 12, fontFamily: fonts.bold },
-  playerName: { flexShrink: 1, fontSize: 15, color: colors.textPrimary },
-  playerNamePicked: { fontFamily: fonts.semiBold, color: colors.accent },
   availChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   availTxt: { fontSize: 11, fontFamily: fonts.semiBold },
   noAvail: { fontSize: 12, color: colors.border },
   playerRowLocked: { opacity: 0.45 },
   lockedTxt: { fontSize: 11, fontStyle: 'italic', color: colors.textSecondary },
-  actions: { flexDirection: 'row', gap: 10 },
-  cancelBtn: {
-    flex: 1, borderRadius: 10, padding: 14,
-    alignItems: 'center', backgroundColor: colors.bg,
-  },
-  cancelTxt: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textSecondary },
-  saveBtn: {
-    flex: 1, borderRadius: 10, padding: 14,
-    alignItems: 'center', backgroundColor: colors.accent,
-  },
-  saveTxt: { fontSize: 15, fontFamily: fonts.bold, color: '#fff' },
 })

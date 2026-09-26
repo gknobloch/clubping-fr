@@ -9,7 +9,7 @@ test.describe('Player — Player detail', () => {
   test('navigates to a player profile via Joueurs list search', async ({ page }) => {
     await page.getByRole('link', { name: 'Joueurs' }).click()
     await expect(page).toHaveURL('/joueurs')
-    await page.getByPlaceholder(/Rechercher par nom/i).fill('Cunin')
+    await page.getByPlaceholder('Rechercher un joueur').fill('Cunin')
     await page.getByRole('row', { name: /Cédric Cunin/ }).getByRole('link').click()
     await expect(page).toHaveURL(/\/joueurs\/p2-player-8/)
     await expect(page.getByRole('heading', { name: 'Cédric Cunin' })).toBeVisible()

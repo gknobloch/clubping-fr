@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { ImportIcon, PlusIcon } from '@/components/icons'
+import { PlusIcon } from '@/components/icons'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
+import { PLAYER_SEARCH_LABEL } from '@/lib/playerSearch'
 import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
 import { ACTIVE_ONLY_LABEL, canSeeArchivedPlayers, visiblePlayers } from '@/lib/playerVisibility'
 import {
@@ -19,7 +20,8 @@ import { clubLicences } from '@/lib/seasonLicences'
 import { LicenceBadge } from '@/components/LicenceBadge'
 import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
-import { ImportPlayersModal } from '@/components/ImportPlayersModal'
+import { GroupMatchToggle, MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@/lib/memberGroups'
 
 const STATUS_LABELS: Record<PlayerType['status'], string> = {
   active: 'Actif',
@@ -31,7 +33,7 @@ export function PlayersPage() {
   const {
     players: allPlayers, clubs, seasons, updatePlayer, addPlayer,
     playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
-    playerSeasonLicences,
+    playerSeasonLicences, memberGroups,
   } = useAppData()
 
   // A category belongs to a season (#482). This screen edits the one being
@@ -55,7 +57,6 @@ export function PlayersPage() {
   const [activeOnly, setActiveOnly] = useState(true)
   const [editing, setEditing] = useState<PlayerType | null>(null)
   const [creating, setCreating] = useState(false)
-  const [importing, setImporting] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -87,16 +88,51 @@ export function PlayersPage() {
     [players, user?.role, activeOnly],
   )
 
+  // The group filter (#602) lives in the URL, so a group on the club's page can
+  // link straight to its members, and the back button returns to the same
+  // filtered list rather than the whole club.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedGroupIds = useMemo(
+    () => (searchParams.get('groupes') ?? '').split(',').filter(Boolean),
+    [searchParams],
+  )
+  const groupMatch: GroupMatch = searchParams.get('mode') === 'tous' ? 'all' : 'any'
+  const setGroupFilter = (ids: string[], mode: GroupMatch) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (ids.length) next.set('groupes', ids.join(','))
+      else next.delete('groupes')
+      if (mode === 'all') next.set('mode', 'tous')
+      else next.delete('mode')
+      return next
+    }, { replace: true })
+
+  // Whose groups the chips offer: the member's own club — and, for a general
+  // admin, who sees every club here, the club of a group they arrived filtered
+  // on from that club's page.
+  const groupClubId = hasClubScope
+    ? userClubId
+    : memberGroups.find((g) => selectedGroupIds.includes(g.id))?.clubId
+  const filterGroups = useMemo(
+    () => clubMemberGroups(memberGroups, groupClubId),
+    [memberGroups, groupClubId],
+  )
+  const inGroups = useMemo(
+    () => memberGroupFilter(filterGroups, selectedGroupIds, groupMatch),
+    [filterGroups, selectedGroupIds, groupMatch],
+  )
+
   const filteredPlayers = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return playersByStatus
     return playersByStatus.filter(
       (p) =>
-        p.lastName.toLowerCase().includes(q) ||
-        p.firstName.toLowerCase().includes(q) ||
-        p.email?.toLowerCase().includes(q),
+        inGroups(p.id) &&
+        (!q ||
+          p.lastName.toLowerCase().includes(q) ||
+          p.firstName.toLowerCase().includes(q) ||
+          p.email?.toLowerCase().includes(q)),
     )
-  }, [playersByStatus, query])
+  }, [playersByStatus, query, inGroups])
 
   const clubsForSelect =
     hasClubScope && adminClubIds.length
@@ -109,10 +145,6 @@ export function PlayersPage() {
     hasClubScope && adminClubIds.length === 1
       ? clubs.find((c) => c.id === adminClubIds[0])
       : undefined
-
-  // The import writes into one club, so it needs the page to be scoped to one
-  // — a general admin sees every club here and has no target to import into.
-  const canImport = canEditPlayers && !!scopedClub
 
   // Adoption (#406). `lastSeenAt` only reaches people who administer these
   // members, so the column and the count are theirs alone — for anyone else the
@@ -222,55 +254,75 @@ export function PlayersPage() {
         title="Joueurs"
         club={scopedClub}
         actions={
+          // The FFTT import lives on the club's page since #602: it brings in
+          // the club's licensees as a whole, and this list is where members
+          // look each other up. The manual add stays — it is about one person.
           canEditPlayers && (
-            <>
-              {/* Same order as /equipes (#229): manual add is the fallback, the
-                  FFTT import is the default path — so it is the primary button
-                  and comes last. Below md: the import is not offered (dense
-                  comparison screen, #381/#384), which leaves the manual add
-                  alone: `adaptive` gives it the filled look back at that width
-                  rather than leaving the page with no filled action. */}
-              <HeaderAction
-                variant={canImport ? 'adaptive' : 'primary'}
-                icon={<PlusIcon />}
-                label="Ajouter un joueur"
-                onClick={openCreate}
-              />
-              {canImport && (
-                <HeaderAction
-                  desktopOnly
-                  icon={<ImportIcon />}
-                  label="Importer depuis la FFTT"
-                  onClick={() => setImporting(true)}
-                />
-              )}
-            </>
+            <HeaderAction
+              variant="primary"
+              icon={<PlusIcon />}
+              label="Ajouter un joueur"
+              onClick={openCreate}
+            />
           )
         }
       />
-      {/* Wraps: «Joueurs actifs uniquement» plus a 256px search box does not
-          fit a phone on one line, and squeezing the box is worse than a second
-          row. */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* The list's controls, in the order the app lays them out too (#602):
+          search, the club's groups, the two switches, and how many that
+          leaves. One order on every screen that lists the club, so a member
+          moving between the web and the app finds each control where the
+          other put it. */}
+      <div className="space-y-3">
+        <label htmlFor="players-search" className="sr-only">{PLAYER_SEARCH_LABEL}</label>
         <input
+          id="players-search"
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher par nom…"
-          className="w-64 min-h-[44px] md:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
+          placeholder={PLAYER_SEARCH_LABEL}
+          className="w-full md:max-w-sm min-h-[44px] md:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-accent-400 focus:outline-none focus:ring-1 focus:ring-accent-400"
         />
-        {/* Offered to the people who administer the club and to nobody else
-            (#438): for a member the roster IS the active players, so a control
-            that only ever says the same thing is a control that shouldn't be
-            there. */}
-        {canSeeArchivedPlayers(user?.role) && (
-          <Toggle checked={activeOnly} onChange={setActiveOnly} label={ACTIVE_ONLY_LABEL} />
-        )}
-        {query && (
-          <span className="text-sm text-slate-500">
-            {filteredPlayers.length} résultat{filteredPlayers.length !== 1 ? 's' : ''}
-          </span>
-        )}
+        <MemberGroupFilter
+          groups={filterGroups}
+          selected={selectedGroupIds}
+          mode={groupMatch}
+          onChange={setGroupFilter}
+        />
+        <div className="flex flex-wrap items-center gap-x-6">
+          <GroupMatchToggle
+            groups={filterGroups}
+            selected={selectedGroupIds}
+            mode={groupMatch}
+            onChange={setGroupFilter}
+          />
+          {/* Offered to the people who administer the club and to nobody else
+              (#438): for a member the roster IS the active players, so a
+              control that only ever says the same thing is a control that
+              shouldn't be there. */}
+          {canSeeArchivedPlayers(user?.role) && (
+            <Toggle checked={activeOnly} onChange={setActiveOnly} label={ACTIVE_ONLY_LABEL} />
+          )}
+        </div>
+        {/* Always said, not only once narrowed: the count is how a member
+            reads what the controls above have done, and a line that comes and
+            goes moves the list under the thumb. */}
+        {/* « Effacer » by the count rather than among the chips: it is about
+            what the list shows, and on the chip row it took a line of its own
+            as soon as a long group name filled the one before (#602). */}
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-slate-500" data-testid="players-count">
+            {filteredPlayers.length} joueur{filteredPlayers.length > 1 ? 's' : ''}
+          </p>
+          {filterGroups.some((g) => selectedGroupIds.includes(g.id)) && (
+            <button
+              type="button"
+              onClick={() => setGroupFilter([], groupMatch)}
+              className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+            >
+              Effacer
+            </button>
+          )}
+        </div>
       </div>
       {/* Singular at zero as well as at one, which is the French rule and not an
           edge case here: the day the app is shared with the club, nobody has
@@ -455,9 +507,6 @@ export function PlayersPage() {
         </table>
       </div>
 
-      {importing && scopedClub && (
-        <ImportPlayersModal clubId={scopedClub.id} onClose={() => setImporting(false)} />
-      )}
 
       {(editing || creating) && (
         <ModalShell

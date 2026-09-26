@@ -49,7 +49,7 @@ beforeEach(() => {
   updatePlayer = jest.fn()
   Object.assign(mockData, {
     players: [player], clubs: [club], teams: [], phases: [phase], seasons: [season],
-    playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
+    playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     matchDays: [], games: [], gameSelections: [],
     updatePlayer,
   })

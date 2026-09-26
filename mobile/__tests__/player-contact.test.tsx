@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native'
 import { Linking } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { render } from '@/__tests__/support/render'
-import type { Club, Phase, Player, Season } from '@shared/types'
+import type { Club, Phase, Player, Season, MemberGroup } from '@shared/types'
 import { PlayerDetail } from '@/components/PlayerDetail'
 
 // ---------------------------------------------------------------------------
@@ -22,9 +22,11 @@ const mockData: {
   playerPhasePoints: never[]
   playerSeasonCategories: never[]
   playerSeasonLicences: never[]
+  // A club's groups (#602) — none unless a test gives some.
+  memberGroups: MemberGroup[]
 } = {
   players: [], clubs: [], teams: [], phases: [], seasons: [],
-  playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
+  playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
 }
 
 // La fiche demande qui regarde depuis #600 — elle n'offre « Modifier » qu'à

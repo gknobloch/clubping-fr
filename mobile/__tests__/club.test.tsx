@@ -1,7 +1,7 @@
 import { Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
-import type { Club, User } from '@shared/types'
+import type { Club, MemberGroup, User } from '@shared/types'
 import ClubScreen from '@/app/(tabs)/club'
 
 // ---------------------------------------------------------------------------
@@ -13,14 +13,24 @@ import ClubScreen from '@/app/(tabs)/club'
 // file under app/, and a test there is bundled into the app.
 // ---------------------------------------------------------------------------
 const mockAuth: { user: User | null } = { user: null }
-const mockData: { clubs: Club[]; refreshing: boolean; refresh: () => void } = {
+const mockData: {
+  clubs: Club[]
+  users: User[]
+  memberGroups: MemberGroup[]
+  refreshing: boolean
+  refresh: () => void
+} = {
   clubs: [],
+  users: [],
+  memberGroups: [],
   refreshing: false,
   refresh: jest.fn(),
 }
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
+const mockPush = jest.fn()
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 const member: User = {
   id: 'u1',
@@ -141,5 +151,37 @@ describe('Mon club', () => {
 
     // The tab is hidden in this case; the screen must not blow up if reached.
     expect(screen.getByText('Club introuvable.')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// L'entrée de l'import FFTT (#555), sur l'onglet Club depuis #602
+//
+// The import brings a club's licensees in as a whole, so it hangs off the
+// club; it needs the club's FFTT number to ask for, and only somebody who
+// administers the club may write what it brings.
+// ---------------------------------------------------------------------------
+describe("Mon club — l'import FFTT", () => {
+  it('offers it to the club admin, pushed onto the Club stack', () => {
+    mockAuth.user = { ...member, role: 'club_admin', isPlayer: false }
+    render(<ClubScreen />)
+
+    fireEvent.press(screen.getByTestId('import-players'))
+
+    expect(mockPush).toHaveBeenCalledWith('/club/import')
+  })
+
+  it('does not offer it to a player', () => {
+    render(<ClubScreen />)
+
+    expect(screen.queryByTestId('import-players')).toBeNull()
+  })
+
+  it('does not offer it for a club with no FFTT affiliation number', () => {
+    mockAuth.user = { ...member, role: 'club_admin', isPlayer: false }
+    mockData.clubs = [{ ...club, affiliationNumber: '' }]
+    render(<ClubScreen />)
+
+    expect(screen.queryByTestId('import-players')).toBeNull()
   })
 })

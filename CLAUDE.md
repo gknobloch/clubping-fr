@@ -675,6 +675,103 @@ invisible dans le diff comme dans la revue.
   saisie de disponibilité impossible en local — exactement ce que l'échappatoire
   de #138 existe pour éviter.
 
+### Groupes de membres (#602)
+- **« Groupe » est déjà pris** : dans le code, `groups` / `Group` sont les
+  poules d'une division. Les groupes d'un club sont donc `member_groups` /
+  `MemberGroup` partout — table, type, `DataState.memberGroups`. L'interface
+  dit « Groupes », les poules y restant des « Poules ».
+- Un groupe appartient à **un club et à aucune saison** : le Bureau de
+  septembre est encore le Bureau en janvier, et un groupe à recréer chaque
+  août est un groupe qu'on cesse d'entretenir.
+- **L'appartenance porte sur le membre, pas sur la licence** : un président de
+  Bureau peut n'en avoir aucune. Les écrans proposent donc tous les membres du
+  club (`users`), non licenciés compris ; la liste Joueurs, qui est une liste
+  de joueurs, ne les montre simplement pas.
+- **Lire est à tout le club, écrire à ses administrateurs.** Les cinq routes
+  `/clubs/:clubId/member-groups…` suivent `administers` (#558), et chaque
+  requête est **épinglée au club de l'URL** : un groupe ou un membre d'un
+  autre club n'y est pas trouvé, plutôt qu'écrit par l'URL de quelqu'un
+  d'autre.
+- **`GET /api/data` ne porte que les groupes du club de celui qui regarde**
+  (tous pour un administrateur général) — à la différence de presque tout le
+  reste de ce payload. C'est la façon dont un club range ses propres gens, pas
+  de la vie sportive que chaque club lit sur les autres.
+- **Deux remplacements, jamais des bascules** : les membres d'un groupe (depuis
+  le club) et les groupes d'un membre (depuis sa fiche). Deux administrateurs
+  qui cochent en même temps finissent sur la liste de l'un d'eux, pas sur un
+  mélange. Le second ne touche **que les groupes de ce club**.
+- Et donc **un remplacement ne doit rien perdre de ce qu'il n'a pas montré** :
+  `ChecklistDialog` (web) et `ChecklistSheet` / `MemberGroupEditor` (app)
+  gardent ce qui était coché sans être proposé — un archivé, un membre que
+  l'écran ne liste pas. Une case que personne n'a vue n'est pas une case que
+  quelqu'un a décochée.
+- **Créer et renommer sont attendus**, sur le web comme dans l'app : le seul
+  refus qui compte — un nom que le club utilise déjà, casse et espaces
+  ignorés (`groupNameTaken`) — appartient à l'API (409 `name_taken`, plus un
+  index unique `COLLATE NOCASE` pour la course). Supprimer et ranger restent
+  optimistes.
+- **Changer de club fait quitter les groupes de l'ancien** — dans `PATCH
+  /players/:id` comme dans le `DataContext` du web.
+- **Le filtre vit dans l'URL** (`?groupes=a,b&mode=tous`, et les paramètres de
+  route dans l'app) : un groupe, sur la page du club ou sur une fiche, mène à
+  la liste déjà filtrée, et le retour ramène à la même liste.
+  `memberGroupFilter` est la seule dérivation : **rien de choisi garde tout le
+  monde**, dans les deux modes — « tous » de rien serait vrai, « au moins un »
+  de rien faux, et la liste se viderait au dernier choix levé. Un identifiant
+  choisi qui n'existe plus est ignoré plutôt que de vider la liste en ET pour
+  une raison invisible.
+- Les deux modes se disent comme une phrase sur le membre — « Au moins un
+  groupe » / « Tous les groupes » — et non ET / OU, **en interrupteur** comme
+  « Joueurs actifs uniquement » : éteint, « au moins un » ; allumé, « tous » ;
+  et le libellé dit celui qui est en vigueur. Il n'apparaît qu'à la deuxième
+  pastille, avant quoi les deux réponses sont les mêmes.
+- **Les contrôles de la liste Joueurs sont dans le même ordre partout** — web
+  bureau, web téléphone, app téléphone, app tablette : la recherche
+  (`PLAYER_SEARCH_LABEL`, le libellé du capitaine), les pastilles de groupes
+  (qui passent à la ligne, jamais coupées au bord), les deux interrupteurs,
+  puis le compte « N joueurs », **toujours** affiché : c'est ainsi qu'on lit
+  ce que les contrôles au-dessus ont fait, et une ligne qui va et vient
+  déplace la liste sous le pouce.
+- **Deux lignes de pastilles au plus**, le reste replié en « +N » qui ouvre
+  tous les groupes dans la feuille du capitaine (« Appliquer », recherche
+  « Rechercher un groupe »). `inlineGroupChips` en décide avec un budget de
+  caractères, et non une mesure de mise en page : une mesure par plateforme
+  donnerait deux réponses, l'arithmétique une seule. C'est un **préfixe de
+  l'alphabet**, pas un remplissage — un groupe court après un long qui ne tient
+  pas resterait sinon affiché avec un trou avant lui. Et **les groupes choisis
+  passent d'abord** : ils ont toujours leur pastille — la rangée est aussi ce
+  qui dit sur quoi la liste est filtrée, et un filtre caché derrière « +3 »
+  serait invisible —, et les autres se partagent la place qu'ils laissent.
+  Choisir un groupe replié ne fait donc pas passer la rangée à trois lignes :
+  il en repousse d'autres derrière « +N ». Elle ne grandit que si les groupes
+  choisis, à eux seuls, débordent — et ne montre alors qu'eux.
+- **« Effacer » est à côté du compte**, pas parmi les pastilles : il porte sur
+  ce que la liste montre, et dans la rangée il prenait une ligne à lui dès
+  qu'un nom long remplissait la précédente. La rangée ne contient que des
+  groupes et « +N ».
+- **On choisit des membres comme un capitaine compose son équipe**, et avec
+  les mêmes pièces, pas un sosie : `SelectionPanel` / `SelectionRow` sur le
+  web, `Selection.tsx` dans l'app (rond qui se remplit de rouge, recherche
+  au-delà de `PLAYER_SEARCH_THRESHOLD`, titre qui compte, « Annuler /
+  Enregistrer » côte à côte en bas). `SelectionSheet` et
+  `CaptainSelectionSheet` en sont bâtis ; `ChecklistDialog` et
+  `ChecklistSheet` aussi, et l'éditeur de groupe n'est que ce dernier avec le
+  nom du groupe en tête. Créer, renommer et remplir un groupe se font donc
+  dans **une seule** feuille, sur les deux plateformes : un groupe se crée avec
+  ses gens. **Supprimer n'en est pas** : c'est une action sur la ligne du
+  groupe (le « … » du web, la corbeille de l'app), jamais dans l'éditeur — on
+  supprime un groupe, on ne le fait pas en le remplissant. La recherche passe par `matchesSearch`, la règle même du
+  capitaine, étendue à un libellé quelconque.
+- **Un groupe ouvert depuis l'app doit avoir un retour, qui dit où il mène.**
+  Pousser `/joueurs` changeait d'onglet, et un onglet est une racine : la
+  liste filtrée s'affichait sans chevron. Depuis l'onglet Club, un groupe
+  s'ouvre donc sur `/club/membres`, poussé sur la pile du Club (l'en-tête dit
+  « Club », l'onglet Club reste allumé) ; depuis une fiche poussée, sur
+  `(detail)/membres`, poussé sur la même pile que la fiche. C'est chaque fois
+  l'écran des Joueurs lui-même, pas une copie. Seule exception : la fiche en
+  volet, à côté de la liste, qui filtre la liste **en place** (`setParams`) et
+  n'a rien à défaire.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per
@@ -790,10 +887,13 @@ invisible dans le diff comme dans la revue.
 - « Déjà à jour » se dit **au singulier** après une recherche : la phrase du
   club — « tout ce que la FFTT liste » — serait une affirmation sur soixante
   personnes tirée d'en avoir regardé une.
-- L'entrée est **sous le champ de recherche des Joueurs**, pas dans l'en-tête :
-  `AppHeader` porte la marque et l'avatar, et « Importer les licenciés FFTT »
-  est de toute façon une étiquette bien trop longue pour une barre de 52 pt —
-  la mesure même qui tient le déclencheur du web hors de son `PageHeader`.
+- **L'entrée est sur la page du club** depuis #602 — l'onglet Club de l'app
+  (`club/import`, poussé sur la pile du Club) et `/club` sur le web, à côté de
+  « Modifier » : l'import fait entrer les licenciés *d'un club*, et la liste
+  des Joueurs est l'endroit où les membres se cherchent entre eux. Dans l'app
+  c'est un bouton à part entière et non une action d'en-tête : `AppHeader`
+  porte la marque et l'avatar, et « Importer les licenciés FFTT » est bien
+  trop long pour une barre de 52 pt.
 
 ### Un homonyme déjà au club (#566)
 - **Un numéro de licence faux fabrique un doublon.** Un club portait Nathan

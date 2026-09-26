@@ -50,7 +50,7 @@ vi.mock('@/contexts/DataContext', () => ({
     // A category is stated per season (#482); these fixtures hold none.
     seasons: [{ id: '26', displayName: '2025/2026', status: 'active' }],
     playerSeasonCategories: [],
-    playerSeasonLicences: [],
+    playerSeasonLicences: [], memberGroups: [],
     setPlayerSeasonCategories: vi.fn(),
     clearPlayerSeasonCategory: vi.fn(),
   }),
@@ -89,7 +89,7 @@ describe('Joueurs — last visit, for the people who administer the club (#406)'
   // name has no business changing — the rows below it narrow, the tally does not.
   it('leaves the count alone while the list is being searched', async () => {
     const user = renderPage()
-    await user.type(screen.getByPlaceholderText(/Rechercher par nom/i), 'Szulc')
+    await user.type(screen.getByPlaceholderText('Rechercher un joueur'), 'Szulc')
 
     expect(screen.getByRole('row', { name: /Joris Szulc/ })).toBeInTheDocument()
     expect(screen.queryByRole('row', { name: /Enzo Lotz/ })).not.toBeInTheDocument()
