@@ -55,10 +55,13 @@ function CheckRow({
       <View style={selection.checkTarget}>
         <SelectMark picked={checked} />
       </View>
-      <Text style={[selection.name, s.name, checked && selection.namePicked]} numberOfLines={1}>
-        {option.label}
-      </Text>
-      {option.hint ? <Text style={s.hint}>{option.hint}</Text> : null}
+      {/* The name on its own line, the hint under it: side by side, a long
+          hint (« Déjà dans l'équipe 5 et aligné sur 1 rencontre ») squeezed the
+          name down to « Camille Be… », which is the one thing the row is for. */}
+      <View style={s.body}>
+        <Text style={[selection.name, checked && selection.namePicked]}>{option.label}</Text>
+        {option.hint ? <Text style={s.hint}>{option.hint}</Text> : null}
+      </View>
     </TouchableOpacity>
   )
 }
@@ -192,7 +195,7 @@ export function ChecklistSheet({
 }
 
 const s = StyleSheet.create({
-  row: { minHeight: 44 },
-  name: { flex: 1 },
-  hint: { fontSize: 12, color: colors.textSecondary, marginLeft: 8 },
+  row: { minHeight: 44, paddingVertical: 6 },
+  body: { flex: 1 },
+  hint: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
 })
