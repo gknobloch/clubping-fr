@@ -29,7 +29,7 @@ const CHANNEL_ICONS: Record<ClubChannelType, keyof typeof Ionicons.glyphMap> = {
 const TYPES: ClubChannelType[] = ['whatsapp', 'website', 'facebook', 'other']
 
 /** A link as typed on a phone, made openable: « chat.whatsapp.com/… » works too. */
-export function normalizeLink(link: string): string {
+function normalizeLink(link: string): string {
   const trimmed = link.trim()
   if (!trimmed) return ''
   return /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`
