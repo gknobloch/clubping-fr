@@ -738,9 +738,17 @@ invisible dans le diff comme dans la revue.
   caractères, et non une mesure de mise en page : une mesure par plateforme
   donnerait deux réponses, l'arithmétique une seule. C'est un **préfixe de
   l'alphabet**, pas un remplissage — un groupe court après un long qui ne tient
-  pas resterait sinon affiché avec un trou avant lui. Et **un groupe choisi a
-  toujours sa pastille** : la rangée est aussi ce qui dit sur quoi la liste est
-  filtrée, et un filtre caché derrière « +3 » serait un filtre invisible.
+  pas resterait sinon affiché avec un trou avant lui. Et **les groupes choisis
+  passent d'abord** : ils ont toujours leur pastille — la rangée est aussi ce
+  qui dit sur quoi la liste est filtrée, et un filtre caché derrière « +3 »
+  serait invisible —, et les autres se partagent la place qu'ils laissent.
+  Choisir un groupe replié ne fait donc pas passer la rangée à trois lignes :
+  il en repousse d'autres derrière « +N ». Elle ne grandit que si les groupes
+  choisis, à eux seuls, débordent — et ne montre alors qu'eux.
+- **« Effacer » est à côté du compte**, pas parmi les pastilles : il porte sur
+  ce que la liste montre, et dans la rangée il prenait une ligne à lui dès
+  qu'un nom long remplissait la précédente. La rangée ne contient que des
+  groupes et « +N ».
 - **On choisit des membres comme un capitaine compose son équipe**, et avec
   les mêmes pièces, pas un sosie : `SelectionPanel` / `SelectionRow` sur le
   web, `Selection.tsx` dans l'app (rond qui se remplit de rouge, recherche

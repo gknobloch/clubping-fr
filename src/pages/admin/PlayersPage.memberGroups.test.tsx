@@ -136,7 +136,7 @@ describe('PlayersPage — filtering by group (#602)', () => {
     auth.user = { id: 'ga', role: 'general_admin', isPlayer: false }
     renderAt('/joueurs?groupes=g-far')
     const filter = screen.getByRole('group', { name: 'Filtrer par groupe' })
-    expect(within(filter).getAllByRole('button').map((b) => b.textContent)).toEqual(['Arbitres', 'Effacer'])
+    expect(within(filter).getAllByRole('button').map((b) => b.textContent)).toEqual(['Arbitres'])
     expect(screen.getByText('1 joueur')).toBeInTheDocument()
     expect(listed()).toEqual(['Ailleurs'])
   })

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { Toggle } from '@/components/Toggle'
 import { ChecklistDialog } from '@/components/ChecklistDialog'
 import { GROUP_MATCH_LABELS, inlineGroupChips, type GroupMatch } from '@/lib/memberGroups'
@@ -64,15 +63,6 @@ export function MemberGroupFilter({
           className="min-h-[44px] md:min-h-0 rounded-full border border-accent-300 bg-white px-3 py-1 text-sm font-medium text-accent-600 hover:bg-accent-50"
         >
           +{hidden}
-        </button>
-      )}
-      {chosen.length > 0 && (
-        <button
-          type="button"
-          onClick={() => onChange([], mode)}
-          className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
-        >
-          Effacer
         </button>
       )}
       {picking && (

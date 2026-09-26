@@ -141,7 +141,40 @@ describe('inlineGroupChips', () => {
     expect(hidden).toBe(5)
   })
 
-  it('never shows fewer chips than fit, whatever is chosen', () => {
+  it('does not grow the row when the chosen group was already showing', () => {
     expect(inlineGroupChips(TEN, ['g0']).inline).toHaveLength(4)
+  })
+
+  // Choosing « Test de groupe qui a un grand nom » from the sheet must not add a
+  // third line: the unchosen groups make room for it instead.
+  const LONG = [...TEN, g('g10', 'Test de groupe qui a un grand nom')]
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'))
+
+  it('makes room for a long chosen group by folding unchosen ones', () => {
+    const { inline, hidden } = inlineGroupChips(LONG, ['g4', 'g10'])
+    // « Compétiteurs Jeunes » (24) and the long one (38) leave room for 8:
+    // « Arbitres » (13) does not fit, so no unchosen group shows at all.
+    expect(inline.map((x) => x.displayName)).toEqual([
+      'Compétiteurs Jeunes', 'Test de groupe qui a un grand nom',
+    ])
+    expect(hidden).toBe(9)
+  })
+
+  it('shows every chosen group when they alone overflow, and nothing else', () => {
+    const { inline, hidden } = inlineGroupChips(LONG, ['g4', 'g5', 'g10'])
+    expect(inline.map((x) => x.displayName)).toEqual([
+      'Compétiteurs Jeunes', 'Compétiteurs Seniors', 'Test de groupe qui a un grand nom',
+    ])
+    expect(hidden).toBe(8)
+  })
+
+  it('fills what the chosen ones leave, alphabetically, with no gap', () => {
+    // Vétérans (13) leaves 57: Arbitres, Baby-ping, Bureau and Comité (49),
+    // then « Compétiteurs Jeunes » (24) does not fit — and neither does
+    // anything after it, however short.
+    const { inline } = inlineGroupChips(TEN, ['g9'])
+    expect(inline.map((x) => x.displayName)).toEqual([
+      'Arbitres', 'Baby-ping', 'Bureau', 'Comité', 'Vétérans',
+    ])
   })
 })

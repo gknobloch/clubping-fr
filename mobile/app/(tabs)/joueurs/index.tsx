@@ -172,9 +172,23 @@ export default function JoueursScreen() {
         {/* Always said, as on the web: it is how a member reads what the
             controls above have done — the more so when the list is empty,
             which would otherwise read as a club with nobody in it. */}
-        <Text style={styles.resultCount} testID="players-count">
-          {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
-        </Text>
+        {/* « Effacer » by the count, as on the web: on the chip row it took a
+            line of its own as soon as a long group name filled the one before. */}
+        <View style={styles.countRow}>
+          <Text style={styles.resultCount} testID="players-count">
+            {filtered.length} joueur{filtered.length > 1 ? 's' : ''}
+          </Text>
+          {filterGroups.some((g) => selectedGroupIds.includes(g.id)) && (
+            <TouchableOpacity
+              testID="group-filter-clear"
+              onPress={() => setGroupFilter([], groupMatch)}
+              hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.clearText}>Effacer</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       <FlatList
         ref={listRef}
@@ -273,7 +287,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  resultCount: { fontSize: 13, color: colors.textSecondary, marginTop: 8 },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
+  resultCount: { fontSize: 13, color: colors.textSecondary },
+  clearText: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
   filterLabel: { fontSize: 13, color: colors.textSecondary },
   list: { padding: 12, gap: 8 },
 

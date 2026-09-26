@@ -150,7 +150,7 @@ export function withMemberGroups(
  * each chip paying {@link CHIP_OVERHEAD} more for its padding and gap, so the
  * rule is the same arithmetic on the web and in the app rather than two
  * layout measurements that would disagree. Room is left on the second line
- * for « +N » and « Effacer ».
+ * for « +N » — « Effacer » is not on this row, it sits by the count.
  */
 export const INLINE_GROUP_BUDGET = 70
 const CHIP_OVERHEAD = 5
@@ -158,9 +158,19 @@ const CHIP_OVERHEAD = 5
 /**
  * Which groups get a chip of their own, and how many fold into « +N ».
  *
- * Alphabetical, as far as the budget goes — and a chosen group always has its
- * chip, wherever it falls: the row is also how the list says what it is
- * filtered on, and a filter hiding behind « +3 » would be one nobody can see.
+ * **Chosen groups first**: they always have their chip, because the row is
+ * also how the list says what it is filtered on, and a filter hiding behind
+ * « +3 » would be one nobody can see. The room they leave goes to the other
+ * groups, alphabetically — so choosing a group from the sheet does not grow
+ * the row past two lines, it pushes others back behind « +N ». Only when the
+ * chosen ones alone overflow the budget does the row grow, and then it holds
+ * nothing else.
+ *
+ * The others fill as a **prefix of the alphabet**, not a packing: once one
+ * does not fit, the shorter ones after it stay folded too, or « Entraîneurs »
+ * would show where « Compétiteurs Jeunes » is missing and the row would read
+ * as having gaps. Chips keep alphabetical order whichever way they got in.
+ *
  * A club whose groups all fit shows them all, with no « +N » at all.
  */
 export function inlineGroupChips(
@@ -170,18 +180,15 @@ export function inlineGroupChips(
 ): { inline: MemberGroup[]; hidden: number } {
   const cost = (g: MemberGroup) => g.displayName.length + CHIP_OVERHEAD
   if (groups.reduce((sum, g) => sum + cost(g), 0) <= budget) return { inline: groups, hidden: 0 }
-  // A prefix of the alphabet, not a packing: once one group does not fit, the
-  // shorter ones after it stay folded too, or « Entraîneurs » would show where
-  // « Compétiteurs Jeunes » is missing and the row would read as having gaps.
-  let used = 0
-  let full = false
-  const inline = groups.filter((g) => {
-    if (!full && used + cost(g) <= budget) {
-      used += cost(g)
-      return true
-    }
-    full = true
-    return selectedIds.includes(g.id)
-  })
+  const chosen = new Set(selectedIds)
+  let room = budget - groups.filter((g) => chosen.has(g.id)).reduce((sum, g) => sum + cost(g), 0)
+  const shown = new Set<string>(chosen)
+  for (const g of groups) {
+    if (chosen.has(g.id)) continue
+    if (cost(g) > room) break
+    room -= cost(g)
+    shown.add(g.id)
+  }
+  const inline = groups.filter((g) => shown.has(g.id))
   return { inline, hidden: groups.length - inline.length }
 }

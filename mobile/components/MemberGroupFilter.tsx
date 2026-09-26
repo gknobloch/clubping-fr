@@ -67,16 +67,6 @@ export function MemberGroupFilter({
           <Text style={s.moreText}>+{hidden}</Text>
         </TouchableOpacity>
       )}
-      {chosen.length > 0 && (
-        <TouchableOpacity
-          testID="group-filter-clear"
-          style={s.clear}
-          onPress={() => onChange([], mode)}
-          accessibilityRole="button"
-        >
-          <Text style={s.clearText}>Effacer</Text>
-        </TouchableOpacity>
-      )}
       {picking && (
         <ChecklistSheet
           testID="group-filter-sheet"
@@ -140,8 +130,6 @@ const s = StyleSheet.create({
   chipTextOn: { color: colors.accent, fontFamily: fonts.semiBold },
   more: { borderColor: colors.accentSoftBorder },
   moreText: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
-  clear: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
-  clearText: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   // The same row as « Joueurs actifs uniquement » on the Joueurs screen.
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   switchLabel: { fontSize: 13, color: colors.textSecondary },

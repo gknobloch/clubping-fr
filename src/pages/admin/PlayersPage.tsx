@@ -306,9 +306,23 @@ export function PlayersPage() {
         {/* Always said, not only once narrowed: the count is how a member
             reads what the controls above have done, and a line that comes and
             goes moves the list under the thumb. */}
-        <p className="text-sm text-slate-500" data-testid="players-count">
-          {filteredPlayers.length} joueur{filteredPlayers.length > 1 ? 's' : ''}
-        </p>
+        {/* « Effacer » by the count rather than among the chips: it is about
+            what the list shows, and on the chip row it took a line of its own
+            as soon as a long group name filled the one before (#602). */}
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-slate-500" data-testid="players-count">
+            {filteredPlayers.length} joueur{filteredPlayers.length > 1 ? 's' : ''}
+          </p>
+          {filterGroups.some((g) => selectedGroupIds.includes(g.id)) && (
+            <button
+              type="button"
+              onClick={() => setGroupFilter([], groupMatch)}
+              className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+            >
+              Effacer
+            </button>
+          )}
+        </div>
       </div>
       {/* Singular at zero as well as at one, which is the French rule and not an
           edge case here: the day the app is shared with the club, nobody has
