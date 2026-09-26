@@ -8,7 +8,7 @@ import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
-import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
+import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
@@ -38,7 +38,7 @@ export function MatchDayDetailPage() {
   const { user } = useAuth()
   const {
     teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
-    competitions, competitionEligibilities, setGameSelection,
+    competitions, competitionGroups, memberGroups, setGameSelection,
     playerSeasonCategories, playerSeasonLicences, seasons,
   } = useAppData()
 
@@ -104,6 +104,7 @@ export function MatchDayDetailPage() {
   // The category comes off the season, not off the licensee (#482), so it has
   // to be resolved before the rule can read it — otherwise everyone here is
   // "sans catégorie" and a competition that names its categories admits nobody.
+  const teamCompetition = competitionOfDivision(team.divisionId, divisions, competitions)
   const eligibleOthers = eligiblePlayers(
     withSeasonCategory(
       players.filter(
@@ -116,8 +117,9 @@ export function MatchDayDetailPage() {
       playerSeasonCategories,
       activeSeasonId(seasons),
     ),
-    competitionOfDivision(team.divisionId, divisions, competitions),
-    competitionEligibilities.filter((e) => e.clubId === team.clubId),
+    teamCompetition,
+    // …and by the club's group for it, if it set one (#604).
+    teamCompetition && competitionGroupOf(team.clubId, teamCompetition.id, competitionGroups, memberGroups),
   )
 
   // Whose licence the federation has not listed this season (#488). Not a

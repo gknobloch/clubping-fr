@@ -1,4 +1,4 @@
-import type { MemberGroup, Role } from '../types'
+import type { CompetitionGroup, MemberGroup, Role } from '../types'
 
 // ---------------------------------------------------------------------------
 // A club's own groups of members (#602)
@@ -191,4 +191,26 @@ export function inlineGroupChips(
   }
   const inline = groups.filter((g) => shown.has(g.id))
   return { inline, hidden: groups.length - inline.length }
+}
+
+/**
+ * What deleting a group does (#602, #604): nobody leaves the club, and any
+ * competition reserved to it opens back up to its whole categories — said
+ * before, since it changes who the line-up sheets offer.
+ */
+export function groupDeletionMessage(
+  group: MemberGroup,
+  links: CompetitionGroup[],
+  competitions: Array<{ id: string; displayName: string }>,
+): string {
+  const reserved = links
+    .filter((l) => l.groupId === group.id && l.clubId === group.clubId)
+    .map((l) => competitions.find((c) => c.id === l.competitionId)?.displayName)
+    .filter((name): name is string => !!name)
+  const base = 'Ses membres restent au club : seul le groupe disparaît.'
+  if (reserved.length === 0) return base
+  const names = reserved.map((n) => `« ${n} »`).join(', ')
+  return reserved.length === 1
+    ? `${base} ${names} lui est réservée : elle redeviendra ouverte à toutes ses catégories.`
+    : `${base} ${names} lui sont réservées : elles redeviendront ouvertes à toutes leurs catégories.`
 }

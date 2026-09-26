@@ -116,12 +116,6 @@ export interface Competition {
    * senior championship does not enumerate seventeen codes to say "anyone".
    */
   categories: PlayerCategory[]
-  /**
-   * When true a club may only ever exclude, never add: the competition is
-   * reserved to its categories, and no club decides otherwise. This is what
-   * keeps a veteran out of a youth championship.
-   */
-  isCategoryLocked: boolean
   sortOrder: number
   isArchived: boolean
   /**
@@ -147,17 +141,30 @@ export interface Competition {
   ffttContestName?: string
 }
 
-/** A club's amendment to a competition's default mapping (#482). */
-export type EligibilityEffect = 'included' | 'excluded'
+/**
+ * A club's restriction of one competition to one of its member groups (#604).
+ *
+ * Keyed on (clubId, competitionId): one group per competition per club. The
+ * competition's categories still apply on top — a group can only narrow.
+ */
+export interface CompetitionGroup {
+  clubId: string
+  competitionId: string
+  groupId: string
+}
 
 /**
- * One licensee a club has added to, or removed from, one competition.
+ * **Legacy** — the per-licensee amendments of #482, replaced by
+ * `CompetitionGroup` in #604.
  *
- * Keyed on (clubId, competitionId, playerId) — the table's primary key. The
- * club is carried rather than derived from the player because it is the scope
- * the API authorizes against: a club admin writes rows bearing their own club
- * and no others.
+ * Still in the payload for one reason: app ≤ 1.5 reads it. The server restates
+ * the group rule as `excluded` rows (`legacyCompetitionExclusions`) so an old
+ * phone offers the same players as a new one. Nothing current reads it; it
+ * goes when those builds are gone.
  */
+export type EligibilityEffect = 'included' | 'excluded'
+
+/** **Legacy** — see `EligibilityEffect`. */
 export interface CompetitionEligibility {
   clubId: string
   competitionId: string
@@ -361,6 +368,15 @@ export interface GameSelection {
 export interface DataState {
   divisions: Division[]
   competitions: Competition[]
+  /**
+   * The viewer's club's competition → group links (#604) — every club's for a
+   * general admin, scoped like `memberGroups`, whose ids they point at.
+   */
+  competitionGroups: CompetitionGroup[]
+  /**
+   * **Legacy**, for app ≤ 1.5 only: the group rule restated as exclusions.
+   * Never read it — see `EligibilityEffect`.
+   */
   competitionEligibilities: CompetitionEligibility[]
   clubs: Club[]
   seasons: Season[]

@@ -38,9 +38,19 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   les membres, un membre pouvant être dans plusieurs. Chacun filtre ensuite la
   liste des joueurs par groupe — dans au moins un des groupes choisis, ou dans
   tous — et la fiche d'un joueur dit dans quels groupes il est.
-- **L'import des licenciés FFTT est passé dans l'onglet Club**, où un
-  administrateur gère déjà le reste du club. La liste des joueurs redevient la
-  liste où l'on se cherche.
+- **L'onglet Club en sections** : aperçu, canaux de communication,
+  administrateurs, groupes et compétitions — empilés sur un téléphone, et sur
+  une tablette un menu à gauche qui affiche la section choisie. Un
+  administrateur y ajoute, modifie et supprime les canaux, désigne ou retire
+  un administrateur, et ouvrir un canal demande d'abord, puisqu'on quitte
+  l'application.
+- **Réserver une compétition à un groupe.** Plutôt que d'exclure ou d'ajouter
+  des joueurs un par un, un administrateur réserve une compétition à l'un des
+  groupes du club : seuls ses membres des catégories admises sont alors
+  proposés dans les compositions. Les joueurs déjà alignés hors du groupe sont
+  signalés, et s'y ajoutent d'un geste.
+- **L'import des licenciés FFTT** est une icône à côté du champ de recherche
+  des joueurs, plutôt qu'un bandeau.
 
 ## 1.5.0 — 20 septembre 2026
 

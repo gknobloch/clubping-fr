@@ -14,6 +14,7 @@ import { AppState } from 'react-native'
 const FOREGROUND_REFETCH_THROTTLE_MS = 30_000
 import type {
   Club,
+  ClubChannel,
   Season,
   Phase,
   Division,
@@ -28,7 +29,7 @@ import type {
   AvailabilityOverriddenBy,
   AvailabilityStatus,
   Competition,
-  CompetitionEligibility,
+  CompetitionGroup,
   PlayerSeasonCategory,
   PlayerSeasonLicence,
   MemberGroup,
@@ -60,7 +61,12 @@ interface DataState {
   /** The member's own club's groups (#602) — every club's for a general admin. */
   memberGroups: MemberGroup[]
   competitions: Competition[]
-  competitionEligibilities: CompetitionEligibility[]
+  /**
+   * The club's competition → group links (#604). The payload also carries a
+   * legacy `competitionEligibilities`, for older builds only: nothing here
+   * reads it.
+   */
+  competitionGroups: CompetitionGroup[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -81,7 +87,7 @@ const emptyState: DataState = {
   playerSeasonLicences: [],
   memberGroups: [],
   competitions: [],
-  competitionEligibilities: [],
+  competitionGroups: [],
   matchDays: [],
   games: [],
   gameAvailabilities: [],
@@ -108,7 +114,7 @@ const withDefaults = (data: DataState): DataState => ({
   playerSeasonLicences: data.playerSeasonLicences ?? [],
   memberGroups: data.memberGroups ?? [],
   competitions: data.competitions ?? [],
-  competitionEligibilities: data.competitionEligibilities ?? [],
+  competitionGroups: data.competitionGroups ?? [],
 })
 
 // ---------------------------------------------------------------------------
@@ -180,7 +186,22 @@ interface DataContextValue extends DataState {
   setMemberGroupMembers: (clubId: string, groupId: string, memberIds: string[]) => void
   /** Replace which of the club's groups one member is in. */
   setGroupsOfMember: (clubId: string, memberId: string, groupIds: string[]) => void
+  /** Restrict a competition to one of the club's groups, or lift it with null (#604). */
+  setCompetitionGroup: (clubId: string, competitionId: string, groupId: string | null) => void
+  /** A club's communication channels (#135), editable from the app since #604. */
+  addClubChannel: (clubId: string, data: Omit<ClubChannel, 'id' | 'sortOrder'>) => void
+  updateClubChannel: (clubId: string, channelId: string, patch: Partial<Omit<ClubChannel, 'id'>>) => void
+  deleteClubChannel: (clubId: string, channelId: string) => void
+  /**
+   * Appoint a member of the club as one of its admins, or stand one down
+   * (#474). Awaited: the cap and the never-zero rule are the API's, and its
+   * French refusal is what the screen shows.
+   */
+  addClubAdmin: (clubId: string, userId: string) => Promise<ClubAdminResult>
+  removeClubAdmin: (clubId: string, userId: string) => Promise<ClubAdminResult>
 }
+
+export type ClubAdminResult = { ok: true } | { ok: false; message: string }
 
 const DataContext = createContext<DataContextValue | null>(null)
 
@@ -621,7 +642,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteMemberGroup = useCallback(
     (clubId: string, groupId: string) => {
-      setState((prev) => ({ ...prev, memberGroups: prev.memberGroups.filter((g) => g.id !== groupId) }))
+      setState((prev) => ({
+        ...prev,
+        memberGroups: prev.memberGroups.filter((g) => g.id !== groupId),
+        // A competition restricted to it opens back up, as the API does (#604).
+        competitionGroups: prev.competitionGroups.filter((l) => l.groupId !== groupId),
+      }))
       if (apiAvailable) {
         fetch(apiUrl(`/clubs/${clubId}/member-groups/${groupId}`), {
           method: 'DELETE',
@@ -663,6 +689,135 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [apiAvailable],
   )
 
+  const setCompetitionGroup = useCallback(
+    (clubId: string, competitionId: string, groupId: string | null) => {
+      setState((prev) => ({
+        ...prev,
+        competitionGroups: [
+          ...prev.competitionGroups.filter((l) => !(l.clubId === clubId && l.competitionId === competitionId)),
+          ...(groupId ? [{ clubId, competitionId, groupId }] : []),
+        ],
+      }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/competitions/${competitionId}/group`), {
+          method: 'PUT',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ groupId }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  // --- Club channels (#135, editable in the app since #604) -----------------
+
+  const patchClubChannels = useCallback(
+    (clubId: string, update: (channels: ClubChannel[]) => ClubChannel[]) =>
+      setState((prev) => ({
+        ...prev,
+        clubs: prev.clubs.map((c) => (c.id === clubId ? { ...c, channels: update(c.channels ?? []) } : c)),
+      })),
+    [],
+  )
+
+  const addClubChannel = useCallback(
+    (clubId: string, data: Omit<ClubChannel, 'id' | 'sortOrder'>) => {
+      const id = `chan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      let sortOrder = 0
+      patchClubChannels(clubId, (channels) => {
+        sortOrder = channels.length
+        return [...channels, { ...data, id, sortOrder }]
+      })
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/channels`), {
+          method: 'POST',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ ...data, id, sortOrder }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable, patchClubChannels],
+  )
+
+  const updateClubChannel = useCallback(
+    (clubId: string, channelId: string, patch: Partial<Omit<ClubChannel, 'id'>>) => {
+      patchClubChannels(clubId, (channels) => channels.map((ch) => (ch.id === channelId ? { ...ch, ...patch } : ch)))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/channels/${channelId}`), {
+          method: 'PATCH',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(patch),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable, patchClubChannels],
+  )
+
+  const deleteClubChannel = useCallback(
+    (clubId: string, channelId: string) => {
+      patchClubChannels(clubId, (channels) => channels.filter((ch) => ch.id !== channelId))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/channels/${channelId}`), {
+          method: 'DELETE',
+          headers: dataHeaders(),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable, patchClubChannels],
+  )
+
+  // --- Club admins (#474, in the app since #604) ----------------------------
+
+  const clubAdminRequest = useCallback(
+    async (path: string, method: 'POST' | 'DELETE', body?: unknown): Promise<ClubAdminResult> => {
+      try {
+        const res = await fetch(apiUrl(path), {
+          method,
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        })
+        if (res.ok) return { ok: true }
+        const refusal = (await res.json().catch(() => null)) as { message?: string } | null
+        return { ok: false, message: refusal?.message ?? "L'opération a échoué." }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [],
+  )
+
+  const addClubAdmin = useCallback(
+    async (clubId: string, userId: string): Promise<ClubAdminResult> => {
+      const result = await clubAdminRequest(`/clubs/${encodeURIComponent(clubId)}/admins`, 'POST', { userId })
+      if (result.ok) {
+        setState((prev) => ({
+          ...prev,
+          users: prev.users.map((u) => (u.id === userId ? { ...u, role: 'club_admin', clubId } : u)),
+        }))
+      }
+      return result
+    },
+    [clubAdminRequest],
+  )
+
+  const removeClubAdmin = useCallback(
+    async (clubId: string, userId: string): Promise<ClubAdminResult> => {
+      const result = await clubAdminRequest(
+        `/clubs/${encodeURIComponent(clubId)}/admins/${encodeURIComponent(userId)}`, 'DELETE',
+      )
+      // Only the role goes: they stay a member of the club, and a player if
+      // that is what they were.
+      if (result.ok) {
+        setState((prev) => ({
+          ...prev,
+          users: prev.users.map((u) => (u.id === userId ? { ...u, role: 'player' } : u)),
+        }))
+      }
+      return result
+    },
+    [clubAdminRequest],
+  )
+
   const value = useMemo<DataContextValue>(
     () => ({
       ...state,
@@ -686,12 +841,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteMemberGroup,
       setMemberGroupMembers,
       setGroupsOfMember,
+      setCompetitionGroup,
+      addClubChannel,
+      updateClubChannel,
+      deleteClubChannel,
+      addClubAdmin,
+      removeClubAdmin,
     }),
     [
       state, loading, refreshing, error, stale, lastSyncedAt, refresh, updatePlayer, updateTeam,
       setAvailability, clearAvailability, setGameSelection, setAvatar, removeAvatar,
       setClubSeasonLicences, applyPlayerImport,
       addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers, setGroupsOfMember,
+      setCompetitionGroup, addClubChannel, updateClubChannel, deleteClubChannel,
+      addClubAdmin, removeClubAdmin,
     ],
   )
 

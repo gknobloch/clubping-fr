@@ -44,7 +44,7 @@ const mockData = {
   playerSeasonLicences: [],
   playerSeasonCategories: [],
   competitions: [],
-  competitionEligibilities: [],
+  competitionGroups: [],
   setAvailability: jest.fn(),
   clearAvailability: jest.fn(),
   setGameSelection: jest.fn(),

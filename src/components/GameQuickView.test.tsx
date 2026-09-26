@@ -7,7 +7,6 @@ import {
   mockPlayers, mockPlayerPhasePoints, mockPlayerSeasonCategories, mockPlayerSeasonLicences, mockMatchDays, mockGames, mockGameAvailabilities, mockGameSelections,
   mockUsers,
   mockCompetitions,
-  mockCompetitionEligibilities,
 } from '@/mock/data'
 
 // AuthContext is mocked rather than driven through the dev-login picker, so one
@@ -25,7 +24,7 @@ const { GameQuickView } = await import('./GameQuickView')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-  competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
+  competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [],
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
   playerSeasonCategories: mockPlayerSeasonCategories,
   playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [],

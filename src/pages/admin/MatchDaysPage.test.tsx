@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
-import type { Phase, PlayerPhasePoints } from '@/types'
+import type { CompetitionGroup, MemberGroup, Phase, PlayerPhasePoints } from '@/types'
 import type { PlayerCategory } from '@/lib/playerCategories'
 import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate } from '@/lib/matchdays'
 import {
@@ -20,7 +20,6 @@ import {
   mockTeams,
   mockUsers,
   mockCompetitions,
-  mockCompetitionEligibilities,
 } from '@/mock/data'
 
 const CLUB_ID = 'club-fftt-06680011'
@@ -66,12 +65,15 @@ const OTHER_PLAYER = (() => {
 
 function baseData() {
   return {
+    // Typed, or an empty literal reads as never[] and nothing can be put in it.
+    competitionGroups: [] as CompetitionGroup[],
+    memberGroups: [] as MemberGroup[],
     divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-    competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
+    competitions: mockCompetitions, competitionEligibilities: [],
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
-    playerSeasonLicences: [], memberGroups: [],
+    playerSeasonLicences: [],
     playerSeasonCategories: mockPlayerSeasonCategories,
     playerPhasePoints: mockPlayerPhasePoints,
   }
@@ -279,8 +281,9 @@ describe('MatchDaysPage — filtrer « Autres joueurs du club » (#454)', () => 
 })
 
 // #482 — the matrix is the third way a club fields somebody, and it was the one
-// screen that never asked the competition. A licensee the club had excluded was
-// still offered here, and still listed under "Autres joueurs du club".
+// screen that never asked the competition. Since #604 the club's say is a group:
+// a licensee outside the group the competition is reserved to must not be
+// offered here, nor listed under "Autres joueurs du club".
 describe('MatchDaysPage — l\'éligibilité aux compétitions dans la matrice (#482)', () => {
   /** Every club team of the phase plays `comp-seniors` in the mock data. */
   const COMPETITION_ID = 'comp-seniors'
@@ -296,14 +299,18 @@ describe('MatchDaysPage — l\'éligibilité aux compétitions dans la matrice (
     return document.getElementById('other-players')
   }
 
-  const excluded = {
-    clubId: CLUB_ID, competitionId: COMPETITION_ID, playerId: OTHER_PLAYER.id,
-    effect: 'excluded' as const,
-  }
+  /** The competition reserved to a group every club player is in but one. */
+  const reservedWithout = (playerId: string) => ({
+    competitionGroups: [{ clubId: CLUB_ID, competitionId: COMPETITION_ID, groupId: 'g-reserved' }],
+    memberGroups: [{
+      id: 'g-reserved', clubId: CLUB_ID, displayName: 'Réservé',
+      memberIds: mockPlayers.filter((p) => p.clubId === CLUB_ID && p.id !== playerId).map((p) => p.id),
+    }],
+  })
 
   it('drops from « Autres joueurs du club » someone no team may field', () => {
     const section = renderWith({
-      competitionEligibilities: [...mockCompetitionEligibilities, excluded],
+      ...reservedWithout(OTHER_PLAYER.id),
     })
 
     // The section itself survives — the club has other unrostered players.
@@ -322,7 +329,7 @@ describe('MatchDaysPage — l\'éligibilité aux compétitions dans la matrice (
     const teamId = game.homeTeamId
 
     const section = renderWith({
-      competitionEligibilities: [...mockCompetitionEligibilities, excluded],
+      ...reservedWithout(OTHER_PLAYER.id),
       gameSelections: [
         ...mockGameSelections,
         { gameId: game.id, teamId, playerIds: [OTHER_PLAYER.id] },

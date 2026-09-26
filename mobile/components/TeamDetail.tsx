@@ -59,7 +59,7 @@ export function TeamDetail({
   const id = teamId
   const {
     teams, players, clubs, seasons, phases, divisions, matchDays, games, playerSeasonLicences, playerSeasonCategories,
-    competitions, competitionEligibilities, updateTeam,
+    competitions, competitionGroups, memberGroups, updateTeam,
   } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
@@ -121,7 +121,8 @@ export function TeamDetail({
     const eligibility = teamEligibility([team], {
       divisions,
       competitions,
-      overrides: competitionEligibilities.filter((e) => e.clubId === team.clubId),
+      competitionGroups,
+      memberGroups,
     })
     // The season being played decides: a category is a fact about a season.
     const seasonId = seasons.find((se) => se.status === 'active')?.id
@@ -138,7 +139,7 @@ export function TeamDetail({
         team.playerIds,
       ),
     )
-  }, [team, teams, players, divisions, competitions, competitionEligibilities,
+  }, [team, teams, players, divisions, competitions, competitionGroups, memberGroups,
       seasons, playerSeasonCategories])
 
   // Past a dozen licenciés this is the whole club to scroll through (#454).

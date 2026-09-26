@@ -40,10 +40,9 @@ const clubXml = liste(known, newcomer)
 
 const xml = (body: string) => ({ body, contentType: 'text/xml' })
 
-// On the club's page since #602, beside « Modifier ».
 async function openImport(page: import('@playwright/test').Page) {
-  await page.goto('/club')
-  await page.getByRole('button', { name: 'Importer les licenciés FFTT' }).click()
+  await page.goto('/joueurs')
+  await page.getByRole('button', { name: 'Importer depuis la FFTT' }).click()
   return page.getByRole('dialog')
 }
 
@@ -70,9 +69,6 @@ test.describe('Club admin — Joueurs FFTT import', () => {
     await expect(dialog.getByText(/1 joueur créé/)).toBeVisible()
     await dialog.getByRole('button', { name: 'Fermer' }).click()
 
-    // Through the app's own link, not a reload: the dev server holds this
-    // creation in memory only.
-    await page.getByRole('navigation').getByRole('link', { name: 'Joueurs' }).first().click()
     await page.getByPlaceholder('Rechercher un joueur').fill('Pont-Martin')
     await expect(page.getByRole('cell', { name: 'Alain Du Pont-Martin' })).toBeVisible()
   })
@@ -154,18 +150,12 @@ test.describe('Joueurs FFTT import — mobile', () => {
   // Dense comparison screen, desktop-only for now (#381, #384).
   test('the import trigger is not offered below md:', async ({ page }) => {
     await loginAs(page, 'club.admin')
-    await page.goto('/club')
-    await expect(page.getByRole('button', { name: 'Modifier' }).first()).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Importer les licenciés FFTT' })).toBeHidden()
-  })
-
-  // The Joueurs list lost its import to the club's page (#602), so the manual
-  // add is its one action, filled at every width.
-  test('the Joueurs list keeps the manual add, filled', async ({ page }) => {
-    await loginAs(page, 'club.admin')
     await page.goto('/joueurs')
+    await expect(page.getByRole('button', { name: 'Ajouter un joueur' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Importer depuis la FFTT' })).toBeHidden()
+    // With the import gone, the manual add is the page's only action and takes
+    // the filled look back (it is outlined on desktop, where import leads).
     await expect(page.getByRole('button', { name: 'Ajouter un joueur' }))
       .toHaveCSS('background-color', 'rgb(201, 47, 47)')
-    await expect(page.getByRole('button', { name: /Importer/ })).toHaveCount(0)
   })
 })

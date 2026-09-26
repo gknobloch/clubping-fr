@@ -2,38 +2,43 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { TEXT_TARGET_CLASS } from '@/components/Button'
+import { useConfirm } from '@/components/useConfirm'
+import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { sortByName } from '@/lib/sortByName'
 import { activeSeasonId } from '@/lib/season'
 import { withSeasonCategory } from '@/lib/seasonCategories'
-import { categoriesSummary, categoryDisplay, normalizeCategory, orderedCategories } from '@/lib/playerCategories'
+import { categoriesSummary, categoryDisplay } from '@/lib/playerCategories'
 import {
   ELIGIBILITY_REASON_LABELS,
-  canClubAdd,
+  competitionGroupOf,
+  competitionsOfClub,
+  engagedOutsideGroup,
+  isPlayerEligible,
   playerEligibility,
+  type EligiblePlayer,
 } from '@/lib/competitionEligibility'
-import { assignmentSummary, assignmentsByPlayer } from '@/lib/competitionAssignments'
-import { useConfirm } from '@/components/useConfirm'
+import { assignmentSummary, assignmentsByPlayer, type CompetitionAssignment } from '@/lib/competitionAssignments'
+import { clubMemberGroups, mayManageMemberGroups } from '@/lib/memberGroups'
+import type { Competition, MemberGroup } from '@/types'
 
-/** The category filter's "everyone" and "nobody knows" entries. */
-const ALL = ''
-const NONE = 'none'
+type ClubPlayer = EligiblePlayer & { firstName: string; lastName: string }
 
 /**
- * What a club amends, competition by competition (#482).
+ * A club's competitions, and the group each one is reserved to (#604).
  *
- * The global mapping decides by category; this screen is the two exceptions a
- * club is allowed to make to it — take out a licensee it admits, put in one it
- * does not — and it is deliberately shaped as exceptions rather than as a
- * second list to maintain. Every row says which of the two it is, or that it is
- * neither, so a club can see at a glance what it has actually changed.
+ * It replaced a licensee-by-licensee list of exclusions and additions (#482):
+ * one choice per competition now, made from the club's own groups (#602). And
+ * since the group is the list, the table here files people into it directly —
+ * a competition reserved to a group of one, with twenty licensees already
+ * fielded, is two clicks from being right, not twenty ticks in another dialog.
  *
- * A locked competition offers no way in at all. A youth championship does not
- * admit a veteran because a club asked nicely, and the API refuses it too —
- * this only spares the round trip.
+ * The rule is the competition's categories AND the group: a group can only
+ * narrow. So the table lists who the categories admit — in the group or not —
+ * and, greyed, whoever the club put in the group but the categories refuse.
  *
- * Same section on both club screens, like ClubAdmins (#474): a club admin sees
- * their own club on /club, a general admin any club on /clubs/:id.
+ * A section of the club's page since #604 (it used to be its own screen), for
+ * everyone in the club; the controls are the admins'. The competitions the
+ * club does not play are folded away.
  */
 export function ClubCompetitions({
   clubId,
@@ -47,23 +52,21 @@ export function ClubCompetitions({
 }) {
   const { user } = useAuth()
   const {
-    competitions, players, competitionEligibilities, setCompetitionEligibility,
-    teams, divisions, gameSelections, playerSeasonCategories, seasons,
+    competitions, players, teams, divisions, gameSelections, playerSeasonCategories, seasons,
+    memberGroups, competitionGroups, setCompetitionGroup, setMemberGroupMembers,
   } = useAppData()
-  const [selectedId, setSelectedId] = useState('')
-  const [category, setCategory] = useState<string>(ALL)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
   const [confirm, confirmDialog] = useConfirm()
+  const [showOthers, setShowOthers] = useState(false)
 
-  const canManage =
-    user?.role === 'general_admin' || (user?.role === 'club_admin' && user.clubId === clubId)
+  // Reserving a competition is choosing among the club's groups, so it is
+  // theirs to do who manage those groups: the club's admins, and a general admin.
+  const canManage = mayManageMemberGroups(user, clubId)
+  const groups = clubMemberGroups(memberGroups, clubId)
 
-  const available = useMemo(
-    () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
-    [competitions],
+  const { played, others } = useMemo(
+    () => competitionsOfClub(clubId, competitions, teams, divisions, competitionGroups),
+    [clubId, competitions, teams, divisions, competitionGroups],
   )
-  const competition = available.find((c) => c.id === selectedId) ?? available[0]
 
   // The category is a fact about a season (#482); the one that decides who may
   // play is the season being played.
@@ -76,147 +79,81 @@ export function ClubCompetitions({
     ),
     [players, clubId, playerSeasonCategories, seasonId],
   )
+  const clubTeams = useMemo(() => teams.filter((t) => t.clubId === clubId), [teams, clubId])
+  const engagedIn = (competitionId: string) =>
+    assignmentsByPlayer(competitionId, { teams: clubTeams, divisions, competitions, gameSelections })
 
-  // Overrides of this club only. A general admin sees every club's rows in the
-  // payload, and reading them all here would let one club's exception decide
-  // another club's list.
-  const overrides = useMemo(
-    () => competitionEligibilities.filter((e) => e.clubId === clubId),
-    [competitionEligibilities, clubId],
-  )
-
-  /** Only the categories the club actually holds — a filter of empty buckets. */
-  const categoryOptions = useMemo(() => {
-    const held = new Set(clubPlayers.map((p) => normalizeCategory(p.category)).filter(Boolean))
-    return {
-      options: orderedCategories().filter((c) => held.has(c.code)),
-      hasUnknown: clubPlayers.some((p) => !normalizeCategory(p.category)),
-    }
-  }, [clubPlayers])
-
-  // Who this competition already fields, so an exclusion cannot be made in
-  // silence — see src/lib/competitionAssignments.
-  const engaged = useMemo(
-    () => (competition
-      ? assignmentsByPlayer(competition.id, {
-        teams: teams.filter((t) => t.clubId === clubId),
-        divisions,
-        competitions,
-        gameSelections,
-      })
-      : new Map()),
-    [competition, teams, clubId, divisions, competitions, gameSelections],
-  )
-
-  const rows = useMemo(() => {
-    if (!competition) return []
-    const shown = category === ALL
-      ? clubPlayers
-      : clubPlayers.filter((p) => {
-        const code = normalizeCategory(p.category)
-        return category === NONE ? !code : code === category
-      })
-    return shown.map((player) => ({
-      player,
-      ...playerEligibility(player, competition, overrides),
-      overridden: overrides.some(
-        (o) => o.competitionId === competition.id && o.playerId === player.id,
-      ),
-      summary: assignmentSummary(engaged.get(player.id)),
-    }))
-  }, [clubPlayers, competition, overrides, category, engaged])
-
-  const eligible = rows.filter((r) => r.eligible)
-  const rest = rows.filter((r) => !r.eligible)
-
-  const apply = async (playerId: string, effect: 'included' | 'excluded' | 'default') => {
-    if (!competition) return
-    if (effect === 'excluded') {
-      const summary = assignmentSummary(engaged.get(playerId))
-      const player = clubPlayers.find((p) => p.id === playerId)
-      if (summary && !(await confirm({
-        title: `Exclure ${player?.firstName} ${player?.lastName} de « ${competition.displayName} » ?`,
-        message: `${summary}. L'exclusion ne le retire d'aucune équipe ni d'aucune composition — elle l'empêche seulement d'être ajouté ailleurs. À vous de régler le reste.`,
-        confirmLabel: 'Exclure',
-      }))) return
-    }
-    setBusy(true)
-    setError(null)
-    const ok = await setCompetitionEligibility(clubId, competition.id, playerId, effect)
-    setBusy(false)
-    if (!ok) {
-      setError(
-        effect === 'included'
-          ? "Cette compétition est réservée à certaines catégories : ce licencié ne peut pas y être ajouté."
-          : "La modification n'a pas pu être enregistrée. Réessayez.",
-      )
-    }
+  const names = (ps: ClubPlayer[]) => {
+    const shown = ps.slice(0, 5).map((p) => `${p.firstName} ${p.lastName}`).join(', ')
+    return ps.length > 5 ? `${shown} et ${ps.length - 5} autre${ps.length - 5 > 1 ? 's' : ''}` : shown
   }
+
+  /**
+   * Nothing is ever taken off a team or a line-up — eligibility bites on what
+   * can be added (#482) — so any step that leaves somebody fielded outside the
+   * rule asks first, says exactly that, and names them.
+   */
+  const confirmLeaving = (competition: Competition, leaving: ClubPlayer[], title: string, confirmLabel: string) =>
+    leaving.length === 0 || confirm({
+      title,
+      message: `${leaving.length === 1 ? 'Un licencié que vos équipes engagent déjà ne sera' : `${leaving.length} licenciés que vos équipes engagent déjà ne seront`} plus éligible${leaving.length > 1 ? 's' : ''} à « ${competition.displayName} » : ${names(leaving)}. Rien ne les retire d'une équipe ni d'une composition ; ils ne seront simplement plus proposés ailleurs.`,
+      confirmLabel,
+      tone: 'accent',
+    })
+
+  const choose = async (competition: Competition, groupId: string | null) => {
+    const group = groups.find((g) => g.id === groupId)
+    if (group) {
+      const engaged = engagedIn(competition.id)
+      const leaving = clubPlayers.filter((p) => engaged.has(p.id) && !isPlayerEligible(p, competition, group))
+      if (!(await confirmLeaving(
+        competition, leaving,
+        `Réserver « ${competition.displayName} » au groupe « ${group.displayName} » ?`, 'Réserver',
+      ))) return
+    }
+    setCompetitionGroup(clubId, competition.id, groupId)
+  }
+
+  const file = async (competition: Competition, group: MemberGroup, ids: string[], add: boolean) => {
+    if (!add) {
+      const engaged = engagedIn(competition.id)
+      const leaving = clubPlayers.filter((p) => ids.includes(p.id) && engaged.has(p.id))
+      if (!(await confirmLeaving(
+        competition, leaving, `Retirer du groupe « ${group.displayName} » ?`, 'Retirer',
+      ))) return false
+    }
+    const next = add
+      ? [...group.memberIds, ...ids.filter((id) => !group.memberIds.includes(id))]
+      : group.memberIds.filter((id) => !ids.includes(id))
+    setMemberGroupMembers(clubId, group.id, next)
+    return true
+  }
+
+  const card = (competition: Competition) => (
+    <CompetitionCard
+      key={competition.id}
+      idPrefix={`${idPrefix}-${competition.id}`}
+      competition={competition}
+      group={competitionGroupOf(clubId, competition.id, competitionGroups, memberGroups)}
+      groups={groups}
+      players={clubPlayers}
+      engaged={engagedIn(competition.id)}
+      canManage={canManage}
+      onChoose={(groupId) => choose(competition, groupId)}
+      onFile={(group, ids, add) => file(competition, group, ids, add)}
+    />
+  )
 
   const isSection = variant === 'section'
 
-  const row = ({ player, reason, overridden, eligible: ok, summary }: (typeof rows)[number]) => {
-    const playerCategory = categoryDisplay(player.category)
-    const addable = competition ? canClubAdd(competition, player) : false
-    return (
-      <li
-        key={player.id}
-        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 py-2 last:border-0"
-      >
-        <Link to={`/joueurs/${player.id}`} className="min-w-0 rounded hover:text-accent-600">
-          <p className="truncate text-sm font-medium text-slate-800">
-            {player.firstName} {player.lastName}
-          </p>
-          <p className="text-xs text-slate-500">
-            {playerCategory || 'Catégorie inconnue'} · {ELIGIBILITY_REASON_LABELS[reason]}
-          </p>
-          {!ok && summary && (
-            <p className="text-xs font-medium text-amber-600">⚠ {summary}</p>
-          )}
-        </Link>
-        {canManage && (
-          overridden ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => apply(player.id, 'default')}
-              className={`text-sm font-medium text-accent-600 hover:text-accent-800 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}
-            >
-              Rétablir le défaut
-            </button>
-          ) : reason === 'category' ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => apply(player.id, 'excluded')}
-              className={`text-sm font-medium text-red-600 hover:text-red-800 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}
-            >
-              Exclure
-            </button>
-          ) : addable ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => apply(player.id, 'included')}
-              className={`text-sm font-medium text-accent-600 hover:text-accent-800 disabled:opacity-50 ${TEXT_TARGET_CLASS}`}
-            >
-              Ajouter
-            </button>
-          ) : (
-            <span className="text-xs text-slate-400">Compétition réservée</span>
-          )
-        )}
-      </li>
-    )
-  }
-
   return (
     <section
+      id="competitions"
       aria-labelledby={`${idPrefix}-competitions-title`}
       className={
         isSection
-          ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'
-          : 'rounded-xl border border-slate-200 bg-white p-6 shadow-sm'
+          ? 'scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'
+          : 'scroll-mt-20 rounded-xl border border-slate-200 bg-white p-6 shadow-sm'
       }
     >
       {isSection ? (
@@ -232,82 +169,273 @@ export function ClubCompetitions({
         </h2>
       )}
 
-      {available.length === 0 ? (
+      {played.length + others.length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">
           Aucune compétition n'est définie. Tous les licenciés du club restent proposés partout.
         </p>
       ) : (
         <>
-          <div className="mt-3">
-            <label htmlFor={`${idPrefix}-competition-select`} className="sr-only">
-              Compétition
-            </label>
-            <select
-              id={`${idPrefix}-competition-select`}
-              value={competition?.id ?? ''}
-              onChange={(e) => {
-                setError(null)
-                setSelectedId(e.target.value)
-              }}
-              className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:min-h-0"
-            >
-              {available.map((c) => (
-                <option key={c.id} value={c.id}>{c.displayName}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mt-2">
-            <label htmlFor={`${idPrefix}-category-filter`} className="sr-only">Catégorie</label>
-            <select
-              id={`${idPrefix}-category-filter`}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:min-h-0"
-            >
-              <option value={ALL}>Toutes les catégories</option>
-              {categoryOptions.options.map((c) => (
-                <option key={c.code} value={c.code}>{c.label}</option>
-              ))}
-              {categoryOptions.hasUnknown && <option value={NONE}>Sans catégorie</option>}
-            </select>
-          </div>
-
-          {competition && (
-            <p className="mt-2 text-xs text-slate-500">
-              Par défaut : {categoriesSummary(competition.categories)}.
-              {competition.isCategoryLocked
-                ? ' Réservée à ces catégories — le club peut retirer un licencié, pas en ajouter un autre.'
-                : ' Le club peut ajouter ou retirer des licenciés.'}
+          <p className="mt-2 text-sm text-slate-600">
+            Chaque compétition admet certaines catégories. Le club peut la réserver à l'un de ses
+            groupes : seuls ses membres de ces catégories y sont alors proposés.
+          </p>
+          {canManage && groups.length === 0 && (
+            <p className="mt-2 text-sm text-slate-500">
+              Le club n'a encore aucun groupe : créez-en un dans la section Groupes ci-dessus.
             </p>
           )}
-
-          {error && (
-            <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Éligibles ({eligible.length})
-          </h4>
-          {eligible.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">Aucun licencié du club n'y est éligible.</p>
+          {played.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">Aucune équipe du club n'est engagée dans une compétition.</p>
           ) : (
-            <ul className="mt-1">{eligible.map(row)}</ul>
+            <ul className="mt-4 space-y-4">{played.map(card)}</ul>
           )}
-
-          {rest.length > 0 && (
-            <>
-              <h4 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Non éligibles ({rest.length})
-              </h4>
-              <ul className="mt-1">{rest.map(row)}</ul>
-            </>
+          {others.length > 0 && (
+            <div className="mt-4">
+              <button
+                type="button"
+                aria-expanded={showOthers}
+                onClick={() => setShowOthers((v) => !v)}
+                className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+              >
+                {showOthers ? 'Masquer' : 'Afficher'} les compétitions où le club n'a pas d'équipe ({others.length})
+              </button>
+              {showOthers && <ul className="mt-3 space-y-4">{others.map(card)}</ul>}
+            </div>
           )}
         </>
       )}
       {confirmDialog}
     </section>
+  )
+}
+
+type Show = 'all' | 'in' | 'out'
+const SHOW_LABELS: Record<Show, string> = { all: 'Tous', in: 'Dans le groupe', out: 'Hors du groupe' }
+
+function CompetitionCard({
+  idPrefix,
+  competition,
+  group,
+  groups,
+  players,
+  engaged,
+  canManage,
+  onChoose,
+  onFile,
+}: {
+  idPrefix: string
+  competition: Competition
+  group: MemberGroup | undefined
+  groups: MemberGroup[]
+  players: ClubPlayer[]
+  engaged: Map<string, CompetitionAssignment>
+  canManage: boolean
+  onChoose: (groupId: string | null) => void
+  onFile: (group: MemberGroup, ids: string[], add: boolean) => Promise<boolean>
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [show, setShow] = useState<Show>('all')
+
+  // Everyone the categories admit — the ones a group can be made of — and,
+  // greyed, the group's members the categories refuse.
+  const rows = useMemo(() => players
+    .map((player) => {
+      const byCategory = playerEligibility(player, competition)
+      const inGroup = !!group?.memberIds.includes(player.id)
+      return { player, byCategory, inGroup, eligible: byCategory.eligible && (!group || inGroup) }
+    })
+    .filter((r) => r.byCategory.eligible || r.inGroup), [players, competition, group])
+
+  const shown = rows.filter((r) => show === 'all' || (show === 'in') === r.inGroup)
+  const selectable = canManage && !!group
+  const pickable = shown.filter((r) => r.byCategory.eligible)
+  const allPicked = pickable.length > 0 && pickable.every((r) => selected.has(r.player.id))
+  const eligibleCount = rows.filter((r) => r.eligible).length
+  // Fielded already, and left out by the group: the contradiction the group
+  // can settle, and the only one this warns about — nothing is ever taken off
+  // a team (#482), so the club has to be told.
+  const missing = engagedOutsideGroup(players, competition, group, (id) => engaged.has(id))
+  const toAdd = [...selected].filter((id) => !group?.memberIds.includes(id))
+  const toRemove = [...selected].filter((id) => group?.memberIds.includes(id))
+
+  const toggle = (id: string) => setSelected((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const file = async (ids: string[], add: boolean) => {
+    if (group && (await onFile(group, ids, add))) setSelected(new Set())
+  }
+  const noneLabel = competition.categories.length === 0
+    ? 'Aucun — tous les licenciés'
+    : 'Aucun — tous les licenciés de ces catégories'
+
+  return (
+    <li className="rounded-lg border border-slate-200 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-800">{competition.displayName}</p>
+          <p className="text-xs text-slate-500">Catégories : {categoriesSummary(competition.categories)}</p>
+        </div>
+        <div className="w-full sm:w-72">
+          <label htmlFor={`${idPrefix}-group`} className="block text-sm font-medium text-slate-700">
+            Réservée au groupe
+          </label>
+          {canManage ? (
+            <select
+              id={`${idPrefix}-group`}
+              value={group?.id ?? ''}
+              onChange={(e) => {
+                setSelected(new Set())
+                setShow('all')
+                onChoose(e.target.value || null)
+              }}
+              className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 md:min-h-0"
+            >
+              <option value="">{noneLabel}</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.displayName}</option>
+              ))}
+            </select>
+          ) : (
+            <p id={`${idPrefix}-group`} className="mt-1 text-sm text-slate-600">
+              {group?.displayName ?? noneLabel}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {missing.length > 0 && (
+        <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <span>
+            ⚠ {missing.length} joueur{missing.length > 1 ? 's' : ''} engagé{missing.length > 1 ? 's' : ''} hors du groupe
+          </span>
+          {selectable && (
+            <button
+              type="button"
+              onClick={() => {
+                setShow('out')
+                setSelected(new Set(missing.map((p) => p.id)))
+              }}
+              className={`font-medium text-amber-900 underline hover:no-underline ${TEXT_TARGET_CLASS}`}
+            >
+              Les sélectionner
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-slate-600">
+          {eligibleCount} joueur{eligibleCount > 1 ? 's' : ''} éligible{eligibleCount > 1 ? 's' : ''}
+        </p>
+        {group && (
+          <div role="radiogroup" aria-label="Afficher" className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm">
+            {(['all', 'in', 'out'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                role="radio"
+                aria-checked={show === s}
+                onClick={() => setShow(s)}
+                className={`min-h-[44px] px-3 py-1 font-medium md:min-h-0 ${show === s ? 'bg-accent-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                {SHOW_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selectable && selected.size > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-600">{selected.size} sélectionné{selected.size > 1 ? 's' : ''}</span>
+          <button
+            type="button"
+            disabled={toAdd.length === 0}
+            onClick={() => file(toAdd, true)}
+            className={`${PRIMARY_BUTTON_CLASS} disabled:opacity-50`}
+          >
+            Ajouter au groupe ({toAdd.length})
+          </button>
+          <button
+            type="button"
+            disabled={toRemove.length === 0}
+            onClick={() => file(toRemove, false)}
+            className={`${NEUTRAL_BUTTON_CLASS} disabled:opacity-50`}
+          >
+            Retirer du groupe ({toRemove.length})
+          </button>
+        </div>
+      )}
+
+      <div className="mt-3 max-h-96 overflow-y-auto rounded-lg border border-slate-100">
+        <table className="min-w-full text-sm">
+          <thead className="sticky top-0 bg-slate-50 text-left text-xs font-medium text-slate-500">
+            <tr>
+              {selectable && (
+                <th scope="col" className="w-10 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label="Tout sélectionner"
+                    checked={allPicked}
+                    disabled={pickable.length === 0}
+                    onChange={() => setSelected(allPicked ? new Set() : new Set(pickable.map((r) => r.player.id)))}
+                    className="h-5 w-5 rounded border-slate-300 accent-accent-600 md:h-4 md:w-4"
+                  />
+                </th>
+              )}
+              <th scope="col" className="px-3 py-2">Joueur</th>
+              <th scope="col" className="hidden px-3 py-2 sm:table-cell">Catégorie</th>
+              {/* Below sm: the Tous / Dans le groupe / Hors du groupe filter
+                  says it already, and the room goes to « Engagé ». */}
+              {group && <th scope="col" className="hidden px-3 py-2 sm:table-cell">Groupe</th>}
+              <th scope="col" className="px-3 py-2">Engagé</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {shown.map(({ player: p, byCategory, inGroup, eligible }) => {
+              const engagement = assignmentSummary(engaged.get(p.id))
+              const conflict = !!engagement && !eligible
+              return (
+                <tr key={p.id} className={byCategory.eligible ? '' : 'text-slate-400'}>
+                  {selectable && (
+                    <td className="px-3 py-1.5">
+                      {byCategory.eligible && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Sélectionner ${p.firstName} ${p.lastName}`}
+                          checked={selected.has(p.id)}
+                          onChange={() => toggle(p.id)}
+                          className="h-5 w-5 rounded border-slate-300 accent-accent-600 md:h-4 md:w-4"
+                        />
+                      )}
+                    </td>
+                  )}
+                  <td className="px-3 py-1.5">
+                    <Link to={`/joueurs/${p.id}`} className="hover:text-accent-600">
+                      {p.firstName} {p.lastName}
+                    </Link>
+                  </td>
+                  <td className="hidden px-3 py-1.5 sm:table-cell">
+                    {categoryDisplay(p.category) || '—'}
+                    {!byCategory.eligible && ` · ${ELIGIBILITY_REASON_LABELS[byCategory.reason]}`}
+                  </td>
+                  {group && <td className="hidden px-3 py-1.5 sm:table-cell">{inGroup ? 'Oui' : '—'}</td>}
+                  <td className={`px-3 py-1.5 text-xs ${conflict ? 'font-medium text-amber-700' : 'text-slate-500'}`}>
+                    {conflict && '⚠ '}
+                    {engagement ?? ''}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {shown.length === 0 && (
+          <p className="px-3 py-4 text-sm text-slate-400">Personne ici.</p>
+        )}
+      </div>
+    </li>
   )
 }
