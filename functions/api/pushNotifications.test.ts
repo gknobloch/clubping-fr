@@ -466,6 +466,47 @@ describe('reading what was actually delivered (#495)', () => {
     expect(writesTo(writes, /DELETE FROM push_tokens/)).toEqual([])
   })
 
+  describe('a member with several devices', () => {
+    const ref = { kind: 'availability_request', user_id: 'alice', game_id: 'g1' }
+    const twoDevices = [
+      { ticket_id: 't-phone', token: 'ExponentPushToken[phone]', ...ref },
+      { ticket_id: 't-tablet', token: 'ExponentPushToken[tablet]', ...ref },
+    ]
+    const refused = { status: 'error', message: 'refused', details: { error: 'InvalidCredentials' } }
+
+    it('does not put a reminder back when another device received it', async () => {
+      // The reported bug: the phone rang, the tablet failed, the ledger row
+      // was undone — and the phone rang again every evening until the match.
+      stubExpoWithReceipts({ 't-phone': { status: 'ok' }, 't-tablet': refused })
+      const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending: twoDevices })
+      const res = await dispatch(db)
+
+      expect(await res.json()).toMatchObject({
+        receipts: { checked: 2, delivered: 1, failed: 1, requeued: 0 },
+      })
+      expect(writesTo(writes, /DELETE FROM notifications_sent/)).toEqual([])
+    })
+
+    it('waits on a device whose verdict has not come back yet', async () => {
+      stubExpoWithReceipts({ 't-tablet': refused })
+      const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending: twoDevices })
+      const res = await dispatch(db)
+
+      expect(await res.json()).toMatchObject({ receipts: { failed: 1, pending: 1, requeued: 0 } })
+      expect(writesTo(writes, /DELETE FROM notifications_sent/)).toEqual([])
+    })
+
+    it('puts the reminder back once, when every device failed', async () => {
+      stubExpoWithReceipts({ 't-phone': refused, 't-tablet': refused })
+      const { db, writes } = fakeDb({ users: [alice], fixtures: [], pending: twoDevices })
+      const res = await dispatch(db)
+
+      expect(await res.json()).toMatchObject({ receipts: { failed: 2, requeued: 1 } })
+      const undone = writesTo(writes, /DELETE FROM notifications_sent/)
+      expect(undone.map((w) => w.params)).toEqual([['availability_request', 'alice', 'g1']])
+    })
+  })
+
   it('deletes the token when the app is gone from the device', async () => {
     stubExpoWithReceipts({
       't-ok': { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } },

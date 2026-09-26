@@ -121,7 +121,7 @@ interface ReceiptReport {
   delivered: number
   /** Refused by the platform — each one logged with the reason it gave. */
   failed: number
-  /** Reminders put back on the table because they never arrived. */
+  /** Reminders put back on the table because none of their deliveries arrived. */
   requeued: number
   /** Still waiting on Expo, or abandoned after a day of waiting. */
   pending: number
@@ -524,12 +524,27 @@ interface PendingRow {
  * - **ok** — the row has served its purpose and goes.
  * - **error** — logged with the platform's own words, because that sentence is
  *   the only thing that ever names the cause. If the delivery was backing a
- *   ledger row, that row is deleted: the member was never told, so the
- *   reminder is owed again, and today's sweep — which runs after this — will
- *   send it. A token the platform says is gone is deleted too, which is what
- *   stops a permanently dead device from being retried for seven days.
+ *   ledger row, and it was the member's ONLY way of being told, that row is
+ *   deleted: the member was never told, so the reminder is owed again, and
+ *   today's sweep — which runs after this — will send it. A token the
+ *   platform says is gone is deleted too, which is what stops a permanently
+ *   dead device from being retried for seven days.
  * - **pending** — Expo has nothing yet. Left alone, and abandoned once it is
  *   older than the window Expo keeps receipts in.
+ *
+ * "Only way" is the point of the per-reminder grouping below. A ticket is per
+ * DEVICE, the ledger per MEMBER: one reminder to a member with a phone and a
+ * tablet is two tickets under one ledger row. Undoing the row because one of
+ * them failed re-sent the reminder to every device the next evening — the one
+ * that had received it included — and again the evening after, for as long
+ * as the failing device kept failing and the match stayed inside the window.
+ * So a reminder is put back only when none of its deliveries arrived, and not
+ * while one of them is still pending: that one decides on a later run.
+ *
+ * The grouping sees one run's rows. All the tickets of one send are filed
+ * together and Expo settles them within minutes, so a day later they are
+ * answered together; a sibling that was already settled by an earlier run
+ * would need a receipt to take a whole day longer than the others.
  */
 async function collectReceipts(env: Env['Bindings']): Promise<ReceiptReport> {
   const db = env.DB
@@ -544,17 +559,24 @@ async function collectReceipts(env: Env['Bindings']): Promise<ReceiptReport> {
   const verdicts = await fetchReceipts(env, rows.results.map((r) => r.ticket_id))
   const settled: string[] = []
   const deadTokens = new Set<string>()
-  const requeue: Array<{ kind: string; userId: string; gameId: string }> = []
+  // Per reminder (kind, member, match): the ones with a failed delivery, and
+  // the ones with a delivery that arrived or may still arrive.
+  const failedRefs = new Map<string, { kind: string; userId: string; gameId: string }>()
+  const reachedRefs = new Set<string>()
+  const refKey = (r: PendingRow) =>
+    r.kind && r.user_id && r.game_id ? `${r.kind} ${sentKey(r.user_id, r.game_id)}` : null
   const cutoff = Date.now() - RECEIPT_TTL_MS
 
   for (const row of rows.results) {
     const verdict = verdicts.get(row.ticket_id) ?? { status: 'pending' as const }
+    const ref = refKey(row)
     if (verdict.status === 'pending') {
       if (row.queued_at < cutoff) {
         report.expired += 1
         settled.push(row.ticket_id)
       } else {
         report.pending += 1
+        if (ref) reachedRefs.add(ref)
       }
       continue
     }
@@ -562,6 +584,7 @@ async function collectReceipts(env: Env['Bindings']): Promise<ReceiptReport> {
     settled.push(row.ticket_id)
     if (verdict.status === 'ok') {
       report.delivered += 1
+      if (ref) reachedRefs.add(ref)
       continue
     }
     report.failed += 1
@@ -569,11 +592,12 @@ async function collectReceipts(env: Env['Bindings']): Promise<ReceiptReport> {
       `[push] non livré (${verdict.error ?? 'sans code'}) : ${verdict.platform ?? verdict.message ?? 'sans détail'}`,
     )
     if (verdict.error === 'DeviceNotRegistered') deadTokens.add(row.token)
-    if (row.kind && row.user_id && row.game_id) {
-      requeue.push({ kind: row.kind, userId: row.user_id, gameId: row.game_id })
+    if (ref && row.kind && row.user_id && row.game_id) {
+      failedRefs.set(ref, { kind: row.kind, userId: row.user_id, gameId: row.game_id })
     }
   }
 
+  const requeue = [...failedRefs].filter(([ref]) => !reachedRefs.has(ref)).map(([, e]) => e)
   await forgetLedger(db, requeue)
   report.requeued = requeue.length
   await pruneTokens(db, [...deadTokens])
