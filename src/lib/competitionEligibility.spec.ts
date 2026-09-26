@@ -3,6 +3,7 @@ import {
   competitionGroupOf,
   competitionRoster,
   competitionsOfClub,
+  engagedOutsideGroup,
   competitionOfDivision,
   eligiblePlayers,
   isPlayerEligible,
@@ -286,5 +287,23 @@ describe('competitionsOfClub (#604)', () => {
   it('keeps a competition the club reserved to a group', () => {
     const links = [{ clubId: 'club-1', competitionId: 'comp-vet', groupId: 'g' }]
     expect(competitionsOfClub('club-1', all, [], divisions, links).played.map((c) => c.id)).toEqual(['comp-vet'])
+  })
+})
+
+describe('engagedOutsideGroup (#604)', () => {
+  const players = [cadet, senior, veteran, unknown]
+  const engaged = (id: string) => ['p-cadet', 'p-senior', 'p-veteran', 'p-unknown'].includes(id)
+
+  it('lists the fielded players the group leaves out', () => {
+    expect(engagedOutsideGroup(players, competition(), seniors, engaged)).toEqual([veteran, unknown])
+  })
+
+  it('leaves out anyone the categories refuse — no group could let them in', () => {
+    expect(engagedOutsideGroup(players, youth, { memberIds: [] }, engaged)).toEqual([cadet])
+  })
+
+  it('says nothing without a group, or for someone nobody fields', () => {
+    expect(engagedOutsideGroup(players, competition(), undefined, engaged)).toEqual([])
+    expect(engagedOutsideGroup(players, competition(), seniors, () => false)).toEqual([])
   })
 })

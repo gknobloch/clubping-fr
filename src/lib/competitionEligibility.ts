@@ -152,6 +152,29 @@ export function competitionRoster<T extends EligiblePlayer>(
 }
 
 /**
+ * Who an équipe already fields but the club's group leaves out (#604) — the
+ * one contradiction the club's screen warns about, because it is the one the
+ * group can settle: each of them is admitted by the categories, and adding
+ * them to the group makes them eligible again.
+ *
+ * Nobody without a group (nothing is restricted), and never someone the
+ * categories refuse: no group could let them in, so a warning would ask for
+ * something the club cannot do.
+ */
+export function engagedOutsideGroup<T extends EligiblePlayer>(
+  players: T[],
+  competition: Pick<Competition, 'categories'>,
+  group: RestrictingGroup | undefined,
+  isEngaged: (playerId: string) => boolean,
+): T[] {
+  if (!group) return []
+  return players.filter((p) =>
+    isEngaged(p.id)
+    && !group.memberIds.includes(p.id)
+    && playerEligibility(p, competition).eligible)
+}
+
+/**
  * The group a club restricted a competition to, or undefined when it set none.
  *
  * A link to a group that no longer exists reads as no group at all: deleting a

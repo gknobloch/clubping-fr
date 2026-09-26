@@ -181,7 +181,7 @@ describe('ClubCompetitions — reserving a competition to a group (#604)', () =>
       render(<ClubCompetitions clubId={CLUB} />)
       const sen = card('Championnat par équipes')
       const alert = within(sen).getByRole('alert')
-      expect(alert).toHaveTextContent('1 joueur engagé mais plus éligible')
+      expect(alert).toHaveTextContent('1 joueur engagé hors du groupe')
       await user.click(within(alert).getByRole('button', { name: 'Les sélectionner' }))
       expect(listed(sen)).toEqual(['Hervé Ceroni'])
       await user.click(within(sen).getByRole('button', { name: 'Ajouter au groupe (1)' }))

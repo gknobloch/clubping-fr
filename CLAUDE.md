@@ -464,6 +464,12 @@ invisible dans le diff comme dans la revue.
   clics — « Les sélectionner » sur l'avertissement, puis « Ajouter au groupe ».
   Il liste ceux que la catégorie admet (c'est parmi eux qu'un groupe se
   compose) et, grisés sans case, les membres du groupe qu'elle refuse.
+- **L'avertissement ne parle que des engagés hors du groupe**
+  (`engagedOutsideGroup`) — ceux que le groupe peut régler, sur le web comme
+  dans l'app. Un engagé que la catégorie refuse n'y figure pas : aucun groupe
+  ne le ferait entrer, et le signaler demanderait au club l'impossible. Dans
+  l'app, il ouvre la revue de ces seuls joueurs, une case chacun et « Tout
+  sélectionner », comme le tableau du web.
 - **Seules les compétitions que le club joue sont montrées**
   (`competitionsOfClub`) : une de ses équipes actives y est, ou il l'a réservée
   à un groupe — un choix fait n'est jamais caché. Les autres sont repliées.

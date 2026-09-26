@@ -72,6 +72,7 @@ export function ChecklistSheet({
   saveDisabled,
   saveLabel,
   searchLabel,
+  selectAll = false,
   onSave,
   onClose,
   testID = 'checklist-sheet',
@@ -87,6 +88,12 @@ export function ChecklistSheet({
   saveLabel?: string
   /** Le libellé de la recherche — « Rechercher un joueur » par défaut. */
   searchLabel?: string
+  /**
+   * Une ligne « Tout sélectionner » en tête, comme la case d'en-tête du
+   * tableau du web : pour une revue où le choix courant est « tous », sans
+   * retirer celui d'en écarter un.
+   */
+  selectAll?: boolean
   /** `false` refuse l'enregistrement et garde la feuille ouverte. */
   onSave: (ids: string[]) => void | boolean | Promise<boolean>
   onClose: () => void
@@ -143,6 +150,22 @@ export function ChecklistSheet({
       )}
       <SelectionList>
         {options.length === 0 && <Text style={selection.empty}>{emptyLabel}</Text>}
+        {selectAll && shown.length > 1 && (
+          <CheckRow
+            testID={`${testID}-all`}
+            option={{ id: '*', label: 'Tout sélectionner' }}
+            checked={shown.every((o) => draft.has(o.id))}
+            onToggle={() => setDraft((prev) => {
+              const all = shown.every((o) => prev.has(o.id))
+              const next = new Set(prev)
+              for (const o of shown) {
+                if (all) next.delete(o.id)
+                else next.add(o.id)
+              }
+              return next
+            })}
+          />
+        )}
         {shown.map((o) => (
           <CheckRow
             key={o.id}

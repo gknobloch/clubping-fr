@@ -167,15 +167,43 @@ describe('Compétitions', () => {
     alert.mockRestore()
   })
 
-  // The case the section is for: fielded, outside the group — one gesture.
-  it('ajoute au groupe les engagés qui n’y sont pas', () => {
-    mockData.competitionGroups = [{ clubId: 'c1', competitionId: 'comp-sen', groupId: 'g1' }]
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, b) => b?.find((x) => x.text === 'Ajouter')?.onPress?.())
-    render(<ClubScreen />)
-    expect(screen.getByTestId('competition-conflicts-comp-sen')).toHaveTextContent(/1 joueur engagé mais plus éligible : Chloé Jeune/)
-    fireEvent.press(screen.getByTestId('competition-fix-comp-sen'))
-    expect(fns.setMemberGroupMembers).toHaveBeenCalledWith('c1', 'g1', ['p1', 'p2', 'p3'])
-    alert.mockRestore()
+  // The case the section is for: fielded, outside the group — reviewed one by
+  // one, or all at once.
+  describe('les engagés hors du groupe', () => {
+    beforeEach(() => {
+      // Both Bruno (in the group) and Chloé are on team 1; Anna is not fielded.
+      mockData.competitionGroups = [{ clubId: 'c1', competitionId: 'comp-sen', groupId: 'g1' }]
+      mockData.memberGroups = [{ ...coaches, memberIds: ['p1'] }]
+    })
+
+    it('ne signale que les joueurs engagés qui manquent au groupe', () => {
+      render(<ClubScreen />)
+      expect(screen.getByTestId('competition-conflicts-comp-sen'))
+        .toHaveTextContent(/2 joueurs engagés hors du groupe : Bruno Both, Chloé Jeune/)
+    })
+
+    it('en ajoute un seul, choisi', () => {
+      render(<ClubScreen />)
+      fireEvent.press(screen.getByTestId('competition-fix-comp-sen'))
+      fireEvent.press(screen.getByTestId('competition-missing-p3'))
+      fireEvent.press(screen.getByTestId('competition-missing-save'))
+      expect(fns.setMemberGroupMembers).toHaveBeenCalledWith('c1', 'g1', ['p1', 'p3'])
+    })
+
+    it('les ajoute tous d’un coup', () => {
+      render(<ClubScreen />)
+      fireEvent.press(screen.getByTestId('competition-fix-comp-sen'))
+      fireEvent.press(screen.getByTestId('competition-missing-all'))
+      expect(screen.getByTestId('competition-missing-title')).toHaveTextContent('Engagés hors du groupe (2)')
+      fireEvent.press(screen.getByTestId('competition-missing-save'))
+      expect(fns.setMemberGroupMembers).toHaveBeenCalledWith('c1', 'g1', ['p1', 'p2', 'p3'])
+    })
+
+    it('ne dit rien sans groupe : rien n’est restreint', () => {
+      mockData.competitionGroups = []
+      render(<ClubScreen />)
+      expect(screen.queryByTestId('competition-conflicts-comp-sen')).toBeNull()
+    })
   })
 })
 

@@ -7,7 +7,7 @@ import { SelectMark, SelectionList, selection } from '@/components/Selection'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
 import {
-  competitionGroupOf, competitionsOfClub, isPlayerEligible, playerEligibility,
+  competitionGroupOf, competitionsOfClub, engagedOutsideGroup, isPlayerEligible, playerEligibility,
   type EligiblePlayer,
 } from '@shared/lib/competitionEligibility'
 import { assignmentSummary, assignmentsByPlayer } from '@shared/lib/competitionAssignments'
@@ -164,13 +164,14 @@ function CompetitionCard({
 }) {
   const [choosing, setChoosing] = useState(false)
   const [filing, setFiling] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
 
   // Who the categories admit — whom a group can be made of.
   const admitted = players.filter((p) => playerEligibility(p, competition).eligible)
   const eligible = admitted.filter((p) => !group || group.memberIds.includes(p.id))
-  const eligibleIds = new Set(eligible.map((p) => p.id))
-  const conflicts = players.filter((p) => engaged.has(p.id) && !eligibleIds.has(p.id))
-  const fixable = conflicts.filter((p) => admitted.includes(p))
+  // Fielded already, and left out by the group: the one contradiction the
+  // group can settle, and the only one warned about (#604).
+  const missing = engagedOutsideGroup(players, competition, group, (id) => engaged.has(id))
   const noneLabel = competition.categories.length === 0 ? 'Aucun — tous les licenciés' : 'Aucun — tous ceux de ces catégories'
 
   const choose = async (groupId: string | null) => {
@@ -201,26 +202,19 @@ function CompetitionCard({
         {canManage && <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />}
       </TouchableOpacity>
 
-      {conflicts.length > 0 && (
+      {missing.length > 0 && (
         <View style={s.alert} accessibilityRole="alert" testID={`competition-conflicts-${competition.id}`}>
           <Text style={s.alertText}>
-            ⚠ {conflicts.length} joueur{conflicts.length > 1 ? 's' : ''} engagé{conflicts.length > 1 ? 's' : ''} mais plus éligible{conflicts.length > 1 ? 's' : ''} : {names(conflicts)}
+            ⚠ {missing.length} joueur{missing.length > 1 ? 's' : ''} engagé{missing.length > 1 ? 's' : ''} hors du groupe : {names(missing)}
           </Text>
-          {canManage && group && fixable.length > 0 && (
+          {canManage && (
             <TouchableOpacity
               testID={`competition-fix-${competition.id}`}
-              onPress={() => Alert.alert(
-                `Ajouter ${fixable.length} joueur${fixable.length > 1 ? 's' : ''} au groupe « ${group.displayName} » ?`,
-                names(fixable),
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  { text: 'Ajouter', onPress: () => onSetMembers(group.id, [...group.memberIds, ...fixable.map((p) => p.id)]) },
-                ],
-              )}
+              onPress={() => setReviewing(true)}
               hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
               accessibilityRole="button"
             >
-              <Text style={s.alertAction}>Les ajouter au groupe</Text>
+              <Text style={s.alertAction}>Choisir qui ajouter au groupe</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -253,6 +247,29 @@ function CompetitionCard({
         />
       )}
 
+      {/* The web's « Les sélectionner » then « Ajouter au groupe », as a sheet:
+          only the players missing, one box each, and all of them at once. */}
+      {reviewing && group && (
+        <ChecklistSheet
+          testID="competition-missing"
+          rowTestIDPrefix="competition-missing-"
+          title="Engagés hors du groupe"
+          options={missing.map((p) => ({
+            id: p.id,
+            label: nameOf(p),
+            hint: assignmentSummary(engaged.get(p.id)) ?? undefined,
+          }))}
+          selected={[]}
+          selectAll
+          saveLabel="Ajouter au groupe"
+          emptyLabel="Personne à ajouter."
+          onSave={(ids) => {
+            if (ids.length > 0) onSetMembers(group.id, [...group.memberIds, ...ids])
+          }}
+          onClose={() => setReviewing(false)}
+        />
+      )}
+
       {filing && group && (
         <ChecklistSheet
           testID="competition-players"
@@ -267,6 +284,7 @@ function CompetitionCard({
             hint: [categoryDisplay(p.category), assignmentSummary(engaged.get(p.id))].filter(Boolean).join(' · ') || undefined,
           }))}
           selected={group.memberIds}
+          selectAll
           emptyLabel="Aucun licencié du club dans ces catégories."
           onSave={async (ids) => {
             const leaving = players.filter((p) => engaged.has(p.id) && group.memberIds.includes(p.id) && !ids.includes(p.id))

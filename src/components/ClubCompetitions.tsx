@@ -12,6 +12,7 @@ import {
   ELIGIBILITY_REASON_LABELS,
   competitionGroupOf,
   competitionsOfClub,
+  engagedOutsideGroup,
   isPlayerEligible,
   playerEligibility,
   type EligiblePlayer,
@@ -250,10 +251,10 @@ function CompetitionCard({
   const pickable = shown.filter((r) => r.byCategory.eligible)
   const allPicked = pickable.length > 0 && pickable.every((r) => selected.has(r.player.id))
   const eligibleCount = rows.filter((r) => r.eligible).length
-  // Fielded already, and no longer admitted: the contradiction a club has to
-  // settle itself, since nothing is ever taken off a team (#482).
-  const conflicts = players.filter((p) => engaged.has(p.id) && !rows.some((r) => r.player.id === p.id && r.eligible))
-  const fixable = conflicts.filter((p) => rows.some((r) => r.player.id === p.id && r.byCategory.eligible))
+  // Fielded already, and left out by the group: the contradiction the group
+  // can settle, and the only one this warns about — nothing is ever taken off
+  // a team (#482), so the club has to be told.
+  const missing = engagedOutsideGroup(players, competition, group, (id) => engaged.has(id))
   const toAdd = [...selected].filter((id) => !group?.memberIds.includes(id))
   const toRemove = [...selected].filter((id) => group?.memberIds.includes(id))
 
@@ -305,18 +306,17 @@ function CompetitionCard({
         </div>
       </div>
 
-      {conflicts.length > 0 && (
+      {missing.length > 0 && (
         <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <span>
-            ⚠ {conflicts.length} joueur{conflicts.length > 1 ? 's' : ''} engagé{conflicts.length > 1 ? 's' : ''} mais
-            plus éligible{conflicts.length > 1 ? 's' : ''}
+            ⚠ {missing.length} joueur{missing.length > 1 ? 's' : ''} engagé{missing.length > 1 ? 's' : ''} hors du groupe
           </span>
-          {selectable && fixable.length > 0 && (
+          {selectable && (
             <button
               type="button"
               onClick={() => {
                 setShow('out')
-                setSelected(new Set(fixable.map((p) => p.id)))
+                setSelected(new Set(missing.map((p) => p.id)))
               }}
               className={`font-medium text-amber-900 underline hover:no-underline ${TEXT_TARGET_CLASS}`}
             >
