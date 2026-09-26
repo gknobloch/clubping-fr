@@ -35,7 +35,7 @@ describe('pathToTab', () => {
     ['/player/p1', 'joueurs'],
     // A group's members, pushed (#602) — the Joueurs list, and lit as such.
     ['/membres', 'joueurs'],
-    ['/club/import', 'club'],
+    ['/joueurs/import', 'joueurs'],
     ['/club/membres', 'club'],
     ['/team/t1', 'equipes'],
     ['/team/phase-games', 'equipes'],

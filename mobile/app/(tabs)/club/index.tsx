@@ -22,7 +22,6 @@ import type { Address, ClubChannel, ClubChannelType, MemberGroup, User } from '@
 import { MemberGroupEditor } from '@/components/MemberGroupEditor'
 import type { ChecklistOption } from '@/components/ChecklistSheet'
 import { clubMemberGroups, groupDeletionMessage, mayManageMemberGroups } from '@shared/lib/memberGroups'
-import { canManageClub } from '@/utils/roles'
 import { sortByName } from '@shared/lib/sortByName'
 
 // ---------------------------------------------------------------------------
@@ -202,9 +201,6 @@ export default function ClubScreen() {
   const club = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
   const groups = clubMemberGroups(memberGroups, club?.id)
   const canManageGroups = !!club && mayManageMemberGroups(user, club.id)
-  // The FFTT import (#555) brings the club's licensees in as a whole, so it
-  // hangs off the club since #602. It needs the club's FFTT number to ask for.
-  const canImport = !!user && !!club && canManageClub(user, club.id) && !!club.affiliationNumber
   const editedMembers = useMemo(
     () => (club && editing ? memberOptions(users, club.id, editing.group?.memberIds ?? []) : []),
     [users, club, editing],
@@ -243,18 +239,6 @@ export default function ClubScreen() {
             <Text style={s.affiliation}>N° {club.affiliationNumber}</Text>
           </View>
         </View>
-
-        {canImport && (
-          <TouchableOpacity
-            testID="import-players"
-            style={s.importButton}
-            onPress={() => router.push('/club/import')}
-            accessibilityRole="button"
-          >
-            <Ionicons name="cloud-download-outline" size={18} color={colors.accent} />
-            <Text style={s.importLabel}>Importer les licenciés FFTT</Text>
-          </TouchableOpacity>
-        )}
 
         <Section title="Adresses">
           {addresses.length === 0 ? (
@@ -336,16 +320,6 @@ const s = StyleSheet.create({
     padding: 16,
   },
   identityBody: { flex: 1 },
-  // A labelled button of its own rather than a header action: `AppHeader`
-  // carries the brand mark and the avatar, and the label is far too long for a
-  // 52pt bar — the same measurement that kept it off the header on Joueurs.
-  importButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44,
-    paddingHorizontal: 14, borderRadius: 10,
-    borderWidth: 1, borderColor: colors.accentSoftBorder,
-    backgroundColor: colors.accentSoft,
-  },
-  importLabel: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.accent },
   clubName: { fontSize: 18, fontFamily: fonts.semiBold, color: colors.textPrimary },
   affiliation: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   section: {

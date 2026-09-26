@@ -28,6 +28,7 @@ import { Avatar } from '@/components/Avatar'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
 import { GroupMatchSwitch, MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { canManageClub } from '@/utils/roles'
 import { PLAYER_SEARCH_LABEL } from '@shared/lib/playerSearch'
 import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@shared/lib/memberGroups'
 
@@ -59,6 +60,13 @@ export default function JoueursScreen() {
   // what this tab is for.
   const [activeOnly, setActiveOnly] = useState(true)
   const canSeeArchived = canSeeArchivedPlayers(user?.role)
+  // The FFTT import writes into one club, so it needs one to write into: a
+  // general admin sees every club's licensees here and has no target (#555).
+  // Back on this list since #604 — it brings the roster in, and this is where
+  // a club checks what it brought.
+  const ownClub = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
+  const canImport =
+    !!user && !!ownClub && canManageClub(user, ownClub.id) && !!ownClub.affiliationNumber
   // The fiche beside the list rather than pushed over it (#466).
   const { isTwoPane } = useLayout()
   const listRef = useRef<FlatList<Player>>(null)
@@ -138,14 +146,30 @@ export default function JoueursScreen() {
       {/* The list's controls, in the web's order (#602): search, the club's
           groups, the two switches, and how many that leaves. */}
       <View style={[styles.searchBar, contentWidth()]}>
+        {/* The import as an icon beside the search box, not a banner under it:
+            a full-width row of its own pushed the list down for a task a club
+            runs a few times a season. The label rides in its accessible name. */}
+        <View style={styles.searchRow}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, styles.inputGrow]}
           placeholder={PLAYER_SEARCH_LABEL}
           placeholderTextColor={colors.textSecondary}
           value={query}
           onChangeText={setQuery}
           clearButtonMode="while-editing"
         />
+        {canImport && (
+          <TouchableOpacity
+            testID="import-players"
+            style={styles.importButton}
+            onPress={() => router.push('/joueurs/import')}
+            accessibilityRole="button"
+            accessibilityLabel="Importer les licenciés FFTT"
+          >
+            <Ionicons name="cloud-download-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
+        )}
+        </View>
         <MemberGroupFilter
           groups={filterGroups}
           selected={selectedGroupIds}
@@ -273,6 +297,12 @@ export default function JoueursScreen() {
 
 const styles = StyleSheet.create({
   searchBar: { padding: 12, paddingBottom: 4 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inputGrow: { flex: 1 },
+  importButton: {
+    width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.accentSoftBorder, backgroundColor: colors.accentSoft,
+  },
   input: {
     backgroundColor: colors.card,
     borderRadius: 10,
