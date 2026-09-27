@@ -33,6 +33,7 @@ export function TrainingCard({
   onAnswer,
   onCancel,
   onRestore,
+  onAddToCalendar,
   showDate = false,
 }: {
   occurrence: TrainingOccurrence
@@ -46,6 +47,8 @@ export function TrainingCard({
   onAnswer: (status: AvailabilityStatus | null) => void
   onCancel: () => void
   onRestore: () => void
+  /** Offered on a guided session still on — this date or the whole series. */
+  onAddToCalendar?: () => void
   /** Say the day too — on the Accueil, where no date heading sits above the card. */
   showDate?: boolean
 }) {
@@ -81,6 +84,17 @@ export function TrainingCard({
             <Text style={s.note}>{o.note}</Text>
           ) : null}
         </View>
+        {onAddToCalendar && asksForAnswer(t.kind) && !o.cancelled && (
+          <TouchableOpacity
+            testID={`training-calendar-${key}`}
+            onPress={onAddToCalendar}
+            style={s.manage}
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter à mon agenda"
+          >
+            <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
         {canManage && (
           <TouchableOpacity
             testID={o.cancelled ? `training-restore-${key}` : `training-cancel-${key}`}
@@ -100,7 +114,8 @@ export function TrainingCard({
         <View style={s.answers}>
           {isExpected && (
             <View style={s.mine}>
-              <Text style={s.mineLabel}>Vous venez ?</Text>
+              {/* The match card's words (#608): one question, asked the same way. */}
+              <Text style={s.mineLabel}>Ma disponibilité</Text>
               <View style={s.segmented}>
                 {ALL_STATUSES.map((status) => {
                   const cfg = AVAIL[status]
@@ -227,7 +242,8 @@ const s = StyleSheet.create({
   manageDanger: { color: colors.danger },
   answers: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 8 },
   mine: { gap: 6 },
-  mineLabel: { fontSize: 13, fontFamily: fonts.medium, color: colors.textPrimary },
+  // NextMatchCard's section label, so the two read as the same question.
+  mineLabel: { fontSize: 13, color: colors.textSecondary },
   segmented: { flexDirection: 'row', gap: 8 },
   segment: {
     flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center',

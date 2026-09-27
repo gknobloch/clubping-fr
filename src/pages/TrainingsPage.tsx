@@ -15,7 +15,7 @@ import { sortByName } from '@/lib/sortByName'
 import { todayIso } from '@/lib/weeks'
 import {
   audienceLabel, clubTrainings,
-  expectedMemberIds, formatTimeRange, mayManageTrainings, occurrenceKey, placeLabel, recurrenceLabel,
+  expectedMemberIds, formatTimeRange, mayManageSchedule, mayManageTrainings, occurrenceKey, placeLabel, recurrenceLabel,
   trainingAddress, upcomingOccurrences, type TrainingOccurrence,
 } from '@/lib/trainings'
 import type { Training } from '@/types'
@@ -125,7 +125,8 @@ export function TrainingsPage() {
                   )}
                   answers={trainingAvailabilities}
                   viewerId={user?.id}
-                  canManage={canManage}
+                  // Per series (#608): a guided one's own managers run its dates.
+                  canManage={mayManageSchedule(user, o.training)}
                   onAnswer={(playerId, status) => setTrainingAvailability(o.training.id, o.date, playerId, status)}
                   onCancel={() => setCancelling(o)}
                   onRestore={() => restore(o)}
@@ -157,14 +158,15 @@ export function TrainingsPage() {
                   <p className="text-slate-500">{audienceLabel(t, groups)}</p>
                   {t.notes && <p className="mt-1 text-slate-600">{t.notes}</p>}
                 </div>
-                {canManage && (
+                {mayManageSchedule(user, t) && (
                   <RowActions
                     menuOnly
                     label={`Actions — ${t.displayName}`}
                     actions={[
-                      { label: 'Modifier', onClick: () => setEditing({ training: t }) },
+                      // The series itself is the admins'; its dates, its managers' too.
+                      canManage && { label: 'Modifier', onClick: () => setEditing({ training: t }) },
                       t.kind === 'guided' && { label: 'Ajouter des dates', onClick: () => setAddingDatesTo(t) },
-                      { label: 'Supprimer', tone: 'danger', onClick: () => removeSeries(t) },
+                      canManage && { label: 'Supprimer', tone: 'danger', onClick: () => removeSeries(t) },
                     ]}
                   />
                 )}
@@ -179,6 +181,11 @@ export function TrainingsPage() {
           training={editing.training}
           addresses={club?.addresses ?? []}
           groups={groups}
+          members={sortByName(
+            users
+              .filter((u) => u.clubId === clubId)
+              .map((u) => ({ ...u, firstName: u.firstName ?? '', lastName: u.lastName ?? '' })),
+          )}
           onSave={(draft) => editing.training
             ? updateTraining(clubId, editing.training.id, draft)
             : addTraining(clubId, draft)}

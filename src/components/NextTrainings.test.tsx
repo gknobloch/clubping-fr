@@ -40,11 +40,11 @@ const member = (id: string, first: string, last: string, over: Partial<User> = {
 
 const mardi: Training = {
   id: 't-mardi', clubId: CLUB, kind: 'regular', displayName: 'Libre du mardi',
-  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [],
+  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [], managerIds: [],
 }
 const dirige: Training = {
   id: 't-dirige', clubId: CLUB, kind: 'guided', displayName: 'Dirigé jeunes',
-  startTime: '18:30', memberGroupIds: ['g-jeunes'],
+  startTime: '18:30', memberGroupIds: ['g-jeunes'], managerIds: [], calendarToken: 'tok',
 }
 
 beforeEach(() => {
@@ -79,34 +79,49 @@ const renderBlock = () => render(<MemoryRouter><NextTrainings /></MemoryRouter>)
 const user = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
 describe('Prochains entraînements, on the Accueil', () => {
-  it('asks about the guided session and states the Tuesday, by date', async () => {
+  it('gives each kind its own carousel of the next three', async () => {
     auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
-    const section = screen.getByRole('region', { name: 'Prochains entraînements' })
-    expect(within(section).getByRole('link', { name: /Libre du mardi.*mardi 29 septembre à 20h/ })).toBeInTheDocument()
-    const guided = within(section).getByRole('article', { name: 'Dirigé jeunes, mercredi 30 septembre' })
-    expect(guided).toHaveTextContent('mercredi 30 septembre · 18h30')
+    const regular = screen.getByRole('group', { name: 'Entraînements libres' })
+    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
+    expect(within(regular).getByRole('article')).toHaveAccessibleName('Libre du mardi, mardi 29 septembre')
+    expect(within(regular).getByText('1/3')).toBeInTheDocument()
+    await user().click(within(regular).getByRole('button', { name: 'Séance suivante' }))
+    // The Tuesday called off stays in the row, saying so.
+    expect(within(regular).getByRole('article')).toHaveTextContent('Annulée — Gymnase fermé')
+    // One guided date: a card, no stepping.
+    expect(within(guided).queryByText(/\/\d/)).not.toBeInTheDocument()
+    expect(within(guided).getByRole('article')).toHaveTextContent('mercredi 30 septembre · 18h30')
+  })
+
+  it('asks « Ma disponibilité » on a guided session, as the match card does', async () => {
+    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
+    renderBlock()
+    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
+    expect(within(guided).getByText('Ma disponibilité')).toBeInTheDocument()
     await user().click(within(guided).getByRole('button', { name: 'OUI' }))
     expect(data.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
     // Answering only: the calendar is run from its own page.
-    expect(within(section).queryByRole('button', { name: /^Actions/ })).not.toBeInTheDocument()
+    expect(within(guided).queryByRole('button', { name: /^Actions/ })).not.toBeInTheDocument()
   })
 
-  it('gives someone no guided session is for the Tuesday alone', () => {
+  it('offers this session or the whole series to the agenda', async () => {
+    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
+    renderBlock()
+    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
+    await user().click(within(guided).getByRole('button', { name: 'Ajouter à mon agenda' }))
+    expect(within(guided).getByRole('menuitem', { name: 'Cette séance' })).toBeInTheDocument()
+    expect(within(guided).getByRole('menuitem', { name: 'Toute la série (1 date)' })).toBeInTheDocument()
+  })
+
+  it('gives someone no guided session is for the regular slot alone', () => {
     auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
-    expect(screen.queryByRole('article')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Libre du mardi/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Entraînements libres' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Entraînements dirigés' })).not.toBeInTheDocument()
   })
 
-  it('says so when this Tuesday is off', () => {
-    auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
-    data.trainingSessions = [{ trainingId: 't-mardi', date: '2026-09-29', cancelled: true, note: 'Tournoi' }]
-    renderBlock()
-    expect(screen.getByRole('link', { name: /annulé : Tournoi/ })).toBeInTheDocument()
-  })
-
-  it('shows nothing when the week holds nothing for this member', () => {
+  it('shows nothing when no session is waiting on this member', () => {
     auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
     data.trainings = []
     const { container } = renderBlock()

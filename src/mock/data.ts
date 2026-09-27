@@ -231,12 +231,14 @@ export const mockTrainings: Training[] = [
   {
     id: 'training-libre-mardi', clubId: 'club-fftt-06680011', kind: 'regular',
     displayName: 'Entraînement libre', weekday: 2, startTime: '20:00', endTime: '22:30',
-    memberGroupIds: [],
+    memberGroupIds: [], managerIds: [],
   },
   {
     id: 'training-dirige', clubId: 'club-fftt-06680011', kind: 'guided',
     displayName: 'Entraînement dirigé', startTime: '18:30', endTime: '20:00',
     memberGroupIds: ['mgroup-entraineurs'], notes: 'Avec Julien, entraîneur fédéral.',
+    // Quentin runs its schedule without being a club admin (#608).
+    managerIds: ['p2-player-2'], calendarToken: 'mock-calendar-token',
   },
 ]
 

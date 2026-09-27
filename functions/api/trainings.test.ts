@@ -41,11 +41,15 @@ const stranger = member({ id: 'p9', club_id: THEIRS })
 const trainingRow = (over: Partial<TrainingRow> & Pick<TrainingRow, 'id'>): TrainingRow => ({
   club_id: MINE, kind: 'guided', display_name: 'Dirigé jeunes', weekday: null,
   start_time: '18:30', end_time: null, address_id: null, member_group_ids: '[]',
-  valid_from: null, valid_until: null, notes: null,
+  valid_from: null, valid_until: null, notes: null, manager_ids: '[]', calendar_token: null,
   ...over,
 })
 
-const dirige = trainingRow({ id: 't-dirige', member_group_ids: JSON.stringify(['g-jeunes']) })
+// Bob runs the guided series' schedule without being a club admin.
+const dirige = trainingRow({
+  id: 't-dirige', member_group_ids: JSON.stringify(['g-jeunes']),
+  manager_ids: JSON.stringify(['bob']), calendar_token: 'secret-token',
+})
 const mardi = trainingRow({ id: 't-mardi', kind: 'regular', display_name: 'Libre', weekday: 2, start_time: '20:00' })
 const far = trainingRow({ id: 't-far', club_id: THEIRS })
 
@@ -89,6 +93,9 @@ function fakeDb(w: World) {
       if (sql.includes('FROM training_sessions WHERE training_id = ? AND date = ?')) {
         return sessions.find((s) => s.training_id === params[0] && s.date === params[1]) ?? null
       }
+      if (sql.includes('FROM club_addresses WHERE club_id = ? ORDER BY is_default')) {
+        return { id: 'addr-mine', club_id: MINE, label: 'Gymnase', street: '1 rue', postal_code: '68170', city: 'Rixheim', is_default: 1 }
+      }
       if (sql.includes('FROM club_addresses WHERE id = ? AND club_id = ?')) {
         return params[0] === 'addr-mine' && params[1] === MINE ? { id: 'addr-mine' } : null
       }
@@ -98,6 +105,12 @@ function fakeDb(w: World) {
       if (sql === 'SELECT * FROM users') return { results: users }
       if (sql === 'SELECT * FROM trainings') return { results: trainings }
       if (sql === 'SELECT * FROM training_sessions') return { results: sessions }
+      if (sql.includes('FROM training_sessions WHERE training_id = ?')) {
+        return { results: sessions.filter((x) => x.training_id === params[0]) }
+      }
+      if (sql.includes('SELECT id FROM users WHERE club_id = ?')) {
+        return { results: users.filter((u) => u.club_id === params[0]).map((u) => ({ id: u.id })) }
+      }
       if (sql.includes('FROM training_sessions WHERE date BETWEEN')) {
         return { results: sessions.filter((s) => s.date >= String(params[0]) && s.date <= String(params[1])) }
       }
@@ -163,6 +176,9 @@ function fakeDb(w: World) {
   } as unknown as D1Database
   return { db, writes }
 }
+
+const anonymous = (db: D1Database, path: string) =>
+  app.fetch(new Request(`http://localhost/api${path}`), { DB: db })
 
 const send = (db: D1Database, method: string, path: string, body?: unknown, env: Record<string, unknown> = {}) =>
   app.fetch(
@@ -286,7 +302,8 @@ describe('answering for a guided session', () => {
   })
 
   it('refuses a team-mate, another club\'s admin, and another club\'s member', async () => {
-    expect((await set(fakeDb({ viewerId: 'bob', sessions }).db, 'alice')).status).toBe(403)
+    // Alice is on the team, not among the series' managers (Bob is).
+    expect((await set(fakeDb({ viewerId: 'alice', sessions }).db, 'bob')).status).toBe(403)
     expect((await set(fakeDb({ viewerId: 'ca2', sessions }).db, 'alice')).status).toBe(403)
     expect((await set(fakeDb({ viewerId: 'p9', sessions }).db, 'p9')).status).toBe(403)
   })
@@ -429,5 +446,73 @@ describe('the daily sweep', () => {
     expect(sent[0].body).toBe('Dirigé jeunes, lundi 28 septembre à 18h30 : séance annulée. Salle prise.')
     expect(writesTo(writes, /INSERT INTO notifications_sent/).map((w) => w.params[0]))
       .toEqual(['training_cancelled', 'training_cancelled'])
+  })
+})
+
+describe('who runs a guided series (#608)', () => {
+  const sessions: TrainingSessionRow[] = [{ training_id: 't-dirige', date: '2026-10-01', cancelled: 0, note: null }]
+
+  it('lets a named manager run its dates, and nothing else', async () => {
+    const { db, writes } = fakeDb({ viewerId: 'bob', sessions })
+    expect((await send(db, 'POST', `/clubs/${MINE}/trainings/t-dirige/sessions`, { dates: ['2026-10-08'] })).status).toBe(200)
+    expect((await send(db, 'PUT', `/clubs/${MINE}/trainings/t-dirige/sessions/2026-10-01`, { cancelled: true })).status).toBe(200)
+    expect((await send(db, 'DELETE', `/clubs/${MINE}/trainings/t-dirige/sessions/2026-10-01`)).status).toBe(200)
+    // The series itself stays the admins'.
+    expect((await send(db, 'PATCH', `/clubs/${MINE}/trainings/t-dirige`, { displayName: 'x' })).status).toBe(403)
+    expect((await send(db, 'DELETE', `/clubs/${MINE}/trainings/t-dirige`)).status).toBe(403)
+    // And another series is not theirs to run.
+    expect((await send(db, 'PUT', `/clubs/${MINE}/trainings/t-mardi/sessions/2026-09-29`, { cancelled: true })).status).toBe(403)
+    expect(writesTo(writes, /UPDATE trainings|DELETE FROM trainings/)).toEqual([])
+  })
+
+  it('lets them answer for whoever is expected', async () => {
+    const { db } = fakeDb({ viewerId: 'bob', sessions })
+    const res = await send(db, 'POST', '/training-availabilities/set', {
+      trainingId: 't-dirige', date: '2026-10-01', playerId: 'alice', status: 'maybe',
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('keeps managers to the club\'s members, and a regular slot to none', async () => {
+    const { db } = fakeDb({ viewerId: 'ca' })
+    const guided = await send(db, 'POST', `/clubs/${MINE}/trainings`, {
+      kind: 'guided', displayName: 'Dirigé', startTime: '18:00', memberGroupIds: [], managerIds: ['bob', 'p9', 'ghost'],
+    })
+    const g = (await guided.json()) as { training: { managerIds: string[]; calendarToken?: string } }
+    expect(g.training.managerIds).toEqual(['bob'])
+    expect(g.training.calendarToken).toMatch(/^[0-9a-f]{32}$/)
+    const regular = await send(db, 'POST', `/clubs/${MINE}/trainings`, {
+      kind: 'regular', displayName: 'Libre', weekday: 2, startTime: '20:00', memberGroupIds: [], managerIds: ['bob'],
+    })
+    expect(((await regular.json()) as { training: { managerIds: string[] } }).training.managerIds).toEqual([])
+  })
+})
+
+describe('a guided series\' calendar link (#608)', () => {
+  const sessions: TrainingSessionRow[] = [
+    { training_id: 't-dirige', date: '2099-10-01', cancelled: 0, note: null },
+    { training_id: 't-dirige', date: '2099-10-08', cancelled: 1, note: 'Fermé' },
+    { training_id: 't-dirige', date: '2000-01-01', cancelled: 0, note: null },
+  ]
+
+  it('answers its .ics without a session, to the right key only', async () => {
+    const { db } = fakeDb({ viewerId: null, sessions })
+    const res = await anonymous(db, '/trainings/t-dirige/calendar.ics?token=secret-token')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toContain('text/calendar')
+    const ics = await res.text()
+    // Every date still on, from today: not the one called off, not the past.
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1)
+    expect(ics).toContain('UID:t-dirige-2099-10-01@clubping.fr')
+    expect(ics).toContain('DTSTART:20991001T183000')
+    expect(ics).toContain('SUMMARY:Dirigé jeunes')
+  })
+
+  it('says nothing to a wrong key, a missing one, or a regular slot', async () => {
+    const { db } = fakeDb({ viewerId: null, sessions })
+    expect((await anonymous(db, '/trainings/t-dirige/calendar.ics?token=nope')).status).toBe(404)
+    expect((await anonymous(db, '/trainings/t-dirige/calendar.ics')).status).toBe(404)
+    expect((await anonymous(db, '/trainings/t-mardi/calendar.ics?token=')).status).toBe(404)
+    expect((await anonymous(db, '/trainings/ghost/calendar.ics?token=secret-token')).status).toBe(404)
   })
 })

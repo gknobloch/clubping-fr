@@ -841,12 +841,40 @@ invisible dans le diff comme dans la revue.
   ferait passer un `router.push` à l'OS, et une notification ouvre
   Entraînements au démarrage à froid, avant que les données disent si le club
   en publie.
-- **L'accueil dit ce que la semaine tient**, sur le web comme dans l'app, sous
-  le prochain match : la prochaine séance *dirigée* où le membre est attendu,
-  dans les deux semaines (`nextSessionToAnswer`), avec la même carte que la
-  liste pour y répondre ; et le prochain soir de son créneau libre, dans la
-  semaine (`nextRegularSession`), en une ligne — annulé compris, puisque c'est
-  justement ce qui vaut d'être vu. Rien quand ni l'un ni l'autre ne l'attend.
+- **Sur l'accueil, les entraînements sont un groupe à eux**, après tout ce qui
+  concerne les matchs (carte, compteurs, « Tous mes matchs ») — les deux ne
+  s'entremêlent jamais. Une colonne par sorte, le créneau libre d'un côté et la
+  série dirigée de l'autre, côte à côte sur une tablette (et à partir de `md:`
+  sur le web), empilées sur un téléphone. Chacune est un carrousel des trois
+  prochaines séances du membre de cette sorte (`upcomingSessionsFor`) — les
+  points dans l'app, ‹ 1/3 › sur le web, comme le carrousel des matchs — et
+  chaque carte est celle de la liste. Une séance annulée reste dans la rangée,
+  et le dit. Rien quand aucune séance n'attend ce membre.
+- **« Ma disponibilité », pas « Vous venez ? »** : les mots et la mise en page
+  de la carte du match, pour qu'un membre lise les deux questions comme une
+  seule.
+- **Une série dirigée a ses responsables** (`managerIds`, 0058) : son
+  encadrant, qui n'est presque jamais administrateur. Ils tiennent le
+  *planning* — ajouter et retirer des dates, annuler une séance, répondre pour
+  les attendus ; la série elle-même (horaire, lieu, pour qui, et qui la tient)
+  reste aux administrateurs. `mayManageSchedule` côté écrans, `runsSchedule`
+  côté API, et la question est posée avant « existe-t-elle ? », pour qu'un
+  inconnu n'apprenne rien des entraînements d'un autre club. Un créneau libre
+  n'a pas de responsable : il n'a pas de planning à tenir.
+- **Ajouter à l'agenda : cette séance, ou toute la série**, pour une séance
+  dirigée. Sur le web, un .ics construit sur place — un VEVENT par date encore
+  maintenue à partir d'aujourd'hui, l'UID clavé sur (série, date) pour qu'un
+  second import mette à jour au lieu de doubler. Dans l'app, une séance passe
+  par l'écran natif comme un match (#416) ; **la série ne peut pas** : cet
+  écran prend un seul événement, et en écrire plusieurs demanderait la
+  permission d'agenda que l'app refuse exprès (#418). La série est donc le .ics
+  de l'API, ouvert dans le navigateur du téléphone, qui le passe à l'agenda
+  (« Ajouter tout » sur iOS). Ce navigateur ne porte aucune session : le lien
+  porte la clé de la série (`calendar_token`), vérifiée en temps constant, et
+  une mauvaise clé répond 404 comme une série absente. Il ne révèle que les
+  dates et le lieu de cette série.
+- **`ics.ts` ne touche pas au DOM** : l'API s'en sert pour le .ics d'une série,
+  donc `downloadIcs` vit à part (`icsDownload.ts`).
 - **Les dates d'une série dirigée se posent de deux façons** : chaque semaine
   (une première date, « chaque semaine jusqu'au »), ou cochées sur un
   calendrier (`MultiDateCalendar`) pour un encadrant dont le planning n'est pas

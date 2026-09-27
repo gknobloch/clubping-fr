@@ -1,49 +1,40 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { OccurrenceCard } from '@/components/TrainingCard'
-import { ChevronRightIcon } from '@/components/icons'
+import { PhaseSwitchButton } from '@/components/icons'
 import { clubMemberGroups } from '@/lib/memberGroups'
-import { longDate } from '@/lib/pushNotifications'
 import { sortByName } from '@/lib/sortByName'
 import { todayIso } from '@/lib/weeks'
 import {
-  audienceLabel, expectedMemberIds, formatTime, nextRegularSession, nextSessionToAnswer, placeLabel,
-  trainingAddress, type TrainingOccurrence,
+  TRAINING_KIND_PLURALS, audienceLabel, expectedMemberIds, placeLabel, trainingAddress,
+  upcomingSessionsFor, type TrainingOccurrence,
 } from '@/lib/trainings'
+import type { TrainingKind } from '@/types'
 
 /**
  * Prochains entraînements, on the Accueil (#608) — the same block as the app's.
  *
- * What the week holds for this member: the next guided session they are
- * expected at, with the Entraînements page's own card so it is answered the
- * same way, and the next evening of their regular slot in one line, cancelled
- * or not. By date. Nothing at all when neither is waiting on them.
+ * Its own group, after everything about matches: one column per kind from md:
+ * up — the regular slot on one side, the guided series on the other — stacked
+ * below that. Each is a carousel of the member's next three sessions of that
+ * kind, stepped like the match carousel above it (‹ 1/3 ›), and each card is
+ * the Entraînements page's own, so a guided session is answered the same way
+ * in both places. Nothing at all when neither kind is waiting on them.
  */
 export function NextTrainings() {
   const { user } = useAuth()
   const data = useAppData()
-  const { clubs, users, memberGroups, trainingAvailabilities, setTrainingAvailability } = data
+  const { users, memberGroups } = data
 
   const clubId = user?.clubId
   const groups = clubMemberGroups(memberGroups, clubId)
   const scoped = { ...data, memberGroups: groups }
   const today = todayIso()
-  const guided = nextSessionToAnswer(scoped, users, clubId, user?.id, today)
-  const regular = nextRegularSession(scoped, users, clubId, user?.id, today)
-  if ((!guided && !regular) || !user) return null
-
-  const expectedAt = (o: TrainingOccurrence) => {
-    const ids = expectedMemberIds(o.training, groups, users)
-    return sortByName(
-      users
-        .filter((u) => ids.includes(u.id))
-        .map((u) => ({ ...u, firstName: u.firstName ?? '', lastName: u.lastName ?? '' })),
-    )
-  }
-  const items = [guided, regular]
-    .filter((o): o is TrainingOccurrence => !!o)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.training.startTime.localeCompare(b.training.startTime))
+  const regular = upcomingSessionsFor(scoped, users, clubId, user?.id, today, 'regular')
+  const guided = upcomingSessionsFor(scoped, users, clubId, user?.id, today, 'guided')
+  if ((!regular.length && !guided.length) || !user) return null
 
   return (
     <section aria-labelledby="home-trainings" className="flex flex-col gap-3">
@@ -55,43 +46,68 @@ export function NextTrainings() {
           Tous les entraînements
         </Link>
       </div>
-      {items.map((o) =>
-        o === guided ? (
-          <OccurrenceCard
-            key="guided"
-            occurrence={o}
-            showDate
-            place={placeLabel(trainingAddress(o.training, clubs))}
-            audience={audienceLabel(o.training, groups)}
-            expected={expectedAt(o)}
-            answers={trainingAvailabilities}
-            viewerId={user.id}
-            // The calendar is run from its own page; the Accueil only answers.
-            canManage={false}
-            onAnswer={(playerId, status) => setTrainingAvailability(o.training.id, o.date, playerId, status)}
-            onCancel={() => {}}
-            onRestore={() => {}}
-            onRemoveDate={() => {}}
-          />
-        ) : (
-          <Link
-            key="regular"
-            to="/entrainements"
-            className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm hover:border-slate-300"
-          >
-            <span className="min-w-0">
-              <span className={`block text-sm font-semibold ${o.cancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
-                {o.training.displayName}
-              </span>
-              <span className={`block text-xs ${o.cancelled ? 'text-red-700' : 'text-slate-500'}`}>
-                {longDate(o.date)} à {formatTime(o.training.startTime)}
-                {o.cancelled ? ` — annulé${o.note ? ` : ${o.note}` : ''}` : ''}
-              </span>
-            </span>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
-          </Link>
-        ),
-      )}
+      <div className={`grid gap-3 ${regular.length && guided.length ? 'md:grid-cols-2' : ''}`}>
+        {regular.length > 0 && <TrainingCarousel kind="regular" sessions={regular} groups={groups} />}
+        {guided.length > 0 && <TrainingCarousel kind="guided" sessions={guided} groups={groups} />}
+      </div>
     </section>
+  )
+}
+
+function TrainingCarousel({
+  kind,
+  sessions,
+  groups,
+}: {
+  kind: TrainingKind
+  sessions: TrainingOccurrence[]
+  groups: ReturnType<typeof clubMemberGroups>
+}) {
+  const { user } = useAuth()
+  const { clubs, users, trainingAvailabilities, setTrainingAvailability } = useAppData()
+  const [index, setIndex] = useState(0)
+  const i = Math.min(index, sessions.length - 1)
+  const o = sessions[i]
+  const ids = expectedMemberIds(o.training, groups, users)
+  const expected = sortByName(
+    users
+      .filter((u) => ids.includes(u.id))
+      .map((u) => ({ ...u, firstName: u.firstName ?? '', lastName: u.lastName ?? '' })),
+  )
+
+  return (
+    <div role="group" aria-label={TRAINING_KIND_PLURALS[kind]} className="flex min-w-0 flex-col gap-2">
+      <div className="flex h-7 items-center justify-between">
+        <p className="text-sm font-medium text-slate-600">{TRAINING_KIND_PLURALS[kind]}</p>
+        {sessions.length > 1 && (
+          <div className="flex items-center gap-1">
+            <PhaseSwitchButton dir="prev" disabled={i <= 0} onClick={() => setIndex(i - 1)} prevLabel="Séance précédente" />
+            <span className="text-xs font-medium text-slate-400">{i + 1}/{sessions.length}</span>
+            <PhaseSwitchButton
+              dir="next"
+              disabled={i >= sessions.length - 1}
+              onClick={() => setIndex(i + 1)}
+              nextLabel="Séance suivante"
+            />
+          </div>
+        )}
+      </div>
+      <OccurrenceCard
+        occurrence={o}
+        showDate
+        place={placeLabel(trainingAddress(o.training, clubs))}
+        audience={audienceLabel(o.training, groups)}
+        expected={expected}
+        answers={trainingAvailabilities}
+        viewerId={user?.id}
+        // The Accueil answers for the member; running the series — calling a
+        // session off, answering for others — is the Entraînements page's.
+        canManage={false}
+        onAnswer={(playerId, status) => setTrainingAvailability(o.training.id, o.date, playerId, status)}
+        onCancel={() => {}}
+        onRestore={() => {}}
+        onRemoveDate={() => {}}
+      />
+    </div>
   )
 }

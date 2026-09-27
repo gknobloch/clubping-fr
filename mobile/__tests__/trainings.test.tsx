@@ -1,3 +1,4 @@
+import { Alert, Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
@@ -8,6 +9,7 @@ import TrainingsScreen from '@/app/(tabs)/entrainements'
 import { NextTrainingSection } from '@/components/NextTrainingSection'
 import MonCompteScreen from '@/app/(tabs)/compte'
 import { setNotificationPreferences } from '@/utils/push'
+import { openMatchInCalendar } from '@/utils/addToCalendar'
 
 // ---------------------------------------------------------------------------
 // Entraînements dans l'app (#608) : la liste des séances, la réponse d'un
@@ -28,6 +30,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, setParams: jest.fn() }),
   useLocalSearchParams: () => ({}),
 }))
+jest.mock('@/utils/addToCalendar', () => ({ openMatchInCalendar: jest.fn(async () => {}) }))
 jest.mock('@/utils/push', () => ({
   setNotificationsEnabled: jest.fn(async () => {}),
   setNotificationPreferences: jest.fn(async () => {}),
@@ -47,11 +50,11 @@ const groups: MemberGroup[] = [{ id: 'g-jeunes', clubId: CLUB, displayName: 'Jeu
 
 const mardi: Training = {
   id: 't-mardi', clubId: CLUB, kind: 'regular', displayName: 'Libre du mardi',
-  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [],
+  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [], managerIds: [],
 }
 const dirige: Training = {
   id: 't-dirige', clubId: CLUB, kind: 'guided', displayName: 'Dirigé jeunes',
-  startTime: '18:30', memberGroupIds: ['g-jeunes'],
+  startTime: '18:30', memberGroupIds: ['g-jeunes'], managerIds: ['coach'], calendarToken: 'tok',
 }
 
 let fns: Record<string, jest.Mock>
@@ -151,44 +154,85 @@ describe('l’administrateur, dans le gymnase', () => {
   })
 })
 
+/** Jest has no layout engine: give a carousel the width a column would have. */
+const measure = (kind: 'regular' | 'guided') =>
+  fireEvent(screen.getByTestId(`home-trainings-${kind}`), 'layout', { nativeEvent: { layout: { width: 343 } } })
+
+/** Press one of the buttons an Alert was opened with. */
+const pressAlert = (label: string) => {
+  const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as Array<{ text: string; onPress?: () => void }>
+  buttons.find((b) => b.text === label)?.onPress?.()
+}
+
 describe('l’accueil', () => {
-  it('pose la question de la prochaine séance dirigée, et mène à l’onglet', () => {
+  beforeEach(() => jest.spyOn(Alert, 'alert').mockImplementation(() => {}))
+
+  it('un carrousel par sorte : les trois prochains mardis, et la séance dirigée', () => {
     render(<NextTrainingSection />)
-    expect(screen.getByTestId('home-next-training')).toHaveTextContent(/Dirigé jeunes/)
-    fireEvent.press(screen.getByTestId('training-answer-t-dirige-2026-09-30-available'))
-    expect(fns.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
-    fireEvent.press(screen.getByTestId('home-all-trainings'))
-    expect(mockPush).toHaveBeenCalledWith('/entrainements')
+    measure('regular')
+    measure('guided')
+    expect(screen.getByTestId('training-t-mardi-2026-09-29')).toBeTruthy()
+    expect(screen.getByTestId('training-t-mardi-2026-10-13')).toBeTruthy()
+    // The Tuesday called off stays in the row, saying so.
+    expect(screen.getByTestId('training-cancelled-t-mardi-2026-10-06')).toHaveTextContent('Annulée — Gymnase fermé')
+    expect(screen.getByTestId('home-trainings-regular-dots')).toBeTruthy()
+    // One guided date: a card, not a carousel.
+    expect(screen.queryByTestId('home-trainings-guided-dots')).toBeNull()
   })
 
-  it('annonce aussi le prochain mardi du créneau libre', () => {
+  it('demande « Ma disponibilité », comme la carte du match', () => {
     render(<NextTrainingSection />)
-    expect(screen.getByTestId('home-next-regular')).toHaveTextContent(/Libre du mardi.*mardi 29 septembre à 20h/)
+    measure('guided')
+    expect(screen.getByText('Ma disponibilité')).toBeTruthy()
+    fireEvent.press(screen.getByTestId('training-answer-t-dirige-2026-09-30-available'))
+    expect(fns.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
+  })
+
+  it('ajoute cette séance, ou toute la série, à l’agenda', () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+    render(<NextTrainingSection />)
+    measure('guided')
+    fireEvent.press(screen.getByTestId('training-calendar-t-dirige-2026-09-30'))
+    pressAlert('Cette séance')
+    expect(openMatchInCalendar).toHaveBeenCalledWith(expect.objectContaining({ title: 'Dirigé jeunes' }))
+    fireEvent.press(screen.getByTestId('training-calendar-t-dirige-2026-09-30'))
+    pressAlert('Toute la série')
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/\/api\/trainings\/t-dirige\/calendar\.ics\?token=tok$/))
+  })
+
+  it('ne propose pas l’agenda pour un créneau libre, qui revient chaque semaine', () => {
+    render(<NextTrainingSection />)
+    measure('regular')
+    expect(screen.queryByTestId('training-calendar-t-mardi-2026-09-29')).toBeNull()
   })
 
   it('ne donne que le créneau libre à qui aucune séance dirigée n’attend', () => {
     mockAuth.user = member('p1', 'Quentin', 'Colle')
     render(<NextTrainingSection />)
-    expect(screen.getByTestId('home-next-regular')).toBeTruthy()
-    expect(screen.queryByTestId('training-answer-t-dirige-2026-09-30-available')).toBeNull()
-  })
-
-  it('dit qu’un mardi est annulé, avec son motif', () => {
-    mockData.trainingSessions = [{ trainingId: 't-mardi', date: '2026-09-29', cancelled: true, note: 'Tournoi' }]
-    render(<NextTrainingSection />)
-    expect(screen.getByTestId('home-next-regular')).toHaveTextContent(/annulé : Tournoi/)
-  })
-
-  it('ne montre rien quand la semaine ne tient rien pour ce membre', () => {
-    mockData.trainings = []
-    render(<NextTrainingSection />)
-    expect(screen.queryByTestId('home-next-training')).toBeNull()
+    expect(screen.getByTestId('home-trainings-regular')).toBeTruthy()
+    expect(screen.queryByTestId('home-trainings-guided')).toBeNull()
   })
 
   it('n’offre pas d’annuler depuis l’accueil, même à un administrateur', () => {
     mockAuth.user = member('p2', 'Enzo', 'Lotz', { role: 'club_admin' })
     render(<NextTrainingSection />)
+    measure('guided')
     expect(screen.queryByTestId('training-cancel-t-dirige-2026-09-30')).toBeNull()
+  })
+
+  it('ne montre rien quand aucune séance n’attend ce membre', () => {
+    mockData.trainings = []
+    render(<NextTrainingSection />)
+    expect(screen.queryByTestId('home-next-training')).toBeNull()
+  })
+})
+
+describe('le responsable d’une série dirigée', () => {
+  it('annule une séance de sa série, et rien du créneau libre', () => {
+    mockAuth.user = member('coach', 'Julien', 'Coach')
+    render(<TrainingsScreen />)
+    expect(screen.getByTestId('training-cancel-t-dirige-2026-09-30')).toBeTruthy()
+    expect(screen.queryByTestId('training-cancel-t-mardi-2026-09-29')).toBeNull()
   })
 })
 

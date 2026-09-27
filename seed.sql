@@ -503,9 +503,9 @@ INSERT INTO member_group_members (group_id, user_id) VALUES
 -- Trainings (#608): a regular Tuesday slot for the whole club, one Tuesday of
 -- which is off, and a guided series for « Entraîneurs » — the same shape as the
 -- web's mock data, dated far enough ahead to stay in the upcoming list.
-INSERT INTO trainings (id, club_id, kind, display_name, weekday, start_time, end_time, address_id, member_group_ids, valid_from, valid_until, notes) VALUES
-  ('training-libre-mardi', 'club-fftt-06680011', 'regular', 'Entraînement libre', 2, '20:00', '22:30', NULL, '[]', NULL, NULL, NULL),
-  ('training-dirige', 'club-fftt-06680011', 'guided', 'Entraînement dirigé', NULL, '18:30', '20:00', NULL, '["mgroup-entraineurs"]', NULL, NULL, 'Avec Julien, entraîneur fédéral.');
+INSERT INTO trainings (id, club_id, kind, display_name, weekday, start_time, end_time, address_id, member_group_ids, valid_from, valid_until, notes, manager_ids, calendar_token) VALUES
+  ('training-libre-mardi', 'club-fftt-06680011', 'regular', 'Entraînement libre', 2, '20:00', '22:30', NULL, '[]', NULL, NULL, NULL, '[]', NULL),
+  ('training-dirige', 'club-fftt-06680011', 'guided', 'Entraînement dirigé', NULL, '18:30', '20:00', NULL, '["mgroup-entraineurs"]', NULL, NULL, 'Avec Julien, entraîneur fédéral.', '["p2-player-2"]', lower(hex(randomblob(16))));
 
 INSERT INTO training_sessions (training_id, date, cancelled, note) VALUES
   ('training-dirige', date('now', '+2 days'), 0, NULL),

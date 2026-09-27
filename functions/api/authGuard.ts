@@ -43,6 +43,12 @@ const PUBLIC_DISPATCH_PATH = /^\/api\/notifications\/dispatch$/
 // two version numbers that already travel inside every published binary.
 const PUBLIC_CLIENT_VERSION_PATH = /^\/api\/client-version$/
 
+// A guided series' calendar (#608). « Toute la série » in the app opens this
+// in the phone's browser, which hands the .ics to the calendar — and neither
+// carries a session. The link holds its own key instead, checked by the
+// handler against the series; without the right one it answers 404.
+const PUBLIC_TRAINING_CALENDAR_PATH = /^\/api\/trainings\/[^/]+\/calendar\.ics$/
+
 // Image endpoints are served to <img> / <Image> tags, which cannot attach an
 // Authorization header — so GETs to them are public (read-only, non-sensitive
 // logos / avatars). Writes still require a session.
@@ -61,5 +67,6 @@ export function needsSession(method: string, path: string): boolean {
   if ((method === 'GET' || method === 'POST') && PUBLIC_CONFIRM_PATH.test(path)) return false
   if (method === 'POST' && PUBLIC_DISPATCH_PATH.test(path)) return false
   if (method === 'GET' && PUBLIC_CLIENT_VERSION_PATH.test(path)) return false
+  if (method === 'GET' && PUBLIC_TRAINING_CALENDAR_PATH.test(path)) return false
   return true
 }

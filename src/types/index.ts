@@ -342,6 +342,19 @@ export interface Training {
   validFrom?: string
   validUntil?: string
   notes?: string
+  /**
+   * Guided only: members who run this series' schedule besides the club's
+   * admins — the coach, typically. They add and remove dates, call a session
+   * off, and answer for whoever is expected; the series itself (time, place,
+   * audience, who runs it) stays the admins'. Empty for a regular slot.
+   */
+  managerIds: string[]
+  /**
+   * The key of the series' calendar link (#608) — a GET that needs no session,
+   * since a phone's calendar or browser cannot carry one. Club-scoped like the
+   * rest of the training, and it reveals the series' dates and place only.
+   */
+  calendarToken?: string
 }
 
 /**

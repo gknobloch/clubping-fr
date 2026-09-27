@@ -4,6 +4,8 @@ import type {
 import type { NotificationCategory, NotificationPreferences } from './notificationPreferences'
 import { daysUntil, inDays, longDate, type PushMessage } from './pushNotifications'
 import { mayManageMemberGroups } from './memberGroups'
+import type { MatchEvent } from './calendar'
+import { formatAddress } from './address'
 
 // ---------------------------------------------------------------------------
 // A club's collective trainings (#608)
@@ -244,54 +246,80 @@ export function expectedMemberIds(
 
 type SessionData = { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] }
 
-/** The first occurrence of one kind this member is expected at, within `days`. */
-function nextSessionOfKind(
+/** How far ahead the Accueil looks for each kind: a coach's month, a slot's three weeks. */
+export const UPCOMING_DAYS: Record<TrainingKind, number> = { guided: 60, regular: 28 }
+
+/**
+ * The next few sessions of one kind this member is expected at (#608) — what
+ * the Accueil shows, one carousel per kind, on web and app alike.
+ *
+ * Cancelled ones are kept: « annulée ce mardi » is exactly what is worth
+ * seeing on the Accueil, and the card says so.
+ */
+export function upcomingSessionsFor(
   data: SessionData,
   members: TrainingMember[],
   clubId: string | undefined,
   memberId: string | undefined,
   today: string,
   kind: TrainingKind,
-  days: number,
-  keep: (o: TrainingOccurrence) => boolean,
-): TrainingOccurrence | null {
-  if (!memberId) return null
+  count = 3,
+): TrainingOccurrence[] {
+  if (!memberId) return []
   const series = clubTrainings(data.trainings, clubId).filter((t) => t.kind === kind)
-  return trainingOccurrences(series, data.trainingSessions, today, addDays(today, days)).find((o) =>
-    keep(o) && expectedMemberIds(o.training, data.memberGroups, members).includes(memberId),
-  ) ?? null
+  return trainingOccurrences(series, data.trainingSessions, today, addDays(today, UPCOMING_DAYS[kind]))
+    .filter((o) => expectedMemberIds(o.training, data.memberGroups, members).includes(memberId))
+    .slice(0, count)
 }
 
-/**
- * The next guided session this member is expected at and that is still on —
- * the one the Accueil asks about (#608), on web and app alike. Two weeks ahead
- * at most: past that, the question can wait for the reminder.
- */
-export const nextSessionToAnswer = (
-  data: SessionData,
-  members: TrainingMember[],
-  clubId: string | undefined,
-  memberId: string | undefined,
-  today: string,
-  days = 14,
-) => nextSessionOfKind(data, members, clubId, memberId, today, 'guided', days, (o) => !o.cancelled)
+// ---------------------------------------------------------------------------
+// Calendar (#608) — one session, or a guided series, into the member's agenda
+// ---------------------------------------------------------------------------
+
+/** How long a session lasts when its series names no end: an evening's two hours. */
+const DEFAULT_SESSION_HOURS = 2
 
 /**
- * The next evening of a regular slot this member is expected at, within the
- * week — said on the Accueil beside the guided session, since « mardi, c'est
- * entraînement » is the other half of what the week holds.
- *
- * Cancelled evenings are kept, unlike for the guided session: there is nothing
- * to answer here, and « annulé ce mardi » is exactly what is worth seeing.
+ * The event one session becomes — the same shape a match does (`MatchEvent`),
+ * so the app's native screen and the web's .ics take it as they are.
  */
-export const nextRegularSession = (
-  data: SessionData,
-  members: TrainingMember[],
-  clubId: string | undefined,
-  memberId: string | undefined,
-  today: string,
-  days = 7,
-) => nextSessionOfKind(data, members, clubId, memberId, today, 'regular', days, () => true)
+export function buildTrainingEvent(o: Pick<TrainingOccurrence, 'training' | 'date'>, address?: Address): MatchEvent {
+  const [y, m, d] = o.date.split('-').map(Number)
+  const [sh, sm] = o.training.startTime.split(':').map(Number)
+  const startDate = new Date(y, m - 1, d, sh, sm)
+  let endDate = new Date(startDate.getTime() + DEFAULT_SESSION_HOURS * 3_600_000)
+  if (o.training.endTime) {
+    const [eh, em] = o.training.endTime.split(':').map(Number)
+    endDate = new Date(y, m - 1, d, eh, em)
+  }
+  const location = address ? [address.label, formatAddress(address)].filter(Boolean).join(', ') : undefined
+  return {
+    title: o.training.displayName,
+    startDate,
+    endDate,
+    allDay: false,
+    ...(location ? { location } : {}),
+    ...(o.training.notes ? { notes: o.training.notes } : {}),
+  }
+}
+
+/** One UID per session, so importing a series twice updates rather than doubles. */
+export const trainingEventUid = (trainingId: string, date: string) => `${trainingId}-${date}@clubping.fr`
+
+/**
+ * The dates a series' calendar carries: every guided date still on, from today.
+ * A past evening in someone's agenda is noise, and a cancelled one a lie.
+ */
+export function seriesCalendarDates(sessions: TrainingSession[], trainingId: string, today: string): string[] {
+  return sessions
+    .filter((s) => s.trainingId === trainingId && !s.cancelled && s.date >= today)
+    .map((s) => s.date)
+    .sort()
+}
+
+/** The series link's path, under /api — what the app opens for « Toute la série ». */
+export const seriesCalendarPath = (t: Pick<Training, 'id' | 'calendarToken'>) =>
+  `/trainings/${encodeURIComponent(t.id)}/calendar.ics?token=${encodeURIComponent(t.calendarToken ?? '')}`
 
 /** "Tout le club" or the groups' names, joined — who a training is for, in words. */
 export function audienceLabel(training: Pick<Training, 'memberGroupIds'>, memberGroups: MemberGroup[]): string {
@@ -364,6 +392,19 @@ export const mayManageTrainings = (
   viewer: Pick<User, 'role' | 'clubId'> | null | undefined,
   clubId: string | undefined,
 ): boolean => mayManageMemberGroups(viewer, clubId)
+
+/**
+ * Who runs one series' schedule: the club's admins, and — for a guided series
+ * — the members it names as its managers. The schedule is its dates, which of
+ * them are off, and the answers of whoever is expected; the series itself
+ * (time, place, audience, managers) stays `mayManageTrainings`.
+ */
+export const mayManageSchedule = (
+  viewer: Pick<User, 'id' | 'role' | 'clubId'> | null | undefined,
+  training: Pick<Training, 'clubId' | 'kind' | 'managerIds'>,
+): boolean =>
+  mayManageTrainings(viewer, training.clubId) ||
+  (!!viewer && training.kind === 'guided' && training.managerIds.includes(viewer.id))
 
 // ---------------------------------------------------------------------------
 // Reminders (#495's ledger, a second and third kind)

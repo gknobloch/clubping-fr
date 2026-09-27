@@ -55,8 +55,13 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   entraînements dirigés, où chacun dit s'il vient, et les créneaux libres de
   la semaine. Une séance annulée reste affichée avec son motif, et un
   administrateur l'annule ou la rétablit depuis le gymnase.
-- **L'accueil dit ce que la semaine tient** : la prochaine séance dirigée,
-  pour répondre d'un geste, et le prochain soir d'entraînement libre.
+- **L'accueil dit ce que la semaine tient**, après les matchs : les trois
+  prochaines séances de chaque sorte, en carrousel — côte à côte sur une
+  tablette —, et « Ma disponibilité » sur une séance dirigée, comme pour un
+  match.
+- **Une séance dirigée s'ajoute à l'agenda**, seule ou avec toute sa série.
+- **Le responsable d'une série dirigée** — son encadrant — annule ou rétablit
+  une séance depuis l'application, même sans être administrateur du club.
 - **Des rappels à la carte.** Mon compte règle séparément les notifications
   des matchs, des entraînements dirigés et des entraînements libres, et le
   délai du rappel, de la veille à une semaine avant. Les dirigés sont activés

@@ -7,11 +7,12 @@ import { TrainingCard, CancelTrainingSheet } from '@/components/TrainingCard'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
 import { todayIso } from '@/utils/weeks'
+import { offerTrainingCalendar } from '@/utils/trainingCalendar'
 import { clubMemberGroups } from '@shared/lib/memberGroups'
 import { longDate } from '@shared/lib/pushNotifications'
 import { sortByName } from '@shared/lib/sortByName'
 import {
-  audienceLabel, expectedMemberIds, mayManageTrainings, occurrenceKey, placeLabel, trainingAddress,
+  audienceLabel, expectedMemberIds, mayManageSchedule, mayManageTrainings, occurrenceKey, placeLabel, trainingAddress,
   upcomingOccurrences, type TrainingOccurrence,
 } from '@shared/lib/trainings'
 
@@ -88,7 +89,9 @@ export default function TrainingsScreen() {
                     expected={sortByName(named.filter((u) => ids.includes(u.id)))}
                     answers={trainingAvailabilities}
                     viewerId={user?.id}
-                    canManage={canManage}
+                    // Per series (#608): a guided one's own managers run its dates.
+                    canManage={mayManageSchedule(user, o.training)}
+                    onAddToCalendar={() => offerTrainingCalendar(o, trainingAddress(o.training, clubs))}
                     onAnswer={(status) => user && setTrainingAvailability(o.training.id, o.date, user.id, status)}
                     onCancel={() => setCancelling(o)}
                     onRestore={() => clubId && setTrainingSessionState(clubId, o.training.id, o.date, { cancelled: false })}

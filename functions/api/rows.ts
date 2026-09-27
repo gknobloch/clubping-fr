@@ -320,6 +320,10 @@ export interface TrainingRow {
   valid_from: string | null
   valid_until: string | null
   notes: string | null
+  /** JSON array of users ids who run a guided series' schedule (0058). */
+  manager_ids: string
+  /** The key of the series' calendar link (0058). */
+  calendar_token: string | null
 }
 
 /** One dated session of a guided training, or an exception to a regular one. */
@@ -348,4 +352,6 @@ export const trainingFromRow = (r: TrainingRow): Training => ({
   ...(r.valid_from ? { validFrom: r.valid_from } : {}),
   ...(r.valid_until ? { validUntil: r.valid_until } : {}),
   ...(r.notes ? { notes: r.notes } : {}),
+  managerIds: jsonParseIds(r.manager_ids),
+  ...(r.calendar_token ? { calendarToken: r.calendar_token } : {}),
 })

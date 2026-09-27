@@ -7,7 +7,7 @@ import {
   TRAINING_KIND_LABELS, WEEKDAY_NAMES, weeklyDates,
   type TrainingDraft, type TrainingResult,
 } from '@/lib/trainings'
-import type { Address, MemberGroup, Training, TrainingKind } from '@/types'
+import type { Address, MemberGroup, Training, TrainingKind, User } from '@/types'
 
 // The forms behind the Entraînements page (#608): a series, a run of dates,
 // and calling one date off. Each is a `ModalShell`, so a bottom sheet below sm:.
@@ -51,6 +51,7 @@ export function TrainingEditor({
   training,
   addresses,
   groups,
+  members,
   onSave,
   onAddDates,
   onClose,
@@ -59,6 +60,8 @@ export function TrainingEditor({
   addresses: Address[]
   /** The club's member groups (#602). */
   groups: MemberGroup[]
+  /** The club's members, sorted — who may be named to run a guided series. */
+  members: User[]
   onSave: (draft: TrainingDraft) => Promise<TrainingResult>
   /** Only for a new guided series, once it exists. */
   onAddDates: (trainingId: string, dates: string[]) => void
@@ -74,6 +77,7 @@ export function TrainingEditor({
   const [validFrom, setValidFrom] = useState(training?.validFrom ?? '')
   const [validUntil, setValidUntil] = useState(training?.validUntil ?? '')
   const [notes, setNotes] = useState(training?.notes ?? '')
+  const [managerIds, setManagerIds] = useState<string[]>(training?.managerIds ?? [])
   const sessionDates = useSessionDates()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -94,6 +98,7 @@ export function TrainingEditor({
       ...(endTime ? { endTime } : {}),
       ...(addressId ? { addressId } : {}),
       memberGroupIds: groupIds,
+      managerIds: kind === 'guided' ? managerIds : [],
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(kind === 'regular'
         ? { weekday, ...(validFrom ? { validFrom } : {}), ...(validUntil ? { validUntil } : {}) }
@@ -207,6 +212,10 @@ export function TrainingEditor({
             )}
           </fieldset>
 
+          {kind === 'guided' && (
+            <ManagersField members={members} selected={managerIds} onChange={setManagerIds} />
+          )}
+
           {kind === 'regular' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -238,6 +247,56 @@ export function TrainingEditor({
         </form>
       </DialogCard>
     </ModalShell>
+  )
+}
+
+const memberName = (u: User) => [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email || 'Sans nom'
+
+/**
+ * Who runs a guided series' schedule besides the club's admins (#608) — its
+ * coach, usually. They add and remove dates, call a session off and answer for
+ * whoever is expected; the series itself stays the admins'.
+ */
+function ManagersField({
+  members, selected, onChange,
+}: { members: User[]; selected: string[]; onChange: (ids: string[]) => void }) {
+  const chosen = members.filter((m) => selected.includes(m.id))
+  const offered = members.filter((m) => !selected.includes(m.id) && m.status !== 'archived')
+  return (
+    <fieldset>
+      <legend className={LABEL}>
+        Responsables du planning <span className="font-normal text-slate-400">(facultatif)</span>
+      </legend>
+      {chosen.length > 0 && (
+        <ul className="mt-1 flex flex-wrap gap-2">
+          {chosen.map((m) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                onClick={() => onChange(selected.filter((id) => id !== m.id))}
+                aria-label={`Retirer ${memberName(m)}`}
+                className="flex min-h-11 items-center gap-1 rounded-full border border-accent-600 bg-accent-50 px-3 text-sm text-accent-700 md:min-h-8"
+              >
+                {memberName(m)} <span aria-hidden>×</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <select
+        aria-label="Ajouter un responsable"
+        value=""
+        onChange={(e) => e.target.value && onChange([...selected, e.target.value])}
+        className={INPUT}
+      >
+        <option value="">Ajouter un responsable…</option>
+        {offered.map((m) => <option key={m.id} value={m.id}>{memberName(m)}</option>)}
+      </select>
+      <p className="mt-1 text-xs text-slate-500">
+        En plus des administrateurs du club : ils ajoutent et retirent des dates, annulent une séance et
+        répondent pour les attendus.
+      </p>
+    </fieldset>
   )
 }
 

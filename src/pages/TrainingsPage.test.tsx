@@ -40,11 +40,11 @@ const member = (id: string, first: string, last: string, over: Partial<User> = {
 
 const mardi: Training = {
   id: 't-mardi', clubId: CLUB, kind: 'regular', displayName: 'Libre du mardi',
-  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [],
+  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [], managerIds: [],
 }
 const dirige: Training = {
   id: 't-dirige', clubId: CLUB, kind: 'guided', displayName: 'Dirigé jeunes',
-  startTime: '18:30', memberGroupIds: ['g-jeunes'],
+  startTime: '18:30', memberGroupIds: ['g-jeunes'], managerIds: ['coach'], calendarToken: 'tok',
 }
 
 beforeEach(() => {
@@ -113,7 +113,37 @@ describe('a member reading the calendar', () => {
   })
 })
 
+describe('the manager of a guided series (#608)', () => {
+  beforeEach(() => { auth.user = { id: 'coach', role: 'player', clubId: CLUB, isPlayer: true } })
+
+  it('runs its dates, and nothing of the series itself nor of the regular slot', async () => {
+    const u = user()
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Nouvel entraînement' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Actions — Dirigé jeunes, mercredi 30 septembre' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Actions — Libre du mardi, mardi 29 septembre' })).not.toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: 'Actions — Dirigé jeunes' }))
+    expect(screen.getByRole('menuitem', { name: 'Ajouter des dates' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Modifier' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Supprimer' })).not.toBeInTheDocument()
+  })
+})
+
 describe('a club admin running it', () => {
+  it('names who runs a guided series', async () => {
+    auth.user = { id: 'ca', role: 'club_admin', clubId: CLUB, isPlayer: false }
+    data.addTraining.mockResolvedValue({ ok: true, training: { ...dirige, id: 't-new' } })
+    const u = user()
+    renderPage()
+    await u.click(screen.getByRole('button', { name: 'Nouvel entraînement' }))
+    await u.type(screen.getByLabelText('Nom'), 'Dirigé adultes')
+    await u.selectOptions(screen.getByRole('combobox', { name: 'Ajouter un responsable' }), 'p2')
+    expect(screen.getByRole('button', { name: 'Retirer Enzo Lotz' })).toBeInTheDocument()
+    await u.type(screen.getByLabelText('Première séance'), '2026-10-01')
+    await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(data.addTraining).toHaveBeenCalledWith(CLUB, expect.objectContaining({ managerIds: ['p2'] }))
+  })
+
   beforeEach(() => { auth.user = { id: 'ca', role: 'club_admin', clubId: CLUB, isPlayer: false } })
 
   it('calls one Tuesday off, with a reason', async () => {

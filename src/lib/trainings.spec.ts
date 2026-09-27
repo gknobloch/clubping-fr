@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup, Training, TrainingAvailability, TrainingSession } from '@/types'
 import {
-  addDays, answerCounts, answerTally, nextSessionToAnswer, nextRegularSession, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
+  addDays, answerCounts, answerTally, upcomingSessionsFor, mayManageSchedule, buildTrainingEvent,
+  seriesCalendarDates, seriesCalendarPath, trainingEventUid, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
   isoWeekday, occurrenceKey, parseOccurrenceKey, recurrenceLabel, trainingCancelledPush, trainingRefusal,
   validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates,
   trainingOccurrences, trainingReminderPush, trainingRemindersDue, upcomingOccurrences,
@@ -14,11 +15,11 @@ import { resolveNotificationPreferences, type NotificationPreferences } from './
 
 const mardi: Training = {
   id: 't-mardi', clubId: 'c1', kind: 'regular', displayName: 'Entraînement libre',
-  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [],
+  weekday: 2, startTime: '20:00', endTime: '22:00', memberGroupIds: [], managerIds: [],
 }
 const dirige: Training = {
   id: 't-dirige', clubId: 'c1', kind: 'guided', displayName: 'Dirigé jeunes',
-  startTime: '18:30', memberGroupIds: ['g-jeunes'],
+  startTime: '18:30', memberGroupIds: ['g-jeunes'], managerIds: ['coach'],
 }
 
 describe('dates', () => {
@@ -263,7 +264,7 @@ describe('local writes', () => {
   })
 
   it('refuses what the API refuses, in words', () => {
-    const base = { kind: 'regular' as const, displayName: 'Libre', weekday: 2, startTime: '20:00', memberGroupIds: [] }
+    const base = { kind: 'regular' as const, displayName: 'Libre', weekday: 2, startTime: '20:00', memberGroupIds: [], managerIds: [] }
     expect(validateTrainingDraft(base)).toBeNull()
     expect(validateTrainingDraft({ ...base, displayName: ' ' })).toMatch(/nom/)
     expect(validateTrainingDraft({ ...base, endTime: '19:00' })).toMatch(/horaires/)
@@ -298,7 +299,7 @@ describe('place and weekly runs', () => {
   })
 })
 
-describe('nextSessionToAnswer', () => {
+describe('upcomingSessionsFor', () => {
   const groups: MemberGroup[] = [{ id: 'g-jeunes', clubId: 'c1', displayName: 'Jeunes', memberIds: ['a'] }]
   const members = [
     { id: 'a', clubId: 'c1', isPlayer: true, status: 'active' },
@@ -306,39 +307,71 @@ describe('nextSessionToAnswer', () => {
   ]
   const data = (sessions: TrainingSession[]) => ({ trainings: [mardi, dirige], trainingSessions: sessions, memberGroups: groups })
 
-  it('skips a session called off and lands on the next one expected', () => {
+  it('gives the next three of one kind, cancelled ones included', () => {
     const d = data([
       { trainingId: 't-dirige', date: '2026-09-28', cancelled: true },
       { trainingId: 't-dirige', date: '2026-10-01', cancelled: false },
+      { trainingId: 't-dirige', date: '2026-10-08', cancelled: false },
+      { trainingId: 't-dirige', date: '2026-10-15', cancelled: false },
     ])
-    expect(nextSessionToAnswer(d, members, 'c1', 'a', '2026-09-26')?.date).toBe('2026-10-01')
+    expect(upcomingSessionsFor(d, members, 'c1', 'a', '2026-09-26', 'guided').map((o) => [o.date, o.cancelled]))
+      .toEqual([['2026-09-28', true], ['2026-10-01', false], ['2026-10-08', false]])
+    expect(upcomingSessionsFor(d, members, 'c1', 'a', '2026-09-26', 'regular').map((o) => o.date))
+      .toEqual(['2026-09-29', '2026-10-06', '2026-10-13'])
   })
 
-  it('never offers a regular slot, nor a session the member is not expected at', () => {
+  it('only what the member is expected at', () => {
     const d = data([{ trainingId: 't-dirige', date: '2026-10-01', cancelled: false }])
-    expect(nextSessionToAnswer(d, members, 'c1', 'b', '2026-09-26')).toBeNull()
+    expect(upcomingSessionsFor(d, members, 'c1', 'b', '2026-09-26', 'guided')).toEqual([])
+    expect(upcomingSessionsFor(d, members, 'c1', undefined, '2026-09-26', 'regular')).toEqual([])
   })
 
-  it('looks two weeks ahead, no further', () => {
-    const d = data([{ trainingId: 't-dirige', date: '2026-10-20', cancelled: false }])
-    expect(nextSessionToAnswer(d, members, 'c1', 'a', '2026-09-26')).toBeNull()
+  it('looks two months ahead for a guided series, no further', () => {
+    const d = data([{ trainingId: 't-dirige', date: '2026-12-01', cancelled: false }])
+    expect(upcomingSessionsFor(d, members, 'c1', 'a', '2026-09-26', 'guided')).toEqual([])
   })
 })
 
-describe('nextRegularSession', () => {
-  const members = [{ id: 'a', clubId: 'c1', isPlayer: true, status: 'active' }]
-  const data = (sessions: TrainingSession[]) => ({ trainings: [mardi, dirige], trainingSessions: sessions, memberGroups: [] })
-
-  it('gives the next Tuesday, still saying so when it is called off', () => {
-    expect(nextRegularSession(data([]), members, 'c1', 'a', '2026-09-26')?.date).toBe('2026-09-29')
-    const off = nextRegularSession(
-      data([{ trainingId: 't-mardi', date: '2026-09-29', cancelled: true, note: 'Fermé' }]), members, 'c1', 'a', '2026-09-26',
-    )
-    expect([off?.date, off?.cancelled]).toEqual(['2026-09-29', true])
+describe('mayManageSchedule', () => {
+  it('admits the club\'s admins, and a guided series\' own managers', () => {
+    expect(mayManageSchedule({ id: 'x', role: 'club_admin', clubId: 'c1' }, dirige)).toBe(true)
+    expect(mayManageSchedule({ id: 'coach', role: 'player', clubId: 'c1' }, dirige)).toBe(true)
+    expect(mayManageSchedule({ id: 'a', role: 'player', clubId: 'c1' }, dirige)).toBe(false)
+    expect(mayManageSchedule(null, dirige)).toBe(false)
   })
 
-  it('looks one week ahead', () => {
-    expect(nextRegularSession(data([]), members, 'c1', 'a', '2026-09-30')?.date).toBe('2026-10-06')
-    expect(nextRegularSession(data([]), members, 'c1', 'a', '2026-09-30', 5)).toBeNull()
+  it('never makes anyone a manager of a regular slot', () => {
+    expect(mayManageSchedule({ id: 'coach', role: 'player', clubId: 'c1' }, { ...mardi, managerIds: ['coach'] })).toBe(false)
+  })
+})
+
+describe('calendar', () => {
+  const address = { id: 'a1', label: 'Gymnase', street: '1 rue du Sport', postalCode: '68170', city: 'Rixheim', isDefault: true }
+
+  it('builds the event of one session, with its end or two hours', () => {
+    const e = buildTrainingEvent({ training: mardi, date: '2026-09-29' }, address)
+    expect([e.startDate.getHours(), e.endDate.getHours(), e.endDate.getMinutes()]).toEqual([20, 22, 0])
+    expect(e.title).toBe('Entraînement libre')
+    expect(e.location).toContain('Gymnase')
+    const open = buildTrainingEvent({ training: dirige, date: '2026-10-01' })
+    expect([open.startDate.getHours(), open.startDate.getMinutes(), open.endDate.getHours(), open.endDate.getMinutes()])
+      .toEqual([18, 30, 20, 30])
+  })
+
+  it('carries the series\' dates still on, from today', () => {
+    const sessions: TrainingSession[] = [
+      { trainingId: 't-dirige', date: '2026-10-08', cancelled: false },
+      { trainingId: 't-dirige', date: '2026-09-20', cancelled: false },
+      { trainingId: 't-dirige', date: '2026-10-01', cancelled: true },
+      { trainingId: 't-dirige', date: '2026-09-30', cancelled: false },
+      { trainingId: 'other', date: '2026-10-02', cancelled: false },
+    ]
+    expect(seriesCalendarDates(sessions, 't-dirige', '2026-09-26')).toEqual(['2026-09-30', '2026-10-08'])
+  })
+
+  it('keys each session and the series link', () => {
+    expect(trainingEventUid('t-dirige', '2026-10-01')).toBe('t-dirige-2026-10-01@clubping.fr')
+    expect(seriesCalendarPath({ id: 't dirigé', calendarToken: 'abc' }))
+      .toBe('/trainings/t%20dirig%C3%A9/calendar.ics?token=abc')
   })
 })

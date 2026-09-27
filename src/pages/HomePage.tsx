@@ -460,17 +460,10 @@ export function HomePage() {
               </p>
             </div>
           </div>
-
-          {/* The week's trainings, under the match (#608) — the other thing a
-              player comes here to answer. */}
-          <NextTrainings />
         </>
       ) : (
         /* Generic view for non-players (admins) */
         <>
-          {/* First for anyone else: belonging to a coached group does not take
-              a team (#608). */}
-          <NextTrainings />
           {activeSeason && (
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Saison en cours</h2>
@@ -517,6 +510,11 @@ export function HomePage() {
       {/* Match history — one phase (season) at a time via the switcher (#233),
           defaulting to the active one. */}
       {myPlayerId && <PlayerPhaseHistory playerId={myPlayerId} title="Tous mes matchs" />}
+
+      {/* The trainings, as a group of their own after everything about matches
+          (#608) — the two never interleave. For anyone expected, player or not:
+          belonging to a coached group does not take a team. */}
+      <NextTrainings />
 
       {quickGame && (
         <GameQuickView gameId={quickGame.gameId} teamId={quickGame.teamId} onClose={() => setQuickGame(null)} />
