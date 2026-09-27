@@ -25,11 +25,12 @@ test.describe('Entraînements — un membre', () => {
     await expect(next.getByText('Vous venez ?')).toBeVisible()
     await expect(next.getByRole('button', { name: /1 oui · 1 peut-être · 1 sans réponse/ })).toBeVisible()
 
-    // He had said « peut-être »; now he is coming.
-    await next.getByRole('button', { name: 'OUI' }).click()
+    // He had said « peut-être »; now he is coming. `exact`, or « OUI » also
+    // names the tally button ("1 oui · …").
+    await next.getByRole('button', { name: 'OUI', exact: true }).click()
     await expect(next.getByRole('button', { name: /2 oui · 1 sans réponse/ })).toBeVisible()
     // Touching the answer he gave withdraws it.
-    await next.getByRole('button', { name: 'OUI' }).click()
+    await next.getByRole('button', { name: 'OUI', exact: true }).click()
     await expect(next.getByRole('button', { name: /1 oui · 2 sans réponse/ })).toBeVisible()
   })
 
