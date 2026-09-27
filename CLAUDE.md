@@ -850,6 +850,12 @@ invisible dans le diff comme dans la revue.
   points dans l'app, ‹ 1/3 › sur le web, comme le carrousel des matchs — et
   chaque carte est celle de la liste. Une séance annulée reste dans la rangée,
   et le dit. Rien quand aucune séance n'attend ce membre.
+- **Au-delà de trois, on le dit** : un carrousel qui s'arrête à trois sans un
+  mot se lit comme « il y en a trois ». Le libellé de la colonne donne le total
+  (« Entraînements dirigés · 8 à venir ») et une dernière page, « +5 autres
+  séances à venir », mène à la liste. Le total porte sur le même horizon que
+  la liste (`UPCOMING_DAYS` : quatre semaines d'un créneau, deux mois d'une
+  série dirigée), pour que les cinq annoncés soient les cinq qu'on y trouve.
 - **« Ma disponibilité », pas « Vous venez ? »** : les mots et la mise en page
   de la carte du match, pour qu'un membre lise les deux questions comme une
   seule.

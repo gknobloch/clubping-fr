@@ -193,16 +193,31 @@ export function clubTrainings(trainings: Training[], clubId: string | undefined)
 }
 
 /**
- * A club's occurrences from `today` for `days` days — what the list shows.
- * Today's included: a session tonight is the one somebody opens the app for.
+ * How far ahead each kind is listed — on the Entraînements list and on the
+ * Accueil alike, so « 5 autres séances » on one is the five the other shows.
+ * A regular slot comes every week, and four of them say enough; a coach's
+ * dates are sparse, and two months is how far a coach plans.
+ */
+export const UPCOMING_DAYS: Record<TrainingKind, number> = { guided: 60, regular: 28 }
+
+/**
+ * A club's occurrences from `today` — what the list shows, each kind over its
+ * own horizon (`UPCOMING_DAYS`). Today's included: a session tonight is the one
+ * somebody opens the app for.
  */
 export function upcomingOccurrences(
   data: { trainings: Training[]; trainingSessions: TrainingSession[] },
   clubId: string | undefined,
   today: string,
-  days = 28,
 ): TrainingOccurrence[] {
-  return trainingOccurrences(clubTrainings(data.trainings, clubId), data.trainingSessions, today, addDays(today, days))
+  const club = clubTrainings(data.trainings, clubId)
+  const ofKind = (kind: TrainingKind) =>
+    trainingOccurrences(club.filter((t) => t.kind === kind), data.trainingSessions, today, addDays(today, UPCOMING_DAYS[kind]))
+  return [...ofKind('guided'), ...ofKind('regular')].sort((a, b) =>
+    a.date.localeCompare(b.date) ||
+    a.training.startTime.localeCompare(b.training.startTime) ||
+    a.training.displayName.localeCompare(b.training.displayName, 'fr'),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -246,12 +261,14 @@ export function expectedMemberIds(
 
 type SessionData = { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] }
 
-/** How far ahead the Accueil looks for each kind: a coach's month, a slot's three weeks. */
-export const UPCOMING_DAYS: Record<TrainingKind, number> = { guided: 60, regular: 28 }
+/** How many sessions of one kind the Accueil carousel shows before « et N autres ». */
+export const ACCUEIL_SESSIONS = 3
 
 /**
- * The next few sessions of one kind this member is expected at (#608) — what
- * the Accueil shows, one carousel per kind, on web and app alike.
+ * The sessions of one kind this member is expected at, over that kind's
+ * horizon (#608). The Accueil shows the first `ACCUEIL_SESSIONS` and says how
+ * many more there are — a carousel that stopped at three without a word would
+ * read as « there are three ».
  *
  * Cancelled ones are kept: « annulée ce mardi » is exactly what is worth
  * seeing on the Accueil, and the card says so.
@@ -263,14 +280,15 @@ export function upcomingSessionsFor(
   memberId: string | undefined,
   today: string,
   kind: TrainingKind,
-  count = 3,
 ): TrainingOccurrence[] {
   if (!memberId) return []
   const series = clubTrainings(data.trainings, clubId).filter((t) => t.kind === kind)
   return trainingOccurrences(series, data.trainingSessions, today, addDays(today, UPCOMING_DAYS[kind]))
     .filter((o) => expectedMemberIds(o.training, data.memberGroups, members).includes(memberId))
-    .slice(0, count)
 }
+
+/** « 5 autres séances », « 1 autre séance ». */
+export const moreSessionsLabel = (n: number) => `${n} autre${n > 1 ? 's' : ''} séance${n > 1 ? 's' : ''}`
 
 // ---------------------------------------------------------------------------
 // Calendar (#608) — one session, or a guided series, into the member's agenda

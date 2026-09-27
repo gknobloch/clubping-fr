@@ -85,13 +85,29 @@ describe('Prochains entraînements, on the Accueil', () => {
     const regular = screen.getByRole('group', { name: 'Entraînements libres' })
     const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
     expect(within(regular).getByRole('article')).toHaveAccessibleName('Libre du mardi, mardi 29 septembre')
-    expect(within(regular).getByText('1/3')).toBeInTheDocument()
-    await user().click(within(regular).getByRole('button', { name: 'Séance suivante' }))
+    const u = user()
+    await u.click(within(regular).getByRole('button', { name: 'Séance suivante' }))
     // The Tuesday called off stays in the row, saying so.
     expect(within(regular).getByRole('article')).toHaveTextContent('Annulée — Gymnase fermé')
     // One guided date: a card, no stepping.
     expect(within(guided).queryByText(/\/\d/)).not.toBeInTheDocument()
     expect(within(guided).getByRole('article')).toHaveTextContent('mercredi 30 septembre · 18h30')
+  })
+
+  it('says there are more than three, and ends on the way to them', async () => {
+    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
+    renderBlock()
+    const regular = screen.getByRole('group', { name: 'Entraînements libres' })
+    // Four Tuesdays within the slot's four weeks: three cards, then « +1 ».
+    expect(regular).toHaveTextContent('Entraînements libres · 4 à venir')
+    expect(within(regular).getByText('1/4')).toBeInTheDocument()
+    const u = user()
+    for (let n = 0; n < 3; n++) await u.click(within(regular).getByRole('button', { name: 'Séance suivante' }))
+    const more = within(regular).getByRole('link', { name: /\+1/ })
+    expect(more).toHaveTextContent('1 autre séance à venir')
+    expect(more).toHaveAttribute('href', '/entrainements')
+    // Nothing of the kind for a column holding no more than it shows.
+    expect(screen.getByRole('group', { name: 'Entraînements dirigés' })).not.toHaveTextContent('à venir')
   })
 
   it('asks « Ma disponibilité » on a guided session, as the match card does', async () => {

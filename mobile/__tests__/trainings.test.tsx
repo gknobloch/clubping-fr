@@ -180,6 +180,22 @@ describe('l’accueil', () => {
     expect(screen.queryByTestId('home-trainings-guided-dots')).toBeNull()
   })
 
+  it('dit qu’il y en a plus que trois, et finit sur le chemin des autres', () => {
+    render(<NextTrainingSection />)
+    measure('regular')
+    measure('guided')
+    // Four Tuesdays in the slot's four weeks: three cards, then « +1 ».
+    expect(screen.getByTestId('home-trainings-regular')).toHaveTextContent(/Entraînements libres · 4 à venir/)
+    expect(screen.queryByTestId('training-t-mardi-2026-10-20')).toBeNull()
+    const more = screen.getByTestId('home-trainings-regular-more')
+    expect(more).toHaveTextContent(/\+1.*1 autre séance à venir/)
+    fireEvent.press(more)
+    expect(mockPush).toHaveBeenCalledWith('/entrainements')
+    // Nothing of the kind for a column holding no more than it shows.
+    expect(screen.queryByTestId('home-trainings-guided-more')).toBeNull()
+    expect(screen.getByTestId('home-trainings-guided')).not.toHaveTextContent(/à venir/)
+  })
+
   it('demande « Ma disponibilité », comme la carte du match', () => {
     render(<NextTrainingSection />)
     measure('guided')

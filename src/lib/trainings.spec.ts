@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup, Training, TrainingAvailability, TrainingSession } from '@/types'
 import {
-  addDays, answerCounts, answerTally, upcomingSessionsFor, mayManageSchedule, buildTrainingEvent,
+  addDays, answerCounts, answerTally, upcomingSessionsFor, moreSessionsLabel, mayManageSchedule, buildTrainingEvent,
   seriesCalendarDates, seriesCalendarPath, trainingEventUid, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
   isoWeekday, occurrenceKey, parseOccurrenceKey, recurrenceLabel, trainingCancelledPush, trainingRefusal,
   validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates,
@@ -90,10 +90,21 @@ describe('trainingOccurrences', () => {
     expect(occ.map((o) => o.training.id)).toEqual(['t-dirige', 't-mardi'])
   })
 
+  it('lists each kind over its own horizon: four weeks of a slot, two months of a coach', () => {
+    const sessions: TrainingSession[] = [
+      { trainingId: 't-dirige', date: '2026-11-20', cancelled: false },
+      { trainingId: 't-dirige', date: '2026-12-01', cancelled: false },
+    ]
+    const occ = upcomingOccurrences({ trainings: [mardi, dirige], trainingSessions: sessions }, 'c1', '2026-09-26')
+    const tuesdays = occ.filter((o) => o.training.kind === 'regular').map((o) => o.date)
+    expect(tuesdays[tuesdays.length - 1]).toBe('2026-10-20')
+    expect(occ.filter((o) => o.training.kind === 'guided').map((o) => o.date)).toEqual(['2026-11-20'])
+  })
+
   it('lists one club only', () => {
     const other = { ...mardi, id: 't-other', clubId: 'c2' }
-    const occ = upcomingOccurrences({ trainings: [mardi, other], trainingSessions: [] }, 'c1', '2026-09-26', 7)
-    expect(occ.map((o) => o.training.id)).toEqual(['t-mardi'])
+    const occ = upcomingOccurrences({ trainings: [mardi, other], trainingSessions: [] }, 'c1', '2026-09-26')
+    expect(occ.map((o) => o.training.id)).toEqual(['t-mardi', 't-mardi', 't-mardi', 't-mardi'])
     expect(upcomingOccurrences({ trainings: [mardi], trainingSessions: [] }, undefined, '2026-09-26')).toEqual([])
   })
 })
@@ -307,7 +318,7 @@ describe('upcomingSessionsFor', () => {
   ]
   const data = (sessions: TrainingSession[]) => ({ trainings: [mardi, dirige], trainingSessions: sessions, memberGroups: groups })
 
-  it('gives the next three of one kind, cancelled ones included', () => {
+  it('gives every session of one kind over its horizon, cancelled ones included', () => {
     const d = data([
       { trainingId: 't-dirige', date: '2026-09-28', cancelled: true },
       { trainingId: 't-dirige', date: '2026-10-01', cancelled: false },
@@ -315,9 +326,14 @@ describe('upcomingSessionsFor', () => {
       { trainingId: 't-dirige', date: '2026-10-15', cancelled: false },
     ])
     expect(upcomingSessionsFor(d, members, 'c1', 'a', '2026-09-26', 'guided').map((o) => [o.date, o.cancelled]))
-      .toEqual([['2026-09-28', true], ['2026-10-01', false], ['2026-10-08', false]])
+      .toEqual([['2026-09-28', true], ['2026-10-01', false], ['2026-10-08', false], ['2026-10-15', false]])
     expect(upcomingSessionsFor(d, members, 'c1', 'a', '2026-09-26', 'regular').map((o) => o.date))
-      .toEqual(['2026-09-29', '2026-10-06', '2026-10-13'])
+      .toEqual(['2026-09-29', '2026-10-06', '2026-10-13', '2026-10-20'])
+  })
+
+  it('says how many more there are', () => {
+    expect(moreSessionsLabel(1)).toBe('1 autre séance')
+    expect(moreSessionsLabel(5)).toBe('5 autres séances')
   })
 
   it('only what the member is expected at', () => {

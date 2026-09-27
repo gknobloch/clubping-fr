@@ -20,8 +20,6 @@ import {
 } from '@/lib/trainings'
 import type { Training } from '@/types'
 
-/** How far ahead the list looks — four weeks, a coach's planning horizon. */
-const HORIZON_DAYS = 28
 
 /**
  * The club's collective trainings (#608): what is coming up, who is expected,
@@ -48,7 +46,7 @@ export function TrainingsPage() {
   const canManage = mayManageTrainings(user, clubId)
   const today = todayIso()
   const groups = clubMemberGroups(memberGroups, clubId)
-  const occurrences = upcomingOccurrences(data, clubId, today, HORIZON_DAYS)
+  const occurrences = upcomingOccurrences(data, clubId, today)
   const series = clubTrainings(trainings, clubId)
 
   const byDate = useMemo(() => {
@@ -100,7 +98,7 @@ export function TrainingsPage() {
         {byDate.length === 0 ? (
           <p className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
             {series.length
-              ? 'Aucune séance dans les quatre prochaines semaines.'
+              ? 'Aucune séance à venir.'
               : canManage
                 ? 'Aucun entraînement pour l’instant. Créez un créneau libre ou une série de séances dirigées.'
                 : 'Le club n’a pas encore publié ses entraînements.'}

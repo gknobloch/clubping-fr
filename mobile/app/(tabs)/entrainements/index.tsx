@@ -19,17 +19,16 @@ import {
 // ---------------------------------------------------------------------------
 // Entraînements (#608)
 //
-// Les quatre semaines à venir du club : les séances dirigées, où chacun dit
+// Les séances à venir du club — quatre semaines d'un créneau, deux mois d'une
+// série dirigée (`UPCOMING_DAYS`) : les séances dirigées, où chacun dit
 // s'il vient, et les créneaux libres, avec leurs soirs annulés. Un onglet à
-// lui : c'est ce qu'un membre ouvre chaque semaine, là où le Club se consulte
-// de temps en temps — d'où l'échange de leurs places dans la barre.
+// lui : c'est ce qu'un membre ouvre chaque semaine.
 //
 // L'administrateur y annule et rétablit une séance, parce que c'est dans le
 // gymnase qu'on apprend qu'il est fermé. Créer une série et poser ses dates
 // restent sur le web, où il y a la place de le faire.
 // ---------------------------------------------------------------------------
 
-const HORIZON_DAYS = 28
 
 const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -46,7 +45,7 @@ export default function TrainingsScreen() {
   const today = todayIso()
   const groups = clubMemberGroups(memberGroups, clubId)
   const canManage = mayManageTrainings(user, clubId)
-  const occurrences = upcomingOccurrences(data, clubId, today, HORIZON_DAYS)
+  const occurrences = upcomingOccurrences(data, clubId, today)
 
   const byDate = useMemo(() => {
     const out = new Map<string, TrainingOccurrence[]>()
@@ -69,8 +68,8 @@ export default function TrainingsScreen() {
         {byDate.length === 0 ? (
           <Text style={s.empty}>
             {canManage
-              ? 'Aucune séance dans les quatre prochaines semaines. Les entraînements se créent sur le site.'
-              : 'Aucune séance dans les quatre prochaines semaines.'}
+              ? 'Aucune séance à venir. Les entraînements se créent sur le site.'
+              : 'Aucune séance à venir.'}
           </Text>
         ) : (
           byDate.map(([date, list]) => (
