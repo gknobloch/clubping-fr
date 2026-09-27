@@ -21,6 +21,7 @@ const member = (over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow => ({
   birth_date: null, birth_place: null,
   status: 'active', club_id: CLUB, first_login_at: null, last_seen_at: null,
   notifications_enabled: 1,
+  notification_preferences: null,
   ...over,
 })
 
@@ -116,7 +117,14 @@ function fakeDb(f: DbFixture) {
             const scoped = params.length
               ? (f.tokens ?? []).filter((t) => params.includes(t.user_id))
               : (f.tokens ?? [])
-            return { results: scoped.filter((t) => notifiable.has(t.user_id)) }
+            // With the member's own preferences, which the query joins in
+            // so the category can be filtered on (#608).
+            return {
+              results: scoped.filter((t) => notifiable.has(t.user_id)).map((t) => ({
+                ...t,
+                notification_preferences: users.find((u) => u.id === t.user_id)?.notification_preferences ?? null,
+              })),
+            }
           }
           if (sql.includes('FROM push_receipts')) {
             return {
@@ -352,6 +360,17 @@ describe('the daily sweep', () => {
       users: [alice, member({ id: 'bob', notifications_enabled: 0 })],
       fixtures: squad, tokens,
     })
+    await dispatch(db, { NOTIFY_SECRET: 's3cret' })
+    expect(expo.sent().map((m) => m.to)).toEqual(['ExponentPushToken[alice]'])
+    expect(writesTo(writes, /notifications_sent/)).toHaveLength(1)
+  })
+
+  it('skips a member who switched match reminders off, and them alone (#608)', async () => {
+    // Trainings on, matches off: the category is what decides, not the
+    // master switch.
+    const expo = stubExpo()
+    const quiet = member({ id: 'bob', notification_preferences: JSON.stringify({ match: { enabled: false } }) })
+    const { db, writes } = fakeDb({ users: [alice, quiet], fixtures: squad, tokens })
     await dispatch(db, { NOTIFY_SECRET: 's3cret' })
     expect(expo.sent().map((m) => m.to)).toEqual(['ExponentPushToken[alice]'])
     expect(writesTo(writes, /notifications_sent/)).toHaveLength(1)

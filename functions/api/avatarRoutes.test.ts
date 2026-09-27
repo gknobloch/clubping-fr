@@ -81,6 +81,7 @@ const member = (over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow => ({
   birth_date: null, birth_place: null,
   status: 'active', club_id: 'club-1', first_login_at: null, last_seen_at: Date.now(),
   notifications_enabled: 1,
+  notification_preferences: null,
   ...over,
 })
 

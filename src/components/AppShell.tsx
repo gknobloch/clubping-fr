@@ -74,8 +74,10 @@ export function AppShell() {
     links.push(
       { to: '/equipes', label: 'Équipes' },
       { to: '/journees', label: 'Journées' },
-      { to: '/joueurs', label: 'Joueurs' },
     )
+    // A club's own trainings (#608) — its members', so only with a club.
+    if (user?.clubId) links.push({ to: '/entrainements', label: 'Entraînements' })
+    links.push({ to: '/joueurs', label: 'Joueurs' })
   }
 
   // Navigating is what closes the drawer — clicking the link the user is

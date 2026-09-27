@@ -40,7 +40,7 @@ const testData = {
   groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,
-  playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [],
+  playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
   playerSeasonCategories: mockPlayerSeasonCategories,
   playerPhasePoints: mockPlayerPhasePoints,
 }

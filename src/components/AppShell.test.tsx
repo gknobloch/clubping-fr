@@ -27,7 +27,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 const EMPTY: DataState = {
   seasons: [], phases: [], divisions: [], competitions: [], competitionGroups: [], competitionEligibilities: [],
   clubs: [], groups: [], teams: [],
-  players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [], playerPhasePoints: [], matchDays: [], games: [],
+  players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
   gameAvailabilities: [], gameSelections: [], users: [],
 }
 

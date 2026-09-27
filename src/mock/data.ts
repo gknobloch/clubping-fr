@@ -1,4 +1,6 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionGroup } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionGroup, Training, TrainingSession, TrainingAvailability } from '@/types'
+import { addDays } from '@/lib/trainings'
+import { todayIso } from '@/lib/weeks'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -215,6 +217,38 @@ export const mockMemberGroups: MemberGroup[] = [
     id: 'mgroup-entraineurs', clubId: 'club-fftt-06680011', displayName: 'Entraîneurs',
     memberIds: ['p2-player-1', 'p2-player-2', 'p2-player-4'],
   },
+]
+
+// ---------------------------------------------------------------------------
+// Trainings (#608)
+// ---------------------------------------------------------------------------
+// One of each kind at Rixheim: the Tuesday slot for everyone, and a guided
+// series for the « Entraîneurs » group whose dates are computed from today so
+// the list is never empty, with one called off so the cancelled state shows.
+const trainingDay = (offset: number) => addDays(todayIso(), offset)
+
+export const mockTrainings: Training[] = [
+  {
+    id: 'training-libre-mardi', clubId: 'club-fftt-06680011', kind: 'regular',
+    displayName: 'Entraînement libre', weekday: 2, startTime: '20:00', endTime: '22:30',
+    memberGroupIds: [],
+  },
+  {
+    id: 'training-dirige', clubId: 'club-fftt-06680011', kind: 'guided',
+    displayName: 'Entraînement dirigé', startTime: '18:30', endTime: '20:00',
+    memberGroupIds: ['mgroup-entraineurs'], notes: 'Avec Julien, entraîneur fédéral.',
+  },
+]
+
+export const mockTrainingSessions: TrainingSession[] = [
+  { trainingId: 'training-dirige', date: trainingDay(2), cancelled: false },
+  { trainingId: 'training-dirige', date: trainingDay(9), cancelled: true, note: 'Salle prise pour le tournoi.' },
+  { trainingId: 'training-dirige', date: trainingDay(16), cancelled: false },
+]
+
+export const mockTrainingAvailabilities: TrainingAvailability[] = [
+  { trainingId: 'training-dirige', date: trainingDay(2), playerId: 'p2-player-1', status: 'available' },
+  { trainingId: 'training-dirige', date: trainingDay(2), playerId: 'p2-player-4', status: 'maybe' },
 ]
 
 // ---------------------------------------------------------------------------

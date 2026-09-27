@@ -2,16 +2,18 @@ import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
-import { jsonParseCategories, jsonParseIds } from './rows'
+import { jsonParseCategories, jsonParseIds, trainingFromRow } from './rows'
 import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
   MemberGroupRow, MemberGroupMemberRow, CompetitionGroupRow,
+  TrainingRow, TrainingSessionRow, TrainingAvailabilityRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibility'
 import { groupNameTaken, normalizeGroupName } from '../../src/lib/memberGroups'
+import { isIsoDate, isTime } from '../../src/lib/trainings'
 import {
   fixtureOverride, mayAnswerOnFixture, mayManageTeam,
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
@@ -310,6 +312,7 @@ app.get('/data', async (c) => {
     groupsR, teamsR, phasePointsR, seasonCategoriesR, seasonLicencesR, matchDaysR, gamesR,
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, competitionGroupsR, memberGroupsR, memberGroupMembersR,
+    trainingsR, trainingSessionsR, trainingAvailsR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -337,6 +340,9 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM club_competition_groups').all<CompetitionGroupRow>(),
     db.prepare('SELECT * FROM member_groups').all<MemberGroupRow>(),
     db.prepare('SELECT * FROM member_group_members').all<MemberGroupMemberRow>(),
+    db.prepare('SELECT * FROM trainings').all<TrainingRow>(),
+    db.prepare('SELECT * FROM training_sessions').all<TrainingSessionRow>(),
+    db.prepare('SELECT * FROM training_availabilities').all<TrainingAvailabilityRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -374,6 +380,11 @@ app.get('/data', async (c) => {
 
   // A club's groups go to that club only (#602) — see memberGroupsVisibleTo.
   const canSeeGroupsOf = memberGroupsVisibleTo(c.get('user'))
+  // Trainings follow the same rule (#608): a club's schedule, and who says
+  // they are coming, is its own. Sessions and answers are filtered through
+  // their training's club.
+  const visibleTrainings = trainingsR.results.filter((r) => canSeeGroupsOf(r.club_id))
+  const visibleTrainingIds = new Set(visibleTrainings.map((r) => r.id))
   const membersByGroup = new Map<string, string[]>()
   for (const m of memberGroupMembersR.results) {
     membersByGroup.set(m.group_id, [...(membersByGroup.get(m.group_id) ?? []), m.user_id])
@@ -484,6 +495,16 @@ app.get('/data', async (c) => {
       seasonId: r.season_id, playerId: r.player_id,
     })),
     memberGroups,
+    trainings: visibleTrainings.map(trainingFromRow),
+    trainingSessions: trainingSessionsR.results
+      .filter((r) => visibleTrainingIds.has(r.training_id))
+      .map((r) => ({
+        trainingId: r.training_id, date: r.date, cancelled: bool(r.cancelled),
+        ...(r.note ? { note: r.note } : {}),
+      })),
+    trainingAvailabilities: trainingAvailsR.results
+      .filter((r) => visibleTrainingIds.has(r.training_id))
+      .map((r) => ({ trainingId: r.training_id, date: r.date, playerId: r.player_id, status: r.status })),
     matchDays: matchDaysR.results.map(r => ({
       id: r.id, groupId: r.group_id, number: r.number, date: r.date,
     })),
@@ -3399,6 +3420,7 @@ app.delete('/clubs/:id', async (c) => {
     ).bind(id),
     db.prepare('DELETE FROM club_competition_groups WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM member_groups WHERE club_id = ?').bind(id),
+    ...trainingDeletes(db, 'SELECT id FROM trainings WHERE club_id = ?', id),
     db.prepare('DELETE FROM clubs WHERE id = ?').bind(id),
   ])
   return c.json({ ok: true })
@@ -3653,6 +3675,279 @@ app.put('/clubs/:clubId/members/:userId/member-groups', async (c) => {
     ).bind(groupId, userId)),
   ])
   return c.json({ ok: true, groupIds: keep })
+})
+
+// --- Trainings (#608) ---
+//
+// A club's collective trainings: the series (`trainings`), the dated rows that
+// either ARE a guided session or are an exception to a regular slot
+// (`training_sessions`), and the answers to guided ones. Writing a club's
+// calendar is its administrators' — `administers`, the club read off the URL
+// and every statement pinned to it, exactly as the member groups above.
+// Answering follows the member, not the club: see `/training-availabilities`.
+
+/**
+ * Everything hanging off the trainings `select` names — their answers, their
+ * dated rows, then the series. Spelled out rather than left to ON DELETE
+ * CASCADE, as the member groups are: D1 is not asked to enforce foreign keys.
+ */
+const trainingDeletes = (db: D1Database, select: string, ...binds: unknown[]) => [
+  db.prepare(`DELETE FROM training_availabilities WHERE training_id IN (${select})`).bind(...binds),
+  db.prepare(`DELETE FROM training_sessions WHERE training_id IN (${select})`).bind(...binds),
+  db.prepare(`DELETE FROM trainings WHERE id IN (${select})`).bind(...binds),
+]
+
+const trimmed = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+
+/**
+ * The columns a training body sets, checked — or the reason it is refused.
+ *
+ * `existing` is the row being edited: a PATCH names only what changes, so the
+ * rules that span fields (a regular slot needs a weekday) are judged on the
+ * result. The kind never changes after creation: a guided series' dates are
+ * its rows, a regular one's rows are exceptions, and swapping would silently
+ * turn one into the other.
+ *
+ * An address must be one of the club's, and the groups are kept to the club's
+ * own — the body names things, and one club must not reach another's.
+ */
+async function trainingColumns(
+  db: D1Database,
+  clubId: string,
+  d: Record<string, unknown>,
+  existing?: TrainingRow,
+): Promise<{ ok: true; cols: Omit<TrainingRow, 'id' | 'club_id'> } | { ok: false; error: string }> {
+  const has = (k: string) => existing === undefined || k in d
+  const kind = existing ? existing.kind : d.kind
+  if (kind !== 'guided' && kind !== 'regular') return { ok: false, error: 'bad_kind' }
+
+  const displayName = has('displayName') ? trimmed(d.displayName) : existing!.display_name
+  if (!displayName) return { ok: false, error: 'bad_name' }
+
+  const startTime = has('startTime') ? d.startTime : existing!.start_time
+  if (!isTime(startTime)) return { ok: false, error: 'bad_time' }
+  const endTime = has('endTime') ? (d.endTime || null) : existing!.end_time
+  if (endTime !== null && (!isTime(endTime) || endTime <= startTime)) return { ok: false, error: 'bad_time' }
+
+  let weekday: number | null = null
+  let validFrom: string | null = null
+  let validUntil: string | null = null
+  if (kind === 'regular') {
+    weekday = has('weekday') ? Number(d.weekday) : existing!.weekday
+    if (!weekday || !Number.isInteger(weekday) || weekday < 1 || weekday > 7) return { ok: false, error: 'bad_weekday' }
+    validFrom = has('validFrom') ? (d.validFrom || null) as string | null : existing!.valid_from
+    validUntil = has('validUntil') ? (d.validUntil || null) as string | null : existing!.valid_until
+    if ((validFrom && !isIsoDate(validFrom)) || (validUntil && !isIsoDate(validUntil))) return { ok: false, error: 'bad_period' }
+    if (validFrom && validUntil && validUntil < validFrom) return { ok: false, error: 'bad_period' }
+  }
+
+  let addressId = has('addressId') ? (d.addressId || null) as string | null : existing!.address_id
+  if (addressId) {
+    const own = await db.prepare('SELECT id FROM club_addresses WHERE id = ? AND club_id = ?')
+      .bind(addressId, clubId).first<{ id: string }>()
+    if (!own) addressId = null
+  }
+
+  let groupIds = existing ? jsonParseIds(existing.member_group_ids) : []
+  if ('memberGroupIds' in d) {
+    if (!Array.isArray(d.memberGroupIds)) return { ok: false, error: 'bad_groups' }
+    const ours = new Set((await clubGroupNames(db, clubId)).map((g) => g.id))
+    groupIds = [...new Set(d.memberGroupIds as unknown[])].filter((id): id is string => typeof id === 'string' && ours.has(id))
+  }
+
+  const notes = has('notes') ? trimmed(d.notes) || null : existing!.notes
+  return {
+    ok: true,
+    cols: {
+      kind, display_name: displayName, weekday, start_time: startTime, end_time: endTime,
+      address_id: addressId, member_group_ids: jsonStr(groupIds),
+      valid_from: validFrom, valid_until: validUntil, notes,
+    },
+  }
+}
+
+/** The training, if it exists and is this club's. */
+const trainingOfClub = (db: D1Database, clubId: string, trainingId: string) =>
+  db.prepare('SELECT * FROM trainings WHERE id = ? AND club_id = ?').bind(trainingId, clubId).first<TrainingRow>()
+
+app.post('/clubs/:clubId/trainings', async (c) => {
+  const clubId = c.req.param('clubId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const d = await c.req.json<Record<string, unknown>>()
+  const checked = await trainingColumns(db, clubId, d)
+  if (!checked.ok) return c.json({ error: checked.error }, 400)
+  const id = typeof d.id === 'string' && d.id ? d.id : newId('training')
+  const t = checked.cols
+  await db.prepare(
+    `INSERT INTO trainings (id, club_id, kind, display_name, weekday, start_time, end_time,
+       address_id, member_group_ids, valid_from, valid_until, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(id, clubId, t.kind, t.display_name, t.weekday, t.start_time, t.end_time,
+    t.address_id, t.member_group_ids, t.valid_from, t.valid_until, t.notes).run()
+  return c.json({ ok: true, training: trainingFromRow({ id, club_id: clubId, ...t }) })
+})
+
+app.patch('/clubs/:clubId/trainings/:trainingId', async (c) => {
+  const clubId = c.req.param('clubId')
+  const trainingId = c.req.param('trainingId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const existing = await trainingOfClub(db, clubId, trainingId)
+  if (!existing) return c.json(notFound, 404)
+  const checked = await trainingColumns(db, clubId, await c.req.json<Record<string, unknown>>(), existing)
+  if (!checked.ok) return c.json({ error: checked.error }, 400)
+  const t = checked.cols
+  await db.prepare(
+    `UPDATE trainings SET display_name = ?, weekday = ?, start_time = ?, end_time = ?, address_id = ?,
+       member_group_ids = ?, valid_from = ?, valid_until = ?, notes = ?
+     WHERE id = ? AND club_id = ?`,
+  ).bind(t.display_name, t.weekday, t.start_time, t.end_time, t.address_id,
+    t.member_group_ids, t.valid_from, t.valid_until, t.notes, trainingId, clubId).run()
+  return c.json({ ok: true, training: trainingFromRow({ id: trainingId, club_id: clubId, ...t }) })
+})
+
+app.delete('/clubs/:clubId/trainings/:trainingId', async (c) => {
+  const clubId = c.req.param('clubId')
+  const trainingId = c.req.param('trainingId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  if (!(await trainingOfClub(db, clubId, trainingId))) return c.json({ ok: true })
+  await db.batch(trainingDeletes(db, 'SELECT id FROM trainings WHERE id = ? AND club_id = ?', trainingId, clubId))
+  return c.json({ ok: true })
+})
+
+/**
+ * Add dates to a guided training — a coach's schedule, entered in one go.
+ * Existing dates are left as they are, cancelled or not: adding is not
+ * restoring.
+ */
+app.post('/clubs/:clubId/trainings/:trainingId/sessions', async (c) => {
+  const clubId = c.req.param('clubId')
+  const trainingId = c.req.param('trainingId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const training = await trainingOfClub(db, clubId, trainingId)
+  if (!training) return c.json(notFound, 404)
+  if (training.kind !== 'guided') return c.json({ error: 'not_guided' }, 400)
+  const { dates } = await c.req.json<{ dates?: unknown }>()
+  if (!Array.isArray(dates) || !dates.length || !dates.every(isIsoDate)) return c.json({ error: 'bad_dates' }, 400)
+  const unique = [...new Set(dates as string[])]
+  for (let i = 0; i < unique.length; i += 50) {
+    await db.batch(unique.slice(i, i + 50).map((date) => db.prepare(
+      'INSERT OR IGNORE INTO training_sessions (training_id, date, cancelled, note) VALUES (?, ?, 0, NULL)',
+    ).bind(trainingId, date)))
+  }
+  return c.json({ ok: true, dates: unique })
+})
+
+/**
+ * Say something about one date: call it off, restore it, or leave a note.
+ *
+ * On a regular slot this is an exception, and an exception that says nothing
+ * any more — restored, no note — is deleted rather than kept as an empty row.
+ * On a guided series the row is the session itself, so it must already exist:
+ * this never creates a guided date by the back door.
+ */
+app.put('/clubs/:clubId/trainings/:trainingId/sessions/:date', async (c) => {
+  const clubId = c.req.param('clubId')
+  const trainingId = c.req.param('trainingId')
+  const date = c.req.param('date')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  if (!isIsoDate(date)) return c.json({ error: 'bad_dates' }, 400)
+  const db = c.env.DB
+  const training = await trainingOfClub(db, clubId, trainingId)
+  if (!training) return c.json(notFound, 404)
+  const d = await c.req.json<{ cancelled?: unknown; note?: unknown }>()
+  const cancelled = d.cancelled === true
+  const note = trimmed(d.note) || null
+
+  if (training.kind === 'guided') {
+    const r = await db.prepare(
+      'UPDATE training_sessions SET cancelled = ?, note = ? WHERE training_id = ? AND date = ?',
+    ).bind(cancelled ? 1 : 0, note, trainingId, date).run()
+    if (!r.meta.changes) return c.json(notFound, 404)
+    return c.json({ ok: true })
+  }
+  if (!cancelled && !note) {
+    await db.prepare('DELETE FROM training_sessions WHERE training_id = ? AND date = ?').bind(trainingId, date).run()
+    return c.json({ ok: true })
+  }
+  await db.prepare(
+    `INSERT INTO training_sessions (training_id, date, cancelled, note) VALUES (?, ?, ?, ?)
+     ON CONFLICT(training_id, date) DO UPDATE SET cancelled = excluded.cancelled, note = excluded.note`,
+  ).bind(trainingId, date, cancelled ? 1 : 0, note).run()
+  return c.json({ ok: true })
+})
+
+/** Remove a date — a guided session entered by mistake, with its answers. */
+app.delete('/clubs/:clubId/trainings/:trainingId/sessions/:date', async (c) => {
+  const clubId = c.req.param('clubId')
+  const trainingId = c.req.param('trainingId')
+  const date = c.req.param('date')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  if (!(await trainingOfClub(db, clubId, trainingId))) return c.json({ ok: true })
+  await db.batch([
+    db.prepare('DELETE FROM training_availabilities WHERE training_id = ? AND date = ?').bind(trainingId, date),
+    db.prepare('DELETE FROM training_sessions WHERE training_id = ? AND date = ?').bind(trainingId, date),
+  ])
+  return c.json({ ok: true })
+})
+
+/**
+ * Whether the caller may answer for `playerId` on this club's trainings: the
+ * member themselves, or whoever administers the club — the coach's side, for
+ * the licensee who told them at the door. Both must be the training's club: a
+ * member's answer about another club's session is not an answer anyone asked
+ * for. A missing viewer is the local hatch (#138).
+ */
+async function mayAnswerTraining(
+  c: { get: (k: 'user') => UserRow | undefined; env: Env['Bindings'] },
+  trainingId: string,
+  date: string,
+  playerId: string,
+): Promise<{ ok: true } | { ok: false; status: 400 | 403 | 404; body: object }> {
+  const db = c.env.DB
+  const training = await db.prepare('SELECT * FROM trainings WHERE id = ?').bind(trainingId).first<TrainingRow>()
+  const player = await authorityPlayer(db, playerId)
+  if (!training || !player) return { ok: false, status: 404, body: notFound }
+  if (training.kind !== 'guided') return { ok: false, status: 400, body: { error: 'not_guided' } }
+  const session = await db.prepare('SELECT cancelled FROM training_sessions WHERE training_id = ? AND date = ?')
+    .bind(trainingId, date).first<{ cancelled: number }>()
+  if (!session) return { ok: false, status: 404, body: notFound }
+  const u = c.get('user')
+  if (!u) return { ok: true }
+  if (player.clubId !== training.club_id) return { ok: false, status: 403, body: notAllowed }
+  const self = u.id === playerId
+  if (!self && !administers(managingViewer(c), training.club_id)) return { ok: false, status: 403, body: notAllowed }
+  return { ok: true }
+}
+
+app.post('/training-availabilities/set', async (c) => {
+  const d = await c.req.json<{ trainingId?: string; date?: string; playerId?: string; status?: string }>()
+  if (!d.trainingId || !isIsoDate(d.date) || !d.playerId) return c.json({ error: 'bad_request' }, 400)
+  if (d.status !== 'available' && d.status !== 'maybe' && d.status !== 'unavailable') {
+    return c.json({ error: 'bad_request' }, 400)
+  }
+  const may = await mayAnswerTraining(c, d.trainingId, d.date, d.playerId)
+  if (!may.ok) return c.json(may.body, may.status)
+  await c.env.DB.prepare(
+    `INSERT INTO training_availabilities (training_id, date, player_id, status) VALUES (?, ?, ?, ?)
+     ON CONFLICT(training_id, date, player_id) DO UPDATE SET status = excluded.status`,
+  ).bind(d.trainingId, d.date, d.playerId, d.status).run()
+  return c.json({ ok: true })
+})
+
+app.post('/training-availabilities/clear', async (c) => {
+  const d = await c.req.json<{ trainingId?: string; date?: string; playerId?: string }>()
+  if (!d.trainingId || !isIsoDate(d.date) || !d.playerId) return c.json({ error: 'bad_request' }, 400)
+  const may = await mayAnswerTraining(c, d.trainingId, d.date, d.playerId)
+  if (!may.ok) return c.json(may.body, may.status)
+  await c.env.DB.prepare(
+    'DELETE FROM training_availabilities WHERE training_id = ? AND date = ? AND player_id = ?',
+  ).bind(d.trainingId, d.date, d.playerId).run()
+  return c.json({ ok: true })
 })
 
 // --- Club logos (#135) ---

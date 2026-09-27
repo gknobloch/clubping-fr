@@ -73,7 +73,7 @@ function baseData() {
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
-    playerSeasonLicences: [],
+    playerSeasonLicences: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
     playerSeasonCategories: mockPlayerSeasonCategories,
     playerPhasePoints: mockPlayerPhasePoints,
   }

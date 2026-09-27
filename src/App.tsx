@@ -20,6 +20,7 @@ import { MyClubPage } from '@/pages/MyClubPage'
 import { PlayerDetailPage } from '@/pages/PlayerDetailPage'
 import { TeamDetailPage } from '@/pages/TeamDetailPage'
 import { ComptePage } from '@/pages/ComptePage'
+import { TrainingsPage } from '@/pages/TrainingsPage'
 import { PrivacyPage } from '@/pages/PrivacyPage'
 import { JoinPage } from '@/pages/JoinPage'
 import { ConfirmRequestPage } from '@/pages/ConfirmRequestPage'
@@ -109,6 +110,7 @@ export default function App() {
                 shared link works anywhere (#306). */}
             <Route path="journees/:gameId" element={<MatchDayDetailPage />} />
             <Route path="club" element={<MyClubPage />} />
+            <Route path="entrainements" element={<TrainingsPage />} />
             <Route path="compte" element={<ComptePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
