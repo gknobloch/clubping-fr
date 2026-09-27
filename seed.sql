@@ -500,6 +500,23 @@ INSERT INTO member_group_members (group_id, user_id) VALUES
   ('mgroup-entraineurs', 'p2-player-2'),
   ('mgroup-entraineurs', 'p2-player-4');
 
+-- Trainings (#608): a regular Tuesday slot for the whole club, one Tuesday of
+-- which is off, and a guided series for « Entraîneurs » — the same shape as the
+-- web's mock data, dated far enough ahead to stay in the upcoming list.
+INSERT INTO trainings (id, club_id, kind, display_name, weekday, start_time, end_time, address_id, member_group_ids, valid_from, valid_until, notes) VALUES
+  ('training-libre-mardi', 'club-fftt-06680011', 'regular', 'Entraînement libre', 2, '20:00', '22:30', NULL, '[]', NULL, NULL, NULL),
+  ('training-dirige', 'club-fftt-06680011', 'guided', 'Entraînement dirigé', NULL, '18:30', '20:00', NULL, '["mgroup-entraineurs"]', NULL, NULL, 'Avec Julien, entraîneur fédéral.');
+
+INSERT INTO training_sessions (training_id, date, cancelled, note) VALUES
+  ('training-dirige', date('now', '+2 days'), 0, NULL),
+  ('training-dirige', date('now', '+9 days'), 1, 'Salle prise pour le tournoi.'),
+  ('training-dirige', date('now', '+16 days'), 0, NULL),
+  ('training-libre-mardi', date('now', 'weekday 2', '+7 days'), 1, 'Gymnase fermé');
+
+INSERT INTO training_availabilities (training_id, date, player_id, status) VALUES
+  ('training-dirige', date('now', '+2 days'), 'p2-player-1', 'available'),
+  ('training-dirige', date('now', '+2 days'), 'p2-player-4', 'maybe');
+
 -- user_avatars — a sample avatar so the authed-image round trip (GET/PUT
 -- /api/users/:id/avatar) is exercisable locally. 1x1 transparent PNG.
 INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES

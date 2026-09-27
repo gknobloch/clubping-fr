@@ -12,6 +12,9 @@ import { ClubChannels } from '@/components/club/ClubChannels'
 import { ClubAdminsSection } from '@/components/club/ClubAdminsSection'
 import { ClubGroupsSection } from '@/components/club/ClubGroupsSection'
 import { ClubCompetitionsSection } from '@/components/club/ClubCompetitionsSection'
+import { ClubTrainingsSection } from '@/components/club/ClubTrainingsSection'
+import { upcomingOccurrences } from '@shared/lib/trainings'
+import { todayIso } from '@/utils/weeks'
 import { clubMemberGroups, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { canManageClub } from '@/utils/roles'
 
@@ -28,10 +31,13 @@ import { canManageClub } from '@/utils/roles'
 // volets (#585) : une rotation ou un retour le retrouve.
 // ---------------------------------------------------------------------------
 
-type SectionId = 'apercu' | 'canaux' | 'administrateurs' | 'groupes' | 'competitions'
+type SectionId = 'apercu' | 'entrainements' | 'canaux' | 'administrateurs' | 'groupes' | 'competitions'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: 'apercu', label: 'Aperçu', icon: 'business-outline' },
+  // Second, after the club's identity: it is what a member opens this tab for
+  // most weeks (#608).
+  { id: 'entrainements', label: 'Entraînements', icon: 'barbell-outline' },
   { id: 'canaux', label: 'Canaux de communication', icon: 'chatbubbles-outline' },
   { id: 'administrateurs', label: 'Administrateurs', icon: 'shield-checkmark-outline' },
   { id: 'groupes', label: 'Groupes', icon: 'people-outline' },
@@ -67,7 +73,11 @@ export default function ClubScreen() {
   const groups = clubMemberGroups(memberGroups, club.id)
   const canManageGroups = mayManageMemberGroups(user, club.id)
   // A member of a club with no group is spared the section, rail entry and all.
-  const sections = SECTIONS.filter((x) => x.id !== 'groupes' || groups.length > 0 || canManageGroups)
+  // Likewise a club that publishes no training (#608).
+  const hasTrainings = data.trainings.some((t) => t.clubId === club.id)
+  const sections = SECTIONS.filter((x) =>
+    (x.id !== 'groupes' || groups.length > 0 || canManageGroups) &&
+    (x.id !== 'entrainements' || hasTrainings))
   const selected: SectionId = sections.some((x) => x.id === params.section)
     ? (params.section as SectionId)
     : 'apercu'
@@ -76,6 +86,8 @@ export default function ClubScreen() {
     switch (id) {
       case 'apercu':
         return <ClubOverview club={club} />
+      case 'entrainements':
+        return <ClubTrainingsSection next={upcomingOccurrences(data, club.id, todayIso(), 28).slice(0, 3)} />
       case 'canaux':
         return (
           <ClubChannels

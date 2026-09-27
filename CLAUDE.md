@@ -793,6 +793,70 @@ invisible dans le diff comme dans la revue.
   volet, à côté de la liste, qui filtre la liste **en place** (`setParams`) et
   n'a rien à défaire.
 
+### Entraînements collectifs (#608)
+- **Deux calendriers, une table.** Un entraînement *libre* est un créneau —
+  « tous les mardis à 20 h » — qui tient toute la saison sauf ses exceptions ;
+  un entraînement *dirigé* suit le planning d'un encadrant, une date à la
+  fois. Les deux sont une ligne `trainings` (la série : club, horaire, lieu,
+  pour qui) ; ce qui diffère, c'est d'où viennent les dates.
+- **`training_sessions` est une ligne par date dont on a dit quelque chose.**
+  Pour une série dirigée, la ligne EST la séance : pas de ligne, pas de
+  séance. Pour un créneau libre, c'est une exception — le mardi où le gymnase
+  est fermé — et les autres mardis n'en ont aucune. Un créneau n'est jamais
+  matérialisé en quarante lignes : il se déroule à la lecture.
+- `trainingOccurrences` (`src/lib/trainings.ts`) est la seule dérivation des
+  dates, partagée par le web, l'app et le balayage. Une exception pour un jour
+  que le créneau n'a pas est ignorée : elle n'est l'exception de rien.
+- **Annulée n'est pas supprimée.** Une séance annulée reste affichée, avec son
+  motif, parce que les membres doivent voir qu'elle l'est — et le balayage la
+  lit pour prévenir ceux qui comptaient dessus. Supprimer, c'est pour une date
+  saisie par erreur. Une exception qui ne dit plus rien (rétablie, sans note)
+  est supprimée plutôt que gardée vide.
+- **Le type ne change jamais après la création** : les lignes d'une série
+  dirigée sont ses séances, celles d'un créneau ses exceptions, et basculer
+  transformerait l'un en l'autre sans un mot.
+- **Qui est attendu, ce sont les groupes (#602).** Aucun groupe veut dire *tout
+  le club* — comme une liste de catégories vide (#482) — et « tout le club »
+  veut dire ses licenciés actifs : lu littéralement, il sonnerait le trésorier
+  pour un mardi. Un groupe, lui, compte tous ses membres, licenciés ou non.
+- **Seules les séances dirigées demandent une réponse.** Un créneau libre est
+  là où viennent les habitués ; le leur demander chaque semaine apprendrait au
+  club à couper l'app. « Sans réponse » est l'absence de ligne, comme pour un
+  match, et le décompte ne porte que sur les attendus.
+- Écrire le calendrier suit `administers`, le club lu dans l'URL et chaque
+  requête épinglée à lui, comme les groupes. Répondre suit le membre : lui-même,
+  ou qui administre son club — l'encadrant, pour le licencié qui l'a dit à la
+  porte. `GET /api/data` ne porte que les entraînements du club de celui qui
+  regarde.
+- **L'app lit et annule ; le web crée.** Annuler ou rétablir se décide dans le
+  gymnase, donc l'app le fait ; créer une série et poser ses dates restent sur
+  le web, où il y a la place de le faire.
+- **Les rappels sont le registre de #495 sous deux autres `kind`**
+  (`training_reminder`, `training_cancelled`), la clé d'occurrence
+  (`training@date`) dans la colonne `game_id`. La question reste « qui, parmi
+  les attendus, n'a pas encore été prévenu ? » — et c'est ce qui rend le délai
+  propre à chacun : un membre qui a choisi « la veille » n'est simplement pas
+  dû avant.
+- Jamais le jour même : le balayage passe en début de soirée, après la plupart
+  des séances du jour. Un avis d'annulation, lui, part aussi le jour même, et
+  seulement à qui comptait dessus — prévenu, ou qui avait dit venir.
+
+### Préférences de notification (#608)
+- **Par catégorie, par membre, jamais par appareil** : matchs, dirigés, libres.
+  Stockées dans `users.notification_preferences`, **creuses** — seul ce que le
+  membre a changé — et résolues par `resolveNotificationPreferences`, pour
+  qu'un défaut révisé plus tard atteigne tous ceux qui n'y ont pas touché.
+- **Matchs et dirigés activés, libres désactivés, trois jours avant.** Seuls les
+  entraînements laissent choisir le délai (1, 2, 3, 5 ou 7 jours) : les sept
+  jours d'un match sont l'avance du capitaine pour combler un trou, pas celle
+  du joueur.
+- `notifications_enabled` reste l'interrupteur général : un build qui ne
+  connaît que lui continue de marcher, et l'écran ne montre les catégories que
+  sous lui allumé.
+- **`tokensByUser` prend la catégorie en argument obligatoire**, et filtre
+  dessus comme sur l'interrupteur général : aucun expéditeur futur ne peut
+  oublier l'une ou l'autre. L'alerte capitaine est de la catégorie matchs.
+
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
   what disappeared. Removing what a rebuilt poule no longer holds is opt-in per

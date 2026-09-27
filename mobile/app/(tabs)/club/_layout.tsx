@@ -12,6 +12,12 @@ export default function ClubLayout() {
         name="membres"
         options={{ title: 'Club', header: () => <AppHeader title="Club" showBack /> }}
       />
+      {/* The club's trainings (#608), pushed from the club's own section so
+          the chevron comes back to it. */}
+      <Stack.Screen
+        name="entrainements"
+        options={{ title: 'Entraînements', header: () => <AppHeader title="Entraînements" showBack /> }}
+      />
     </Stack>
   )
 }

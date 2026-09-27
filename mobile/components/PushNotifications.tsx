@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router'
 import { Notifications } from '@/utils/expoNotifications'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { gameIdOf, registerForPush } from '@/utils/push'
+import { gameIdOf, registerForPush, trainingOf } from '@/utils/push'
 
 /**
  * Everything push does while the app is running (#495): register the device
@@ -43,16 +43,21 @@ export function PushNotifications() {
     if (!isAuthenticated || !Notifications) return
     // A tap on a notification that launched the app from cold is not delivered
     // to a listener — it is waiting to be asked for.
-    void Notifications.getLastNotificationResponseAsync().then((r) => {
+    // A training reminder or cancellation (#608) opens the club's trainings:
+    // the list is short and the session is at its top, so there is nothing to
+    // wait for — unlike a match, whose screen needs a team resolved first.
+    const open = (r: Parameters<typeof gameIdOf>[0]) => {
+      if (trainingOf(r)) {
+        router.push('/club/entrainements')
+        return
+      }
       const gameId = gameIdOf(r)
       if (gameId) setPendingGameId(gameId)
-    })
-    const sub = Notifications.addNotificationResponseReceivedListener((r) => {
-      const gameId = gameIdOf(r)
-      if (gameId) setPendingGameId(gameId)
-    })
+    }
+    void Notifications.getLastNotificationResponseAsync().then(open)
+    const sub = Notifications.addNotificationResponseReceivedListener(open)
     return () => sub.remove()
-  }, [isAuthenticated])
+  }, [isAuthenticated, router])
 
   // The match screen is one TEAM's view of a fixture, so it needs a team as
   // well as a game. The notification deliberately does not carry one: the

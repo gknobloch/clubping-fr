@@ -38,16 +38,16 @@ const alice = member({ id: 'alice' })
 const bob = member({ id: 'bob' })
 const stranger = member({ id: 'p9', club_id: THEIRS })
 
-const training = (over: Partial<TrainingRow> & Pick<TrainingRow, 'id'>): TrainingRow => ({
+const trainingRow = (over: Partial<TrainingRow> & Pick<TrainingRow, 'id'>): TrainingRow => ({
   club_id: MINE, kind: 'guided', display_name: 'Dirigé jeunes', weekday: null,
   start_time: '18:30', end_time: null, address_id: null, member_group_ids: '[]',
   valid_from: null, valid_until: null, notes: null,
   ...over,
 })
 
-const dirige = training({ id: 't-dirige', member_group_ids: JSON.stringify(['g-jeunes']) })
-const mardi = training({ id: 't-mardi', kind: 'regular', display_name: 'Libre', weekday: 2, start_time: '20:00' })
-const far = training({ id: 't-far', club_id: THEIRS })
+const dirige = trainingRow({ id: 't-dirige', member_group_ids: JSON.stringify(['g-jeunes']) })
+const mardi = trainingRow({ id: 't-mardi', kind: 'regular', display_name: 'Libre', weekday: 2, start_time: '20:00' })
+const far = trainingRow({ id: 't-far', club_id: THEIRS })
 
 interface World {
   viewerId?: string | null

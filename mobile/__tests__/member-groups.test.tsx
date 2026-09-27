@@ -81,7 +81,7 @@ beforeEach(() => {
     players: PLAYERS, users: USERS, clubs: [club], teams: [], phases: [phase], seasons: [season],
     playerPhasePoints: [], playerSeasonCategories: [], playerSeasonLicences: [],
     matchDays: [], games: [], gameSelections: [],
-    memberGroups: GROUPS, refreshing: false, refresh: jest.fn(), updatePlayer: jest.fn(),
+    memberGroups: GROUPS, trainings: [], trainingSessions: [], refreshing: false, refresh: jest.fn(), updatePlayer: jest.fn(),
     competitions: [], competitionGroups: [],
     ...fns,
   })

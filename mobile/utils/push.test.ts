@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
-import { forgetPush, gameIdOf, registerForPush, setNotificationsEnabled } from '@/utils/push'
+import {
+  forgetPush, gameIdOf, registerForPush, setNotificationPreferences, setNotificationsEnabled, trainingOf,
+} from '@/utils/push'
 import { setSession } from '@/utils/api'
 
 // The device's side of push (#495). What matters here is not that a token was
@@ -211,6 +213,13 @@ describe('the preference', () => {
     captureFetch(() => Promise.resolve(new Response('{}', { status: 500 })))
     await expect(setNotificationsEnabled(false)).rejects.toThrow()
   })
+
+  it('sends only the category that changed (#608)', async () => {
+    const calls = captureFetch()
+    await setNotificationPreferences({ training_regular: { enabled: true } })
+    expect(calls[0].path).toBe('/api/notifications/preferences')
+    expect(calls[0].body).toEqual({ categories: { training_regular: { enabled: true } } })
+  })
 })
 
 describe('where a tap leads', () => {
@@ -225,5 +234,13 @@ describe('where a tap leads', () => {
     expect(gameIdOf(null)).toBeNull()
     expect(gameIdOf(response({}))).toBeNull()
     expect(gameIdOf(response({ gameId: 42 }))).toBeNull()
+  })
+
+  it('reads a training session out of the payload, and nothing else as one (#608)', () => {
+    expect(trainingOf(response({ kind: 'training_reminder', trainingId: 't1', date: '2026-09-29' })))
+      .toEqual({ trainingId: 't1', date: '2026-09-29' })
+    expect(trainingOf(response({ gameId: 'g1' }))).toBeNull()
+    expect(trainingOf(response({ trainingId: 't1' }))).toBeNull()
+    expect(gameIdOf(response({ trainingId: 't1', date: '2026-09-29' }))).toBeNull()
   })
 })

@@ -51,6 +51,16 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   signalés, et s'y ajoutent d'un geste.
 - **L'import des licenciés FFTT** est une icône à côté du champ de recherche
   des joueurs, plutôt qu'un bandeau.
+- **Les entraînements du club.** L'onglet Club annonce les prochaines séances
+  et mène à la liste des quatre semaines à venir : les entraînements dirigés,
+  où chacun dit s'il vient, et les créneaux libres de la semaine. Une séance
+  annulée reste affichée avec son motif, et un administrateur l'annule ou la
+  rétablit depuis le gymnase.
+- **Des rappels à la carte.** Mon compte règle séparément les notifications
+  des matchs, des entraînements dirigés et des entraînements libres, et le
+  délai du rappel, de la veille à une semaine avant. Les dirigés sont activés
+  d'office, trois jours avant ; les libres, qui reviennent chaque semaine, ne
+  le sont pas. Une séance annulée après son rappel donne lieu à un avis.
 
 ## 1.5.0 — 20 septembre 2026
 
