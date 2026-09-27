@@ -7,12 +7,10 @@ import { assignmentsByPlayer, assignmentSummary } from './competitionAssignments
 // is in fact already playing.
 
 const youth: Competition = {
-  id: 'comp-jeunes', displayName: 'Jeunes', categories: ['B', 'M', 'C', 'J'],
-  isCategoryLocked: true, sortOrder: 1, isArchived: false,
+  id: 'comp-jeunes', displayName: 'Jeunes', categories: ['B', 'M', 'C', 'J'], sortOrder: 1, isArchived: false,
 }
 const seniors: Competition = {
-  id: 'comp-seniors', displayName: 'Seniors', categories: [],
-  isCategoryLocked: false, sortOrder: 2, isArchived: false,
+  id: 'comp-seniors', displayName: 'Seniors', categories: [], sortOrder: 2, isArchived: false,
 }
 
 const divisions = [

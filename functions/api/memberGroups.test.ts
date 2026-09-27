@@ -49,6 +49,12 @@ const MEMBERS: MemberGroupMemberRow[] = [
   { group_id: 'g-far', user_id: 'p9' },
 ]
 
+/** Each club restricts the same competition to one of its groups (#604). */
+const LINKS = [
+  { club_id: MINE, competition_id: 'comp-1', group_id: 'g-bureau' },
+  { club_id: THEIRS, competition_id: 'comp-1', group_id: 'g-far' },
+]
+
 /** Enough D1 for the guard, the lookups these routes make, and GET /api/data. */
 function fakeDb(viewerId: string | null) {
   const writes: { sql: string; params: unknown[] }[] = []
@@ -91,6 +97,7 @@ function fakeDb(viewerId: string | null) {
           if (sql === 'SELECT * FROM users') return { results: USERS }
           if (sql === 'SELECT * FROM member_groups') return { results: GROUPS }
           if (sql === 'SELECT * FROM member_group_members') return { results: MEMBERS }
+          if (sql === 'SELECT * FROM club_competition_groups') return { results: LINKS }
           return { results: [] }
         },
         async run() { writes.push({ sql, params: [] }); return { success: true } },
@@ -277,6 +284,25 @@ describe('GET /api/data — who is sent which groups', () => {
 
   it('sends a member with no club none at all', async () => {
     expect(await groupsFor('p0')).toEqual([])
+  })
+
+  it('sends a member only their own club\'s competition links (#604)', async () => {
+    const { db } = fakeDb('p2')
+    const res = await request(db, 'GET', '/data')
+    expect(((await res.json()) as DataState).competitionGroups).toEqual([
+      { clubId: MINE, competitionId: 'comp-1', groupId: 'g-bureau' },
+    ])
+  })
+
+  // App ≤ 1.5 reads per-licensee exclusions: the group rule, restated for it,
+  // and only for the clubs whose groups this viewer may see.
+  it('restates the group as exclusions for the old app (#604)', async () => {
+    const { db } = fakeDb('p2')
+    const res = await request(db, 'GET', '/data')
+    const rows = ((await res.json()) as DataState).competitionEligibilities
+    // The club's players outside « Bureau » (p1 is in it); none of the club next door.
+    expect(rows.map((r) => r.playerId).sort()).toEqual(['ca', 'p2'])
+    expect(rows.every((r) => r.effect === 'excluded' && r.clubId === MINE)).toBe(true)
   })
 
   it('sends everything under the local escape hatch', async () => {

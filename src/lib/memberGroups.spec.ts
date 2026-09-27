@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup } from '@/types'
 import {
-  clubMemberGroups, groupNameTaken, groupsOfMember, inlineGroupChips, mayManageMemberGroups,
+  clubMemberGroups, groupDeletionMessage, groupNameTaken, groupsOfMember, inlineGroupChips, mayManageMemberGroups,
   memberGroupFilter, normalizeGroupName, withGroupMembers, withMemberGroups,
 } from './memberGroups'
 
@@ -176,5 +176,27 @@ describe('inlineGroupChips', () => {
     expect(inline.map((x) => x.displayName)).toEqual([
       'Arbitres', 'Baby-ping', 'Bureau', 'Comité', 'Vétérans',
     ])
+  })
+})
+
+describe('groupDeletionMessage (#604)', () => {
+  const comps = [{ id: 'comp-1', displayName: 'Championnat jeunes' }, { id: 'comp-2', displayName: 'Coupe' }]
+
+  it('says only that nobody leaves the club when nothing is reserved to it', () => {
+    expect(groupDeletionMessage(bureau, [], comps)).toBe('Ses membres restent au club : seul le groupe disparaît.')
+  })
+
+  it('names the competition that opens back up', () => {
+    expect(groupDeletionMessage(bureau, [{ clubId: 'c1', competitionId: 'comp-1', groupId: 'g-bureau' }], comps))
+      .toContain('« Championnat jeunes » lui est réservée : elle redeviendra ouverte à toutes ses catégories.')
+  })
+
+  it('names them all, and reads another club\'s link for nothing', () => {
+    const msg = groupDeletionMessage(bureau, [
+      { clubId: 'c1', competitionId: 'comp-1', groupId: 'g-bureau' },
+      { clubId: 'c1', competitionId: 'comp-2', groupId: 'g-bureau' },
+      { clubId: 'c2', competitionId: 'comp-2', groupId: 'g-bureau' },
+    ], comps)
+    expect(msg).toContain('« Championnat jeunes », « Coupe » lui sont réservées')
   })
 })

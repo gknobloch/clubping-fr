@@ -353,8 +353,19 @@ const LAST_SEEN_REFRESH_MS = 60 * 60 * 1000
 /**
  * Bring `last_seen_at` up to date if it has gone stale, mutating the row so the
  * rest of the request sees the value it just wrote.
+ *
+ * And record the app build the request came from, when it says (#604): that is
+ * what tells us when no member is left on a build old enough to need the
+ * compatibility rows `GET /api/data` still sends. Written on change only, so
+ * it costs one write per app update, not one per request. The web sends no
+ * version and leaves the value alone.
  */
-async function touchLastSeen(db: D1Database, user: UserRow): Promise<void> {
+async function touchLastSeen(db: D1Database, user: UserRow, clientVersion?: string | null): Promise<void> {
+  const version = clientVersion?.trim().slice(0, 32) || null
+  if (version && user.last_client_version !== version) {
+    await db.prepare('UPDATE users SET last_client_version = ? WHERE id = ?').bind(version, user.id).run()
+    user.last_client_version = version
+  }
   const now = Date.now()
   // `typeof` rather than a null check: a database still missing the 0039
   // columns hands back undefined, and treating that as "fresh" would leave the
@@ -423,7 +434,12 @@ export function sessionCookieHeader(token: string | null, requestUrl: string): s
     : `${SESSION_COOKIE}=; Max-Age=0; ${attrs}`
 }
 
-export async function userFromToken(db: D1Database, token: string): Promise<UserRow | null> {
+export async function userFromToken(
+  db: D1Database,
+  token: string,
+  /** `X-Client-Version`, when the caller has it (#604). */
+  clientVersion?: string | null,
+): Promise<UserRow | null> {
   const session = await sessionByToken(db, token)
   if (!session) return null
   if (session.expires_at <= Date.now()) {
@@ -443,7 +459,7 @@ export async function userFromToken(db: D1Database, token: string): Promise<User
   // Every authenticated request lands here, which makes it the one place that
   // knows a member is still using the app between sign-ins (#406). Throttled —
   // see LAST_SEEN_REFRESH_MS.
-  if (user) await touchLastSeen(db, user)
+  if (user) await touchLastSeen(db, user, clientVersion)
   return user
 }
 
@@ -590,7 +606,7 @@ authApp.post('/oauth', async (c) => {
 authApp.get('/me', async (c) => {
   const token = requestToken(c.req)
   if (!token) return c.json({ error: 'unauthorized' }, 401)
-  const user = await userFromToken(c.env.DB, token)
+  const user = await userFromToken(c.env.DB, token, c.req.header('X-Client-Version'))
   if (!user) return c.json({ error: 'unauthorized' }, 401)
   return c.json({ user: serializeUser(user) })
 })

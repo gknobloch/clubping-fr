@@ -16,15 +16,14 @@ const INPUT_CLASS =
 const emptyForm = {
   displayName: '',
   categories: [] as PlayerCategory[],
-  isCategoryLocked: false,
 }
 
 /**
  * The global mapping, configured once (#482).
  *
  * A general admin says which competitions exist and which categories each one
- * admits by default. Clubs amend that from their own screen; nothing here is
- * per-club, which is the whole point of calling it a default.
+ * admits. Clubs narrow that to one of their groups from their own screen
+ * (#604); nothing here is per-club.
  */
 export function CompetitionsPage() {
   const {
@@ -64,7 +63,6 @@ export function CompetitionsPage() {
     setForm({
       displayName: competition.displayName,
       categories: competition.categories,
-      isCategoryLocked: competition.isCategoryLocked,
     })
   }
 
@@ -89,12 +87,10 @@ export function CompetitionsPage() {
       .map((c) => c.code)
       .filter((c) => form.categories.includes(c))
     if (editing) {
-      updateCompetition(editing.id, {
-        displayName, categories, isCategoryLocked: form.isCategoryLocked,
-      })
+      updateCompetition(editing.id, { displayName, categories })
     } else {
       addCompetition({
-        displayName, categories, isCategoryLocked: form.isCategoryLocked,
+        displayName, categories,
         sortOrder: Math.max(0, ...competitions.map((c) => c.sortOrder)) + 1,
         isArchived: false,
       })
@@ -107,8 +103,8 @@ export function CompetitionsPage() {
     if (await confirm({
       title: `Supprimer la compétition « ${competition.displayName} » ?`,
       message: attached > 0
-        ? `${attached} division${attached > 1 ? 's' : ''} y ${attached > 1 ? 'sont rattachées' : 'est rattachée'} : elle${attached > 1 ? 's' : ''} ne ${attached > 1 ? 'seront' : 'sera'} plus rattachée${attached > 1 ? 's' : ''} à aucune compétition, et n'y perdra rien d'autre. Les dérogations des clubs sont supprimées.`
-        : "Les dérogations des clubs sont supprimées. Cette action est irréversible.",
+        ? `${attached} division${attached > 1 ? 's' : ''} y ${attached > 1 ? 'sont rattachées' : 'est rattachée'} : elle${attached > 1 ? 's' : ''} ne ${attached > 1 ? 'seront' : 'sera'} plus rattachée${attached > 1 ? 's' : ''} à aucune compétition, et n'y perdra rien d'autre. Les groupes que les clubs y ont posés sont retirés.`
+        : "Les groupes que les clubs y ont posés sont retirés. Cette action est irréversible.",
       confirmLabel: 'Supprimer',
     })) {
       deleteCompetition(competition.id)
@@ -133,8 +129,8 @@ export function CompetitionsPage() {
 
       <p className="text-sm text-slate-600">
         Une compétition regroupe des divisions et dit quelles catégories de joueurs
-        y sont admises par défaut. Chaque club peut ensuite ajouter ou retirer
-        des licenciés — sauf sur une compétition verrouillée, où il ne peut que retirer.
+        y sont admises. Chaque club peut ensuite la réserver à l'un de ses groupes —
+        jamais l'ouvrir au-delà de ces catégories.
       </p>
 
       {archivedCount > 0 && (
@@ -180,11 +176,6 @@ export function CompetitionsPage() {
                       title="Créée par l'import des divisions FFTT"
                     >
                       FFTT
-                    </span>
-                  )}
-                  {competition.isCategoryLocked && (
-                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
-                      Verrouillée
                     </span>
                   )}
                   {competition.isArchived && (
@@ -269,7 +260,7 @@ export function CompetitionsPage() {
 
               <fieldset>
                 <legend className="text-sm font-medium text-slate-700">
-                  Catégories admises par défaut
+                  Catégories admises
                 </legend>
                 <p className="mt-1 text-xs text-slate-500">
                   Aucune case cochée = toutes les catégories.
@@ -289,20 +280,9 @@ export function CompetitionsPage() {
                 </div>
               </fieldset>
 
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.isCategoryLocked}
-                  onChange={(e) => setForm((f) => ({ ...f, isCategoryLocked: e.target.checked }))}
-                  className="mt-0.5 h-5 w-5 rounded border-slate-300 md:h-4 md:w-4"
-                />
-                <span className="text-sm text-slate-700">
-                  Réservée à ces catégories
-                  <span className="block text-xs text-slate-500">
-                    Un club pourra retirer un licencié, jamais en ajouter un hors catégorie.
-                  </span>
-                </span>
-              </label>
+              {/* No « Réservée à ces catégories » any more (#604): a club can only
+                  narrow a competition to one of its groups, never widen it past
+                  these categories, so there is nothing left to lock. */}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={closeModal} className={NEUTRAL_BUTTON_CLASS}>

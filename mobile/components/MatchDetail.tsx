@@ -61,7 +61,7 @@ export function MatchDetail({
   const {
     clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
-    playerSeasonCategories, competitions, competitionEligibilities,
+    playerSeasonCategories, competitions, competitionGroups, memberGroups,
     setAvailability, clearAvailability, setGameSelection,
   } = useAppData()
 
@@ -391,7 +391,8 @@ export function MatchDetail({
             // What this team's competition admits (#498).
             divisions,
             competitions,
-            competitionEligibilities,
+            competitionGroups,
+            memberGroups,
             playerSeasonCategories,
           }}
           onSave={(ids) => setGameSelection(team.id, game.id, ids)}

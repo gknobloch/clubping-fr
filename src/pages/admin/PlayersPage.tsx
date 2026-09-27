@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { PlusIcon } from '@/components/icons'
+import { ImportIcon, PlusIcon } from '@/components/icons'
+import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
@@ -57,6 +58,7 @@ export function PlayersPage() {
   const [activeOnly, setActiveOnly] = useState(true)
   const [editing, setEditing] = useState<PlayerType | null>(null)
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -145,6 +147,12 @@ export function PlayersPage() {
     hasClubScope && adminClubIds.length === 1
       ? clubs.find((c) => c.id === adminClubIds[0])
       : undefined
+
+  // The import writes into one club, so it needs the page to be scoped to one
+  // — a general admin sees every club here and has no target to import into.
+  // Back on this list since #604: it brings the roster in, and this is where
+  // a club checks what it brought.
+  const canImport = canEditPlayers && !!scopedClub?.affiliationNumber
 
   // Adoption (#406). `lastSeenAt` only reaches people who administer these
   // members, so the column and the count are theirs alone — for anyone else the
@@ -254,16 +262,29 @@ export function PlayersPage() {
         title="Joueurs"
         club={scopedClub}
         actions={
-          // The FFTT import lives on the club's page since #602: it brings in
-          // the club's licensees as a whole, and this list is where members
-          // look each other up. The manual add stays — it is about one person.
           canEditPlayers && (
-            <HeaderAction
-              variant="primary"
-              icon={<PlusIcon />}
-              label="Ajouter un joueur"
-              onClick={openCreate}
-            />
+            <>
+              {/* Same order as /equipes (#229): manual add is the fallback, the
+                  FFTT import is the default path — so it is the primary button
+                  and comes last. Below md: the import is not offered (dense
+                  comparison screen, #381/#384), which leaves the manual add
+                  alone: `adaptive` gives it the filled look back at that width
+                  rather than leaving the page with no filled action. */}
+              <HeaderAction
+                variant={canImport ? 'adaptive' : 'primary'}
+                icon={<PlusIcon />}
+                label="Ajouter un joueur"
+                onClick={openCreate}
+              />
+              {canImport && (
+                <HeaderAction
+                  desktopOnly
+                  icon={<ImportIcon />}
+                  label="Importer depuis la FFTT"
+                  onClick={() => setImporting(true)}
+                />
+              )}
+            </>
           )
         }
       />
@@ -507,6 +528,10 @@ export function PlayersPage() {
         </table>
       </div>
 
+
+      {importing && scopedClub && (
+        <ImportPlayersModal clubId={scopedClub.id} onClose={() => setImporting(false)} />
+      )}
 
       {(editing || creating) && (
         <ModalShell

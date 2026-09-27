@@ -3,12 +3,12 @@ import { app } from './[[path]]'
 import type { UserRow } from './rows'
 import { sessionKey } from './auth'
 
-// #482 — the two halves of this feature have different owners, and the API is
-// where that is decided rather than in the browser: a general admin says which
-// competitions exist and which categories each admits, a club amends that for
-// its own licensees only. The rule the amendments obey is pinned down in
+// #482, #604 — the two halves of this feature have different owners, and the
+// API is where that is decided rather than in the browser: a general admin says
+// which competitions exist and which categories each admits, a club restricts
+// one to one of its own groups. The rule itself is pinned down in
 // src/lib/competitionEligibility.spec.ts; what these tests check is that the
-// routes ask it, refuse what they should, and write what they promise.
+// routes refuse what they should and write what they promise.
 
 const HOUR = 60 * 60 * 1000
 const TOKEN = 'session-token'
@@ -27,8 +27,13 @@ const member = (over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow => ({
 interface CompetitionFixture {
   id: string
   categories: string
-  is_category_locked: number
 }
+
+/** The clubs' member groups (#602) the group route checks ownership against. */
+const GROUPS = [
+  { id: 'g-seniors', club_id: 'club-fftt-06680011' },
+  { id: 'g-theirs', club_id: 'club-fftt-06680105' },
+]
 
 /**
  * Enough D1 for the guard (a session, then the viewer), for the player lookup
@@ -57,6 +62,9 @@ function fakeDb(
           }
           if (sql.includes('FROM users WHERE id = ?')) {
             return users.find((u) => u.id === params[0]) ?? null
+          }
+          if (sql.includes('FROM member_groups WHERE id = ? AND club_id = ?')) {
+            return GROUPS.find((g) => g.id === params[0] && g.club_id === params[1]) ?? null
           }
           if (sql.includes('FROM competitions')) {
             return competitions.find((c) => c.id === params[0]) ?? null
@@ -131,19 +139,33 @@ const outsider = member({ id: 'p-outsider', club_id: OTHER })
 /** What each of them holds this season. */
 const CATEGORIES = { 'p-cadet': 'C1', 'p-senior': 'S', 'p-outsider': 'S' }
 
-const youth: CompetitionFixture = { id: 'comp-jeunes', categories: '["P","B","M","C","J"]', is_category_locked: 1 }
-const veterans: CompetitionFixture = { id: 'comp-veterans', categories: '["V50","V55"]', is_category_locked: 0 }
+const youth: CompetitionFixture = { id: 'comp-jeunes', categories: '["P","B","M","C","J"]' }
 
 describe('competitions are a general admin\'s to create (#482)', () => {
-  it('writes the name, the categories and the lock', async () => {
+  it('writes the name and the categories', async () => {
     const { db, writes } = fakeDb([generalAdmin], [], 'ga')
     const res = await send(db, '/competitions', 'POST', {
-      id: 'comp-1', displayName: 'Championnat jeunes',
-      categories: ['B', 'M', 'C'], isCategoryLocked: true, sortOrder: 2,
+      id: 'comp-1', displayName: 'Championnat jeunes', categories: ['B', 'M', 'C'], sortOrder: 2,
     })
     expect(res.status).toBe(200)
     const write = writes.find((w) => /INSERT INTO competitions/.test(w.sql))!
-    expect(write.params).toEqual(['comp-1', 'Championnat jeunes', '["B","M","C"]', 1, 2, 0])
+    expect(write.params).toEqual(['comp-1', 'Championnat jeunes', '["B","M","C"]', 2, 0])
+  })
+
+  // The lock is gone (#604), and its column is dropped by a later release:
+  // nothing may name it any more, or that release breaks the write.
+  it('never names the lock column, whatever the caller sends', async () => {
+    const { db, writes } = fakeDb([generalAdmin], [youth], 'ga')
+    await send(db, '/competitions', 'POST', { id: 'c', displayName: 'X', isCategoryLocked: true })
+    await send(db, '/competitions/comp-jeunes', 'PATCH', { isCategoryLocked: true })
+    expect(writes.some((w) => /is_category_locked/.test(w.sql))).toBe(false)
+  })
+
+  it('takes the clubs\' group links with a deleted competition, not the old amendments', async () => {
+    const { db, writes } = fakeDb([generalAdmin], [youth], 'ga')
+    await send(db, '/competitions/comp-jeunes', 'DELETE')
+    expect(writes.some((w) => /DELETE FROM club_competition_groups WHERE competition_id/.test(w.sql))).toBe(true)
+    expect(writes.some((w) => /club_competition_eligibility/.test(w.sql))).toBe(false)
   })
 
   // The column is read back with jsonParseCategories, which drops what it does
@@ -172,99 +194,67 @@ describe('competitions are a general admin\'s to create (#482)', () => {
   })
 })
 
-describe('a club amends the default mapping for its own licensees', () => {
-  it('records an exclusion', async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'excluded',
-    })
+describe('a club restricts a competition to one of its groups (#604)', () => {
+  const path = `/clubs/${CLUB}/competitions/comp-jeunes/group`
+
+  it('links the competition to the group, replacing any previous one', async () => {
+    const { db, writes } = fakeDb([clubAdmin], [youth], 'ca')
+    const res = await send(db, path, 'PUT', { groupId: 'g-seniors' })
     expect(res.status).toBe(200)
-    const write = writes.find((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))!
-    expect(write.params).toEqual([CLUB, 'comp-jeunes', 'p-cadet', 'excluded'])
+    const write = writes.find((w) => /INSERT INTO club_competition_groups/.test(w.sql))!
+    expect(write.sql).toMatch(/ON CONFLICT \(club_id, competition_id\) DO UPDATE/)
+    expect(write.params).toEqual([CLUB, 'comp-jeunes', 'g-seniors'])
   })
 
-  it('records an addition on a competition that is not locked', async () => {
-    const { db, writes } = fakeDb([clubAdmin, senior], [veterans], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-veterans/eligibility`, 'PUT', {
-      playerId: 'p-senior', effect: 'included',
-    })
-    expect(res.status).toBe(200)
-    expect(writes.find((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))!.params)
-      .toEqual([CLUB, 'comp-veterans', 'p-senior', 'included'])
+  it('lifts the restriction with null', async () => {
+    const { db, writes } = fakeDb([clubAdmin], [youth], 'ca')
+    expect((await send(db, path, 'PUT', { groupId: null })).status).toBe(200)
+    const write = writes.find((w) => /DELETE FROM club_competition_groups/.test(w.sql))!
+    expect(write.params).toEqual([CLUB, 'comp-jeunes'])
   })
 
-  // The whole point of the lock: a youth championship does not admit a veteran
-  // because a club asked nicely.
-  it('refuses an addition out of category on a locked competition', async () => {
-    const { db, writes } = fakeDb([clubAdmin, senior], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-senior', effect: 'included',
-    })
-    expect(res.status).toBe(409)
-    expect(await errorOf(res)).toBe('competition_locked')
-    expect(writes.filter((w) => /club_competition_eligibility/.test(w.sql))).toEqual([])
+  it('refuses another club\'s group, and writes nothing', async () => {
+    const { db, writes } = fakeDb([clubAdmin], [youth], 'ca')
+    const res = await send(db, path, 'PUT', { groupId: 'g-theirs' })
+    expect(res.status).toBe(404)
+    expect(featureWrites(writes)).toEqual([])
   })
 
-  it('still lets a locked competition exclude one of its own', async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'excluded',
-    })
-    expect(res.status).toBe(200)
-    expect(writes.some((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))).toBe(true)
+  it('refuses a competition that does not exist', async () => {
+    const { db } = fakeDb([clubAdmin], [], 'ca')
+    expect((await send(db, path, 'PUT', { groupId: 'g-seniors' })).status).toBe(404)
   })
 
-  it("drops the row for 'default' — the third state is the absence of one", async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'default',
-    })
-    expect(res.status).toBe(200)
-    const write = writes.find((w) => /DELETE FROM club_competition_eligibility/.test(w.sql))!
-    expect(write.params).toEqual([CLUB, 'comp-jeunes', 'p-cadet'])
+  it('refuses a body that names no group, not even null', async () => {
+    const { db } = fakeDb([clubAdmin], [youth], 'ca')
+    expect((await send(db, path, 'PUT', {})).status).toBe(400)
   })
 
   it('refuses a club admin writing on another club', async () => {
-    const { db, writes } = fakeDb([otherClubAdmin, cadet], [youth], 'ca2', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'excluded',
-    })
-    expect(res.status).toBe(403)
+    const { db, writes } = fakeDb([otherClubAdmin], [youth], 'ca2')
+    expect((await send(db, path, 'PUT', { groupId: 'g-seniors' })).status).toBe(403)
     expect(featureWrites(writes)).toEqual([])
   })
 
   it('refuses a plain player', async () => {
-    const { db } = fakeDb([cadet], [youth], 'p-cadet', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'excluded',
-    })
-    expect(res.status).toBe(403)
-  })
-
-  it('refuses a licensee who is not in the club named', async () => {
-    const { db } = fakeDb([clubAdmin, outsider], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-outsider', effect: 'excluded',
-    })
-    expect(res.status).toBe(404)
-    expect(await errorOf(res)).toBe('not_in_club')
-  })
-
-  it('refuses an unknown effect', async () => {
-    const { db } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'peut-être',
-    })
-    expect(res.status).toBe(400)
+    const { db } = fakeDb([cadet], [youth], 'p-cadet')
+    expect((await send(db, path, 'PUT', { groupId: 'g-seniors' })).status).toBe(403)
   })
 
   it('lets a general admin write on any club', async () => {
-    const { db, writes } = fakeDb([generalAdmin, cadet], [youth], 'ga', CATEGORIES)
+    const { db, writes } = fakeDb([generalAdmin], [youth], 'ga')
+    expect((await send(db, path, 'PUT', { groupId: 'g-seniors' })).status).toBe(200)
+    expect(writes.some((w) => /INSERT INTO club_competition_groups/.test(w.sql))).toBe(true)
+  })
+
+  // Only a web bundle cached from before #604 still calls it.
+  it('answers 410 on the old per-licensee route, and writes nothing', async () => {
+    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
     const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
       playerId: 'p-cadet', effect: 'excluded',
     })
-    expect(res.status).toBe(200)
-    expect(writes.some((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))).toBe(true)
+    expect(res.status).toBe(410)
+    expect(featureWrites(writes)).toEqual([])
   })
 })
 
@@ -603,27 +593,6 @@ describe('a category is written against a season (#482)', () => {
     expect(res.status).toBe(200)
     const write = writes.find((w) => /DELETE FROM player_season_categories/.test(w.sql))!
     expect(write.params).toEqual(['27', 'p-cadet'])
-  })
-
-  // The eligibility guard reads the category of the season being played, not a
-  // field on the person — so a licensee with no row for it is out of category.
-  it('refuses an addition on a locked competition for a player with no category', async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', {})
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'included',
-    })
-    expect(res.status).toBe(409)
-    expect(await errorOf(res)).toBe('competition_locked')
-    expect(featureWrites(writes)).toEqual([])
-  })
-
-  it('allows it once that season states a category the competition admits', async () => {
-    const { db, writes } = fakeDb([clubAdmin, cadet], [youth], 'ca', CATEGORIES)
-    const res = await send(db, `/clubs/${CLUB}/competitions/comp-jeunes/eligibility`, 'PUT', {
-      playerId: 'p-cadet', effect: 'included',
-    })
-    expect(res.status).toBe(200)
-    expect(writes.find((w) => /INSERT INTO club_competition_eligibility/.test(w.sql))).toBeDefined()
   })
 })
 

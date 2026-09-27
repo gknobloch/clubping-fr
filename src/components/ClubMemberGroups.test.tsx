@@ -18,6 +18,9 @@ const data = vi.hoisted(() => ({
   renameMemberGroup: vi.fn(),
   deleteMemberGroup: vi.fn(),
   setMemberGroupMembers: vi.fn(),
+  // Competitions reserved to a group (#604) — none unless a test says so.
+  competitions: [] as Array<{ id: string; displayName: string }>,
+  competitionGroups: [] as Array<{ clubId: string; competitionId: string; groupId: string }>,
 }))
 const auth = vi.hoisted(() => ({ user: null as unknown }))
 

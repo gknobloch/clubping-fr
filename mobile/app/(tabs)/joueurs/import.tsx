@@ -399,7 +399,7 @@ export default function ImportPlayersScreen() {
           </View>
           {missing.length > 0 && <MissingNote missing={missing} />}
           <TouchableOpacity style={s.primary} onPress={() => router.back()}>
-            <Text style={s.primaryTxt}>Retour au club</Text>
+            <Text style={s.primaryTxt}>Retour aux joueurs</Text>
           </TouchableOpacity>
         </ScrollView>
       </Screen>

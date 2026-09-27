@@ -99,9 +99,13 @@ function dbWith(users: UserRow[], viewerId: string | null) {
   return { db, statements }
 }
 
-async function getData(db: D1Database, env: Record<string, unknown> = {}) {
+async function getData(
+  db: D1Database,
+  env: Record<string, unknown> = {},
+  headers: Record<string, string> = {},
+) {
   const res = await app.fetch(
-    new Request('http://localhost/api/data', { headers: { Authorization: `Bearer ${TOKEN}` } }),
+    new Request('http://localhost/api/data', { headers: { Authorization: `Bearer ${TOKEN}`, ...headers } }),
     { DB: db, ...env },
   )
   expect(res.status).toBe(200)
@@ -207,5 +211,39 @@ describe('refreshing last_seen_at on the way through the guard (#406)', () => {
 
     await getData(db)
     expect(updates(statements)).toHaveLength(0)
+  })
+})
+
+// #604 — which app build each member runs. The app has sent it on every request
+// since #508; this is what finally reads it, so a later release knows when no
+// one is left on a build that still needs the compatibility rows of /data.
+describe('recording the app build a member uses (#604)', () => {
+  const versionWrites = (statements: { sql: string; params: unknown[] }[]) =>
+    statements.filter((s) => s.sql.startsWith('UPDATE users SET last_client_version'))
+
+  it('records the build the request says it is', async () => {
+    const viewer = member({ id: 'teammate', club_id: RIXHEIM, last_seen_at: Date.now() })
+    const { db, statements } = dbWith([viewer], viewer.id)
+
+    await getData(db, {}, { 'X-Client-Version': '1.6.0' })
+    expect(versionWrites(statements).map((w) => w.params)).toEqual([['1.6.0', viewer.id]])
+  })
+
+  // One write per app update, not one per request.
+  it('stays silent when the build has not changed', async () => {
+    const viewer = member({ id: 'teammate', club_id: RIXHEIM, last_seen_at: Date.now(), last_client_version: '1.6.0' })
+    const { db, statements } = dbWith([viewer], viewer.id)
+
+    await getData(db, {}, { 'X-Client-Version': '1.6.0' })
+    expect(versionWrites(statements)).toHaveLength(0)
+  })
+
+  // The web sends no version: a member who also uses the app keeps theirs.
+  it('leaves the stored build alone when the request names none', async () => {
+    const viewer = member({ id: 'teammate', club_id: RIXHEIM, last_seen_at: Date.now(), last_client_version: '1.5.0' })
+    const { db, statements } = dbWith([viewer], viewer.id)
+
+    await getData(db)
+    expect(versionWrites(statements)).toHaveLength(0)
   })
 })

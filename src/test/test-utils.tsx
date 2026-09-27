@@ -19,7 +19,6 @@ import {
   mockGameSelections,
   mockUsers,
   mockCompetitions,
-  mockCompetitionEligibilities,
   mockPlayerSeasonCategories,
   mockPlayerSeasonLicences,
   mockMemberGroups,
@@ -28,7 +27,7 @@ import {
 const testData = {
   divisions: mockDivisions,
   competitions: mockCompetitions,
-  competitionEligibilities: mockCompetitionEligibilities,
+  competitionGroups: [], competitionEligibilities: [],
   clubs: mockClubs,
   seasons: mockSeasons,
   phases: mockPhases,

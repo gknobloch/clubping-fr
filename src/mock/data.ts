@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionEligibility } from '@/types'
+import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionGroup } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Addresses
@@ -222,7 +222,7 @@ export const mockMemberGroups: MemberGroup[] = [
 // ---------------------------------------------------------------------------
 // The senior championship lists no category on purpose — an empty list admits
 // everyone, which is what keeps the existing fixtures behaving exactly as they
-// did. The other two are what the feature is for: one locked to the young, one
+// did. The other two are what the feature is for: one reserved to the young, one
 // open to a club's judgement.
 export const mockCompetitions: Competition[] = [
   {
@@ -231,13 +231,13 @@ export const mockCompetitions: Competition[] = [
     // contest's name is stored beside its identifier because the identifier
     // alone is not unique (see migration 0048).
     id: 'comp-seniors', displayName: 'Championnat par équipes',
-    categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+    categories: [], sortOrder: 1, isArchived: false,
     ffttContestIdentifier: '1',
     ffttContestName: 'FED_Championnat de France par Equipes Masculin',
   },
   {
     id: 'comp-jeunes', displayName: 'Championnat jeunes',
-    categories: ['P', 'B', 'M', 'C', 'J'], isCategoryLocked: true,
+    categories: ['P', 'B', 'M', 'C', 'J'],
     sortOrder: 2, isArchived: false,
     ffttContestIdentifier: '4',
     ffttContestName: 'FED_Championnat par Equipes Jeunes',
@@ -245,18 +245,14 @@ export const mockCompetitions: Competition[] = [
   {
     id: 'comp-veterans', displayName: 'Championnat vétérans',
     categories: ['V50', 'V55', 'V60', 'V65', 'V70', 'V75', 'V80', 'V85', 'V90'],
-    isCategoryLocked: false, sortOrder: 3, isArchived: false,
+    sortOrder: 3, isArchived: false,
   },
 ]
 
-// One of each amendment, so both halves of the club screen have a row.
-export const mockCompetitionEligibilities: CompetitionEligibility[] = [
-  // A V45 the club fields with its veterans anyway — the competition is not
-  // locked, so this is theirs to decide.
-  { clubId: 'club-fftt-06680011', competitionId: 'comp-veterans', playerId: 'p2-player-16', effect: 'included' },
-  // And one its default would admit but who does not play that championship.
-  { clubId: 'club-fftt-06680011', competitionId: 'comp-veterans', playerId: 'p2-player-30', effect: 'excluded' },
-]
+// No club restricts a competition to a group by default (#604): the line-up
+// sheets and the journées matrix keep offering what they always have, and the
+// club screen's tests set a group where they need one.
+export const mockCompetitionGroups: CompetitionGroup[] = []
 
 // ---------------------------------------------------------------------------
 // Groups

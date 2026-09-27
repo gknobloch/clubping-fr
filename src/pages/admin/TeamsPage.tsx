@@ -16,7 +16,7 @@ import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
 import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
-import { competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
+import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { withSeasonCategory } from '@/lib/seasonCategories'
 
@@ -33,7 +33,8 @@ export function TeamsPage() {
     playerSeasonCategories,
     seasons,
     competitions,
-    competitionEligibilities,
+    competitionGroups,
+    memberGroups,
     updateTeam,
     moveTeamToGroup,
     addTeam,
@@ -181,7 +182,8 @@ export function TeamsPage() {
     eligiblePlayers(
       playersInClub.filter((p) => !form.playerIds.includes(p.id) && !playerIdsInOtherTeams.has(p.id)),
       teamCompetition,
-      competitionEligibilities.filter((e) => e.clubId === form.clubId),
+      // The club's group for that competition, if it set one (#604).
+      teamCompetition && competitionGroupOf(form.clubId, teamCompetition.id, competitionGroups, memberGroups),
     ),
   )
 

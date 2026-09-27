@@ -46,8 +46,9 @@ const mockData = {
   playerSeasonCategories: [] as { seasonId: string; playerId: string; category: string }[],
   // Nothing restricted: a division under no competition restricts nobody (#498).
   competitions: [] as never[],
-  competitionEligibilities: [] as
-    { clubId: string; competitionId: string; playerId: string; effect: string }[],
+  // A club's group for a competition (#604) — none unless a test says so.
+  competitionGroups: [] as { clubId: string; competitionId: string; groupId: string }[],
+  memberGroups: [] as { id: string; clubId: string; displayName: string; memberIds: string[] }[],
   setAvailability,
   clearAvailability,
   setGameSelection,
@@ -461,8 +462,9 @@ describe('les autres joueurs du club', () => {
 // L'éligibilité aux compétitions (#498)
 //
 // The app fields people too, so it asks the same question the web does. What
-// these pin is the bite and its limit: a licensee the club has excluded is not
-// offered, and a composition already made is never undone by the exclusion.
+// these pin is the bite and its limit: a licensee outside the group the club
+// reserved the competition to (#604) is not offered, and a composition already
+// made is never undone by it.
 // ---------------------------------------------------------------------------
 describe('l’éligibilité aux compétitions', () => {
   /** In the club, in no team: the population of «Autres joueurs du club». */
@@ -470,19 +472,27 @@ describe('l’éligibilité aux compétitions', () => {
     ...captain, id: 'p7', firstName: 'Hugo', lastName: 'Bernard', licenseNumber: '9900077',
   }
 
-  /** Both club teams play through `d1`, so one competition covers the phase. */
-  const excluded = (playerId: string) => ({
-    clubId: 'c1', competitionId: 'comp1', playerId, effect: 'excluded',
-  })
+  /**
+   * Both club teams play through `d1`, so one competition covers the phase —
+   * reserved here to a group of every club player but one.
+   */
+  const reserveWithout = (playerId: string) => {
+    mockData.competitionGroups = [{ clubId: 'c1', competitionId: 'comp1', groupId: 'g1' }]
+    mockData.memberGroups = [{
+      id: 'g1', clubId: 'c1', displayName: 'Compétiteurs',
+      memberIds: mockData.players.map((p) => p.id).filter((id) => id !== playerId),
+    }]
+  }
 
   beforeEach(() => {
     mockData.players = [...mockData.players, spare]
     mockData.divisions = mockData.divisions.map((d) => ({ ...d, competitionId: 'comp1' }))
     mockData.competitions = [{
       id: 'comp1', displayName: 'Championnat par équipes',
-      categories: [], isCategoryLocked: false, sortOrder: 1, isArchived: false,
+      categories: [], sortOrder: 1, isArchived: false,
     }] as never[]
-    mockData.competitionEligibilities = []
+    mockData.competitionGroups = []
+    mockData.memberGroups = []
   })
 
   const renderTablet = () => {
@@ -492,7 +502,7 @@ describe('l’éligibilité aux compétitions', () => {
   }
 
   it('sort des «autres joueurs» celui qu’aucune équipe ne peut aligner', () => {
-    mockData.competitionEligibilities = [excluded('p7')]
+    reserveWithout('p7')
     renderTablet()
 
     expect(screen.queryByTestId('matrix-row-p7')).toBeNull()
@@ -501,7 +511,7 @@ describe('l’éligibilité aux compétitions', () => {
   it('le garde quand une composition le nomme déjà', () => {
     // The exclusion came after the line-up; this section is the only place
     // either app lets a captain take him back out.
-    mockData.competitionEligibilities = [excluded('p7')]
+    reserveWithout('p7')
     mockData.gameSelections = [{ teamId: 't1', gameId: 'g1', playerIds: ['p7'] }]
     renderTablet()
 
@@ -513,7 +523,7 @@ describe('l’éligibilité aux compétitions', () => {
     // the exclusion takes t2 off his list, and leaves t1 on it, because a
     // squad already picked is never emptied by a competition edited afterwards.
     addSecondClubTeam()
-    mockData.competitionEligibilities = [excluded('p1')]
+    reserveWithout('p1')
     renderTablet()
     fireEvent.press(screen.getByTestId('compo-p1-0'))
 
@@ -525,7 +535,7 @@ describe('l’éligibilité aux compétitions', () => {
     // He is in no roster, so only the composition itself keeps t1 offered —
     // otherwise «le retirer» would be the only move left, with no way back.
     addSecondClubTeam()
-    mockData.competitionEligibilities = [excluded('p7')]
+    reserveWithout('p7')
     mockData.gameSelections = [{ teamId: 't1', gameId: 'g1', playerIds: ['p7'] }]
     renderTablet()
     fireEvent.press(screen.getByTestId('compo-p7-0'))

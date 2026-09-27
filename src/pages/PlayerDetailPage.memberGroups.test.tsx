@@ -6,7 +6,7 @@ import { DataProvider } from '@/contexts/DataContext'
 import {
   mockClubs, mockDivisions, mockGameAvailabilities, mockGameSelections, mockGames, mockGroups,
   mockMatchDays, mockMemberGroups, mockPhases, mockPlayerPhasePoints, mockPlayers, mockSeasons,
-  mockTeams, mockUsers, mockCompetitions, mockCompetitionEligibilities,
+  mockTeams, mockUsers, mockCompetitions,
 } from '@/mock/data'
 import type { MemberGroup } from '@/types'
 
@@ -28,7 +28,7 @@ function renderPlayer(id: string, memberGroups: MemberGroup[] = mockMemberGroups
       <DataProvider
         initialData={{
           divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-          competitions: mockCompetitions, competitionEligibilities: mockCompetitionEligibilities,
+          competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [],
           groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
           games: mockGames, gameAvailabilities: mockGameAvailabilities,
           gameSelections: mockGameSelections, users: mockUsers,

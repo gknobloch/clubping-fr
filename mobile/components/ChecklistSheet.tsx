@@ -55,10 +55,13 @@ function CheckRow({
       <View style={selection.checkTarget}>
         <SelectMark picked={checked} />
       </View>
-      <Text style={[selection.name, s.name, checked && selection.namePicked]} numberOfLines={1}>
-        {option.label}
-      </Text>
-      {option.hint ? <Text style={s.hint}>{option.hint}</Text> : null}
+      {/* The name on its own line, the hint under it: side by side, a long
+          hint (« Déjà dans l'équipe 5 et aligné sur 1 rencontre ») squeezed the
+          name down to « Camille Be… », which is the one thing the row is for. */}
+      <View style={s.body}>
+        <Text style={[selection.name, checked && selection.namePicked]}>{option.label}</Text>
+        {option.hint ? <Text style={s.hint}>{option.hint}</Text> : null}
+      </View>
     </TouchableOpacity>
   )
 }
@@ -72,6 +75,7 @@ export function ChecklistSheet({
   saveDisabled,
   saveLabel,
   searchLabel,
+  selectAll = false,
   onSave,
   onClose,
   testID = 'checklist-sheet',
@@ -87,6 +91,12 @@ export function ChecklistSheet({
   saveLabel?: string
   /** Le libellé de la recherche — « Rechercher un joueur » par défaut. */
   searchLabel?: string
+  /**
+   * Une ligne « Tout sélectionner » en tête, comme la case d'en-tête du
+   * tableau du web : pour une revue où le choix courant est « tous », sans
+   * retirer celui d'en écarter un.
+   */
+  selectAll?: boolean
   /** `false` refuse l'enregistrement et garde la feuille ouverte. */
   onSave: (ids: string[]) => void | boolean | Promise<boolean>
   onClose: () => void
@@ -143,6 +153,22 @@ export function ChecklistSheet({
       )}
       <SelectionList>
         {options.length === 0 && <Text style={selection.empty}>{emptyLabel}</Text>}
+        {selectAll && shown.length > 1 && (
+          <CheckRow
+            testID={`${testID}-all`}
+            option={{ id: '*', label: 'Tout sélectionner' }}
+            checked={shown.every((o) => draft.has(o.id))}
+            onToggle={() => setDraft((prev) => {
+              const all = shown.every((o) => prev.has(o.id))
+              const next = new Set(prev)
+              for (const o of shown) {
+                if (all) next.delete(o.id)
+                else next.add(o.id)
+              }
+              return next
+            })}
+          />
+        )}
         {shown.map((o) => (
           <CheckRow
             key={o.id}
@@ -169,7 +195,7 @@ export function ChecklistSheet({
 }
 
 const s = StyleSheet.create({
-  row: { minHeight: 44 },
-  name: { flex: 1 },
-  hint: { fontSize: 12, color: colors.textSecondary, marginLeft: 8 },
+  row: { minHeight: 44, paddingVertical: 6 },
+  body: { flex: 1 },
+  hint: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
 })

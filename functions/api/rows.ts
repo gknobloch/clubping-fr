@@ -272,6 +272,11 @@ export interface UserRow {
   last_seen_at: number | null
   /** 0 silences every push to this member's devices (#495). Defaults to 1. */
   notifications_enabled: number
+  /**
+   * The app build this member last used, from `X-Client-Version` (#604).
+   * Optional because a database before 0056 has no such column.
+   */
+  last_client_version?: string | null
 }
 
 /** A club's own group of members (#602). */
@@ -279,6 +284,13 @@ export interface MemberGroupRow {
   id: string
   club_id: string
   display_name: string
+}
+
+/** A club's restriction of a competition to one of its groups (#604). */
+export interface CompetitionGroupRow {
+  club_id: string
+  competition_id: string
+  group_id: string
 }
 
 export interface MemberGroupMemberRow {

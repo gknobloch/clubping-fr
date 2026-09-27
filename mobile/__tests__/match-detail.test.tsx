@@ -38,7 +38,7 @@ const mockData = {
   playerSeasonCategories: [],
   // Nothing restricted: a division under no competition restricts nobody (#498).
   competitions: [],
-  competitionEligibilities: [],
+  competitionGroups: [],
   setAvailability: jest.fn(),
   clearAvailability: jest.fn(),
   setGameSelection: jest.fn(),
