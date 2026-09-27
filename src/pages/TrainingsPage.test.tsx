@@ -94,7 +94,7 @@ describe('a member reading the calendar', () => {
     auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
     renderPage()
     expect(card('Libre du mardi, mardi 6 octobre')).toHaveTextContent('Annulée — Gymnase fermé')
-    expect(within(card('Libre du mardi, mardi 29 septembre')).queryByText('Vous venez ?')).not.toBeInTheDocument()
+    expect(within(card('Libre du mardi, mardi 29 septembre')).queryByText('Ma disponibilité')).not.toBeInTheDocument()
   })
 
   it('asks whoever is expected at a guided session, and records their own answer', async () => {
@@ -109,7 +109,7 @@ describe('a member reading the calendar', () => {
   it('does not ask someone the session is not for', () => {
     auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
     renderPage()
-    expect(within(card('Dirigé jeunes, mercredi 30 septembre')).queryByText('Vous venez ?')).not.toBeInTheDocument()
+    expect(within(card('Dirigé jeunes, mercredi 30 septembre')).queryByText('Ma disponibilité')).not.toBeInTheDocument()
   })
 })
 
