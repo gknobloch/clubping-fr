@@ -22,7 +22,7 @@ test.describe('Entraînements — un membre', () => {
 
   test('says whether he comes to a guided session, and the tally follows', async ({ page }) => {
     const next = cards(page, 'Entraînement dirigé').first()
-    await expect(next.getByText('Vous venez ?')).toBeVisible()
+    await expect(next.getByText('Ma disponibilité')).toBeVisible()
     await expect(next.getByRole('button', { name: /1 oui · 1 peut-être · 1 sans réponse/ })).toBeVisible()
 
     // He had said « peut-être »; now he is coming. `exact`, or « OUI » also
