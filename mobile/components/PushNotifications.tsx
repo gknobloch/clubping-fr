@@ -43,12 +43,12 @@ export function PushNotifications() {
     if (!isAuthenticated || !Notifications) return
     // A tap on a notification that launched the app from cold is not delivered
     // to a listener — it is waiting to be asked for.
-    // A training reminder or cancellation (#608) opens the club's trainings:
+    // A training reminder or cancellation (#608) opens the Entraînements tab:
     // the list is short and the session is at its top, so there is nothing to
     // wait for — unlike a match, whose screen needs a team resolved first.
     const open = (r: Parameters<typeof gameIdOf>[0]) => {
       if (trainingOf(r)) {
-        router.push('/club/entrainements')
+        router.push('/entrainements')
         return
       }
       const gameId = gameIdOf(r)

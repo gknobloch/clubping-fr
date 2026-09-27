@@ -38,7 +38,7 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   les membres, un membre pouvant être dans plusieurs. Chacun filtre ensuite la
   liste des joueurs par groupe — dans au moins un des groupes choisis, ou dans
   tous — et la fiche d'un joueur dit dans quels groupes il est.
-- **L'onglet Club en sections** : aperçu, canaux de communication,
+- **La page du club en sections** : aperçu, canaux de communication,
   administrateurs, groupes et compétitions — empilés sur un téléphone, et sur
   une tablette un menu à gauche qui affiche la section choisie. Un
   administrateur y ajoute, modifie et supprime les canaux, désigne ou retire
@@ -51,11 +51,13 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   signalés, et s'y ajoutent d'un geste.
 - **L'import des licenciés FFTT** est une icône à côté du champ de recherche
   des joueurs, plutôt qu'un bandeau.
-- **Les entraînements du club.** L'onglet Club annonce les prochaines séances
-  et mène à la liste des quatre semaines à venir : les entraînements dirigés,
-  où chacun dit s'il vient, et les créneaux libres de la semaine. Une séance
-  annulée reste affichée avec son motif, et un administrateur l'annule ou la
-  rétablit depuis le gymnase.
+- **Un onglet Entraînements.** Les quatre semaines à venir du club : les
+  entraînements dirigés, où chacun dit s'il vient, et les créneaux libres de
+  la semaine. Une séance annulée reste affichée avec son motif, et un
+  administrateur l'annule ou la rétablit depuis le gymnase. L'accueil pose la
+  question de la prochaine séance dirigée, à côté du prochain match.
+- **Le club s'ouvre depuis Mon compte**, pour laisser sa place dans la barre
+  d'onglets aux entraînements.
 - **Des rappels à la carte.** Mon compte règle séparément les notifications
   des matchs, des entraînements dirigés et des entraînements libres, et le
   délai du rappel, de la veille à une semaine avant. Les dirigés sont activés

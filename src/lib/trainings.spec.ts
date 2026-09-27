@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup, Training, TrainingAvailability, TrainingSession } from '@/types'
 import {
-  addDays, answerCounts, answerTally, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
+  addDays, answerCounts, answerTally, nextSessionToAnswer, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
   isoWeekday, occurrenceKey, parseOccurrenceKey, recurrenceLabel, trainingCancelledPush, trainingRefusal,
   validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates,
   trainingOccurrences, trainingReminderPush, trainingRemindersDue, upcomingOccurrences,
@@ -295,5 +295,32 @@ describe('place and weekly runs', () => {
     expect(weeklyDates('2026-10-01', '2026-09-01')).toEqual(['2026-10-01'])
     expect(weeklyDates('2026-01-01', '2030-01-01')).toHaveLength(52)
     expect(weeklyDates('bad')).toEqual([])
+  })
+})
+
+describe('nextSessionToAnswer', () => {
+  const groups: MemberGroup[] = [{ id: 'g-jeunes', clubId: 'c1', displayName: 'Jeunes', memberIds: ['a'] }]
+  const members = [
+    { id: 'a', clubId: 'c1', isPlayer: true, status: 'active' },
+    { id: 'b', clubId: 'c1', isPlayer: true, status: 'active' },
+  ]
+  const data = (sessions: TrainingSession[]) => ({ trainings: [mardi, dirige], trainingSessions: sessions, memberGroups: groups })
+
+  it('skips a session called off and lands on the next one expected', () => {
+    const d = data([
+      { trainingId: 't-dirige', date: '2026-09-28', cancelled: true },
+      { trainingId: 't-dirige', date: '2026-10-01', cancelled: false },
+    ])
+    expect(nextSessionToAnswer(d, members, 'c1', 'a', '2026-09-26')?.date).toBe('2026-10-01')
+  })
+
+  it('never offers a regular slot, nor a session the member is not expected at', () => {
+    const d = data([{ trainingId: 't-dirige', date: '2026-10-01', cancelled: false }])
+    expect(nextSessionToAnswer(d, members, 'c1', 'b', '2026-09-26')).toBeNull()
+  })
+
+  it('looks two weeks ahead, no further', () => {
+    const d = data([{ trainingId: 't-dirige', date: '2026-10-20', cancelled: false }])
+    expect(nextSessionToAnswer(d, members, 'c1', 'a', '2026-09-26')).toBeNull()
   })
 })

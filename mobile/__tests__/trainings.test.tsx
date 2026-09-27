@@ -4,8 +4,8 @@ import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support
 import type {
   Club, MemberGroup, Training, TrainingAvailability, TrainingSession, User,
 } from '@shared/types'
-import TrainingsScreen from '@/app/(tabs)/club/entrainements'
-import ClubScreen from '@/app/(tabs)/club'
+import TrainingsScreen from '@/app/(tabs)/entrainements'
+import { NextTrainingSection } from '@/components/NextTrainingSection'
 import MonCompteScreen from '@/app/(tabs)/compte'
 import { setNotificationPreferences } from '@/utils/push'
 
@@ -151,18 +151,26 @@ describe('l’administrateur, dans le gymnase', () => {
   })
 })
 
-describe('l’onglet Club', () => {
-  it('annonce les prochaines séances et mène à la liste', () => {
-    render(<ClubScreen />)
-    expect(screen.getByTestId('club-trainings')).toHaveTextContent(/Libre du mardi/)
-    fireEvent.press(screen.getByTestId('club-trainings-all'))
-    expect(mockPush).toHaveBeenCalledWith('/club/entrainements')
+describe('l’accueil', () => {
+  it('pose la question de la prochaine séance dirigée, et mène à l’onglet', () => {
+    render(<NextTrainingSection />)
+    expect(screen.getByTestId('home-next-training')).toHaveTextContent(/Dirigé jeunes/)
+    fireEvent.press(screen.getByTestId('training-answer-t-dirige-2026-09-30-available'))
+    expect(fns.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
+    fireEvent.press(screen.getByTestId('home-all-trainings'))
+    expect(mockPush).toHaveBeenCalledWith('/entrainements')
   })
 
-  it('épargne la section à un club qui n’en publie aucun', () => {
-    mockData.trainings = []
-    render(<ClubScreen />)
-    expect(screen.queryByTestId('club-trainings')).toBeNull()
+  it('ne montre rien à qui aucune séance dirigée n’attend', () => {
+    mockAuth.user = member('p1', 'Quentin', 'Colle')
+    render(<NextTrainingSection />)
+    expect(screen.queryByTestId('home-next-training')).toBeNull()
+  })
+
+  it('n’offre pas d’annuler depuis l’accueil, même à un administrateur', () => {
+    mockAuth.user = member('p2', 'Enzo', 'Lotz', { role: 'club_admin' })
+    render(<NextTrainingSection />)
+    expect(screen.queryByTestId('training-cancel-t-dirige-2026-09-30')).toBeNull()
   })
 })
 
@@ -193,6 +201,13 @@ describe('Mon compte — ce qu’on veut recevoir', () => {
     render(<MonCompteScreen />)
     expect(screen.getByTestId('notify-training_regular-switch').props.value).toBe(true)
     expect(screen.getByTestId('notify-training_regular-lead-1').props.accessibilityState).toEqual({ selected: true })
+  })
+
+  it('mène au club, sorti de la barre d’onglets', () => {
+    render(<MonCompteScreen />)
+    expect(screen.getByTestId('compte-club')).toHaveTextContent(/PPA Rixheim/)
+    fireEvent.press(screen.getByTestId('compte-club'))
+    expect(mockPush).toHaveBeenCalledWith('/club')
   })
 
   it('ne parle pas d’entraînements à un club qui n’en publie aucun', () => {

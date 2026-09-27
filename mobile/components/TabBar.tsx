@@ -60,6 +60,7 @@ export function pathToTab(
   if (path.startsWith('/journees')) return 'journees'
   if (path.startsWith('/equipes')) return 'equipes'
   if (path.startsWith('/joueurs')) return 'joueurs'
+  if (path.startsWith('/entrainements')) return 'entrainements'
   if (path.startsWith('/club')) return 'club'
   if (path.startsWith('/compte')) return 'compte'
   return 'index' // Accueil

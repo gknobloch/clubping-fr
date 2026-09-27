@@ -242,6 +242,29 @@ export function expectedMemberIds(
   return inClub.filter((m) => ids.has(m.id)).map((m) => m.id)
 }
 
+/**
+ * The next guided session this member is expected at and that is still on —
+ * the one the app's Accueil asks about (#608). Two weeks ahead at most: past
+ * that, the question can wait for the reminder.
+ *
+ * Guided only, because only a guided session asks anything; a regular slot on
+ * the home screen would be a card with nothing to do on it.
+ */
+export function nextSessionToAnswer(
+  data: { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] },
+  members: TrainingMember[],
+  clubId: string | undefined,
+  memberId: string | undefined,
+  today: string,
+  days = 14,
+): TrainingOccurrence | null {
+  if (!memberId) return null
+  const guided = clubTrainings(data.trainings, clubId).filter((t) => t.kind === 'guided')
+  return trainingOccurrences(guided, data.trainingSessions, today, addDays(today, days)).find((o) =>
+    !o.cancelled && expectedMemberIds(o.training, data.memberGroups, members).includes(memberId),
+  ) ?? null
+}
+
 /** "Tout le club" or the groups' names, joined — who a training is for, in words. */
 export function audienceLabel(training: Pick<Training, 'memberGroupIds'>, memberGroups: MemberGroup[]): string {
   if (!training.memberGroupIds.length) return 'Tout le club'

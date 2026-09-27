@@ -20,6 +20,7 @@ import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { CARD_SPLIT_MIN_WIDTH, NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
+import { NextTrainingSection } from '@/components/NextTrainingSection'
 import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
@@ -442,6 +443,11 @@ export default function HomeScreen() {
             )}
           </>
         )}
+
+        {/* The next guided session this member is expected at (#608) — for a
+            player under the matches, for anyone else on its own: belonging to
+            « Jeunes dirigé » does not take a team. */}
+        <NextTrainingSection />
       </ScrollView>
 
       {quickViewId && (

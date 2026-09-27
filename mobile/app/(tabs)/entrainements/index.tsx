@@ -19,8 +19,9 @@ import {
 // Entraînements (#608)
 //
 // Les quatre semaines à venir du club : les séances dirigées, où chacun dit
-// s'il vient, et les créneaux libres, avec leurs soirs annulés. Poussé sur la
-// pile du Club — un entraînement est l'affaire du club, comme ses groupes.
+// s'il vient, et les créneaux libres, avec leurs soirs annulés. Un onglet à
+// lui : c'est ce qu'un membre ouvre chaque semaine, là où le Club se consulte
+// de temps en temps — d'où l'échange de leurs places dans la barre.
 //
 // L'administrateur y annule et rétablit une séance, parce que c'est dans le
 // gymnase qu'on apprend qu'il est fermé. Créer une série et poser ses dates

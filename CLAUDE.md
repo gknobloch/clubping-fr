@@ -828,6 +828,23 @@ invisible dans le diff comme dans la revue.
   ou qui administre son club — l'encadrant, pour le licencié qui l'a dit à la
   porte. `GET /api/data` ne porte que les entraînements du club de celui qui
   regarde.
+- **Dans l'app, Entraînements est un onglet, et Club n'en est plus un.** Cinq
+  destinations, jamais six : à 390 pt un sixième onglet fait 65 pt, coupe
+  « Entraînements » en « Entraînem… », et les deux plateformes plafonnent une
+  barre à cinq. Entraînements a pris la place de Club plutôt que de s'y
+  ajouter — un membre l'ouvre chaque semaine, la fiche du club de temps en
+  temps — et Club s'ouvre depuis Mon compte (« Mon club »), avec un retour.
+  Les deux onglets sont **masqués, jamais désinscrits** (`tabBarItemStyle`,
+  comme Compte) : `href: null` ferait passer un `router.push` à l'OS, et une
+  notification ouvre Entraînements au démarrage à froid, avant que les données
+  disent si le club en publie.
+- **L'onglet est masqué pour un club qui ne publie aucun entraînement** : une
+  destination toujours vide est une question à laquelle personne ne peut
+  répondre.
+- **L'accueil pose la question de la semaine** : la prochaine séance *dirigée*
+  où le membre est attendu, dans les deux semaines (`nextSessionToAnswer`), avec
+  la même carte que l'onglet. Rien quand aucune ne l'attend, et jamais un
+  créneau libre — il n'y aurait rien à faire sur la carte.
 - **L'app lit et annule ; le web crée.** Annuler ou rétablir se décide dans le
   gymnase, donc l'app le fait ; créer une série et poser ses dates restent sur
   le web, où il y a la place de le faire.

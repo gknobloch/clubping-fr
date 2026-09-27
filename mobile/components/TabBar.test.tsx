@@ -27,6 +27,7 @@ describe('pathToTab', () => {
     ['/equipes', 'equipes'],
     ['/journees', 'journees'],
     ['/joueurs', 'joueurs'],
+    ['/entrainements', 'entrainements'],
   ])('maps the section %s to %s', (path, tab) => {
     expect(pathToTab(path)).toBe(tab)
   })
