@@ -8,6 +8,7 @@ import { fonts } from '@/constants/typography'
 import { AVAIL, ALL_STATUSES } from '@/constants/availability'
 import { Sheet } from '@/components/Sheet'
 import type { AvailabilityStatus, TrainingAvailability, User } from '@shared/types'
+import { longDate } from '@shared/lib/pushNotifications'
 import {
   answerCounts, answerOf, answerTally, asksForAnswer, formatTimeRange, type TrainingOccurrence,
 } from '@shared/lib/trainings'
@@ -32,6 +33,7 @@ export function TrainingCard({
   onAnswer,
   onCancel,
   onRestore,
+  showDate = false,
 }: {
   occurrence: TrainingOccurrence
   place?: string
@@ -44,6 +46,8 @@ export function TrainingCard({
   onAnswer: (status: AvailabilityStatus | null) => void
   onCancel: () => void
   onRestore: () => void
+  /** Say the day too — on the Accueil, where no date heading sits above the card. */
+  showDate?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const t = o.training
@@ -65,7 +69,9 @@ export function TrainingCard({
               </Text>
             </View>
           </View>
-          <Text style={s.meta}>{formatTimeRange(t)}{place ? ` · ${place}` : ''}</Text>
+          <Text style={s.meta}>
+            {showDate ? `${longDate(o.date)} · ` : ''}{formatTimeRange(t)}{place ? ` · ${place}` : ''}
+          </Text>
           <Text style={s.meta}>{audience}</Text>
           {o.cancelled ? (
             <Text testID={`training-cancelled-${key}`} style={s.cancelled}>

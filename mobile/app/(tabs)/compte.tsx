@@ -4,7 +4,6 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { colors } from '@/constants/colors'
@@ -56,10 +55,6 @@ export default function MonCompteScreen() {
 
   const player = user?.isPlayer ? players.find((p) => p.id === user.id) : null
   const club = player ? clubs.find((c) => c.id === player.clubId) : null
-  // The member's club, player or not — the way in to the Club screen since it
-  // left the tab bar (#608).
-  const myClub = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
-  const router = useRouter()
 
   const activePhase = phases.find((p) => p.status === 'active')
   const playerTeams = player
@@ -183,26 +178,6 @@ export default function MonCompteScreen() {
             <Text style={styles.roleText}>{getRoleLabel(user?.role ?? 'player')}</Text>
           </View>
         </View>
-
-        {/* Mon club — where the Club screen lives since Entraînements took its
-            place in the tab bar (#608). First, because an admin comes here for
-            it and a player rarely scrolls. */}
-        {myClub && (
-          <TouchableOpacity
-            testID="compte-club"
-            style={[styles.section, styles.clubRow]}
-            onPress={() => router.push('/club')}
-            accessibilityRole="link"
-            accessibilityLabel={`Mon club — ${myClub.displayName}`}
-          >
-            <Ionicons name="business-outline" size={22} color={colors.textSecondary} />
-            <View style={styles.clubBody}>
-              <Text style={styles.switchTitle}>Mon club</Text>
-              <Text style={styles.switchHint} numberOfLines={1}>{myClub.displayName}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
 
         {/* Coordonnées — editable by the player */}
         {player && (
@@ -384,8 +359,6 @@ const styles = StyleSheet.create({
   switchLabels: { flex: 1, gap: 2 },
   switchTitle: { fontSize: 15, color: colors.textPrimary, fontFamily: fonts.medium },
   switchHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
-  clubRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56 },
-  clubBody: { flex: 1, gap: 2 },
   category: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, marginTop: 4, gap: 8 },
   leads: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   lead: {

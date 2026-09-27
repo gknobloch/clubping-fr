@@ -242,28 +242,56 @@ export function expectedMemberIds(
   return inClub.filter((m) => ids.has(m.id)).map((m) => m.id)
 }
 
+type SessionData = { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] }
+
+/** The first occurrence of one kind this member is expected at, within `days`. */
+function nextSessionOfKind(
+  data: SessionData,
+  members: TrainingMember[],
+  clubId: string | undefined,
+  memberId: string | undefined,
+  today: string,
+  kind: TrainingKind,
+  days: number,
+  keep: (o: TrainingOccurrence) => boolean,
+): TrainingOccurrence | null {
+  if (!memberId) return null
+  const series = clubTrainings(data.trainings, clubId).filter((t) => t.kind === kind)
+  return trainingOccurrences(series, data.trainingSessions, today, addDays(today, days)).find((o) =>
+    keep(o) && expectedMemberIds(o.training, data.memberGroups, members).includes(memberId),
+  ) ?? null
+}
+
 /**
  * The next guided session this member is expected at and that is still on —
- * the one the app's Accueil asks about (#608). Two weeks ahead at most: past
- * that, the question can wait for the reminder.
- *
- * Guided only, because only a guided session asks anything; a regular slot on
- * the home screen would be a card with nothing to do on it.
+ * the one the Accueil asks about (#608), on web and app alike. Two weeks ahead
+ * at most: past that, the question can wait for the reminder.
  */
-export function nextSessionToAnswer(
-  data: { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] },
+export const nextSessionToAnswer = (
+  data: SessionData,
   members: TrainingMember[],
   clubId: string | undefined,
   memberId: string | undefined,
   today: string,
   days = 14,
-): TrainingOccurrence | null {
-  if (!memberId) return null
-  const guided = clubTrainings(data.trainings, clubId).filter((t) => t.kind === 'guided')
-  return trainingOccurrences(guided, data.trainingSessions, today, addDays(today, days)).find((o) =>
-    !o.cancelled && expectedMemberIds(o.training, data.memberGroups, members).includes(memberId),
-  ) ?? null
-}
+) => nextSessionOfKind(data, members, clubId, memberId, today, 'guided', days, (o) => !o.cancelled)
+
+/**
+ * The next evening of a regular slot this member is expected at, within the
+ * week — said on the Accueil beside the guided session, since « mardi, c'est
+ * entraînement » is the other half of what the week holds.
+ *
+ * Cancelled evenings are kept, unlike for the guided session: there is nothing
+ * to answer here, and « annulé ce mardi » is exactly what is worth seeing.
+ */
+export const nextRegularSession = (
+  data: SessionData,
+  members: TrainingMember[],
+  clubId: string | undefined,
+  memberId: string | undefined,
+  today: string,
+  days = 7,
+) => nextSessionOfKind(data, members, clubId, memberId, today, 'regular', days, () => true)
 
 /** "Tout le club" or the groups' names, joined — who a training is for, in words. */
 export function audienceLabel(training: Pick<Training, 'memberGroupIds'>, memberGroups: MemberGroup[]): string {

@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { ModalShell } from '@/components/ModalShell'
+import { MultiDateCalendar } from '@/components/MultiDateCalendar'
+import { todayIso } from '@/lib/weeks'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
-  TRAINING_KIND_LABELS, WEEKDAY_NAMES, isIsoDate, weeklyDates,
+  TRAINING_KIND_LABELS, WEEKDAY_NAMES, weeklyDates,
   type TrainingDraft, type TrainingResult,
 } from '@/lib/trainings'
 import type { Address, MemberGroup, Training, TrainingKind } from '@/types'
@@ -72,13 +74,12 @@ export function TrainingEditor({
   const [validFrom, setValidFrom] = useState(training?.validFrom ?? '')
   const [validUntil, setValidUntil] = useState(training?.validUntil ?? '')
   const [notes, setNotes] = useState(training?.notes ?? '')
-  const [firstDate, setFirstDate] = useState('')
-  const [repeatUntil, setRepeatUntil] = useState('')
+  const sessionDates = useSessionDates()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const isNew = !training
-  const dates = isNew && kind === 'guided' ? weeklyDates(firstDate, repeatUntil || undefined) : []
+  const dates = isNew && kind === 'guided' ? sessionDates.dates : []
   const toggleGroup = (id: string) =>
     setGroupIds((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]))
 
@@ -222,9 +223,7 @@ export function TrainingEditor({
           )}
 
           {isNew && kind === 'guided' && (
-            <DateRunFields
-              first={firstDate} until={repeatUntil} onFirst={setFirstDate} onUntil={setRepeatUntil} count={dates.length}
-            />
+            <SessionDatesField state={sessionDates} />
           )}
 
           <div>
@@ -242,55 +241,106 @@ export function TrainingEditor({
   )
 }
 
-/** A first date and an optional weekly repeat — how a coach's run is typed in. */
-function DateRunFields({
-  first, until, onFirst, onUntil, count,
-}: {
-  first: string; until: string; onFirst: (v: string) => void; onUntil: (v: string) => void; count: number
-}) {
+type DatesMode = 'weekly' | 'pick'
+
+/**
+ * The dates of a guided series, entered one of two ways (#608): a weekly run —
+ * a first date and « chaque semaine jusqu'au » — or dates ticked on a calendar,
+ * for a coach whose schedule is not weekly. Dates the series already has are
+ * never counted twice.
+ */
+function useSessionDates(existing: string[] = []) {
+  const [mode, setMode] = useState<DatesMode>('weekly')
+  const [first, setFirst] = useState('')
+  const [until, setUntil] = useState('')
+  const [picked, setPicked] = useState<string[]>([])
+  const raw = mode === 'weekly' ? weeklyDates(first, until || undefined) : picked
+  const dates = raw.filter((d) => !existing.includes(d))
+  return { mode, setMode, first, setFirst, until, setUntil, picked, setPicked, dates, existing }
+}
+
+type SessionDates = ReturnType<typeof useSessionDates>
+
+const MODES: Array<{ id: DatesMode; label: string }> = [
+  { id: 'weekly', label: 'Chaque semaine' },
+  { id: 'pick', label: 'Dates au choix' },
+]
+
+function SessionDatesField({ state }: { state: SessionDates }) {
+  const count = state.dates.length
   return (
-    <div>
-      {/* Bottom-aligned: the second label wraps on a phone, the inputs must not. */}
-      <div className="grid grid-cols-2 items-end gap-3">
-        <div>
-          <label htmlFor="training-first-date" className={LABEL}>Première séance</label>
-          <input id="training-first-date" type="date" value={first} className={INPUT}
-            onChange={(e) => onFirst(e.target.value)} />
-        </div>
-        <div>
-          <label htmlFor="training-repeat-until" className={LABEL}>
-            Chaque semaine jusqu’au <span className="font-normal text-slate-400">(facultatif)</span>
+    <fieldset>
+      <legend className={LABEL}>Dates</legend>
+      <div className="mt-1 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Façon de choisir les dates">
+        {MODES.map((m) => (
+          <label
+            key={m.id}
+            className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-3 text-sm font-medium md:min-h-9 ${
+              state.mode === m.id ? 'border-accent-600 bg-accent-50 text-accent-700' : 'border-slate-300 text-slate-600'
+            }`}
+          >
+            <input type="radio" name="training-dates-mode" value={m.id} checked={state.mode === m.id}
+              onChange={() => state.setMode(m.id)} className="sr-only" />
+            {m.label}
           </label>
-          <input id="training-repeat-until" type="date" value={until} min={first || undefined} className={INPUT}
-            onChange={(e) => onUntil(e.target.value)} />
-        </div>
+        ))}
+      </div>
+      <div className="mt-3">
+        {state.mode === 'weekly' ? (
+          /* Bottom-aligned: the second label wraps on a phone, the inputs must not. */
+          <div className="grid grid-cols-2 items-end gap-3">
+            <div>
+              <label htmlFor="training-first-date" className={LABEL}>Première séance</label>
+              <input id="training-first-date" type="date" value={state.first} className={INPUT}
+                onChange={(e) => state.setFirst(e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="training-repeat-until" className={LABEL}>
+                Chaque semaine jusqu’au <span className="font-normal text-slate-400">(facultatif)</span>
+              </label>
+              <input id="training-repeat-until" type="date" value={state.until} min={state.first || undefined}
+                className={INPUT} onChange={(e) => state.setUntil(e.target.value)} />
+            </div>
+          </div>
+        ) : (
+          <MultiDateCalendar
+            selected={state.picked}
+            onChange={state.setPicked}
+            existing={state.existing}
+            today={todayIso()}
+          />
+        )}
       </div>
       <p className="mt-1 text-xs text-slate-500">
         {count === 0
           ? 'Choisissez au moins une date.'
           : `${count} séance${count > 1 ? 's' : ''}. Chaque date se retire ensuite une à une.`}
       </p>
-    </div>
+    </fieldset>
   )
 }
 
-/** Add a run of dates to a guided series. */
+/** Add dates to a guided series, weekly or picked on a calendar. */
 export function AddDatesDialog({
-  training, onAdd, onClose,
-}: { training: Training; onAdd: (dates: string[]) => void; onClose: () => void }) {
-  const [first, setFirst] = useState('')
-  const [until, setUntil] = useState('')
-  const dates = weeklyDates(first, until || undefined)
+  training, existingDates, onAdd, onClose,
+}: {
+  training: Training
+  /** The dates the series already has — shown on the calendar, never added twice. */
+  existingDates: string[]
+  onAdd: (dates: string[]) => void
+  onClose: () => void
+}) {
+  const dates = useSessionDates(existingDates)
   const titleId = 'training-dates-title'
   return (
     <ModalShell onClose={onClose} labelledBy={titleId}>
       <DialogCard titleId={titleId} title={`Ajouter des dates — ${training.displayName}`}>
         <form
           className="mt-4"
-          onSubmit={(e) => { e.preventDefault(); if (dates.length) { onAdd(dates); onClose() } }}
+          onSubmit={(e) => { e.preventDefault(); if (dates.dates.length) { onAdd(dates.dates); onClose() } }}
         >
-          <DateRunFields first={first} until={until} onFirst={setFirst} onUntil={setUntil} count={dates.length} />
-          <Actions onCancel={onClose} submitLabel="Ajouter" submitDisabled={!dates.length || !isIsoDate(first)} />
+          <SessionDatesField state={dates} />
+          <Actions onCancel={onClose} submitLabel="Ajouter" submitDisabled={!dates.dates.length} />
         </form>
       </DialogCard>
     </ModalShell>

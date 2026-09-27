@@ -27,6 +27,7 @@ import {
   upcomingRounds, upcomingTeamGames,
 } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
+import { NextTrainings } from '@/components/NextTrainings'
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -459,10 +460,17 @@ export function HomePage() {
               </p>
             </div>
           </div>
+
+          {/* The week's trainings, under the match (#608) — the other thing a
+              player comes here to answer. */}
+          <NextTrainings />
         </>
       ) : (
         /* Generic view for non-players (admins) */
         <>
+          {/* First for anyone else: belonging to a coached group does not take
+              a team (#608). */}
+          <NextTrainings />
           {activeSeason && (
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Saison en cours</h2>

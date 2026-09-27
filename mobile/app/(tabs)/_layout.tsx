@@ -22,16 +22,15 @@ function tabIcon(name: IconName) {
 // ---------------------------------------------------------------------------
 // Tab order mirrors the web's navigation for a player or club admin (#365):
 //
-//   Accueil · Équipes · Journées · Entraînements · Joueurs
+//   Accueil · Club · Équipes · Journées · Entraînements · Joueurs
 //
-// Five, never six: at 390pt a sixth tab is 65pt wide, which cuts
-// « Entraînements » to « Entraînem… », and both platforms cap a bottom bar at
-// five. So Entraînements (#608) took Club's place rather than joining it — a
-// member opens the trainings every week, the club's card now and then — and
-// Club is reached from Mon compte instead.
+// Six since #608. A tablet's rail has room to spare; a phone gives each tab
+// about 65pt at 390pt, which is why `TabBar` lets a label shrink a little
+// rather than cut « Entraînements » to « Entraînem… ». Club stays in the bar:
+// tucked behind Mon compte it was too hard to find.
 //
-// Compte is not a tab either — it lives in the header, behind the member's
-// avatar, exactly as on the web (src/components/AppShell.tsx).
+// Compte is not a tab — it lives in the header, behind the member's avatar,
+// exactly as on the web (src/components/AppShell.tsx).
 // ---------------------------------------------------------------------------
 export default function TabLayout() {
   const { user } = useAuth()
@@ -60,18 +59,14 @@ export default function TabLayout() {
         name="index"
         options={{ title: 'Accueil', tabBarIcon: tabIcon('home-outline') }}
       />
-      {/* Off the bar since #608, reached from Mon compte — see the order
-          above. Hidden like Compte rather than unregistered, so
-          router.push('/club') still resolves. */}
       <Tabs.Screen
         name="club"
         options={{
           title: 'Club',
-          // A stack since #602, which draws its own header like the other
-          // section stacks.
+          // A stack since #602 (the FFTT import is pushed on it), which draws
+          // its own header like the other section stacks.
           headerShown: false,
           href: hasClub ? undefined : null,
-          tabBarItemStyle: { display: 'none' },
           tabBarIcon: tabIcon('business-outline'),
         }}
       />

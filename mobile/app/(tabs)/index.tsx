@@ -386,6 +386,10 @@ export default function HomeScreen() {
               )}
             </View>
 
+            {/* The week's trainings, right under the match (#608) — the
+                other thing a player opens the app to answer. */}
+            <NextTrainingSection />
+
             {/* Season counters, two across under the card. */}
             <View style={styles.tiles}>
               {counter(
@@ -419,6 +423,9 @@ export default function HomeScreen() {
         {/* ── Generic view for non-players ── */}
         {!isPlayer && (
           <>
+            {/* First for anyone else: belonging to « Jeunes dirigé » does not
+                take a team (#608). */}
+            <NextTrainingSection />
             {activeSeason && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Saison en cours</Text>
@@ -443,11 +450,6 @@ export default function HomeScreen() {
             )}
           </>
         )}
-
-        {/* The next guided session this member is expected at (#608) — for a
-            player under the matches, for anyone else on its own: belonging to
-            « Jeunes dirigé » does not take a team. */}
-        <NextTrainingSection />
       </ScrollView>
 
       {quickViewId && (

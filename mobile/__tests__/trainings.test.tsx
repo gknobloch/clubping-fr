@@ -161,8 +161,26 @@ describe('l’accueil', () => {
     expect(mockPush).toHaveBeenCalledWith('/entrainements')
   })
 
-  it('ne montre rien à qui aucune séance dirigée n’attend', () => {
+  it('annonce aussi le prochain mardi du créneau libre', () => {
+    render(<NextTrainingSection />)
+    expect(screen.getByTestId('home-next-regular')).toHaveTextContent(/Libre du mardi.*mardi 29 septembre à 20h/)
+  })
+
+  it('ne donne que le créneau libre à qui aucune séance dirigée n’attend', () => {
     mockAuth.user = member('p1', 'Quentin', 'Colle')
+    render(<NextTrainingSection />)
+    expect(screen.getByTestId('home-next-regular')).toBeTruthy()
+    expect(screen.queryByTestId('training-answer-t-dirige-2026-09-30-available')).toBeNull()
+  })
+
+  it('dit qu’un mardi est annulé, avec son motif', () => {
+    mockData.trainingSessions = [{ trainingId: 't-mardi', date: '2026-09-29', cancelled: true, note: 'Tournoi' }]
+    render(<NextTrainingSection />)
+    expect(screen.getByTestId('home-next-regular')).toHaveTextContent(/annulé : Tournoi/)
+  })
+
+  it('ne montre rien quand la semaine ne tient rien pour ce membre', () => {
+    mockData.trainings = []
     render(<NextTrainingSection />)
     expect(screen.queryByTestId('home-next-training')).toBeNull()
   })
@@ -201,13 +219,6 @@ describe('Mon compte — ce qu’on veut recevoir', () => {
     render(<MonCompteScreen />)
     expect(screen.getByTestId('notify-training_regular-switch').props.value).toBe(true)
     expect(screen.getByTestId('notify-training_regular-lead-1').props.accessibilityState).toEqual({ selected: true })
-  })
-
-  it('mène au club, sorti de la barre d’onglets', () => {
-    render(<MonCompteScreen />)
-    expect(screen.getByTestId('compte-club')).toHaveTextContent(/PPA Rixheim/)
-    fireEvent.press(screen.getByTestId('compte-club'))
-    expect(mockPush).toHaveBeenCalledWith('/club')
   })
 
   it('ne parle pas d’entraînements à un club qui n’en publie aucun', () => {

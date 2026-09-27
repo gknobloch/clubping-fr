@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup, Training, TrainingAvailability, TrainingSession } from '@/types'
 import {
-  addDays, answerCounts, answerTally, nextSessionToAnswer, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
+  addDays, answerCounts, answerTally, nextSessionToAnswer, nextRegularSession, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
   isoWeekday, occurrenceKey, parseOccurrenceKey, recurrenceLabel, trainingCancelledPush, trainingRefusal,
   validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates,
   trainingOccurrences, trainingReminderPush, trainingRemindersDue, upcomingOccurrences,
@@ -322,5 +322,23 @@ describe('nextSessionToAnswer', () => {
   it('looks two weeks ahead, no further', () => {
     const d = data([{ trainingId: 't-dirige', date: '2026-10-20', cancelled: false }])
     expect(nextSessionToAnswer(d, members, 'c1', 'a', '2026-09-26')).toBeNull()
+  })
+})
+
+describe('nextRegularSession', () => {
+  const members = [{ id: 'a', clubId: 'c1', isPlayer: true, status: 'active' }]
+  const data = (sessions: TrainingSession[]) => ({ trainings: [mardi, dirige], trainingSessions: sessions, memberGroups: [] })
+
+  it('gives the next Tuesday, still saying so when it is called off', () => {
+    expect(nextRegularSession(data([]), members, 'c1', 'a', '2026-09-26')?.date).toBe('2026-09-29')
+    const off = nextRegularSession(
+      data([{ trainingId: 't-mardi', date: '2026-09-29', cancelled: true, note: 'Fermé' }]), members, 'c1', 'a', '2026-09-26',
+    )
+    expect([off?.date, off?.cancelled]).toEqual(['2026-09-29', true])
+  })
+
+  it('looks one week ahead', () => {
+    expect(nextRegularSession(data([]), members, 'c1', 'a', '2026-09-30')?.date).toBe('2026-10-06')
+    expect(nextRegularSession(data([]), members, 'c1', 'a', '2026-09-30', 5)).toBeNull()
   })
 })

@@ -123,7 +123,15 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
         activeOpacity={0.7}
       >
         {options.tabBarIcon?.({ focused: isActive, color, size: 24 })}
-        <Text style={[styles.label, { color }]} numberOfLines={1}>
+        {/* Six tabs on a 390pt phone leave ~65pt each (#608): the one long
+            label, « Entraînements », shrinks a little to fit whole rather than
+            end in an ellipsis. The others fit at full size and do not move. */}
+        <Text
+          style={[styles.label, { color }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+        >
           {label}
         </Text>
       </TouchableOpacity>
@@ -200,7 +208,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', width: '100%' },
   rowCentred: { maxWidth: TAB_ROW_MAX_WIDTH, alignSelf: 'center' },
-  item: { flex: 1, alignItems: 'center', gap: 3 },
+  item: { flex: 1, alignItems: 'center', gap: 3, paddingHorizontal: 2 },
   // Not `flex: 1`: five destinations spread down 800pt would be a tap target
   // the height of a hand. They sit at the top of the rail, as a menu does.
   railItem: { alignItems: 'center', gap: 3, paddingVertical: 14 },

@@ -828,23 +828,30 @@ invisible dans le diff comme dans la revue.
   ou qui administre son club — l'encadrant, pour le licencié qui l'a dit à la
   porte. `GET /api/data` ne porte que les entraînements du club de celui qui
   regarde.
-- **Dans l'app, Entraînements est un onglet, et Club n'en est plus un.** Cinq
-  destinations, jamais six : à 390 pt un sixième onglet fait 65 pt, coupe
-  « Entraînements » en « Entraînem… », et les deux plateformes plafonnent une
-  barre à cinq. Entraînements a pris la place de Club plutôt que de s'y
-  ajouter — un membre l'ouvre chaque semaine, la fiche du club de temps en
-  temps — et Club s'ouvre depuis Mon compte (« Mon club »), avec un retour.
-  Les deux onglets sont **masqués, jamais désinscrits** (`tabBarItemStyle`,
-  comme Compte) : `href: null` ferait passer un `router.push` à l'OS, et une
-  notification ouvre Entraînements au démarrage à froid, avant que les données
-  disent si le club en publie.
-- **L'onglet est masqué pour un club qui ne publie aucun entraînement** : une
-  destination toujours vide est une question à laquelle personne ne peut
-  répondre.
-- **L'accueil pose la question de la semaine** : la prochaine séance *dirigée*
-  où le membre est attendu, dans les deux semaines (`nextSessionToAnswer`), avec
-  la même carte que l'onglet. Rien quand aucune ne l'attend, et jamais un
-  créneau libre — il n'y aurait rien à faire sur la carte.
+- **Dans l'app, Entraînements est un sixième onglet**, à côté de Club et non à
+  sa place : Accueil · Club · Équipes · Journées · Entraînements · Joueurs,
+  l'ordre du web. Le rail d'une tablette a la place ; sur un téléphone chaque
+  onglet a ~65 pt à 390 pt, donc `TabBar` laisse un libellé rétrécir
+  (`adjustsFontSizeToFit`, jusqu'à 80 %) plutôt que de couper
+  « Entraînements » en « Entraînem… ». Un essai à cinq, Club rangé dans Mon
+  compte, a été écarté : le club y devenait introuvable.
+- **L'onglet est masqué, jamais désinscrit** (`tabBarItemStyle`, comme Compte),
+  pour un club qui ne publie aucun entraînement — une destination toujours
+  vide est une question à laquelle personne ne peut répondre. `href: null`
+  ferait passer un `router.push` à l'OS, et une notification ouvre
+  Entraînements au démarrage à froid, avant que les données disent si le club
+  en publie.
+- **L'accueil dit ce que la semaine tient**, sur le web comme dans l'app, sous
+  le prochain match : la prochaine séance *dirigée* où le membre est attendu,
+  dans les deux semaines (`nextSessionToAnswer`), avec la même carte que la
+  liste pour y répondre ; et le prochain soir de son créneau libre, dans la
+  semaine (`nextRegularSession`), en une ligne — annulé compris, puisque c'est
+  justement ce qui vaut d'être vu. Rien quand ni l'un ni l'autre ne l'attend.
+- **Les dates d'une série dirigée se posent de deux façons** : chaque semaine
+  (une première date, « chaque semaine jusqu'au »), ou cochées sur un
+  calendrier (`MultiDateCalendar`) pour un encadrant dont le planning n'est pas
+  hebdomadaire. Les dates que la série a déjà sont montrées et jamais
+  comptées deux fois ; le passé ne se coche pas.
 - **L'app lit et annule ; le web crée.** Annuler ou rétablir se décide dans le
   gymnase, donc l'app le fait ; créer une série et poser ses dates restent sur
   le web, où il y a la place de le faire.

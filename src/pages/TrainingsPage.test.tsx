@@ -144,7 +144,7 @@ describe('a club admin running it', () => {
     await u.type(screen.getByLabelText('Nom'), 'Dirigé adultes')
     await u.click(screen.getByRole('button', { name: 'Jeunes' }))
     await u.type(screen.getByLabelText('Première séance'), '2026-10-01')
-    await u.type(screen.getByLabelText(/Chaque semaine/), '2026-10-15')
+    await u.type(screen.getByLabelText(/jusqu’au/), '2026-10-15')
     expect(screen.getByText(/3 séances/)).toBeInTheDocument()
     await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
@@ -152,6 +152,41 @@ describe('a club admin running it', () => {
       kind: 'guided', displayName: 'Dirigé adultes', memberGroupIds: ['g-jeunes'], startTime: '20:00',
     }))
     expect(data.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-new', ['2026-10-01', '2026-10-08', '2026-10-15'])
+  })
+
+  it('creates a guided series on dates picked in a calendar', async () => {
+    data.addTraining.mockResolvedValue({ ok: true, training: { ...dirige, id: 't-new' } })
+    const u = user()
+    renderPage()
+    await u.click(screen.getByRole('button', { name: 'Nouvel entraînement' }))
+    await u.type(screen.getByLabelText('Nom'), 'Dirigé irrégulier')
+    await u.click(screen.getByLabelText('Dates au choix'))
+    const calendar = screen.getByRole('group', { name: 'Dates des séances' })
+    // Opens on this month; the past cannot be picked.
+    expect(within(calendar).getByText('Septembre 2026')).toBeInTheDocument()
+    expect(within(calendar).getByRole('button', { name: 'vendredi 25 septembre' })).toBeDisabled()
+    await u.click(within(calendar).getByRole('button', { name: 'mardi 29 septembre' }))
+    await u.click(within(calendar).getByRole('button', { name: 'Mois suivant' }))
+    await u.click(within(calendar).getByRole('button', { name: 'jeudi 8 octobre' }))
+    await u.click(within(calendar).getByRole('button', { name: 'jeudi 22 octobre' }))
+    // A second tap takes a date back out.
+    await u.click(within(calendar).getByRole('button', { name: 'jeudi 22 octobre' }))
+    expect(screen.getByText(/2 séances/)).toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(data.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-new', ['2026-09-29', '2026-10-08'])
+  })
+
+  it('adds dates to a series without offering the ones it has', async () => {
+    const u = user()
+    renderPage()
+    await u.click(screen.getByRole('button', { name: 'Actions — Dirigé jeunes' }))
+    await u.click(screen.getByRole('menuitem', { name: 'Ajouter des dates' }))
+    await u.click(screen.getByLabelText('Dates au choix'))
+    const calendar = screen.getByRole('group', { name: 'Dates des séances' })
+    expect(within(calendar).getByRole('button', { name: 'mercredi 30 septembre — déjà prévue' })).toBeDisabled()
+    await u.click(within(calendar).getByRole('button', { name: 'mardi 29 septembre' }))
+    await u.click(screen.getByRole('button', { name: 'Ajouter' }))
+    expect(data.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-dirige', ['2026-09-29'])
   })
 
   it('keeps the form open on a refusal, saying why', async () => {
