@@ -214,6 +214,21 @@ describe('l’accueil', () => {
     expect(screen.getByTestId('home-trainings-guided-more')).toHaveTextContent(/\+2.*2 autres séances à venir/)
   })
 
+  it('prend la hauteur de la page affichée, pas celle de la plus haute', () => {
+    render(<NextTrainingSection />)
+    measure('regular')
+    const layout = (id: string, height: number) =>
+      fireEvent(screen.getByTestId(id), 'layout', { nativeEvent: { layout: { width: 343, height } } })
+    layout('home-trainings-regular-page-0', 96)
+    // The Tuesday called off, with its reason, is taller.
+    layout('home-trainings-regular-page-1', 140)
+    const pager = () => screen.getByTestId('home-trainings-regular-pager')
+    const height = () => [pager().props.style].flat(Infinity).reduce((h, st) => st?.height ?? h, undefined)
+    expect(height()).toBe(96)
+    fireEvent(pager(), 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 343 } } })
+    expect(height()).toBe(140)
+  })
+
   it('demande « Ma disponibilité », comme la carte du match', () => {
     render(<NextTrainingSection />)
     measure('guided')

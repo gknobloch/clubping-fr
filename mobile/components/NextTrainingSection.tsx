@@ -92,6 +92,14 @@ function TrainingCarousel({
   const { clubs, users, trainingAvailabilities, setTrainingAvailability } = useAppData()
   const [width, setWidth] = useState(0)
   const [page, setPage] = useState(0)
+  // Each page's own height. A horizontal ScrollView is as tall as its tallest
+  // page, so a short Tuesday card sat above a band of nothing sized for the
+  // cancelled evening or the « more » page beside it — plain to see once the
+  // two columns stack on a phone. Measured instead, and the pager takes the
+  // height of the page on screen.
+  const [heights, setHeights] = useState<number[]>([])
+  const measurePage = (i: number, h: number) =>
+    setHeights((prev) => (prev[i] === h ? prev : Object.assign([...prev], { [i]: h })))
   // The first few, then a last page saying how many more there are — a row
   // that stopped at three without a word would read as « there are three ».
   const { shown, hasMore, more, total } = accueilColumn(sessions, todayIso())
@@ -123,11 +131,19 @@ function TrainingCarousel({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           scrollEnabled={shown.length + (hasMore ? 1 : 0) > 1}
-          style={{ width }}
+          testID={`home-trainings-${kind}-pager`}
+          style={[{ width }, heights[page] ? { height: heights[page] } : null]}
+          // Pages keep their own height rather than stretching to the row's.
+          contentContainerStyle={s.pages}
           onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
         >
-          {shown.map((o) => (
-            <View key={`${o.training.id}-${o.date}`} style={{ width }}>
+          {shown.map((o, i) => (
+            <View
+              key={`${o.training.id}-${o.date}`}
+              testID={`home-trainings-${kind}-page-${i}`}
+              style={{ width }}
+              onLayout={(e) => measurePage(i, e.nativeEvent.layout.height)}
+            >
               <TrainingCard
                 occurrence={o}
                 showDate
@@ -147,10 +163,14 @@ function TrainingCarousel({
             </View>
           ))}
           {hasMore && (
-            <View style={{ width }}>
+            <View
+              style={{ width }}
+              onLayout={(e) => measurePage(shown.length, e.nativeEvent.layout.height)}
+            >
               <TouchableOpacity
                 testID={`home-trainings-${kind}-more`}
-                style={s.more}
+                // The first card's height, so the last page reads as one more card.
+                style={[s.more, heights[0] ? { minHeight: heights[0] } : null]}
                 onPress={() => router.push('/entrainements')}
                 accessibilityRole="link"
                 accessibilityLabel={`${more !== null ? `${moreSessionsLabel(more)} à venir` : 'Et les suivantes'} — voir tous les entraînements`}
@@ -190,9 +210,9 @@ const s = StyleSheet.create({
   carousel: { gap: 8 },
   kindLabel: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
   kindCount: { fontFamily: fonts.regular, color: colors.textSecondary },
-  // The same footprint as a session card, so the row does not jump on the last page.
+  pages: { alignItems: 'flex-start' },
   more: {
-    minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 16,
+    minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 16,
     backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border,
   },
   moreCount: { fontSize: 24, fontFamily: fonts.bold, color: colors.textPrimary },
