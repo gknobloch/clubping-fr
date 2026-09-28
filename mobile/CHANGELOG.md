@@ -60,9 +60,11 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   tablette —, et « Ma disponibilité » sur une séance dirigée, comme pour un
   match.
 - **Une séance dirigée s'ajoute à l'agenda**, seule ou avec toute sa série.
-- **Les entraînements du club ont leur section dans l'onglet Club** : chaque
+- **Les entraînements du club se gèrent depuis l'onglet Club** : chaque
   créneau et chaque série, avec son horaire, son lieu, son public et ses
-  responsables.
+  responsables. Un administrateur les crée, les modifie et les supprime ; lui
+  et le responsable d'une série dirigée y ajoutent des dates, chaque semaine
+  ou cochées sur un calendrier.
 - **Le responsable d'une série dirigée** — son encadrant — annule ou rétablit
   une séance depuis l'application, même sans être administrateur du club.
 - **Des rappels à la carte.** Mon compte règle séparément les notifications

@@ -4,8 +4,8 @@ import { MultiDateCalendar } from '@/components/MultiDateCalendar'
 import { todayIso } from '@/lib/weeks'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
-  TRAINING_KIND_LABELS, WEEKDAY_NAMES, weeklyDates,
-  type TrainingDraft, type TrainingResult,
+  DATES_MODE_LABELS, TRAINING_KIND_LABELS, WEEKDAY_NAMES, sessionDates, sessionDatesHint,
+  type DatesMode, type TrainingDraft, type TrainingResult,
 } from '@/lib/trainings'
 import type { Address, MemberGroup, Training, TrainingKind, User } from '@/types'
 
@@ -78,12 +78,12 @@ export function TrainingEditor({
   const [validUntil, setValidUntil] = useState(training?.validUntil ?? '')
   const [notes, setNotes] = useState(training?.notes ?? '')
   const [managerIds, setManagerIds] = useState<string[]>(training?.managerIds ?? [])
-  const sessionDates = useSessionDates()
+  const newDates = useSessionDates()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const isNew = !training
-  const dates = isNew && kind === 'guided' ? sessionDates.dates : []
+  const dates = isNew && kind === 'guided' ? newDates.dates : []
   const toggleGroup = (id: string) =>
     setGroupIds((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]))
 
@@ -232,7 +232,7 @@ export function TrainingEditor({
           )}
 
           {isNew && kind === 'guided' && (
-            <SessionDatesField state={sessionDates} />
+            <SessionDatesField state={newDates} />
           )}
 
           <div>
@@ -300,29 +300,26 @@ function ManagersField({
   )
 }
 
-type DatesMode = 'weekly' | 'pick'
-
 /**
  * The dates of a guided series, entered one of two ways (#608): a weekly run —
  * a first date and « chaque semaine jusqu'au » — or dates ticked on a calendar,
- * for a coach whose schedule is not weekly. Dates the series already has are
- * never counted twice.
+ * for a coach whose schedule is not weekly. `sessionDates` is the rule, shared
+ * with the app.
  */
 function useSessionDates(existing: string[] = []) {
   const [mode, setMode] = useState<DatesMode>('weekly')
   const [first, setFirst] = useState('')
   const [until, setUntil] = useState('')
   const [picked, setPicked] = useState<string[]>([])
-  const raw = mode === 'weekly' ? weeklyDates(first, until || undefined) : picked
-  const dates = raw.filter((d) => !existing.includes(d))
+  const dates = sessionDates({ mode, first, until, picked }, existing)
   return { mode, setMode, first, setFirst, until, setUntil, picked, setPicked, dates, existing }
 }
 
 type SessionDates = ReturnType<typeof useSessionDates>
 
 const MODES: Array<{ id: DatesMode; label: string }> = [
-  { id: 'weekly', label: 'Chaque semaine' },
-  { id: 'pick', label: 'Dates au choix' },
+  { id: 'weekly', label: DATES_MODE_LABELS.weekly },
+  { id: 'pick', label: DATES_MODE_LABELS.pick },
 ]
 
 function SessionDatesField({ state }: { state: SessionDates }) {
@@ -370,11 +367,7 @@ function SessionDatesField({ state }: { state: SessionDates }) {
           />
         )}
       </div>
-      <p className="mt-1 text-xs text-slate-500">
-        {count === 0
-          ? 'Choisissez au moins une date.'
-          : `${count} séance${count > 1 ? 's' : ''}. Chaque date se retire ensuite une à une.`}
-      </p>
+      <p className="mt-1 text-xs text-slate-500">{sessionDatesHint(count)}</p>
     </fieldset>
   )
 }

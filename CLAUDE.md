@@ -870,8 +870,8 @@ invisible dans le diff comme dans la revue.
   dates d'une série dirigée, supprimer. `/entrainements` ne garde que les
   séances — annuler, rétablir, retirer une date — et un « Gérer les séries »
   vers `/club#entrainements` pour qui tient une série. Dans l'app, une section
-  Entraînements du Club, une entrée de plus dans le rail d'une tablette, en
-  lecture : chaque série y mène à ses séances, et la créer reste sur le site.
+  Entraînements du Club, une entrée de plus dans le rail d'une tablette, où
+  l'on fait la même chose que sur le web ; chaque série y mène à ses séances.
   Un essai en section repliable en tête de la page Entraînements a été écarté.
 - **« Ma disponibilité », pas « Vous venez ? »** — et le même contrôle, pas un
   sosie : `MyAvailability` dans l'app, `MyAvailabilityField` autour
@@ -906,10 +906,17 @@ invisible dans le diff comme dans la revue.
   calendrier (`MultiDateCalendar`) pour un encadrant dont le planning n'est pas
   hebdomadaire. Les dates que la série a déjà sont montrées et jamais
   comptées deux fois ; le passé ne se coche pas.
-- **L'app lit et annule ; le web crée.** Annuler ou rétablir se décide dans le
-  gymnase, donc l'app le fait ; créer une série et poser ses dates restent sur
-  le web, où il y a la place de le faire — la section Entraînements du Club,
-  dans l'app, le dit à l'administrateur.
+- **L'app tient les séries comme le web** : `TrainingEditorSheet` est le
+  formulaire de `TrainingEditor`, champ pour champ, et `AddDatesSheet` celui
+  d'`AddDatesDialog`. **Sans sélecteur natif** : une heure se règle par − / +
+  et les minutes par quart d'heure (`TimeField`), une date s'ouvre sur un mois
+  (`MonthCalendar`, le calendrier du web en natif). Un module natif de date
+  aurait exigé une nouvelle version sur les stores là où ceci part par une mise
+  à jour. `sessionDates` est la règle des dates des deux côtés, pour que « 3
+  séances » soient les trois mêmes.
+- La création attend l'API dans l'app aussi, et **refuse hors connexion** :
+  annoncer une série enregistrée qui n'a jamais quitté le téléphone est le
+  piège de #495.
 - **Les rappels sont le registre de #495 sous deux autres `kind`**
   (`training_reminder`, `training_cancelled`), la clé d'occurrence
   (`training@date`) dans la colonne `game_id`. La question reste « qui, parmi

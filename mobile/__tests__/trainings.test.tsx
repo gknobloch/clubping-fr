@@ -70,6 +70,14 @@ beforeEach(() => {
   fns = {
     setTrainingAvailability: jest.fn(),
     setTrainingSessionState: jest.fn(),
+    addTraining: jest.fn(async (_club: string, draft: Record<string, unknown>) => ({
+      ok: true, training: { ...draft, id: 't-new', clubId: CLUB },
+    })),
+    updateTraining: jest.fn(async (_club: string, id: string, draft: Record<string, unknown>) => ({
+      ok: true, training: { ...draft, id, clubId: CLUB },
+    })),
+    deleteTraining: jest.fn(),
+    addTrainingDates: jest.fn(),
   }
   const sessions: TrainingSession[] = [
     { trainingId: 't-dirige', date: '2026-09-30', cancelled: false },
@@ -297,20 +305,134 @@ describe('l’onglet Club — les séries du club', () => {
     expect(section).toHaveTextContent(/Responsable : Quentin Colle/)
     fireEvent.press(screen.getByTestId('club-training-t-dirige'))
     expect(mockPush).toHaveBeenCalledWith('/entrainements')
-    // Nothing to run here: series are created on the web.
-    expect(section).not.toHaveTextContent(/se fait sur le site/)
-  })
-
-  it('dit à l’administrateur où les créer', () => {
-    mockAuth.user = member('ca', 'Virginie', 'Barlinge', { role: 'club_admin', isPlayer: false })
-    render(<ClubScreen />)
-    expect(screen.getByTestId('club-trainings')).toHaveTextContent(/se fait sur le site/)
+    // A member reads, and runs nothing.
+    expect(screen.queryByTestId('club-training-new')).toBeNull()
+    expect(screen.queryByTestId('club-training-edit-t-mardi')).toBeNull()
+    expect(screen.queryByTestId('club-training-dates-t-dirige')).toBeNull()
   })
 
   it('épargne la section à un membre d’un club qui n’en publie aucune', () => {
     mockData.trainings = []
     render(<ClubScreen />)
     expect(screen.queryByTestId('club-trainings')).toBeNull()
+  })
+})
+
+describe('l’onglet Club — tenir les séries depuis l’app', () => {
+  const admin = () => { mockAuth.user = member('ca', 'Virginie', 'Barlinge', { role: 'club_admin', isPlayer: false }) }
+  beforeEach(() => jest.spyOn(Alert, 'alert').mockImplementation(() => {}))
+
+  it('crée un créneau libre : type, nom, jour, heure', async () => {
+    admin()
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-training-new'))
+    fireEvent.press(screen.getByTestId('training-kind-regular'))
+    fireEvent.changeText(screen.getByTestId('training-name'), 'Loisirs du jeudi')
+    fireEvent.press(screen.getByTestId('training-weekday-4'))
+    // 20h by default, an hour later; the end stays two hours after 20h.
+    fireEvent.press(screen.getByTestId('training-start-plus'))
+    expect(screen.getByTestId('training-start-value')).toHaveTextContent('21h')
+    fireEvent.press(screen.getByTestId('training-start-min-30'))
+    fireEvent.press(screen.getByTestId('training-group-g-jeunes'))
+    fireEvent.press(screen.getByTestId('training-editor-save'))
+    await screen.findByTestId('club-trainings')
+    expect(fns.addTraining).toHaveBeenCalledWith(CLUB, expect.objectContaining({
+      kind: 'regular', displayName: 'Loisirs du jeudi', weekday: 4, startTime: '21:30', endTime: '22:00',
+      memberGroupIds: ['g-jeunes'], managerIds: [],
+    }))
+    expect(fns.addTrainingDates).not.toHaveBeenCalled()
+  })
+
+  it('crée une série dirigée sur des dates cochées, avec son responsable', async () => {
+    admin()
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-training-new'))
+    fireEvent.changeText(screen.getByTestId('training-name'), 'Dirigé adultes')
+    fireEvent.changeText(screen.getByTestId('training-manager-search'), 'lotz')
+    fireEvent.press(screen.getByTestId('training-manager-add-p2'))
+    expect(screen.getByTestId('training-manager-p2')).toBeTruthy()
+    // No date yet: nothing to save.
+    expect(screen.getByTestId('training-editor-save').props.accessibilityState).toEqual({ disabled: true })
+    fireEvent.press(screen.getByTestId('training-dates-mode-pick'))
+    expect(screen.getByTestId('training-dates-calendar-month')).toHaveTextContent('Septembre 2026')
+    fireEvent.press(screen.getByTestId('training-dates-calendar-2026-09-29'))
+    fireEvent.press(screen.getByTestId('training-dates-calendar-next'))
+    fireEvent.press(screen.getByTestId('training-dates-calendar-2026-10-08'))
+    expect(screen.getByTestId('training-dates-count')).toHaveTextContent(/^2 séances/)
+    fireEvent.press(screen.getByTestId('training-editor-save'))
+    await screen.findByTestId('club-trainings')
+    expect(fns.addTraining).toHaveBeenCalledWith(CLUB, expect.objectContaining({
+      kind: 'guided', displayName: 'Dirigé adultes', managerIds: ['p2'],
+    }))
+    expect(fns.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-new', ['2026-09-29', '2026-10-08'])
+  })
+
+  it('pose une course hebdomadaire de dates', async () => {
+    admin()
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-training-new'))
+    fireEvent.changeText(screen.getByTestId('training-name'), 'Dirigé')
+    fireEvent.press(screen.getByTestId('training-first-date'))
+    fireEvent.press(screen.getByTestId('training-first-date-calendar-2026-09-30'))
+    fireEvent.press(screen.getByTestId('training-repeat-until'))
+    fireEvent.press(screen.getByTestId('training-repeat-until-calendar-next'))
+    fireEvent.press(screen.getByTestId('training-repeat-until-calendar-2026-10-14'))
+    expect(screen.getByTestId('training-dates-count')).toHaveTextContent(/^3 séances/)
+    fireEvent.press(screen.getByTestId('training-editor-save'))
+    await screen.findByTestId('club-trainings')
+    expect(fns.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-new', ['2026-09-30', '2026-10-07', '2026-10-14'])
+  })
+
+  it('garde la feuille ouverte sur un refus, et dit pourquoi', async () => {
+    admin()
+    fns.addTraining.mockResolvedValueOnce({ ok: false, message: 'Vérifiez les horaires : la fin doit suivre le début.' })
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-training-new'))
+    fireEvent.press(screen.getByTestId('training-kind-regular'))
+    fireEvent.changeText(screen.getByTestId('training-name'), 'Libre')
+    fireEvent.press(screen.getByTestId('training-editor-save'))
+    expect(await screen.findByTestId('training-editor-error')).toHaveTextContent(/horaires/)
+    expect(screen.getByTestId('training-editor')).toBeTruthy()
+  })
+
+  it('modifie une série, sans en changer le type', async () => {
+    admin()
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-training-edit-t-mardi'))
+    expect(screen.queryByTestId('training-kind-guided')).toBeNull()
+    expect(screen.getByTestId('training-name').props.value).toBe('Libre du mardi')
+    fireEvent.changeText(screen.getByTestId('training-name'), 'Libre du mardi soir')
+    fireEvent.press(screen.getByTestId('training-editor-save'))
+    await screen.findByTestId('club-trainings')
+    expect(fns.updateTraining).toHaveBeenCalledWith(CLUB, 't-mardi', expect.objectContaining({
+      displayName: 'Libre du mardi soir', weekday: 2, startTime: '20:00', endTime: '22:00',
+    }))
+  })
+
+  it('supprime après avoir demandé', () => {
+    admin()
+    render(<ClubScreen />)
+    fireEvent.press(screen.getByTestId('club-training-delete-t-mardi'))
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as Array<{ text: string; onPress?: () => void }>
+    expect(fns.deleteTraining).not.toHaveBeenCalled()
+    buttons.find((b) => b.text === 'Supprimer')?.onPress?.()
+    expect(fns.deleteTraining).toHaveBeenCalledWith(CLUB, 't-mardi')
+  })
+
+  it('laisse au responsable d’une série ses dates, et rien d’autre', () => {
+    mockAuth.user = member('coach', 'Julien', 'Coach')
+    render(<ClubScreen />)
+    expect(screen.queryByTestId('club-training-new')).toBeNull()
+    expect(screen.queryByTestId('club-training-edit-t-dirige')).toBeNull()
+    expect(screen.queryByTestId('club-training-dates-t-mardi')).toBeNull()
+    fireEvent.press(screen.getByTestId('club-training-dates-t-dirige'))
+    fireEvent.press(screen.getByTestId('training-dates-mode-pick'))
+    // The date the series has is shown, not offered.
+    expect(screen.getByTestId('training-dates-calendar-2026-09-30').props.accessibilityState)
+      .toEqual({ selected: false, disabled: true })
+    fireEvent.press(screen.getByTestId('training-dates-calendar-2026-09-29'))
+    fireEvent.press(screen.getByTestId('training-dates-save'))
+    expect(fns.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-dirige', ['2026-09-29'])
   })
 })
 

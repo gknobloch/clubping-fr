@@ -122,7 +122,19 @@ export default function ClubScreen() {
         )
       case 'entrainements':
         return (
-          <ClubTrainingsSection club={club} series={series} groups={groups} users={users} canManage={canManageSeries} />
+          <ClubTrainingsSection
+            club={club}
+            series={series}
+            sessions={data.trainingSessions}
+            groups={groups}
+            users={users}
+            viewer={user}
+            canManage={canManageSeries}
+            onCreate={(draft) => data.addTraining(club.id, draft)}
+            onUpdate={(trainingId, draft) => data.updateTraining(club.id, trainingId, draft)}
+            onDelete={(trainingId) => data.deleteTraining(club.id, trainingId)}
+            onAddDates={(trainingId, dates) => data.addTrainingDates(club.id, trainingId, dates)}
+          />
         )
       case 'competitions':
         return (

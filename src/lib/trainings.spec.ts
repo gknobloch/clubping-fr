@@ -4,7 +4,7 @@ import {
   addDays, answerCounts, answerTally, upcomingSessionsFor, moreSessionsLabel, accueilColumn, mayManageSchedule, buildTrainingEvent,
   seriesCalendarDates, seriesCalendarPath, trainingEventUid, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
   isoWeekday, occurrenceKey, parseOccurrenceKey, recurrenceLabel, trainingCancelledPush, trainingRefusal,
-  validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates,
+  validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates, sessionDates, sessionDatesHint,
   trainingOccurrences, trainingReminderPush, trainingRemindersDue, upcomingOccurrences,
   type OccurrenceAudience,
 } from './trainings'
@@ -406,5 +406,17 @@ describe('calendar', () => {
     expect(trainingEventUid('t-dirige', '2026-10-01')).toBe('t-dirige-2026-10-01@clubping.fr')
     expect(seriesCalendarPath({ id: 't dirigé', calendarToken: 'abc' }))
       .toBe('/trainings/t%20dirig%C3%A9/calendar.ics?token=abc')
+  })
+})
+
+describe('sessionDates', () => {
+  it('reads a weekly run or the dates picked, never one the series has', () => {
+    expect(sessionDates({ mode: 'weekly', first: '2026-10-01', until: '2026-10-15', picked: [] }, ['2026-10-08']))
+      .toEqual(['2026-10-01', '2026-10-15'])
+    expect(sessionDates({ mode: 'pick', first: '', until: '', picked: ['2026-11-05', '2026-10-08'] }))
+      .toEqual(['2026-10-08', '2026-11-05'])
+    expect(sessionDates({ mode: 'weekly', first: '', until: '', picked: ['2026-10-08'] })).toEqual([])
+    expect(sessionDatesHint(0)).toBe('Choisissez au moins une date.')
+    expect(sessionDatesHint(2)).toMatch(/^2 séances\./)
   })
 })

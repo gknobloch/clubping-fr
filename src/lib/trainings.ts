@@ -91,6 +91,33 @@ export function trainingAddress(training: Pick<Training, 'clubId' | 'addressId'>
 /** The place in a few words — the address's label, or its city. */
 export const placeLabel = (a: Address | undefined) => (a ? a.label || a.city : undefined)
 
+/** The two ways a guided series' dates are entered (#608). */
+export type DatesMode = 'weekly' | 'pick'
+
+export const DATES_MODE_LABELS: Record<DatesMode, string> = {
+  weekly: 'Chaque semaine',
+  pick: 'Dates au choix',
+}
+
+/**
+ * The dates a dates form means — a weekly run, or those ticked on a calendar —
+ * less those the series already has, which are never counted twice. One rule
+ * for the web's form and the app's, so « 3 séances » is the same three.
+ */
+export function sessionDates(
+  entry: { mode: DatesMode; first: string; until: string; picked: string[] },
+  existing: string[] = [],
+): string[] {
+  const raw = entry.mode === 'weekly' ? weeklyDates(entry.first, entry.until || undefined) : [...entry.picked].sort()
+  return raw.filter((d) => !existing.includes(d))
+}
+
+/** « 3 séances. Chaque date se retire ensuite une à une. » — or what is missing. */
+export const sessionDatesHint = (count: number) =>
+  count === 0
+    ? 'Choisissez au moins une date.'
+    : `${count} séance${count > 1 ? 's' : ''}. Chaque date se retire ensuite une à une.`
+
 /**
  * A coach's weekly run of dates, from the first to `until` inclusive — how a
  * guided schedule is entered in one go, then trimmed date by date. Capped, so
