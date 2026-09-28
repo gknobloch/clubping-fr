@@ -60,6 +60,8 @@ test.describe('Entraînements — un administrateur de club', () => {
 
     const thursdays = cards(page, 'Loisirs du jeudi')
     await expect(thursdays.first()).toContainText('20h – 21h30')
+    // The series sit folded at the top of the page; unfolded, the new slot is there.
+    await page.getByRole('button', { name: /Créneaux et séries/ }).click()
     await expect(page.getByText('Tous les jeudis, 20h – 21h30')).toBeVisible()
 
     await thursdays.first().getByRole('button', { name: /^Actions —/ }).click()
