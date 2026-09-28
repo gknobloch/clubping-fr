@@ -16,8 +16,10 @@ test.describe('Player — Accueil', () => {
   test('setting availability updates the "À confirmer" tile', async ({ page }) => {
     await expect(page.getByText('1 match', { exact: true })).toBeVisible()
     // Scoped: from md: up the card carries the team's answers too, so a bare
-    // "OUI" is two controls — mine, and my own row in the roster (#461).
-    await page.getByRole('group', { name: 'Ma disponibilité' }).getByRole('button', { name: 'OUI' }).click()
+    // "OUI" is two controls — mine, and my own row in the roster (#461). And
+    // to the matches: a guided training below asks « Ma disponibilité » too (#608).
+    await page.getByRole('region', { name: 'Prochains matchs' })
+      .getByRole('group', { name: 'Ma disponibilité' }).getByRole('button', { name: 'OUI' }).click()
     await expect(page.getByText('0 matchs')).toBeVisible()
   })
 

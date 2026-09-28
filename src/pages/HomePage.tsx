@@ -165,9 +165,11 @@ export function HomePage() {
           {/* The next match, full width: from md: up the card splits in two on
               its own — the game on the left, the team's answers on the right —
               so it no longer shares the row with two counters (#461). */}
-          <div className="flex flex-col gap-3">
+          {/* A named region, as « Prochains entraînements » is below it: both
+              carry a « Ma disponibilité », and each is found by its own (#608). */}
+          <section aria-labelledby="home-matches" className="flex flex-col gap-3">
             <div className="flex h-7 items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochains matchs</p>
+              <h2 id="home-matches" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochains matchs</h2>
               {upcoming.length > 1 && (
                 <div className="flex items-center gap-1">
                   <PhaseSwitchButton
@@ -441,7 +443,7 @@ export function HomePage() {
                 )
               })()
             )}
-          </div>
+          </section>
 
           {/* Season facts, not match facts: a footer under the card rather than
               a column beside it. One line each from md: up — label at one end,
