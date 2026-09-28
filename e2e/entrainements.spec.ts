@@ -44,11 +44,13 @@ test.describe('Entraînements — un membre', () => {
 test.describe('Entraînements — un administrateur de club', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, 'club.admin')
-    await page.goto('/entrainements')
   })
 
-  test('creates a weekly slot, then calls one evening off', async ({ page }) => {
-    await page.getByRole('button', { name: 'Nouvel entraînement' }).click()
+  test('creates a weekly slot on the club page, then calls one evening off', async ({ page }) => {
+    // The series are the club's: created from its page (#608).
+    await page.goto('/club')
+    const series = page.getByRole('region', { name: 'Entraînements' })
+    await series.getByRole('button', { name: '+ Nouvel entraînement' }).click()
     const dialog = page.getByRole('dialog')
     await dialog.getByText('Entraînement libre', { exact: true }).click()
     await dialog.getByLabel('Nom').fill('Loisirs du jeudi')
@@ -57,17 +59,25 @@ test.describe('Entraînements — un administrateur de club', () => {
     await dialog.getByLabel(/^Fin/).fill('21:30')
     await dialog.getByRole('button', { name: 'Enregistrer' }).click()
     await expect(dialog).toHaveCount(0)
+    await expect(series.getByText('Tous les jeudis, 20h – 21h30')).toBeVisible()
 
+    // Its sessions are on the Entraînements page — reached in-app, since the
+    // demo data lives only as long as the page does.
+    await page.getByRole('link', { name: 'Entraînements' }).first().click()
     const thursdays = cards(page, 'Loisirs du jeudi')
     await expect(thursdays.first()).toContainText('20h – 21h30')
-    // The series sit folded at the top of the page; unfolded, the new slot is there.
-    await page.getByRole('button', { name: /Créneaux et séries/ }).click()
-    await expect(page.getByText('Tous les jeudis, 20h – 21h30')).toBeVisible()
 
     await thursdays.first().getByRole('button', { name: /^Actions —/ }).click()
     await page.getByRole('menuitem', { name: 'Annuler la séance' }).click()
     await page.getByRole('dialog').getByLabel(/Motif/).fill('Gymnase fermé')
     await page.getByRole('dialog').getByRole('button', { name: 'Annuler la séance' }).click()
     await expect(thursdays.first()).toContainText('Annulée — Gymnase fermé')
+  })
+
+  test('has the way from the sessions to the series', async ({ page }) => {
+    await page.goto('/entrainements')
+    await page.getByRole('button', { name: 'Gérer les séries' }).click()
+    await expect(page).toHaveURL(/\/club#entrainements$/)
+    await expect(page.getByRole('region', { name: 'Entraînements' })).toBeVisible()
   })
 })

@@ -122,6 +122,13 @@ describe('a member reading the calendar', () => {
     expect(data.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
   })
 
+  it('gives a member no way to the series\' management', () => {
+    auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Gérer les séries' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Nouvel entraînement/ })).not.toBeInTheDocument()
+  })
+
   it('does not ask someone the session is not for', () => {
     auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
     renderPage()
@@ -145,55 +152,22 @@ describe('the list (#608)', () => {
     expect(card('Dirigé jeunes, jeudi 10 décembre')).toBeInTheDocument()
   })
 
-  it('puts the series first, folded, and remembers it unfolded', async () => {
-    const u = user()
-    const { unmount } = renderPage()
-    const toggle = screen.getByRole('button', { name: /Créneaux et séries \(2\)/ })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('Tous les mardis, 20h – 22h')).not.toBeInTheDocument()
-    // Above the sessions in the page.
-    expect(toggle.compareDocumentPosition(screen.getByText('Prochaines séances')) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy()
-    await u.click(toggle)
-    expect(screen.getByText(/Tous les mardis, 20h – 22h/)).toBeInTheDocument()
-    unmount()
-    renderPage()
-    expect(screen.getByRole('button', { name: /Créneaux et séries/ })).toHaveAttribute('aria-expanded', 'true')
-  })
+
 })
 
 describe('the manager of a guided series (#608)', () => {
   beforeEach(() => { auth.user = { id: 'coach', role: 'player', clubId: CLUB, isPlayer: true } })
 
-  it('runs its dates, and nothing of the series itself nor of the regular slot', async () => {
-    const u = user()
+  it('calls off a session of their series, and nothing of the regular slot', async () => {
     renderPage()
-    expect(screen.queryByRole('button', { name: 'Nouvel entraînement' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Actions — Dirigé jeunes, mercredi 30 septembre' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Actions — Libre du mardi, mardi 29 septembre' })).not.toBeInTheDocument()
-    await u.click(screen.getByRole('button', { name: /Créneaux et séries/ }))
-    await u.click(screen.getByRole('button', { name: 'Actions — Dirigé jeunes' }))
-    expect(screen.getByRole('menuitem', { name: 'Ajouter des dates' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Modifier' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Supprimer' })).not.toBeInTheDocument()
+    // And has the way to the series, on the club's page.
+    expect(screen.getByRole('button', { name: 'Gérer les séries' })).toBeInTheDocument()
   })
 })
 
 describe('a club admin running it', () => {
-  it('names who runs a guided series', async () => {
-    auth.user = { id: 'ca', role: 'club_admin', clubId: CLUB, isPlayer: false }
-    data.addTraining.mockResolvedValue({ ok: true, training: { ...dirige, id: 't-new' } })
-    const u = user()
-    renderPage()
-    await u.click(screen.getByRole('button', { name: 'Nouvel entraînement' }))
-    await u.type(screen.getByLabelText('Nom'), 'Dirigé adultes')
-    await u.selectOptions(screen.getByRole('combobox', { name: 'Ajouter un responsable' }), 'p2')
-    expect(screen.getByRole('button', { name: 'Retirer Enzo Lotz' })).toBeInTheDocument()
-    await u.type(screen.getByLabelText('Première séance'), '2026-10-01')
-    await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
-    expect(data.addTraining).toHaveBeenCalledWith(CLUB, expect.objectContaining({ managerIds: ['p2'] }))
-  })
-
   beforeEach(() => { auth.user = { id: 'ca', role: 'club_admin', clubId: CLUB, isPlayer: false } })
 
   it('calls one Tuesday off, with a reason', async () => {
@@ -216,69 +190,8 @@ describe('a club admin running it', () => {
     expect(data.setTrainingSessionState).toHaveBeenCalledWith(CLUB, 't-mardi', '2026-10-06', { cancelled: false })
   })
 
-  it('creates a guided series with its weekly run of dates', async () => {
-    data.addTraining.mockResolvedValue({ ok: true, training: { ...dirige, id: 't-new' } })
-    const u = user()
-    renderPage()
-    await u.click(screen.getByRole('button', { name: 'Nouvel entraînement' }))
-    await u.type(screen.getByLabelText('Nom'), 'Dirigé adultes')
-    await u.click(screen.getByRole('button', { name: 'Jeunes' }))
-    await u.type(screen.getByLabelText('Première séance'), '2026-10-01')
-    await u.type(screen.getByLabelText(/jusqu’au/), '2026-10-15')
-    expect(screen.getByText(/3 séances/)).toBeInTheDocument()
-    await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
-    expect(data.addTraining).toHaveBeenCalledWith(CLUB, expect.objectContaining({
-      kind: 'guided', displayName: 'Dirigé adultes', memberGroupIds: ['g-jeunes'], startTime: '20:00',
-    }))
-    expect(data.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-new', ['2026-10-01', '2026-10-08', '2026-10-15'])
-  })
 
-  it('creates a guided series on dates picked in a calendar', async () => {
-    data.addTraining.mockResolvedValue({ ok: true, training: { ...dirige, id: 't-new' } })
-    const u = user()
-    renderPage()
-    await u.click(screen.getByRole('button', { name: 'Nouvel entraînement' }))
-    await u.type(screen.getByLabelText('Nom'), 'Dirigé irrégulier')
-    await u.click(screen.getByLabelText('Dates au choix'))
-    const calendar = screen.getByRole('group', { name: 'Dates des séances' })
-    // Opens on this month; the past cannot be picked.
-    expect(within(calendar).getByText('Septembre 2026')).toBeInTheDocument()
-    expect(within(calendar).getByRole('button', { name: 'vendredi 25 septembre' })).toBeDisabled()
-    await u.click(within(calendar).getByRole('button', { name: 'mardi 29 septembre' }))
-    await u.click(within(calendar).getByRole('button', { name: 'Mois suivant' }))
-    await u.click(within(calendar).getByRole('button', { name: 'jeudi 8 octobre' }))
-    await u.click(within(calendar).getByRole('button', { name: 'jeudi 22 octobre' }))
-    // A second tap takes a date back out.
-    await u.click(within(calendar).getByRole('button', { name: 'jeudi 22 octobre' }))
-    expect(screen.getByText(/2 séances/)).toBeInTheDocument()
-    await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
-    expect(data.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-new', ['2026-09-29', '2026-10-08'])
-  })
 
-  it('adds dates to a series without offering the ones it has', async () => {
-    const u = user()
-    renderPage()
-    await u.click(screen.getByRole('button', { name: /Créneaux et séries/ }))
-    await u.click(screen.getByRole('button', { name: 'Actions — Dirigé jeunes' }))
-    await u.click(screen.getByRole('menuitem', { name: 'Ajouter des dates' }))
-    await u.click(screen.getByLabelText('Dates au choix'))
-    const calendar = screen.getByRole('group', { name: 'Dates des séances' })
-    expect(within(calendar).getByRole('button', { name: 'mercredi 30 septembre — déjà prévue' })).toBeDisabled()
-    await u.click(within(calendar).getByRole('button', { name: 'mardi 29 septembre' }))
-    await u.click(screen.getByRole('button', { name: 'Ajouter' }))
-    expect(data.addTrainingDates).toHaveBeenCalledWith(CLUB, 't-dirige', ['2026-09-29'])
-  })
 
-  it('keeps the form open on a refusal, saying why', async () => {
-    data.addTraining.mockResolvedValue({ ok: false, message: 'Vérifiez les horaires : la fin doit suivre le début.' })
-    const u = user()
-    renderPage()
-    await u.click(screen.getByRole('button', { name: 'Nouvel entraînement' }))
-    await u.click(screen.getByLabelText('Entraînement libre'))
-    await u.type(screen.getByLabelText('Nom'), 'Libre')
-    await u.click(screen.getByRole('button', { name: 'Enregistrer' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('horaires')
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-  })
 })

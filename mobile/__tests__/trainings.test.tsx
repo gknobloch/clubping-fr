@@ -6,6 +6,7 @@ import type {
   Club, MemberGroup, Training, TrainingAvailability, TrainingSession, User,
 } from '@shared/types'
 import TrainingsScreen from '@/app/(tabs)/entrainements'
+import ClubScreen from '@/app/(tabs)/club'
 import { NextTrainingSection } from '@/components/NextTrainingSection'
 import MonCompteScreen from '@/app/(tabs)/compte'
 import { setNotificationPreferences } from '@/utils/push'
@@ -266,6 +267,32 @@ describe('le responsable d’une série dirigée', () => {
     render(<TrainingsScreen />)
     expect(screen.getByTestId('training-cancel-t-dirige-2026-09-30')).toBeTruthy()
     expect(screen.queryByTestId('training-cancel-t-mardi-2026-09-29')).toBeNull()
+  })
+})
+
+describe('l’onglet Club — les séries du club', () => {
+  it('les liste, avec qui les tient, et mène à leurs séances', () => {
+    mockData.trainings = [mardi, { ...dirige, managerIds: ['p1'] }]
+    render(<ClubScreen />)
+    const section = screen.getByTestId('club-trainings')
+    expect(section).toHaveTextContent(/Tous les mardis, 20h – 22h/)
+    expect(section).toHaveTextContent(/Responsable : Quentin Colle/)
+    fireEvent.press(screen.getByTestId('club-training-t-dirige'))
+    expect(mockPush).toHaveBeenCalledWith('/entrainements')
+    // Nothing to run here: series are created on the web.
+    expect(section).not.toHaveTextContent(/se fait sur le site/)
+  })
+
+  it('dit à l’administrateur où les créer', () => {
+    mockAuth.user = member('ca', 'Virginie', 'Barlinge', { role: 'club_admin', isPlayer: false })
+    render(<ClubScreen />)
+    expect(screen.getByTestId('club-trainings')).toHaveTextContent(/se fait sur le site/)
+  })
+
+  it('épargne la section à un membre d’un club qui n’en publie aucune', () => {
+    mockData.trainings = []
+    render(<ClubScreen />)
+    expect(screen.queryByTestId('club-trainings')).toBeNull()
   })
 })
 

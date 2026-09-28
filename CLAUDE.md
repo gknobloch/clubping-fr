@@ -862,9 +862,17 @@ invisible dans le diff comme dans la revue.
   une fin, et le libellé de la colonne dit « 8 à venir » ; « Et les
   suivantes » pour un créneau qui n'en a pas (`isOpenEnded`), où un total
   serait un nombre que personne ne lit.
-- **« Créneaux et séries » est en tête de la page web, replié par défaut** : ce
-  dont la liste est faite, lu une fois puis encombrant. Le choix est retenu
-  sur ce navigateur (`localStorage`, confort de lecteur seulement).
+- **Les séries sont au Club ; leurs séances, aux Entraînements.** Une série
+  décrit le club — ce qu'il entraîne, quand, où, pour qui, et qui la tient —
+  alors que la page Entraînements est la semaine qu'on lit et à laquelle on
+  répond. Sur le web, `ClubTrainings` est une section de `/club` (et de
+  `/clubs/:id` pour un administrateur général) : créer, modifier, poser les
+  dates d'une série dirigée, supprimer. `/entrainements` ne garde que les
+  séances — annuler, rétablir, retirer une date — et un « Gérer les séries »
+  vers `/club#entrainements` pour qui tient une série. Dans l'app, une section
+  Entraînements du Club, une entrée de plus dans le rail d'une tablette, en
+  lecture : chaque série y mène à ses séances, et la créer reste sur le site.
+  Un essai en section repliable en tête de la page Entraînements a été écarté.
 - **« Ma disponibilité », pas « Vous venez ? »** : les mots et la mise en page
   de la carte du match, pour qu'un membre lise les deux questions comme une
   seule.
@@ -897,7 +905,8 @@ invisible dans le diff comme dans la revue.
   comptées deux fois ; le passé ne se coche pas.
 - **L'app lit et annule ; le web crée.** Annuler ou rétablir se décide dans le
   gymnase, donc l'app le fait ; créer une série et poser ses dates restent sur
-  le web, où il y a la place de le faire.
+  le web, où il y a la place de le faire — la section Entraînements du Club,
+  dans l'app, le dit à l'administrateur.
 - **Les rappels sont le registre de #495 sous deux autres `kind`**
   (`training_reminder`, `training_cancelled`), la clé d'occurrence
   (`training@date`) dans la colonne `game_id`. La question reste « qui, parmi

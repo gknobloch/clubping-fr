@@ -5,6 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView, ChannelIcon, channelTypeLabel } from '@/components/ClubDetailView'
 import { ClubAdmins } from '@/components/ClubAdmins'
 import { ClubMemberGroups } from '@/components/ClubMemberGroups'
+import { ClubTrainings } from '@/components/ClubTrainings'
 import { ClubCompetitions } from '@/components/ClubCompetitions'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
@@ -59,6 +60,7 @@ export function MyClubPage() {
         <ClubAdmins clubId={currentClub.id} idPrefix="my-club" variant="section" />
         <ClubMemberGroups clubId={currentClub.id} idPrefix="my-club" variant="section" />
         <ClubCompetitions clubId={currentClub.id} idPrefix="my-club" variant="section" />
+        <ClubTrainings clubId={currentClub.id} idPrefix="my-club" variant="section" />
       </div>
     )
   }
@@ -147,6 +149,10 @@ export function MyClubPage() {
       {/* Which group each competition is reserved to (#604) — after the groups,
           since that is what it chooses among. Its own screen until #604. */}
       <ClubCompetitions clubId={currentClub.id} idPrefix="my-club" variant="section" />
+
+      {/* The club's training series (#608): what it trains, when, where and
+          for whom. Their sessions are on the Entraînements page. */}
+      <ClubTrainings clubId={currentClub.id} idPrefix="my-club" variant="section" />
     </div>
   )
 }

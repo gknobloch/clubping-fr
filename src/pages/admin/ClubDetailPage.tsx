@@ -5,6 +5,7 @@ import { ClubDetailView } from '@/components/ClubDetailView'
 import { ClubAdmins } from '@/components/ClubAdmins'
 import { ClubMemberGroups } from '@/components/ClubMemberGroups'
 import { ClubCompetitions } from '@/components/ClubCompetitions'
+import { ClubTrainings } from '@/components/ClubTrainings'
 import { ClubImportPreview } from '@/components/ClubImportPreview'
 import { ModalShell } from '@/components/ModalShell'
 import { BASE_BUTTON_CLASS, DANGER_BUTTON_CLASS, NEUTRAL_BUTTON_CLASS, OUTLINE_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -148,6 +149,7 @@ export function ClubDetailPage() {
       <ClubAdmins clubId={club.id} idPrefix="admin-club" />
       <ClubMemberGroups clubId={club.id} idPrefix="admin-club" />
       <ClubCompetitions clubId={club.id} idPrefix="admin-club" />
+      <ClubTrainings clubId={club.id} idPrefix="admin-club" />
 
       <div className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-sm font-medium text-slate-800">Synchronisation FFTT</h2>
