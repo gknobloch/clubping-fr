@@ -14,7 +14,7 @@ import { offerTrainingCalendar } from '@/utils/trainingCalendar'
 import { clubMemberGroups } from '@shared/lib/memberGroups'
 import { sortByName } from '@shared/lib/sortByName'
 import {
-  ACCUEIL_SESSIONS, TRAINING_KIND_PLURALS, audienceLabel, expectedMemberIds, moreSessionsLabel, placeLabel,
+  TRAINING_KIND_PLURALS, accueilColumn, audienceLabel, expectedMemberIds, moreSessionsLabel, placeLabel,
   trainingAddress, upcomingSessionsFor, type TrainingOccurrence,
 } from '@shared/lib/trainings'
 import type { MemberGroup, TrainingKind } from '@shared/types'
@@ -26,11 +26,12 @@ import type { MemberGroup, TrainingKind } from '@shared/types'
 // mêlent pas. Une colonne par sorte : le créneau libre d'un côté, la série
 // dirigée de l'autre, côte à côte sur une tablette et empilées sur un
 // téléphone. Chacune est un carrousel des trois prochaines séances de ce
-// membre, avec les points du carrousel des matchs — et, s'il y en a plus, le
-// libellé le dit (« 8 à venir ») et une dernière page mène aux autres. Chaque
-// carte est celle
-// de l'onglet — une séance dirigée se répond donc de la même façon aux deux
-// endroits. Rien du tout quand aucune séance ne l'attend.
+// membre, avec les points du carrousel des matchs — et, s'il y en a plus, une
+// dernière page mène aux autres : « +5 autres séances » pour une série qui a
+// une fin (le libellé dit aussi « 8 à venir »), « Et les suivantes » pour un
+// créneau qui n'en a pas. Chaque carte est celle de l'onglet — une séance
+// dirigée se répond donc de la même façon aux deux endroits. Rien du tout
+// quand aucune séance ne l'attend.
 // ---------------------------------------------------------------------------
 
 export function NextTrainingSection() {
@@ -93,8 +94,7 @@ function TrainingCarousel({
   const [page, setPage] = useState(0)
   // The first few, then a last page saying how many more there are — a row
   // that stopped at three without a word would read as « there are three ».
-  const shown = sessions.slice(0, ACCUEIL_SESSIONS)
-  const more = sessions.length - shown.length
+  const { shown, hasMore, more, total } = accueilColumn(sessions, todayIso())
 
   const expectedAt = (o: TrainingOccurrence) => {
     const ids = expectedMemberIds(o.training, groups, users)
@@ -113,7 +113,7 @@ function TrainingCarousel({
     >
       <Text style={s.kindLabel}>
         {TRAINING_KIND_PLURALS[kind]}
-        {more > 0 && <Text style={s.kindCount}> · {sessions.length} à venir</Text>}
+        {total !== null && <Text style={s.kindCount}> · {total} à venir</Text>}
       </Text>
       {/* Measured before it is drawn: a page is the column's width, and a
           pager guessing it would snap between half cards. */}
@@ -122,7 +122,7 @@ function TrainingCarousel({
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          scrollEnabled={shown.length + (more > 0 ? 1 : 0) > 1}
+          scrollEnabled={shown.length + (hasMore ? 1 : 0) > 1}
           style={{ width }}
           onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
         >
@@ -146,17 +146,24 @@ function TrainingCarousel({
               />
             </View>
           ))}
-          {more > 0 && (
+          {hasMore && (
             <View style={{ width }}>
               <TouchableOpacity
                 testID={`home-trainings-${kind}-more`}
                 style={s.more}
                 onPress={() => router.push('/entrainements')}
                 accessibilityRole="link"
-                accessibilityLabel={`${moreSessionsLabel(more)} à venir — voir tous les entraînements`}
+                accessibilityLabel={`${more !== null ? `${moreSessionsLabel(more)} à venir` : 'Et les suivantes'} — voir tous les entraînements`}
               >
-                <Text style={s.moreCount}>+{more}</Text>
-                <Text style={s.moreText}>{moreSessionsLabel(more)} à venir</Text>
+                {more !== null ? (
+                  <>
+                    <Text style={s.moreCount}>+{more}</Text>
+                    <Text style={s.moreText}>{moreSessionsLabel(more)} à venir</Text>
+                  </>
+                ) : (
+                  // A slot with no end has no total worth stating.
+                  <Text style={s.moreText}>Et les suivantes</Text>
+                )}
                 <Text style={s.moreLink}>Voir tous les entraînements</Text>
               </TouchableOpacity>
             </View>
@@ -165,7 +172,7 @@ function TrainingCarousel({
       )}
       <PagerDots
         index={page}
-        total={shown.length + (more > 0 ? 1 : 0)}
+        total={shown.length + (hasMore ? 1 : 0)}
         testID={`home-trainings-${kind}-dots`}
       />
     </View>

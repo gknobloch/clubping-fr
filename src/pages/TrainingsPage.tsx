@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { PageHeader } from '@/components/PageHeader'
-import { HeaderAction } from '@/components/Button'
+import { HeaderAction, NEUTRAL_BUTTON_CLASS } from '@/components/Button'
 import { PlusIcon } from '@/components/icons'
 import { RowActions } from '@/components/RowActions'
 import { KindPill, OccurrenceCard } from '@/components/TrainingCard'
@@ -15,7 +15,7 @@ import { sortByName } from '@/lib/sortByName'
 import { todayIso } from '@/lib/weeks'
 import {
   audienceLabel, clubTrainings,
-  expectedMemberIds, formatTimeRange, mayManageSchedule, mayManageTrainings, occurrenceKey, placeLabel, recurrenceLabel,
+  LIST_PAGE_SIZE, expectedMemberIds, formatTimeRange, mayManageSchedule, mayManageTrainings, occurrenceKey, placeLabel, recurrenceLabel,
   trainingAddress, upcomingOccurrences, type TrainingOccurrence,
 } from '@/lib/trainings'
 import type { Training } from '@/types'
@@ -48,12 +48,16 @@ export function TrainingsPage() {
   const groups = clubMemberGroups(memberGroups, clubId)
   const occurrences = upcomingOccurrences(data, clubId, today)
   const series = clubTrainings(trainings, clubId)
+  // Ten at a time (#608): a weekly slot alone is fifty evenings a year.
+  const [limit, setLimit] = useState(LIST_PAGE_SIZE)
+  const [seriesOpen, setSeriesOpen] = useState(() => readSeriesOpen())
+  const toggleSeries = () => setSeriesOpen((open) => { writeSeriesOpen(!open); return !open })
 
   const byDate = useMemo(() => {
     const out = new Map<string, TrainingOccurrence[]>()
-    for (const o of occurrences) out.set(o.date, [...(out.get(o.date) ?? []), o])
+    for (const o of occurrences.slice(0, limit)) out.set(o.date, [...(out.get(o.date) ?? []), o])
     return [...out.entries()]
-  }, [occurrences])
+  }, [occurrences, limit])
 
   if (!clubId) return <Navigate to="/" replace />
 
@@ -90,6 +94,60 @@ export function TrainingsPage() {
           <HeaderAction icon={<PlusIcon />} label="Nouvel entraînement" onClick={() => setEditing({})} />
         )}
       />
+
+      {series.length > 0 && (
+        // The club's series first (#608), folded by default: they are what the
+        // list below is made of, read once and then in the way. The choice is
+        // remembered on this browser.
+        <section aria-labelledby="trainings-series" className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <h2 id="trainings-series">
+            <button
+              type="button"
+              aria-expanded={seriesOpen}
+              aria-controls="trainings-series-list"
+              onClick={() => toggleSeries()}
+              className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left"
+            >
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Créneaux et séries <span className="font-normal normal-case tracking-normal text-slate-400">({series.length})</span>
+              </span>
+              <span aria-hidden className={`text-slate-400 transition-transform ${seriesOpen ? 'rotate-180' : ''}`}>▾</span>
+            </button>
+          </h2>
+          {seriesOpen && (
+          <ul id="trainings-series-list" className="space-y-2 px-5 pb-5">
+            {series.map((t) => (
+              <li key={t.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-800">
+                    {t.displayName}
+                    <KindPill kind={t.kind} />
+                  </p>
+                  <p className="text-slate-500">
+                    {t.kind === 'regular' ? recurrenceLabel(t) : formatTimeRange(t)}
+                    {placeLabel(trainingAddress(t, clubs)) && ` · ${placeLabel(trainingAddress(t, clubs))}`}
+                  </p>
+                  <p className="text-slate-500">{audienceLabel(t, groups)}</p>
+                  {t.notes && <p className="mt-1 text-slate-600">{t.notes}</p>}
+                </div>
+                {mayManageSchedule(user, t) && (
+                  <RowActions
+                    menuOnly
+                    label={`Actions — ${t.displayName}`}
+                    actions={[
+                      // The series itself is the admins'; its dates, its managers' too.
+                      canManage && { label: 'Modifier', onClick: () => setEditing({ training: t }) },
+                      t.kind === 'guided' && { label: 'Ajouter des dates', onClick: () => setAddingDatesTo(t) },
+                      canManage && { label: 'Supprimer', tone: 'danger', onClick: () => removeSeries(t) },
+                    ]}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="trainings-upcoming" className="space-y-3">
         <h2 id="trainings-upcoming" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -134,45 +192,16 @@ export function TrainingsPage() {
             </div>
           ))
         )}
+        {occurrences.length > limit && (
+          <button
+            type="button"
+            onClick={() => setLimit((n) => n + LIST_PAGE_SIZE)}
+            className={`${NEUTRAL_BUTTON_CLASS} w-full`}
+          >
+            Voir plus
+          </button>
+        )}
       </section>
-
-      {series.length > 0 && (
-        <section aria-labelledby="trainings-series" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 id="trainings-series" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Créneaux et séries
-          </h2>
-          <ul className="mt-3 space-y-2">
-            {series.map((t) => (
-              <li key={t.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-800">
-                    {t.displayName}
-                    <KindPill kind={t.kind} />
-                  </p>
-                  <p className="text-slate-500">
-                    {t.kind === 'regular' ? recurrenceLabel(t) : formatTimeRange(t)}
-                    {placeLabel(trainingAddress(t, clubs)) && ` · ${placeLabel(trainingAddress(t, clubs))}`}
-                  </p>
-                  <p className="text-slate-500">{audienceLabel(t, groups)}</p>
-                  {t.notes && <p className="mt-1 text-slate-600">{t.notes}</p>}
-                </div>
-                {mayManageSchedule(user, t) && (
-                  <RowActions
-                    menuOnly
-                    label={`Actions — ${t.displayName}`}
-                    actions={[
-                      // The series itself is the admins'; its dates, its managers' too.
-                      canManage && { label: 'Modifier', onClick: () => setEditing({ training: t }) },
-                      t.kind === 'guided' && { label: 'Ajouter des dates', onClick: () => setAddingDatesTo(t) },
-                      canManage && { label: 'Supprimer', tone: 'danger', onClick: () => removeSeries(t) },
-                    ]}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       {editing && (
         <TrainingEditor
@@ -210,6 +239,15 @@ export function TrainingsPage() {
       )}
     </div>
   )
+}
+
+/** Whether this browser last left the series open — a per-viewer convenience. */
+const SERIES_OPEN_KEY = 'pp-trainings-series-open'
+function readSeriesOpen(): boolean {
+  try { return window.localStorage.getItem(SERIES_OPEN_KEY) === '1' } catch { return false }
+}
+function writeSeriesOpen(open: boolean) {
+  try { window.localStorage.setItem(SERIES_OPEN_KEY, open ? '1' : '0') } catch { /* private window */ }
 }
 
 const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

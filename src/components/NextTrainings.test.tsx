@@ -94,20 +94,29 @@ describe('Prochains entraînements, on the Accueil', () => {
     expect(within(guided).getByRole('article')).toHaveTextContent('mercredi 30 septembre · 18h30')
   })
 
-  it('says there are more than three, and ends on the way to them', async () => {
+  it('says a weekly slot goes on, without a count nobody reads', async () => {
     auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
     const regular = screen.getByRole('group', { name: 'Entraînements libres' })
-    // Four Tuesdays within the slot's four weeks: three cards, then « +1 ».
-    expect(regular).toHaveTextContent('Entraînements libres · 4 à venir')
+    expect(regular).not.toHaveTextContent('à venir')
     expect(within(regular).getByText('1/4')).toBeInTheDocument()
     const u = user()
     for (let n = 0; n < 3; n++) await u.click(within(regular).getByRole('button', { name: 'Séance suivante' }))
-    const more = within(regular).getByRole('link', { name: /\+1/ })
-    expect(more).toHaveTextContent('1 autre séance à venir')
+    const more = within(regular).getByRole('link', { name: /Et les suivantes/ })
     expect(more).toHaveAttribute('href', '/entrainements')
-    // Nothing of the kind for a column holding no more than it shows.
-    expect(screen.getByRole('group', { name: 'Entraînements dirigés' })).not.toHaveTextContent('à venir')
+  })
+
+  it('counts what is left of a guided series', async () => {
+    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
+    data.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14', '2026-12-02', '2026-12-09'].map((date) => ({
+      trainingId: 't-dirige', date, cancelled: false,
+    }))
+    renderBlock()
+    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
+    expect(guided).toHaveTextContent('Entraînements dirigés · 5 à venir')
+    const u = user()
+    for (let n = 0; n < 3; n++) await u.click(within(guided).getByRole('button', { name: 'Séance suivante' }))
+    expect(within(guided).getByRole('link', { name: /\+2/ })).toHaveTextContent('2 autres séances à venir')
   })
 
   it('asks « Ma disponibilité » on a guided session, as the match card does', async () => {

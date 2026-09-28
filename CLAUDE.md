@@ -850,12 +850,21 @@ invisible dans le diff comme dans la revue.
   points dans l'app, ‹ 1/3 › sur le web, comme le carrousel des matchs — et
   chaque carte est celle de la liste. Une séance annulée reste dans la rangée,
   et le dit. Rien quand aucune séance n'attend ce membre.
-- **Au-delà de trois, on le dit** : un carrousel qui s'arrête à trois sans un
-  mot se lit comme « il y en a trois ». Le libellé de la colonne donne le total
-  (« Entraînements dirigés · 8 à venir ») et une dernière page, « +5 autres
-  séances à venir », mène à la liste. Le total porte sur le même horizon que
-  la liste (`UPCOMING_DAYS` : quatre semaines d'un créneau, deux mois d'une
-  série dirigée), pour que les cinq annoncés soient les cinq qu'on y trouve.
+- **La liste montre tout, dix par dix** (« Voir plus »), sur le web comme dans
+  l'app. Un horizon par sorte a été essayé et retiré : il coupait les séances
+  dirigées de décembre et les mardis au-delà d'un mois, précisément ce qu'un
+  membre vient y chercher. Le seul horizon est un an (`LIST_HORIZON_DAYS`),
+  qu'on n'atteint pas en pratique : il ne sert qu'à ne pas dérouler un créneau
+  sans fin pour toujours. Les trois séances, c'est l'accueil seulement.
+- **Au-delà de trois, l'accueil le dit** : un carrousel qui s'arrête à trois
+  sans un mot se lit comme « il y en a trois ». Une dernière page mène à la
+  liste (`accueilColumn`) — « +5 autres séances à venir » pour une série qui a
+  une fin, et le libellé de la colonne dit « 8 à venir » ; « Et les
+  suivantes » pour un créneau qui n'en a pas (`isOpenEnded`), où un total
+  serait un nombre que personne ne lit.
+- **« Créneaux et séries » est en tête de la page web, replié par défaut** : ce
+  dont la liste est faite, lu une fois puis encombrant. Le choix est retenu
+  sur ce navigateur (`localStorage`, confort de lecteur seulement).
 - **« Ma disponibilité », pas « Vous venez ? »** : les mots et la mise en page
   de la carte du match, pour qu'un membre lise les deux questions comme une
   seule.

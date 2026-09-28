@@ -8,7 +8,7 @@ import { clubMemberGroups } from '@/lib/memberGroups'
 import { sortByName } from '@/lib/sortByName'
 import { todayIso } from '@/lib/weeks'
 import {
-  ACCUEIL_SESSIONS, TRAINING_KIND_PLURALS, audienceLabel, expectedMemberIds, moreSessionsLabel, placeLabel,
+  TRAINING_KIND_PLURALS, accueilColumn, audienceLabel, expectedMemberIds, moreSessionsLabel, placeLabel,
   trainingAddress, upcomingSessionsFor, type TrainingOccurrence,
 } from '@/lib/trainings'
 import type { TrainingKind } from '@/types'
@@ -69,9 +69,8 @@ function TrainingCarousel({
   const [index, setIndex] = useState(0)
   // The first few, then a last page saying how many more there are — a row
   // that stopped at three without a word would read as « there are three ».
-  const shown = sessions.slice(0, ACCUEIL_SESSIONS)
-  const more = sessions.length - shown.length
-  const pages = shown.length + (more > 0 ? 1 : 0)
+  const { shown, hasMore, more, total } = accueilColumn(sessions, todayIso())
+  const pages = shown.length + (hasMore ? 1 : 0)
   const i = Math.min(index, pages - 1)
   const o = shown[Math.min(i, shown.length - 1)]
   const ids = expectedMemberIds(o.training, groups, users)
@@ -86,7 +85,7 @@ function TrainingCarousel({
       <div className="flex h-7 items-center justify-between">
         <p className="text-sm font-medium text-slate-600">
           {TRAINING_KIND_PLURALS[kind]}
-          {more > 0 && <span className="font-normal text-slate-400"> · {sessions.length} à venir</span>}
+          {total !== null && <span className="font-normal text-slate-400"> · {total} à venir</span>}
         </p>
         {pages > 1 && (
           <div className="flex items-center gap-1">
@@ -106,8 +105,15 @@ function TrainingCarousel({
           to="/entrainements"
           className="flex min-h-40 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-center shadow-sm hover:border-slate-400"
         >
-          <span className="font-display text-2xl font-semibold text-slate-800">+{more}</span>
-          <span className="text-sm text-slate-600">{moreSessionsLabel(more)} à venir</span>
+          {more !== null ? (
+            <>
+              <span className="font-display text-2xl font-semibold text-slate-800">+{more}</span>
+              <span className="text-sm text-slate-600">{moreSessionsLabel(more)} à venir</span>
+            </>
+          ) : (
+            // A slot with no end has no total worth stating.
+            <span className="text-sm text-slate-600">Et les suivantes</span>
+          )}
           <span className="mt-1 text-sm font-medium text-accent-600">Voir tous les entraînements</span>
         </Link>
       ) : (

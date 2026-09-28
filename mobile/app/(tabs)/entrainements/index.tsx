@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native'
+import { ScrollView, View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -12,15 +12,14 @@ import { clubMemberGroups } from '@shared/lib/memberGroups'
 import { longDate } from '@shared/lib/pushNotifications'
 import { sortByName } from '@shared/lib/sortByName'
 import {
-  audienceLabel, expectedMemberIds, mayManageSchedule, mayManageTrainings, occurrenceKey, placeLabel, trainingAddress,
+  LIST_PAGE_SIZE, audienceLabel, expectedMemberIds, mayManageSchedule, mayManageTrainings, occurrenceKey, placeLabel, trainingAddress,
   upcomingOccurrences, type TrainingOccurrence,
 } from '@shared/lib/trainings'
 
 // ---------------------------------------------------------------------------
 // Entraînements (#608)
 //
-// Les séances à venir du club — quatre semaines d'un créneau, deux mois d'une
-// série dirigée (`UPCOMING_DAYS`) : les séances dirigées, où chacun dit
+// Les séances à venir du club, dix par dix : les séances dirigées, où chacun dit
 // s'il vient, et les créneaux libres, avec leurs soirs annulés. Un onglet à
 // lui : c'est ce qu'un membre ouvre chaque semaine.
 //
@@ -46,12 +45,14 @@ export default function TrainingsScreen() {
   const groups = clubMemberGroups(memberGroups, clubId)
   const canManage = mayManageTrainings(user, clubId)
   const occurrences = upcomingOccurrences(data, clubId, today)
+  // Ten at a time (#608): a weekly slot alone is fifty evenings a year.
+  const [limit, setLimit] = useState(LIST_PAGE_SIZE)
 
   const byDate = useMemo(() => {
     const out = new Map<string, TrainingOccurrence[]>()
-    for (const o of occurrences) out.set(o.date, [...(out.get(o.date) ?? []), o])
+    for (const o of occurrences.slice(0, limit)) out.set(o.date, [...(out.get(o.date) ?? []), o])
     return [...out.entries()]
-  }, [occurrences])
+  }, [occurrences, limit])
 
   const named = useMemo(
     () => users.map((u) => ({ ...u, firstName: u.firstName ?? '', lastName: u.lastName ?? '' })),
@@ -100,6 +101,16 @@ export default function TrainingsScreen() {
             </View>
           ))
         )}
+        {occurrences.length > limit && (
+          <TouchableOpacity
+            testID="trainings-more"
+            style={s.moreButton}
+            onPress={() => setLimit((n) => n + LIST_PAGE_SIZE)}
+            accessibilityRole="button"
+          >
+            <Text style={s.moreText}>Voir plus</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {cancelling && clubId && (
@@ -119,4 +130,9 @@ const s = StyleSheet.create({
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingVertical: 32 },
   day: { gap: 8 },
   dayTitle: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  moreButton: {
+    minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center',
+  },
+  moreText: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
 })

@@ -75,6 +75,22 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers())
 
+// happy-dom ships no localStorage here (see offlineCache.spec.ts), and the
+// series' fold is remembered in it — so each test brings a fresh one.
+beforeEach(() => {
+  const map = new Map<string, string>()
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    writable: true,
+    value: {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, String(v)),
+      removeItem: (k: string) => void map.delete(k),
+      clear: () => map.clear(),
+    },
+  })
+})
+
 const renderPage = () => render(<MemoryRouter><TrainingsPage /></MemoryRouter>)
 const card = (name: string) => screen.getByRole('article', { name })
 const user = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -113,6 +129,39 @@ describe('a member reading the calendar', () => {
   })
 })
 
+describe('the list (#608)', () => {
+  beforeEach(() => { auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true } })
+
+  it('shows ten sessions, then ten more at a time, far past a month', async () => {
+    data.trainingSessions = [{ trainingId: 't-dirige', date: '2026-12-10', cancelled: false }]
+    const u = user()
+    renderPage()
+    expect(screen.getAllByRole('article')).toHaveLength(10)
+    await u.click(screen.getByRole('button', { name: 'Voir plus' }))
+    expect(screen.getAllByRole('article')).toHaveLength(20)
+    // Past the first Tuesday of November, and on to a coach's December.
+    expect(card('Libre du mardi, mardi 3 novembre')).toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: 'Voir plus' }))
+    expect(card('Dirigé jeunes, jeudi 10 décembre')).toBeInTheDocument()
+  })
+
+  it('puts the series first, folded, and remembers it unfolded', async () => {
+    const u = user()
+    const { unmount } = renderPage()
+    const toggle = screen.getByRole('button', { name: /Créneaux et séries \(2\)/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Tous les mardis, 20h – 22h')).not.toBeInTheDocument()
+    // Above the sessions in the page.
+    expect(toggle.compareDocumentPosition(screen.getByText('Prochaines séances')) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+    await u.click(toggle)
+    expect(screen.getByText(/Tous les mardis, 20h – 22h/)).toBeInTheDocument()
+    unmount()
+    renderPage()
+    expect(screen.getByRole('button', { name: /Créneaux et séries/ })).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
 describe('the manager of a guided series (#608)', () => {
   beforeEach(() => { auth.user = { id: 'coach', role: 'player', clubId: CLUB, isPlayer: true } })
 
@@ -122,6 +171,7 @@ describe('the manager of a guided series (#608)', () => {
     expect(screen.queryByRole('button', { name: 'Nouvel entraînement' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Actions — Dirigé jeunes, mercredi 30 septembre' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Actions — Libre du mardi, mardi 29 septembre' })).not.toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: /Créneaux et séries/ }))
     await u.click(screen.getByRole('button', { name: 'Actions — Dirigé jeunes' }))
     expect(screen.getByRole('menuitem', { name: 'Ajouter des dates' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Modifier' })).not.toBeInTheDocument()
@@ -209,6 +259,7 @@ describe('a club admin running it', () => {
   it('adds dates to a series without offering the ones it has', async () => {
     const u = user()
     renderPage()
+    await u.click(screen.getByRole('button', { name: /Créneaux et séries/ }))
     await u.click(screen.getByRole('button', { name: 'Actions — Dirigé jeunes' }))
     await u.click(screen.getByRole('menuitem', { name: 'Ajouter des dates' }))
     await u.click(screen.getByLabelText('Dates au choix'))

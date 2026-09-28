@@ -132,6 +132,19 @@ describe('la liste des séances', () => {
   })
 })
 
+describe('la liste, dix par dix', () => {
+  it('montre dix séances, puis dix de plus, bien au-delà d’un mois', () => {
+    mockData.trainingSessions = [{ trainingId: 't-dirige', date: '2026-12-10', cancelled: false }]
+    render(<TrainingsScreen />)
+    // Ten Tuesdays, the 29th of September to the 1st of December.
+    expect(screen.getByTestId('training-t-mardi-2026-12-01')).toBeTruthy()
+    expect(screen.queryByTestId('training-t-mardi-2026-12-08')).toBeNull()
+    fireEvent.press(screen.getByTestId('trainings-more'))
+    expect(screen.getByTestId('training-t-mardi-2026-12-08')).toBeTruthy()
+    expect(screen.getByTestId('training-t-dirige-2026-12-10')).toBeTruthy()
+  })
+})
+
 describe('l’administrateur, dans le gymnase', () => {
   beforeEach(() => {
     mockAuth.user = member('ca', 'Virginie', 'Barlinge', { role: 'club_admin', isPlayer: false })
@@ -180,20 +193,24 @@ describe('l’accueil', () => {
     expect(screen.queryByTestId('home-trainings-guided-dots')).toBeNull()
   })
 
-  it('dit qu’il y en a plus que trois, et finit sur le chemin des autres', () => {
+  it('dit qu’un créneau continue, sans compte que personne ne lit', () => {
     render(<NextTrainingSection />)
     measure('regular')
-    measure('guided')
-    // Four Tuesdays in the slot's four weeks: three cards, then « +1 ».
-    expect(screen.getByTestId('home-trainings-regular')).toHaveTextContent(/Entraînements libres · 4 à venir/)
-    expect(screen.queryByTestId('training-t-mardi-2026-10-20')).toBeNull()
+    expect(screen.getByTestId('home-trainings-regular')).not.toHaveTextContent(/à venir/)
     const more = screen.getByTestId('home-trainings-regular-more')
-    expect(more).toHaveTextContent(/\+1.*1 autre séance à venir/)
+    expect(more).toHaveTextContent(/Et les suivantes/)
     fireEvent.press(more)
     expect(mockPush).toHaveBeenCalledWith('/entrainements')
-    // Nothing of the kind for a column holding no more than it shows.
-    expect(screen.queryByTestId('home-trainings-guided-more')).toBeNull()
-    expect(screen.getByTestId('home-trainings-guided')).not.toHaveTextContent(/à venir/)
+  })
+
+  it('compte ce qui reste d’une série dirigée', () => {
+    mockData.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14', '2026-12-02', '2026-12-09'].map((date) => ({
+      trainingId: 't-dirige', date, cancelled: false,
+    }))
+    render(<NextTrainingSection />)
+    measure('guided')
+    expect(screen.getByTestId('home-trainings-guided')).toHaveTextContent(/Entraînements dirigés · 5 à venir/)
+    expect(screen.getByTestId('home-trainings-guided-more')).toHaveTextContent(/\+2.*2 autres séances à venir/)
   })
 
   it('demande « Ma disponibilité », comme la carte du match', () => {

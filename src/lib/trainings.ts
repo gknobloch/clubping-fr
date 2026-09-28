@@ -193,32 +193,37 @@ export function clubTrainings(trainings: Training[], clubId: string | undefined)
 }
 
 /**
- * How far ahead each kind is listed — on the Entraînements list and on the
- * Accueil alike, so « 5 autres séances » on one is the five the other shows.
- * A regular slot comes every week, and four of them say enough; a coach's
- * dates are sparse, and two months is how far a coach plans.
+ * How far ahead anything is listed: a year. The list pages through it ten at
+ * a time, so the horizon is not a cut-off anyone meets — it only keeps an
+ * open-ended weekly slot from being unrolled forever.
  */
-export const UPCOMING_DAYS: Record<TrainingKind, number> = { guided: 60, regular: 28 }
+export const LIST_HORIZON_DAYS = 365
+
+/** How many sessions the Entraînements list shows at first, and adds per « Voir plus ». */
+export const LIST_PAGE_SIZE = 10
 
 /**
- * A club's occurrences from `today` — what the list shows, each kind over its
- * own horizon (`UPCOMING_DAYS`). Today's included: a session tonight is the one
- * somebody opens the app for.
+ * A club's upcoming occurrences, every kind, by date — what the list pages
+ * through. Today's included: a session tonight is the one somebody opens the
+ * app for.
  */
 export function upcomingOccurrences(
   data: { trainings: Training[]; trainingSessions: TrainingSession[] },
   clubId: string | undefined,
   today: string,
 ): TrainingOccurrence[] {
-  const club = clubTrainings(data.trainings, clubId)
-  const ofKind = (kind: TrainingKind) =>
-    trainingOccurrences(club.filter((t) => t.kind === kind), data.trainingSessions, today, addDays(today, UPCOMING_DAYS[kind]))
-  return [...ofKind('guided'), ...ofKind('regular')].sort((a, b) =>
-    a.date.localeCompare(b.date) ||
-    a.training.startTime.localeCompare(b.training.startTime) ||
-    a.training.displayName.localeCompare(b.training.displayName, 'fr'),
+  return trainingOccurrences(
+    clubTrainings(data.trainings, clubId), data.trainingSessions, today, addDays(today, LIST_HORIZON_DAYS),
   )
 }
+
+/**
+ * Whether a series has no last date within reach — a weekly slot with no end,
+ * or one ending past the horizon. Its sessions have no total worth stating:
+ * « 50 autres séances » says nothing « et les suivantes » does not.
+ */
+export const isOpenEnded = (t: Pick<Training, 'kind' | 'validUntil'>, today: string) =>
+  t.kind === 'regular' && (!t.validUntil || t.validUntil > addDays(today, LIST_HORIZON_DAYS))
 
 // ---------------------------------------------------------------------------
 // Who is expected, and who said what
@@ -261,15 +266,11 @@ export function expectedMemberIds(
 
 type SessionData = { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] }
 
-/** How many sessions of one kind the Accueil carousel shows before « et N autres ». */
+/** How many sessions of one kind the Accueil carousel shows before saying there are more. */
 export const ACCUEIL_SESSIONS = 3
 
 /**
- * The sessions of one kind this member is expected at, over that kind's
- * horizon (#608). The Accueil shows the first `ACCUEIL_SESSIONS` and says how
- * many more there are — a carousel that stopped at three without a word would
- * read as « there are three ».
- *
+ * The sessions of one kind this member is expected at, from today (#608).
  * Cancelled ones are kept: « annulée ce mardi » is exactly what is worth
  * seeing on the Accueil, and the card says so.
  */
@@ -283,8 +284,32 @@ export function upcomingSessionsFor(
 ): TrainingOccurrence[] {
   if (!memberId) return []
   const series = clubTrainings(data.trainings, clubId).filter((t) => t.kind === kind)
-  return trainingOccurrences(series, data.trainingSessions, today, addDays(today, UPCOMING_DAYS[kind]))
+  return trainingOccurrences(series, data.trainingSessions, today, addDays(today, LIST_HORIZON_DAYS))
     .filter((o) => expectedMemberIds(o.training, data.memberGroups, members).includes(memberId))
+}
+
+/**
+ * One Accueil column (#608): the first few sessions, and what to say about the
+ * rest — a carousel that stopped at three without a word would read as « there
+ * are three ». `more` counts them when the series have a last date; `null`
+ * when one of them runs on with no end, where a count would be a number
+ * nobody reads and « et les suivantes » says it all.
+ */
+export function accueilColumn(sessions: TrainingOccurrence[], today: string): {
+  shown: TrainingOccurrence[]
+  hasMore: boolean
+  more: number | null
+  total: number | null
+} {
+  const shown = sessions.slice(0, ACCUEIL_SESSIONS)
+  const hasMore = sessions.length > shown.length
+  const openEnded = sessions.some((o) => isOpenEnded(o.training, today))
+  return {
+    shown,
+    hasMore,
+    more: hasMore && !openEnded ? sessions.length - shown.length : null,
+    total: hasMore && !openEnded ? sessions.length : null,
+  }
 }
 
 /** « 5 autres séances », « 1 autre séance ». */
