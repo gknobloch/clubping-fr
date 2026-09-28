@@ -5,7 +5,8 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
-import { AVAIL, ALL_STATUSES } from '@/constants/availability'
+import { AVAIL } from '@/constants/availability'
+import { MyAvailability } from '@/components/MyAvailability'
 import { Sheet } from '@/components/Sheet'
 import type { AvailabilityStatus, TrainingAvailability, User } from '@shared/types'
 import { longDate } from '@shared/lib/pushNotifications'
@@ -113,34 +114,12 @@ export function TrainingCard({
       {asks && (
         <View style={s.answers}>
           {isExpected && (
-            <View style={s.mine}>
-              {/* The match card's words (#608): one question, asked the same way. */}
-              <Text style={s.mineLabel}>Ma disponibilité</Text>
-              <View style={s.segmented}>
-                {ALL_STATUSES.map((status) => {
-                  const cfg = AVAIL[status]
-                  const active = mine === status
-                  return (
-                    <TouchableOpacity
-                      key={status}
-                      testID={`training-answer-${key}-${status}`}
-                      onPress={() => onAnswer(active ? null : status)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={cfg.label}
-                      style={[
-                        s.segment,
-                        active ? { backgroundColor: cfg.bg, borderColor: cfg.color } : { borderColor: colors.border },
-                      ]}
-                    >
-                      <Text style={[s.segmentText, { color: active ? cfg.color : colors.textSecondary }]}>
-                        {cfg.label}
-                      </Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-            </View>
+            <MyAvailability
+              status={mine}
+              onPick={(status) => onAnswer(status)}
+              onClear={() => onAnswer(null)}
+              testIDPrefix={`training-answer-${key}`}
+            />
           )}
           <TouchableOpacity
             testID={`training-tally-${key}`}
@@ -241,14 +220,6 @@ const s = StyleSheet.create({
   manageText: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.accent },
   manageDanger: { color: colors.danger },
   answers: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 8 },
-  mine: { gap: 6 },
-  // NextMatchCard's section label, so the two read as the same question.
-  mineLabel: { fontSize: 13, color: colors.textSecondary },
-  segmented: { flexDirection: 'row', gap: 8 },
-  segment: {
-    flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-  },
-  segmentText: { fontSize: 14, fontFamily: fonts.semiBold },
   tally: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44 },
   tallyText: { fontSize: 13, color: colors.textSecondary },
   person: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingVertical: 4 },

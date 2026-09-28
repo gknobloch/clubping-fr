@@ -7,7 +7,7 @@ import { downloadIcs } from '@/lib/icsDownload'
 import { todayIso } from '@/lib/weeks'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { RowActions } from '@/components/RowActions'
-import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
+import { AvailabilityButtons, AvailabilityPills, MyAvailabilityField } from '@/components/Availability'
 import { longDate } from '@/lib/pushNotifications'
 import {
   answerCounts, answerOf, answerTally, asksForAnswer, buildTrainingEvent, formatTimeRange, seriesCalendarDates,
@@ -102,16 +102,15 @@ export function OccurrenceCard({
       {asks && !o.cancelled && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
           {isExpected && viewerId && (
-            // The match card's own words and layout, so a member reads the two
-            // questions as the same one (#608).
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ma disponibilité</p>
+            // The match card's own field and buttons, so a member reads the
+            // two questions as the same one (#608).
+            <MyAvailabilityField>
               <AvailabilityButtons
                 status={mine}
                 onSet={(s) => onAnswer(viewerId, s)}
                 onClear={() => onAnswer(viewerId, null)}
               />
-            </div>
+            </MyAvailabilityField>
           )}
           <button
             type="button"

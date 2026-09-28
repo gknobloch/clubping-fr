@@ -107,3 +107,18 @@ export function LineupCheck({ on }: { on?: boolean }) {
     </span>
   )
 }
+
+// « Ma disponibilité » around the member's own answer — the label and its
+// spacing, shared by the Accueil's match card and a guided training session
+// (#608), so the one question reads the same wherever it is asked. The
+// control inside is the caller's: the buttons, or what stands in for them.
+export function MyAvailabilityField({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ma disponibilité</p>
+      <div className="mt-1" role="group" aria-label="Ma disponibilité">
+        {children}
+      </div>
+    </div>
+  )
+}

@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
-import { AVAIL, ALL_STATUSES } from '@/constants/availability'
+import { MyAvailability } from '@/components/MyAvailability'
 import { Avatar } from '@/components/Avatar'
 import { MatchHeader } from '@/components/MatchHeader'
 import { PlayerRow } from '@/components/PlayerRow'
@@ -137,33 +137,15 @@ export function NextMatchCard({
         />
       </TouchableOpacity>
 
-      {/* Availability */}
+      {/* Availability — the one control a member answers with, shared with
+          a guided training session (#608). */}
       <View style={s.section}>
-        <Text style={s.sectionLabel}>Ma disponibilité</Text>
-        <View style={s.segmented}>
-          {ALL_STATUSES.map((status) => {
-            const cfg = AVAIL[status]
-            const active = myAvailability === status
-            return (
-              <TouchableOpacity
-                key={status}
-                disabled={!canSetAvailability}
-                onPress={() => (active ? onClearAvailability() : onPickAvailability(status))}
-                style={[
-                  s.segment,
-                  active
-                    ? { backgroundColor: cfg.bg, borderColor: cfg.color }
-                    : { borderColor: colors.border },
-                  !canSetAvailability && s.segmentDisabled,
-                ]}
-              >
-                <Text style={[s.segmentTxt, { color: active ? cfg.color : colors.textSecondary }]}>
-                  {cfg.label}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
+        <MyAvailability
+          status={myAvailability}
+          disabled={!canSetAvailability}
+          onPick={onPickAvailability}
+          onClear={onClearAvailability}
+        />
       </View>
     </>
   )
@@ -294,13 +276,6 @@ const s = StyleSheet.create({
     fontFamily: fonts.semiBold, color: colors.warning,
   },
   sectionLabel: { fontSize: 13, color: colors.textSecondary },
-  segmented: { flexDirection: 'row', gap: 8 },
-  segment: {
-    flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1.5,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  segmentDisabled: { opacity: 0.5 },
-  segmentTxt: { fontSize: 14, fontFamily: fonts.semiBold },
   responses: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stack: { flexDirection: 'row', marginRight: 4 },
   stackItem: { borderRadius: 12, borderWidth: 1.5, borderColor: colors.card },

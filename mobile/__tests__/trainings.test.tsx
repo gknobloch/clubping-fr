@@ -8,6 +8,7 @@ import type {
 import TrainingsScreen from '@/app/(tabs)/entrainements'
 import ClubScreen from '@/app/(tabs)/club'
 import { NextTrainingSection } from '@/components/NextTrainingSection'
+import { MyAvailability } from '@/components/MyAvailability'
 import MonCompteScreen from '@/app/(tabs)/compte'
 import { setNotificationPreferences } from '@/utils/push'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
@@ -233,6 +234,8 @@ describe('l’accueil', () => {
     render(<NextTrainingSection />)
     measure('guided')
     expect(screen.getByText('Ma disponibilité')).toBeTruthy()
+    // The match card's own control, not a copy of it.
+    expect(screen.UNSAFE_getAllByType(MyAvailability)).toHaveLength(1)
     fireEvent.press(screen.getByTestId('training-answer-t-dirige-2026-09-30-available'))
     expect(fns.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
   })

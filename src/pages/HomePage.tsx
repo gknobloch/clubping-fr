@@ -12,7 +12,7 @@ import { MatchDate } from '@/components/MatchDate'
 import { GameQuickView } from '@/components/GameQuickView'
 import { PlayerPhaseHistory } from '@/components/PlayerPhaseHistory'
 import { SelectionSheet } from '@/components/SelectionSheet'
-import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck } from '@/components/Availability'
+import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck, MyAvailabilityField } from '@/components/Availability'
 import { HomeIcon, AwayIcon, Pill, PhaseSwitchButton, AlertIcon, ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
@@ -276,8 +276,7 @@ export function HomePage() {
                             triplets in one card, one meaning "me" and the other
                             "everyone", have to say which is which (#461). */}
                         <div className="mt-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ma disponibilité</p>
-                          <div className="mt-1" role="group" aria-label="Ma disponibilité">
+                          <MyAvailabilityField>
                             {locked !== undefined ? (
                               <span className="text-xs italic text-slate-500">Joue en Équipe {locked}</span>
                             ) : myPlayerId ? (
@@ -289,7 +288,7 @@ export function HomePage() {
                             ) : (
                               <AvailabilityChip status={availOf(g.id)} />
                             )}
-                          </div>
+                          </MyAvailabilityField>
                         </div>
                       </div>
 

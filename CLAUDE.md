@@ -873,9 +873,12 @@ invisible dans le diff comme dans la revue.
   Entraînements du Club, une entrée de plus dans le rail d'une tablette, en
   lecture : chaque série y mène à ses séances, et la créer reste sur le site.
   Un essai en section repliable en tête de la page Entraînements a été écarté.
-- **« Ma disponibilité », pas « Vous venez ? »** : les mots et la mise en page
-  de la carte du match, pour qu'un membre lise les deux questions comme une
-  seule.
+- **« Ma disponibilité », pas « Vous venez ? »** — et le même contrôle, pas un
+  sosie : `MyAvailability` dans l'app, `MyAvailabilityField` autour
+  d'`AvailabilityButtons` sur le web, partagés par la carte du match et celle
+  d'une séance dirigée. La première carte de séance en portait une copie, qui
+  avait déjà dérivé (44 pt et une bordure de 1 contre 40 pt et 1,5) : sur
+  l'accueil, la même question en deux tailles, l'une sous l'autre.
 - **Une série dirigée a ses responsables** (`managerIds`, 0058) : son
   encadrant, qui n'est presque jamais administrateur. Ils tiennent le
   *planning* — ajouter et retirer des dates, annuler une séance, répondre pour

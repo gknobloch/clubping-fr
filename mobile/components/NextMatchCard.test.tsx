@@ -2,6 +2,7 @@ import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { AvailabilityStatus, Player } from '@shared/types'
 import { NextMatchCard, type TeamAnswers } from './NextMatchCard'
+import { MyAvailability } from './MyAvailability'
 
 // ---------------------------------------------------------------------------
 // The Accueil hero card (#459)
@@ -181,5 +182,14 @@ describe('a captain answering for the team', () => {
     // My own row is mine to set, captain or not.
     fireEvent.press(screen.getAllByText('NON')[0])
     expect(onSet).toHaveBeenCalledWith('p1', 'unavailable')
+  })
+})
+
+describe('my own answer', () => {
+  it('is the shared control, the one a guided training session uses too (#608)', () => {
+    renderCard()
+    // One component for the one question: a copy had drifted to another size.
+    expect(screen.UNSAFE_getAllByType(MyAvailability)).toHaveLength(1)
+    expect(screen.UNSAFE_getByType(MyAvailability).props.status).toBe('available')
   })
 })
