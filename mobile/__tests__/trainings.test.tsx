@@ -1,5 +1,5 @@
 import { Alert, Linking } from 'react-native'
-import { fireEvent, screen, within } from '@testing-library/react-native'
+import { act, fireEvent, screen, within } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import { PHONE_WIDTH, TABLET_SMALL, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type {
@@ -78,6 +78,7 @@ beforeEach(() => {
     })),
     deleteTraining: jest.fn(),
     addTrainingDates: jest.fn(),
+    deleteTrainingDate: jest.fn(),
   }
   const sessions: TrainingSession[] = [
     { trainingId: 't-dirige', date: '2026-09-30', cancelled: false },
@@ -184,7 +185,7 @@ const measure = (width = 343) =>
 /** Press one of the buttons an Alert was opened with. */
 const pressAlert = (label: string) => {
   const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as Array<{ text: string; onPress?: () => void }>
-  buttons.find((b) => b.text === label)?.onPress?.()
+  act(() => buttons.find((b) => b.text === label)?.onPress?.())
 }
 
 /** The session cards a page holds, by testID. */
@@ -323,11 +324,39 @@ describe('l’accueil', () => {
 })
 
 describe('le responsable d’une série dirigée', () => {
-  it('annule une séance de sa série, et rien du créneau libre', () => {
+  beforeEach(() => jest.spyOn(Alert, 'alert').mockImplementation(() => {}))
+
+  it('tient les séances de sa série, et rien du créneau libre', () => {
     mockAuth.user = member('coach', 'Julien', 'Coach')
     render(<TrainingsScreen />)
-    expect(screen.getByTestId('training-cancel-t-dirige-2026-09-30')).toBeTruthy()
+    expect(screen.getByTestId('training-actions-t-dirige-2026-09-30')).toBeTruthy()
     expect(screen.queryByTestId('training-cancel-t-mardi-2026-09-29')).toBeNull()
+  })
+
+  it('annule une séance dirigée depuis le « … »', () => {
+    mockAuth.user = member('coach', 'Julien', 'Coach')
+    render(<TrainingsScreen />)
+    fireEvent.press(screen.getByTestId('training-actions-t-dirige-2026-09-30'))
+    pressAlert('Annuler la séance')
+    fireEvent.press(screen.getByTestId('training-cancel-confirm'))
+    expect(fns.setTrainingSessionState).toHaveBeenCalledWith(CLUB, 't-dirige', '2026-09-30', {
+      cancelled: true, note: '',
+    })
+  })
+
+  it('retire une date saisie par erreur, après avoir demandé', () => {
+    mockAuth.user = member('coach', 'Julien', 'Coach')
+    render(<TrainingsScreen />)
+    fireEvent.press(screen.getByTestId('training-actions-t-dirige-2026-09-30'))
+    pressAlert('Retirer cette date')
+    // Asked first — and not by an « Annuler » that would read as the other action.
+    const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls.at(-1)
+    expect(title).toBe('Retirer la séance du mercredi 30 septembre ?')
+    expect(message).toMatch(/réponses déjà données/)
+    expect(buttons.map((b: { text: string }) => b.text)).toEqual(['Garder', 'Retirer'])
+    expect(fns.deleteTrainingDate).not.toHaveBeenCalled()
+    pressAlert('Retirer')
+    expect(fns.deleteTrainingDate).toHaveBeenCalledWith(CLUB, 't-dirige', '2026-09-30')
   })
 })
 

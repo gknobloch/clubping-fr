@@ -267,3 +267,19 @@ describe('HomePage — les renforts et la catégorie de la saison (#482)', () =>
     expect(screen.queryByText('Autres joueurs')).not.toBeInTheDocument()
   })
 })
+
+// #608 — a journée of « Prochaines journées » opens the Journées page on it.
+describe('HomePage — the generic view’s next journées', () => {
+  it('links each journée to the Journées page, on that journée', () => {
+    renderAs({ id: 'user-2', role: 'club_admin', isPlayer: false, clubId: CLUB_ID })
+
+    const rows = screen.getAllByRole('link', { name: /^Journée \d+/ })
+    expect(rows.length, 'mock data needs an upcoming journée').toBeGreaterThan(0)
+    const [first] = rows
+    const n = first.textContent?.match(/^Journée (\d+)/)?.[1]
+    const url = new URL(first.getAttribute('href') ?? '', 'http://x')
+    expect(url.pathname).toBe('/journees')
+    expect(url.searchParams.get('journee')).toBe(n)
+    expect(mockPhases.some((p) => p.id === url.searchParams.get('phase'))).toBe(true)
+  })
+})

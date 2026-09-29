@@ -491,14 +491,21 @@ export function HomePage() {
                 </h2>
                 <ul>
                   {next.map((round) => (
-                    <li key={round.id} className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-800">Journée {round.number}</span>
-                        <span className="block text-xs text-slate-500">{formatRoundDates(round)}</span>
-                      </span>
-                      <span className="text-sm text-slate-500">
-                        {round.games} match{round.games > 1 ? 's' : ''}
-                      </span>
+                    <li key={round.id} className="border-t border-slate-100">
+                      {/* Opens the Journées page on this journée (#608). */}
+                      <Link
+                        to={`/journees?${new URLSearchParams({ phase: round.phaseId, journee: String(round.number) })}`}
+                        className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-slate-800">Journée {round.number}</span>
+                          <span className="block text-xs text-slate-500">{formatRoundDates(round)}</span>
+                        </span>
+                        <span className="text-sm text-slate-500">
+                          {round.games} match{round.games > 1 ? 's' : ''}
+                        </span>
+                        <ChevronRightIcon className="h-4 w-4 text-slate-400" />
+                      </Link>
                     </li>
                   ))}
                 </ul>

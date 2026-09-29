@@ -69,7 +69,8 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   et le responsable d'une série dirigée y ajoutent des dates, chaque semaine
   ou cochées sur un calendrier.
 - **Le responsable d'une série dirigée** — son encadrant — annule ou rétablit
-  une séance depuis l'application, même sans être administrateur du club.
+  une séance depuis l'application, même sans être administrateur du club, et
+  retire une date saisie par erreur.
 - **Des rappels à la carte.** Mon compte règle séparément les notifications
   des matchs, des entraînements dirigés et des entraînements libres, et le
   délai du rappel, de la veille à une semaine avant. Les dirigés sont activés

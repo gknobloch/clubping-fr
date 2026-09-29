@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ScrollView, View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
+import { Alert, ScrollView, View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -36,7 +36,7 @@ export default function TrainingsScreen() {
   const data = useAppData()
   const {
     clubs, users, memberGroups, trainingAvailabilities, refreshing, refresh,
-    setTrainingAvailability, setTrainingSessionState,
+    setTrainingAvailability, setTrainingSessionState, deleteTrainingDate,
   } = data
   const [cancelling, setCancelling] = useState<TrainingOccurrence | null>(null)
 
@@ -69,7 +69,7 @@ export default function TrainingsScreen() {
         {byDate.length === 0 ? (
           <Text style={s.empty}>
             {canManage
-              ? 'Aucune séance à venir. Les entraînements se créent sur le site.'
+              ? 'Aucune séance à venir. Les entraînements se créent dans l’onglet Club.'
               : 'Aucune séance à venir.'}
           </Text>
         ) : (
@@ -95,6 +95,22 @@ export default function TrainingsScreen() {
                     onAnswer={(status) => user && setTrainingAvailability(o.training.id, o.date, user.id, status)}
                     onCancel={() => setCancelling(o)}
                     onRestore={() => clubId && setTrainingSessionState(clubId, o.training.id, o.date, { cancelled: false })}
+                    // A guided date entered by mistake — asked first, as on the web.
+                    onRemoveDate={() =>
+                      Alert.alert(
+                        `Retirer la séance du ${longDate(o.date)} ?`,
+                        'Les réponses déjà données pour cette date sont retirées avec elle.',
+                        [
+                          // Not « Annuler »: next to « Annuler la séance », it would
+                          // read as the other action.
+                          { text: 'Garder', style: 'cancel' },
+                          {
+                            text: 'Retirer',
+                            style: 'destructive',
+                            onPress: () => clubId && deleteTrainingDate(clubId, o.training.id, o.date),
+                          },
+                        ],
+                      )}
                   />
                 )
               })}

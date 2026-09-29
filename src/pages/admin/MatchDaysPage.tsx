@@ -196,16 +196,23 @@ export function MatchDaysPage() {
   const hasClubScope = (user?.role === 'club_admin' || user?.role === 'player') && !!user?.clubId
   const scopedClub = hasClubScope ? clubs.find((c) => c.id === user?.clubId) : undefined
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
-  // Opens on the active phase; a deep link to a fixture overrides it below.
-  const [selectedPhaseId, setSelectedPhaseId] = useState<string>(() => defaultPhase(phases)?.id ?? '')
-  const [importGamesOpen, setImportGamesOpen] = useState(false)
-
   // Deep link into one fixture (#347). Read once: the params stay in the URL so
   // the view survives a reload, but re-applying them would fight the user's own
   // navigation afterwards.
   const [deepLinkParams] = useSearchParams()
   const deepLinkTeamId = deepLinkParams.get('equipe')
   const deepLinkGameId = deepLinkParams.get('match')
+  // Or into one journée (`?phase=…&journee=…`, #608): a row of the accueil's
+  // « Prochaines journées ». Read once too, as the starting point.
+  const openedPhaseId = deepLinkParams.get('phase')
+  const openedJournee = Number(deepLinkParams.get('journee')) || null
+
+  // Opens on the active phase, or the one a link names; a deep link to a
+  // fixture overrides it below.
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string>(
+    () => (openedPhaseId && phases.some((p) => p.id === openedPhaseId) ? openedPhaseId : defaultPhase(phases)?.id ?? ''),
+  )
+  const [importGamesOpen, setImportGamesOpen] = useState(false)
   const [highlight, setHighlight] = useState<{ teamId: string; matchDayId: string } | null>(null)
 
   /** Groups of the selected phase that contain at least one team — the FFTT
@@ -386,14 +393,22 @@ export function MatchDaysPage() {
 
   // Auto-position to smart offset on phase change
   const autoPositionedPhaseRef = useRef<string | null>(null)
+  // A journée named by the link (#608) positions the window once, then the
+  // smart offset is back in charge.
+  const openedJourneeUsedRef = useRef(false)
   useEffect(() => {
     if (!selectedPhaseId || myClubTeamsInPhase.length === 0) return
     if (autoPositionedPhaseRef.current === selectedPhaseId) return
     autoPositionedPhaseRef.current = selectedPhaseId
     // Use the first team's match days as reference
     const refMatchDays = getMatchDaysForTeam(myClubTeamsInPhase[0].id)
-    const smartOffset = computeSmartOffset(refMatchDays)
-    setGlobalOffset(smartOffset)
+    const opened =
+      !openedJourneeUsedRef.current && openedJournee !== null && selectedPhaseId === openedPhaseId
+        ? refMatchDays.findIndex((m) => m.number === openedJournee)
+        : -1
+    openedJourneeUsedRef.current = true
+    // One column in, so its neighbours give it context — as a fixture's deep link does.
+    setGlobalOffset(opened >= 0 ? opened - 1 : computeSmartOffset(refMatchDays))
   }, [selectedPhaseId, myClubTeamsInPhase.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const getTeamLabel = (teamId: string) => {
@@ -575,7 +590,9 @@ export function MatchDaysPage() {
         : [],
     [selectedPhaseId, matchDays, groups, divisions, games, myClubTeamsInPhase]
   )
-  const [mobileMatchDayNumber, setMobileMatchDayNumber] = useState<number | null>(null)
+  const [mobileMatchDayNumber, setMobileMatchDayNumber] = useState<number | null>(
+    () => (openedPhaseId && openedPhaseId === selectedPhaseId ? openedJournee : null),
+  )
   // Default — and re-default on phase change — to the active journée.
   const effectiveMatchDayNumber = mobileMatchDayNumber ?? activeMatchDayNumber(matchDayGroups)
   const mobileMatchDayIndex = matchDayGroups.findIndex((g) => g.number === effectiveMatchDayNumber)

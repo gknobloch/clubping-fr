@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform,
+  Alert, View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
@@ -21,6 +21,12 @@ import {
 // réponse du membre et le décompte sur les attendus, qui se déplie sur les
 // noms ; un créneau libre dit seulement quand, où et pour qui — il ne demande
 // rien. Une séance annulée reste affichée, et dit pourquoi.
+//
+// Qui tient la séance l'annule (ou la rétablit) d'un bouton. Une séance
+// dirigée a une seconde action, comme sur le web : retirer la date, saisie par
+// erreur — elle disparaît alors, réponses comprises, là où une séance annulée
+// reste affichée et prévient ceux qui comptaient dessus. Deux actions, donc le
+// « … » du web plutôt que deux boutons côte à côte dans l'en-tête de la carte.
 // ---------------------------------------------------------------------------
 
 export function TrainingCard({
@@ -34,6 +40,7 @@ export function TrainingCard({
   onAnswer,
   onCancel,
   onRestore,
+  onRemoveDate,
   onAddToCalendar,
   showDate = false,
 }: {
@@ -48,6 +55,8 @@ export function TrainingCard({
   onAnswer: (status: AvailabilityStatus | null) => void
   onCancel: () => void
   onRestore: () => void
+  /** A guided date entered by mistake: offered with cancelling, under « … ». */
+  onRemoveDate?: () => void
   /** Offered on a guided session still on — this date or the whole series. */
   onAddToCalendar?: () => void
   /** Say the day too — on the Accueil, where no date heading sits above the card. */
@@ -96,7 +105,25 @@ export function TrainingCard({
             <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
-        {canManage && (
+        {canManage && t.kind === 'guided' && onRemoveDate ? (
+          <TouchableOpacity
+            testID={`training-actions-${key}`}
+            onPress={() =>
+              Alert.alert(`${t.displayName}, ${longDate(o.date)}`, undefined, [
+                o.cancelled
+                  ? { text: 'Rétablir la séance', onPress: onRestore }
+                  : { text: 'Annuler la séance', style: 'destructive', onPress: onCancel },
+                { text: 'Retirer cette date', style: 'destructive', onPress: onRemoveDate },
+                { text: 'Fermer', style: 'cancel' },
+              ])
+            }
+            style={s.manage}
+            accessibilityRole="button"
+            accessibilityLabel={`Actions — ${t.displayName}, ${longDate(o.date)}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        ) : canManage && (
           <TouchableOpacity
             testID={o.cancelled ? `training-restore-${key}` : `training-cancel-${key}`}
             onPress={o.cancelled ? onRestore : onCancel}

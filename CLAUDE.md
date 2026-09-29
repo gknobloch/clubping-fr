@@ -257,11 +257,12 @@ invisible dans le diff comme dans la revue.
   lister verbatim répétait « Journée 1 — 1 match » une fois par poule.
 - Un club sans équipe ne voit **rien**, ce qui est où une inscription toute
   fraîche laisse son administrateur.
-- **Une journée listée mène à elle** (#608, dans l'app) : chaque ligne pousse
-  l'écran des Journées ouvert sur cette journée (`/journee?phase=…&journee=…`,
-  la phase portée par `UpcomingRound.phaseId`), avec son chevron — l'onglet
-  est une racine, sans retour vers l'accueil. Les paramètres ne sont lus
-  qu'une fois, comme point de départ : les sélecteurs sont au membre ensuite.
+- **Une journée listée mène à elle** (#608) : chaque ligne ouvre les Journées
+  sur cette journée, la phase portée par `UpcomingRound.phaseId`. Sur le web,
+  `/journees?phase=…&journee=…` ; dans l'app, `/journee` avec les mêmes
+  paramètres, poussé avec son chevron — l'onglet est une racine, sans retour
+  vers l'accueil. Les paramètres ne sont lus qu'une fois, comme point de
+  départ : les sélecteurs sont au membre ensuite.
 - **La vue générique prend la largeur de celle d'un joueur** sur une tablette.
   Elle gardait la colonne d'un téléphone, défendable tant qu'elle n'était
   qu'une courte pile de cartes ; les entraînements y sont maintenant deux par
@@ -822,6 +823,14 @@ invisible dans le diff comme dans la revue.
   lit pour prévenir ceux qui comptaient dessus. Supprimer, c'est pour une date
   saisie par erreur. Une exception qui ne dit plus rien (rétablie, sans note)
   est supprimée plutôt que gardée vide.
+- **Annuler et retirer sont deux gestes**, offerts ensemble sous le « … »
+  d'une séance dirigée, sur le web comme dans l'app. *Annuler* : la séance
+  n'a pas lieu — elle reste listée, barrée, avec son motif, et ceux qui
+  comptaient dessus sont prévenus. *Retirer cette date* : elle n'aurait jamais
+  dû exister — la ligne disparaît, les réponses avec elle, et personne n'est
+  prévenu. Un créneau libre n'a que le premier : ses mardis ne sont pas des
+  lignes qu'on aurait pu saisir par erreur. La confirmation du retrait dit
+  « Garder », jamais « Annuler », qui s'y lirait comme l'autre geste.
 - **Le type ne change jamais après la création** : les lignes d'une série
   dirigée sont ses séances, celles d'un créneau ses exceptions, et basculer
   transformerait l'un en l'autre sans un mot.

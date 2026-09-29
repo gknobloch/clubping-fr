@@ -223,11 +223,16 @@ interface DataContextValue extends DataState {
   ) => void
   /**
    * Call a session off or restore it — the evening the gym is closed, decided
-   * in the gym. Creating series stays on the web, where there is room to.
+   * in the gym.
    */
   setTrainingSessionState: (
     clubId: string, trainingId: string, date: string, state: { cancelled: boolean; note?: string },
   ) => void
+  /**
+   * Take a guided date out of the series — one entered by mistake. Unlike
+   * cancelling, the session is gone, and the answers given for it with it.
+   */
+  deleteTrainingDate: (clubId: string, trainingId: string, date: string) => void
   /**
    * Create or edit a series (#608) — awaited, as on the web: the API checks
    * the times and the weekday, and the sheet stays open to say why it refused.
@@ -893,6 +898,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [apiAvailable],
   )
 
+  const deleteTrainingDate = useCallback(
+    (clubId: string, trainingId: string, date: string) => {
+      setState((prev) => ({
+        ...prev,
+        trainingSessions: prev.trainingSessions.filter((x) => !(x.trainingId === trainingId && x.date === date)),
+        trainingAvailabilities: prev.trainingAvailabilities.filter(
+          (a) => !(a.trainingId === trainingId && a.date === date),
+        ),
+      }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/trainings/${trainingId}/sessions/${date}`), {
+          method: 'DELETE',
+          headers: dataHeaders(),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
   const saveTraining = useCallback(
     async (clubId: string, draft: TrainingDraft, id?: string): Promise<TrainingResult> => {
       const invalid = validateTrainingDraft(draft)
@@ -995,6 +1019,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       removeClubAdmin,
       setTrainingAvailability,
       setTrainingSessionState,
+      deleteTrainingDate,
       addTraining,
       updateTraining,
       deleteTraining,
@@ -1007,7 +1032,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers, setGroupsOfMember,
       setCompetitionGroup, addClubChannel, updateClubChannel, deleteClubChannel,
       addClubAdmin, removeClubAdmin,
-      setTrainingAvailability, setTrainingSessionState,
+      setTrainingAvailability, setTrainingSessionState, deleteTrainingDate,
       addTraining, updateTraining, deleteTraining, addTrainingDates,
     ],
   )
