@@ -94,10 +94,12 @@ export default function HomeScreen() {
   const isPlayer = !!myPlayerId && !!myActiveTeam
 
   // The match card runs the width of the content and splits inside itself
-  // (#459), so the dashboard is one column again — a wide one. Only the player
-  // dashboard has that width to fill: the generic view is a short stack of
-  // cards, and 1280pt of it would be the stretched phone all over again.
-  const dashColumns = isTablet && isPlayer ? 2 : 1
+  // (#459), so the dashboard is one column again — a wide one. The generic
+  // view takes the same width (#608): it used to keep a phone's column, which
+  // was defensible while it was a short stack of cards, but the trainings now
+  // sit two to a page below it, and the same block at two widths depending on
+  // whether the member plays read as two different screens.
+  const dashColumns = isTablet ? 2 : 1
   // The carousel pages by its own width, so the card and the scroller are the
   // same number by construction — `onMomentumScrollEnd` below divides the
   // offset by it to find the page, and a scroller wider than its cards would
@@ -429,15 +431,30 @@ export default function HomeScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Prochaines journées</Text>
                 {upcomingAdminRounds.map((round) => (
-                  <View key={round.id} style={styles.matchDayRow}>
-                    <View>
+                  // Opens that journée in the Journées screen, pushed so the
+                  // chevron comes back here (#608).
+                  <TouchableOpacity
+                    key={round.id}
+                    testID={`home-round-${round.number}`}
+                    style={styles.matchDayRow}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/journee',
+                        params: { phase: round.phaseId, journee: String(round.number) },
+                      })
+                    }
+                    accessibilityRole="link"
+                    accessibilityLabel={`Journée ${round.number}, ${formatRoundDates(round)}`}
+                  >
+                    <View style={styles.matchDayBody}>
                       <Text style={styles.matchDayName}>Journée {round.number}</Text>
                       <Text style={styles.matchDayDate}>{formatRoundDates(round)}</Text>
                     </View>
                     <Text style={styles.matchCount}>
                       {round.games} match{round.games > 1 ? 's' : ''}
                     </Text>
-                  </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -543,9 +560,10 @@ const styles = StyleSheet.create({
 
   // Non-player view
   matchDayRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    minHeight: 44, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border,
   },
+  matchDayBody: { flex: 1 },
   matchDayName: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   matchDayDate: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   matchCount: { fontSize: 13, color: colors.textSecondary },

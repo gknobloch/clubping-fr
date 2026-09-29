@@ -59,7 +59,8 @@ export function pathToTab(
   if (path.startsWith('/match')) {
     return gameAxisFromParam(params.from) === 'round' ? 'journees' : 'equipes'
   }
-  if (path.startsWith('/journees')) return 'journees'
+  // `/journee`, the Journées screen pushed from the accueil (#608), and the tab.
+  if (path.startsWith('/journee')) return 'journees'
   if (path.startsWith('/equipes')) return 'equipes'
   if (path.startsWith('/joueurs')) return 'joueurs'
   if (path.startsWith('/entrainements')) return 'entrainements'

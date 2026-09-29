@@ -257,6 +257,16 @@ invisible dans le diff comme dans la revue.
   lister verbatim répétait « Journée 1 — 1 match » une fois par poule.
 - Un club sans équipe ne voit **rien**, ce qui est où une inscription toute
   fraîche laisse son administrateur.
+- **Une journée listée mène à elle** (#608, dans l'app) : chaque ligne pousse
+  l'écran des Journées ouvert sur cette journée (`/journee?phase=…&journee=…`,
+  la phase portée par `UpcomingRound.phaseId`), avec son chevron — l'onglet
+  est une racine, sans retour vers l'accueil. Les paramètres ne sont lus
+  qu'une fois, comme point de départ : les sélecteurs sont au membre ensuite.
+- **La vue générique prend la largeur de celle d'un joueur** sur une tablette.
+  Elle gardait la colonne d'un téléphone, défendable tant qu'elle n'était
+  qu'une courte pile de cartes ; les entraînements y sont maintenant deux par
+  page, et le même bloc à deux largeurs selon qu'on joue ou non se lisait
+  comme deux écrans différents.
 - Corrigé sur le web en #474, puis retrouvé intact dans l'app en #522 : les
   deux écrans passent maintenant par le même code, `formatRoundDates` compris :
   une plage de dates et non une date, parce que chaque poule a son propre

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native'
+import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { Club, Division, Game, Group, MatchDay, Phase, Player, Season, Team, User } from '@shared/types'
 import HomeScreen from '@/app/(tabs)/index'
@@ -43,7 +43,8 @@ const mockData = {
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }))
+const mockPush = jest.fn()
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }))
 
 const club = (id: string, displayName: string): Club => ({
   id, affiliationNumber: `0668${id}`, displayName, isArchived: false, addresses: [], channels: [],
@@ -155,4 +156,14 @@ it('spans the dates its poules play on', () => {
   render(<HomeScreen />)
 
   expect(screen.getByText(/^du .+ au .+$/)).toBeTruthy()
+})
+
+// #608: a journée leads somewhere — the Journées screen, opened on it.
+it('opens the journée in the Journées screen', () => {
+  mockPush.mockClear()
+  render(<HomeScreen />)
+
+  fireEvent.press(screen.getByTestId('home-round-1'))
+
+  expect(mockPush).toHaveBeenCalledWith({ pathname: '/journee', params: { phase: 'ph1', journee: '1' } })
 })

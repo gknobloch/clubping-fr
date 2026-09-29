@@ -431,6 +431,13 @@ describe('upcomingRounds (#474)', () => {
     ])
   })
 
+  it('names the phase of each round, so a screen can open it (#608)', () => {
+    expect(call({ clubId: 'club-mine' }).map((r) => [r.phaseId, r.number])).toEqual([
+      ['phase-27-1', 1],
+      ['phase-27-1', 2],
+    ])
+  })
+
   // The reported symptom: three lines all reading "Journée 1 — 1 match".
   it('does not repeat a journée once per group', () => {
     expect(call({ clubId: 'club-mine' }).filter((r) => r.number === 1)).toHaveLength(1)

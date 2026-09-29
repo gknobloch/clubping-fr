@@ -58,7 +58,11 @@ const mockData = {
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }))
+let mockParams: Record<string, string> = {}
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useLocalSearchParams: () => mockParams,
+}))
 
 const club: Club = {
   id: 'c1', affiliationNumber: '06680123', displayName: 'Rixheim PPA',
@@ -126,6 +130,7 @@ function addSecondClubTeam() {
 }
 
 beforeEach(() => {
+  mockParams = {}
   mockPush.mockClear()
   setAvailability.mockClear()
   clearAvailability.mockClear()
@@ -219,6 +224,15 @@ describe('sur une tablette', () => {
     layoutAt(LANDSCAPE)
 
     expect(screen.getByText('1–3 / 4')).toBeTruthy()
+  })
+
+  it('ouvre sur la journée que l’accueil lui passe (#608)', () => {
+    mockParams = { phase: 'ph1', journee: '4' }
+    setWindowSize(TABLET_SMALL)
+    render(<JourneesScreen />, { metrics: TABLET })
+    layoutAt(LANDSCAPE)
+
+    expect(screen.getByText('2–4 / 4')).toBeTruthy()
   })
 
   it('enregistre une réponse depuis une cellule', () => {

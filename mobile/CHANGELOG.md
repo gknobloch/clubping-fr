@@ -59,6 +59,9 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   prochaines séances, dirigées et libres mêlées, en carrousel — deux par page
   sur une tablette —, et « Ma disponibilité » sur une séance dirigée, comme
   pour un match.
+- **Sur l'accueil d'un membre qui ne joue pas**, chaque prochaine journée
+  ouvre les Journées sur elle, et une tablette lui donne toute la largeur,
+  comme à un joueur.
 - **Une séance dirigée s'ajoute à l'agenda**, seule ou avec toute sa série.
 - **Les entraînements du club se gèrent depuis l'onglet Club** : chaque
   créneau et chaque série, avec son horaire, son lieu, son public et ses
