@@ -38,6 +38,9 @@ describe('pathToTab', () => {
     ['/membres', 'joueurs'],
     ['/joueurs/import', 'joueurs'],
     ['/club/membres', 'club'],
+    // The sessions, pushed from the accueil or the Club (#608), each with a way back.
+    ['/seances', 'entrainements'],
+    ['/club/entrainements', 'club'],
     ['/team/t1', 'equipes'],
     ['/team/phase-games', 'equipes'],
   ])('keeps the section highlighted while drilling into %s', (path, tab) => {

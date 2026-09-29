@@ -94,7 +94,7 @@ export function ClubTrainingsSection({
               <TouchableOpacity
                 testID={`club-training-${t.id}`}
                 style={section.rowMain}
-                onPress={() => router.push('/entrainements')}
+                onPress={() => router.push('/club/entrainements')}
                 accessibilityRole="link"
                 accessibilityLabel={`${t.displayName} — voir les séances`}
               >

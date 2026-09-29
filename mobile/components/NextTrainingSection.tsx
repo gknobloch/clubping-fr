@@ -32,6 +32,10 @@ import {
 // chaque série a une fin, « Et les suivantes » quand un créneau n'en a pas.
 // Chaque carte est celle de l'onglet — une séance dirigée se répond donc de la
 // même façon aux deux endroits. Rien du tout quand aucune séance ne l'attend.
+//
+// La liste s'ouvre sur `/seances`, poussée avec son chevron, et non sur
+// l'onglet Entraînements : un onglet est une racine, sans retour vers
+// l'accueil.
 // ---------------------------------------------------------------------------
 
 const GAP = 12
@@ -105,7 +109,7 @@ export function NextTrainingSection() {
                       testID="home-trainings-more"
                       // The first page's height, so the last card reads as one more card.
                       style={[s.more, { width: cardWidth }, heights[0] ? { minHeight: heights[0] } : null]}
-                      onPress={() => router.push('/entrainements')}
+                      onPress={() => router.push('/seances')}
                       accessibilityRole="link"
                       accessibilityLabel={`${more !== null ? `${moreSessionsLabel(more)} à venir` : 'Et les suivantes'} — voir tous les entraînements`}
                     >
@@ -150,7 +154,7 @@ export function NextTrainingSection() {
       <TouchableOpacity
         testID="home-all-trainings"
         style={s.row}
-        onPress={() => router.push('/entrainements')}
+        onPress={() => router.push('/seances')}
         accessibilityRole="link"
       >
         <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />

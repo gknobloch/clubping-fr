@@ -12,6 +12,11 @@ export default function ClubLayout() {
         name="membres"
         options={{ title: 'Club', header: () => <AppHeader title="Club" showBack /> }}
       />
+      {/* A series' sessions, opened from this tab (#608) — the same way back. */}
+      <Stack.Screen
+        name="entrainements"
+        options={{ title: 'Club', header: () => <AppHeader title="Club" showBack /> }}
+      />
     </Stack>
   )
 }

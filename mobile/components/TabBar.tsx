@@ -50,6 +50,8 @@ export function pathToTab(
   if (path.startsWith('/player')) return 'joueurs'
   // Les membres d'un groupe (#602) : la liste des Joueurs, poussée.
   if (path.startsWith('/membres')) return 'joueurs'
+  // Les séances poussées depuis l'accueil (#608) : la liste des Entraînements.
+  if (path.startsWith('/seances')) return 'entrainements'
   if (path.startsWith('/team')) return 'equipes'
   // La journée d'un club, tous ses matchs (#585). L'axe est dit par la route
   // elle-même, là où `/match` le lit dans `from` — donc rien à déduire.

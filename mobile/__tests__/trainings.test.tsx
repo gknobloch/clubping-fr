@@ -229,7 +229,7 @@ describe('l’accueil', () => {
     const more = screen.getByTestId('home-trainings-more')
     expect(more).toHaveTextContent(/Et les suivantes/)
     fireEvent.press(more)
-    expect(mockPush).toHaveBeenCalledWith('/entrainements')
+    expect(mockPush).toHaveBeenCalledWith('/seances')
   })
 
   it('compte ce qui reste quand chaque série a une fin', () => {
@@ -305,7 +305,7 @@ describe('l’accueil', () => {
   it('mène à tous les entraînements, en bas', () => {
     render(<NextTrainingSection />)
     fireEvent.press(screen.getByTestId('home-all-trainings'))
-    expect(mockPush).toHaveBeenCalledWith('/entrainements')
+    expect(mockPush).toHaveBeenCalledWith('/seances')
   })
 
   it('n’offre pas d’annuler depuis l’accueil, même à un administrateur', () => {
@@ -339,7 +339,7 @@ describe('l’onglet Club — les séries du club', () => {
     expect(section).toHaveTextContent(/Tous les mardis, 20h – 22h/)
     expect(section).toHaveTextContent(/Responsable : Quentin Colle/)
     fireEvent.press(screen.getByTestId('club-training-t-dirige'))
-    expect(mockPush).toHaveBeenCalledWith('/entrainements')
+    expect(mockPush).toHaveBeenCalledWith('/club/entrainements')
     // A member reads, and runs nothing.
     expect(screen.queryByTestId('club-training-new')).toBeNull()
     expect(screen.queryByTestId('club-training-edit-t-mardi')).toBeNull()

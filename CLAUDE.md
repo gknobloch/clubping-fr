@@ -868,6 +868,14 @@ invisible dans le diff comme dans la revue.
   compte comme une carte dans la pagination : sur une tablette, la cinquième
   séance partage sa page avec elle plutôt que de rester seule à côté d'un
   vide.
+- **Depuis l'accueil ou le Club, la liste des séances est poussée, jamais
+  l'onglet** : pousser `/entrainements` changeait d'onglet, et un onglet est
+  une racine — la liste s'affichait sans retour vers l'écran d'où l'on
+  venait. Même réponse que pour les membres d'un groupe (#602) : l'écran de
+  l'onglet lui-même, poussé avec son chevron — `(detail)/seances` depuis
+  l'accueil (l'onglet Entraînements allumé), `club/entrainements` depuis le
+  Club (le Club reste allumé). Une notification ouvre toujours l'onglet : il
+  n'y a rien derrière elle où revenir.
 - **Les séries sont au Club ; leurs séances, aux Entraînements.** Une série
   décrit le club — ce qu'il entraîne, quand, où, pour qui, et qui la tient —
   alors que la page Entraînements est la semaine qu'on lit et à laquelle on
