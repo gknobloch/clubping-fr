@@ -51,14 +51,14 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   signalés, et s'y ajoutent d'un geste.
 - **L'import des licenciés FFTT** est une icône à côté du champ de recherche
   des joueurs, plutôt qu'un bandeau.
-- **Un onglet Entraînements.** Les quatre semaines à venir du club : les
-  entraînements dirigés, où chacun dit s'il vient, et les créneaux libres de
-  la semaine. Une séance annulée reste affichée avec son motif, et un
+- **Un onglet Entraînements.** Toutes les séances à venir du club, dix par
+  dix : les entraînements dirigés, où chacun dit s'il vient, et les créneaux
+  libres. Une séance annulée reste affichée avec son motif, et un
   administrateur l'annule ou la rétablit depuis le gymnase.
-- **L'accueil dit ce que la semaine tient**, après les matchs : les trois
-  prochaines séances de chaque sorte, en carrousel — côte à côte sur une
-  tablette —, et « Ma disponibilité » sur une séance dirigée, comme pour un
-  match.
+- **L'accueil dit ce que la semaine tient**, après les matchs : les cinq
+  prochaines séances, dirigées et libres mêlées, en carrousel — deux par page
+  sur une tablette —, et « Ma disponibilité » sur une séance dirigée, comme
+  pour un match.
 - **Une séance dirigée s'ajoute à l'agenda**, seule ou avec toute sa série.
 - **Les entraînements du club se gèrent depuis l'onglet Club** : chaque
   créneau et chaque série, avec son horaire, son lieu, son public et ses

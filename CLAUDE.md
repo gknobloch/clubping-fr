@@ -843,25 +843,31 @@ invisible dans le diff comme dans la revue.
   en publie.
 - **Sur l'accueil, les entraînements sont un groupe à eux**, après tout ce qui
   concerne les matchs (carte, compteurs, « Tous mes matchs ») — les deux ne
-  s'entremêlent jamais. Une colonne par sorte, le créneau libre d'un côté et la
-  série dirigée de l'autre, côte à côte sur une tablette (et à partir de `md:`
-  sur le web), empilées sur un téléphone. Chacune est un carrousel des trois
-  prochaines séances du membre de cette sorte (`upcomingSessionsFor`) — les
-  points dans l'app, ‹ 1/3 › sur le web, comme le carrousel des matchs — et
-  chaque carte est celle de la liste. Une séance annulée reste dans la rangée,
-  et le dit. Rien quand aucune séance n'attend ce membre.
+  s'entremêlent jamais. **Un seul carrousel**, dirigés et libres mêlés dans
+  l'ordre des dates (`upcomingSessionsFor` sans sorte) : chaque carte porte
+  déjà sa pastille « Dirigé » / « Libre ». Deux colonnes, une par sorte, ont
+  été essayées et retirées — deux rangées à lire pour une seule question,
+  « quand est mon prochain entraînement ? ». Les cinq prochaines séances du
+  membre (`ACCUEIL_SESSIONS`), **deux par page** sur une tablette et à partir
+  de `md:` sur le web, une sur un téléphone ; la dernière page porte ce qui
+  reste (`carouselPages`). Les points dans l'app, ‹ 1/3 › sur le web, comme le
+  carrousel des matchs, et « Tous les entraînements » en dessous. Chaque carte
+  est celle de la liste. Une séance annulée reste dans la rangée, et le dit.
+  Rien quand aucune séance n'attend ce membre.
 - **La liste montre tout, dix par dix** (« Voir plus »), sur le web comme dans
   l'app. Un horizon par sorte a été essayé et retiré : il coupait les séances
   dirigées de décembre et les mardis au-delà d'un mois, précisément ce qu'un
   membre vient y chercher. Le seul horizon est un an (`LIST_HORIZON_DAYS`),
   qu'on n'atteint pas en pratique : il ne sert qu'à ne pas dérouler un créneau
-  sans fin pour toujours. Les trois séances, c'est l'accueil seulement.
-- **Au-delà de trois, l'accueil le dit** : un carrousel qui s'arrête à trois
-  sans un mot se lit comme « il y en a trois ». Une dernière page mène à la
-  liste (`accueilColumn`) — « +5 autres séances à venir » pour une série qui a
-  une fin, et le libellé de la colonne dit « 8 à venir » ; « Et les
-  suivantes » pour un créneau qui n'en a pas (`isOpenEnded`), où un total
-  serait un nombre que personne ne lit.
+  sans fin pour toujours. Les cinq séances, c'est l'accueil seulement.
+- **Au-delà de cinq, l'accueil le dit** : un carrousel qui s'arrête à cinq
+  sans un mot se lit comme « il y en a cinq ». Une dernière carte mène à la
+  liste (`accueilSessions`) — « +5 autres séances à venir » quand chaque série
+  a une fin ; « Et les suivantes » dès qu'un créneau n'en a pas
+  (`isOpenEnded`), où un total serait un nombre que personne ne lit. Elle
+  compte comme une carte dans la pagination : sur une tablette, la cinquième
+  séance partage sa page avec elle plutôt que de rester seule à côté d'un
+  vide.
 - **Les séries sont au Club ; leurs séances, aux Entraînements.** Une série
   décrit le club — ce qu'il entraîne, quand, où, pour qui, et qui la tient —
   alors que la page Entraînements est la semaine qu'on lit et à laquelle on

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { MemberGroup, Training, TrainingAvailability, TrainingSession } from '@/types'
 import {
-  addDays, answerCounts, answerTally, upcomingSessionsFor, moreSessionsLabel, accueilColumn, mayManageSchedule, buildTrainingEvent,
+  addDays, answerCounts, answerTally, upcomingSessionsFor, moreSessionsLabel, accueilSessions, carouselPages, MORE_SESSIONS, mayManageSchedule, buildTrainingEvent,
   seriesCalendarDates, seriesCalendarPath, trainingEventUid, audienceLabel, cancellationsDue, expectedMemberIds, formatTime, formatTimeRange,
   isoWeekday, occurrenceKey, parseOccurrenceKey, recurrenceLabel, trainingCancelledPush, trainingRefusal,
   validateTrainingDraft, withAddedDates, withAnswer, withSessionState, trainingAddress, placeLabel, weeklyDates, sessionDates, sessionDatesHint,
@@ -338,23 +338,39 @@ describe('upcomingSessionsFor', () => {
     expect(moreSessionsLabel(5)).toBe('5 autres séances')
   })
 
-  it('counts what is left of a series with a last date, and not of an open-ended slot', () => {
-    const guided = upcomingSessionsFor(data([
-      { trainingId: 't-dirige', date: '2026-10-01', cancelled: false },
-      { trainingId: 't-dirige', date: '2026-10-08', cancelled: false },
-      { trainingId: 't-dirige', date: '2026-10-15', cancelled: false },
-      { trainingId: 't-dirige', date: '2026-12-15', cancelled: false },
-      { trainingId: 't-dirige', date: '2027-01-05', cancelled: false },
-    ]), members, 'c1', 'a', '2026-09-26', 'guided')
-    expect(accueilColumn(guided, '2026-09-26')).toMatchObject({ hasMore: true, more: 2, total: 5 })
-    const tuesdays = upcomingSessionsFor(data([]), members, 'c1', 'a', '2026-09-26', 'regular')
-    expect(accueilColumn(tuesdays, '2026-09-26')).toMatchObject({ hasMore: true, more: null, total: null })
+  it('mixes both kinds in date order when no kind is asked for', () => {
+    const d = data([{ trainingId: 't-dirige', date: '2026-10-01', cancelled: false }])
+    expect(upcomingSessionsFor(d, members, 'c1', 'a', '2026-09-26').slice(0, 3).map((o) => [o.training.id, o.date]))
+      .toEqual([['t-mardi', '2026-09-29'], ['t-dirige', '2026-10-01'], ['t-mardi', '2026-10-06']])
+  })
+
+  it('counts what is left when every series has a last date, and not past an open-ended slot', () => {
+    const dates = ['2026-10-01', '2026-10-08', '2026-10-15', '2026-11-05', '2026-12-15', '2027-01-05', '2027-01-12']
+    const guided = upcomingSessionsFor(
+      data(dates.map((date) => ({ trainingId: 't-dirige', date, cancelled: false }))),
+      members, 'c1', 'a', '2026-09-26', 'guided',
+    )
+    const col = accueilSessions(guided, '2026-09-26')
+    expect(col).toMatchObject({ hasMore: true, more: 2 })
+    expect(col.shown).toHaveLength(5)
+    expect(col.items[col.items.length - 1]).toBe(MORE_SESSIONS)
+    const everything = upcomingSessionsFor(data([]), members, 'c1', 'a', '2026-09-26')
+    expect(accueilSessions(everything, '2026-09-26')).toMatchObject({ hasMore: true, more: null })
     // A slot with its own end is a series like any other.
     const bounded = upcomingSessionsFor(
-      { ...data([]), trainings: [{ ...mardi, validUntil: '2026-10-27' }] }, members, 'c1', 'a', '2026-09-26', 'regular',
+      { ...data([]), trainings: [{ ...mardi, validUntil: '2026-11-10' }] }, members, 'c1', 'a', '2026-09-26', 'regular',
     )
-    expect(accueilColumn(bounded, '2026-09-26')).toMatchObject({ hasMore: true, more: 2, total: 5 })
-    expect(accueilColumn(guided.slice(0, 3), '2026-09-26')).toMatchObject({ hasMore: false, more: null })
+    expect(accueilSessions(bounded, '2026-09-26')).toMatchObject({ hasMore: true, more: 2 })
+    const five = accueilSessions(guided.slice(0, 5), '2026-09-26')
+    expect(five).toMatchObject({ hasMore: false, more: null })
+    expect(five.items).toHaveLength(5)
+  })
+
+  it('pages two at a time, the last page holding what is left', () => {
+    expect(carouselPages([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
+    expect(carouselPages([1, 2, 3, 4, 5, 6], 2)).toEqual([[1, 2], [3, 4], [5, 6]])
+    expect(carouselPages([1, 2], 1)).toEqual([[1], [2]])
+    expect(carouselPages([], 2)).toEqual([])
   })
 
   it('only what the member is expected at', () => {

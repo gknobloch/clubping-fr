@@ -293,13 +293,16 @@ export function expectedMemberIds(
 
 type SessionData = { trainings: Training[]; trainingSessions: TrainingSession[]; memberGroups: MemberGroup[] }
 
-/** How many sessions of one kind the Accueil carousel shows before saying there are more. */
-export const ACCUEIL_SESSIONS = 3
+/** How many sessions the Accueil carousel shows before saying there are more. */
+export const ACCUEIL_SESSIONS = 5
 
 /**
- * The sessions of one kind this member is expected at, from today (#608).
- * Cancelled ones are kept: « annulée ce mardi » is exactly what is worth
- * seeing on the Accueil, and the card says so.
+ * The sessions this member is expected at, from today (#608) — of one kind
+ * when `kind` is given, of every kind mixed in date order otherwise, which is
+ * what the Accueil shows: each card carries its own « Dirigé » / « Libre »
+ * pill, so two carousels side by side only made the member read two rows for
+ * one question, « when is my next training? ». Cancelled ones are kept:
+ * « annulée ce mardi » is exactly what is worth seeing, and the card says so.
  */
 export function upcomingSessionsFor(
   data: SessionData,
@@ -307,36 +310,51 @@ export function upcomingSessionsFor(
   clubId: string | undefined,
   memberId: string | undefined,
   today: string,
-  kind: TrainingKind,
+  kind?: TrainingKind,
 ): TrainingOccurrence[] {
   if (!memberId) return []
-  const series = clubTrainings(data.trainings, clubId).filter((t) => t.kind === kind)
+  const series = clubTrainings(data.trainings, clubId).filter((t) => !kind || t.kind === kind)
   return trainingOccurrences(series, data.trainingSessions, today, addDays(today, LIST_HORIZON_DAYS))
     .filter((o) => expectedMemberIds(o.training, data.memberGroups, members).includes(memberId))
 }
 
+/** The Accueil carousel's last item, when there are more sessions than it shows. */
+export const MORE_SESSIONS = 'more' as const
+export type AccueilItem = TrainingOccurrence | typeof MORE_SESSIONS
+
 /**
- * One Accueil column (#608): the first few sessions, and what to say about the
- * rest — a carousel that stopped at three without a word would read as « there
- * are three ». `more` counts them when the series have a last date; `null`
- * when one of them runs on with no end, where a count would be a number
- * nobody reads and « et les suivantes » says it all.
+ * The Accueil carousel (#608): the first few sessions, and what to say about
+ * the rest — a carousel that stopped at five without a word would read as
+ * « there are five ». `more` counts them when every series has a last date;
+ * `null` when one runs on with no end, where a count would be a number nobody
+ * reads and « et les suivantes » says it all.
+ *
+ * `items` is what the carousel pages through: the sessions, then the « more »
+ * card when there is one — so on a tablet, two to a page, the fifth session
+ * shares its page with it rather than sitting alone beside a gap.
  */
-export function accueilColumn(sessions: TrainingOccurrence[], today: string): {
+export function accueilSessions(sessions: TrainingOccurrence[], today: string): {
   shown: TrainingOccurrence[]
+  items: AccueilItem[]
   hasMore: boolean
   more: number | null
-  total: number | null
 } {
   const shown = sessions.slice(0, ACCUEIL_SESSIONS)
   const hasMore = sessions.length > shown.length
   const openEnded = sessions.some((o) => isOpenEnded(o.training, today))
   return {
     shown,
+    items: hasMore ? [...shown, MORE_SESSIONS] : shown,
     hasMore,
     more: hasMore && !openEnded ? sessions.length - shown.length : null,
-    total: hasMore && !openEnded ? sessions.length : null,
   }
+}
+
+/** A carousel's pages: `perPage` items each, the last one holding what is left. */
+export function carouselPages<T>(items: readonly T[], perPage: number): T[][] {
+  const pages: T[][] = []
+  for (let i = 0; i < items.length; i += perPage) pages.push(items.slice(i, i + perPage))
+  return pages
 }
 
 /** « 5 autres séances », « 1 autre séance ». */

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import { createPortal } from 'react-dom'
 import { ModalShell } from '@/components/ModalShell'
 
@@ -135,33 +136,6 @@ export function RowActions({
         </div>
       )}
     </>
-  )
-}
-
-// One media query for the whole page, not one per row: a list screen renders
-// dozens of RowActions, and each subscribing separately would put dozens of
-// listeners on the same query.
-const DESKTOP = '(min-width: 768px)'
-
-function subscribeToDesktop(onChange: () => void) {
-  const mq = window.matchMedia(DESKTOP)
-  mq.addEventListener('change', onChange)
-  // `resize` as well: some embedded browsers resize the viewport without
-  // emitting the media-query change, which would strand the menu in the wrong
-  // presentation until the next navigation.
-  window.addEventListener('resize', onChange)
-  return () => {
-    mq.removeEventListener('change', onChange)
-    window.removeEventListener('resize', onChange)
-  }
-}
-
-/** True from `md:` up, so a resize swaps the presentation with the layout. */
-function useIsDesktop() {
-  return useSyncExternalStore(
-    subscribeToDesktop,
-    () => window.matchMedia(DESKTOP).matches,
-    () => true,
   )
 }
 

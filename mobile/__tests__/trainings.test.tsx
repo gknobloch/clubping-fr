@@ -1,7 +1,7 @@
 import { Alert, Linking } from 'react-native'
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, within } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
-import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
+import { PHONE_WIDTH, TABLET_SMALL, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type {
   Club, MemberGroup, Training, TrainingAvailability, TrainingSession, User,
 } from '@shared/types'
@@ -177,9 +177,9 @@ describe('l’administrateur, dans le gymnase', () => {
   })
 })
 
-/** Jest has no layout engine: give a carousel the width a column would have. */
-const measure = (kind: 'regular' | 'guided') =>
-  fireEvent(screen.getByTestId(`home-trainings-${kind}`), 'layout', { nativeEvent: { layout: { width: 343 } } })
+/** Jest has no layout engine: give the carousel the width the block would have. */
+const measure = (width = 343) =>
+  fireEvent(screen.getByTestId('home-trainings'), 'layout', { nativeEvent: { layout: { width } } })
 
 /** Press one of the buttons an Alert was opened with. */
 const pressAlert = (label: string) => {
@@ -187,62 +187,90 @@ const pressAlert = (label: string) => {
   buttons.find((b) => b.text === label)?.onPress?.()
 }
 
+/** The session cards a page holds, by testID. */
+const pageCards = (i: number) =>
+  within(screen.getByTestId(`home-trainings-page-${i}`))
+    .queryAllByTestId(/^training-t-[a-z]+-\d{4}-\d\d-\d\d$/)
+    .map((el) => el.props.testID)
+
 describe('l’accueil', () => {
   beforeEach(() => jest.spyOn(Alert, 'alert').mockImplementation(() => {}))
 
-  it('un carrousel par sorte : les trois prochains mardis, et la séance dirigée', () => {
+  it('un seul carrousel, les deux sortes mêlées dans l’ordre des dates, une séance par page', () => {
     render(<NextTrainingSection />)
-    measure('regular')
-    measure('guided')
-    expect(screen.getByTestId('training-t-mardi-2026-09-29')).toBeTruthy()
-    expect(screen.getByTestId('training-t-mardi-2026-10-13')).toBeTruthy()
+    measure()
+    expect(pageCards(0)).toEqual(['training-t-mardi-2026-09-29'])
+    expect(pageCards(1)).toEqual(['training-t-dirige-2026-09-30'])
     // The Tuesday called off stays in the row, saying so.
     expect(screen.getByTestId('training-cancelled-t-mardi-2026-10-06')).toHaveTextContent('Annulée — Gymnase fermé')
-    expect(screen.getByTestId('home-trainings-regular-dots')).toBeTruthy()
-    // One guided date: a card, not a carousel.
-    expect(screen.queryByTestId('home-trainings-guided-dots')).toBeNull()
+    // Five sessions, then the « more » card: six pages.
+    expect(screen.getByTestId('home-trainings-page-5')).toBeTruthy()
+    expect(screen.queryByTestId('home-trainings-page-6')).toBeNull()
+    expect(screen.getByTestId('home-trainings-dots')).toBeTruthy()
+  })
+
+  it('deux par page sur une tablette, la dernière portant ce qui reste', () => {
+    setWindowSize(TABLET_SMALL)
+    render(<NextTrainingSection />)
+    measure(760)
+    expect(pageCards(0)).toEqual(['training-t-mardi-2026-09-29', 'training-t-dirige-2026-09-30'])
+    expect(pageCards(1)).toEqual(['training-t-mardi-2026-10-06', 'training-t-mardi-2026-10-13'])
+    expect(pageCards(2)).toEqual(['training-t-mardi-2026-10-20'])
+    // The fifth shares its page with the « more » card, and every card is half the block.
+    expect(within(screen.getByTestId('home-trainings-page-2')).getByTestId('home-trainings-more')).toBeTruthy()
+    expect(screen.getByTestId('home-trainings-more')).toHaveStyle({ width: (760 - 12) / 2 })
+    expect(screen.queryByTestId('home-trainings-page-3')).toBeNull()
   })
 
   it('dit qu’un créneau continue, sans compte que personne ne lit', () => {
     render(<NextTrainingSection />)
-    measure('regular')
-    expect(screen.getByTestId('home-trainings-regular')).not.toHaveTextContent(/à venir/)
-    const more = screen.getByTestId('home-trainings-regular-more')
+    measure()
+    expect(screen.getByTestId('home-next-training')).not.toHaveTextContent(/à venir/)
+    const more = screen.getByTestId('home-trainings-more')
     expect(more).toHaveTextContent(/Et les suivantes/)
     fireEvent.press(more)
     expect(mockPush).toHaveBeenCalledWith('/entrainements')
   })
 
-  it('compte ce qui reste d’une série dirigée', () => {
-    mockData.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14', '2026-12-02', '2026-12-09'].map((date) => ({
-      trainingId: 't-dirige', date, cancelled: false,
-    }))
+  it('compte ce qui reste quand chaque série a une fin', () => {
+    mockData.trainings = [dirige]
+    mockData.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14', '2026-11-04', '2026-12-02', '2026-12-09', '2027-01-13']
+      .map((date) => ({ trainingId: 't-dirige', date, cancelled: false }))
     render(<NextTrainingSection />)
-    measure('guided')
-    expect(screen.getByTestId('home-trainings-guided')).toHaveTextContent(/Entraînements dirigés · 5 à venir/)
-    expect(screen.getByTestId('home-trainings-guided-more')).toHaveTextContent(/\+2.*2 autres séances à venir/)
+    measure()
+    expect(screen.getByTestId('home-trainings-more')).toHaveTextContent(/\+2.*2 autres séances à venir/)
+  })
+
+  it('s’arrête sur la dernière séance quand il n’y en a pas plus de cinq', () => {
+    mockData.trainings = [dirige]
+    render(<NextTrainingSection />)
+    measure()
+    expect(pageCards(0)).toEqual(['training-t-dirige-2026-09-30'])
+    expect(screen.queryByTestId('home-trainings-more')).toBeNull()
+    // One card: not a carousel.
+    expect(screen.queryByTestId('home-trainings-page-1')).toBeNull()
   })
 
   it('prend la hauteur de la page affichée, pas celle de la plus haute', () => {
     render(<NextTrainingSection />)
-    measure('regular')
+    measure()
     const layout = (id: string, height: number) =>
       fireEvent(screen.getByTestId(id), 'layout', { nativeEvent: { layout: { width: 343, height } } })
-    layout('home-trainings-regular-page-0', 96)
-    // The Tuesday called off, with its reason, is taller.
-    layout('home-trainings-regular-page-1', 140)
-    const pager = () => screen.getByTestId('home-trainings-regular-pager')
+    layout('home-trainings-page-0', 96)
+    // The guided session, with its « Ma disponibilité », is taller.
+    layout('home-trainings-page-1', 140)
+    const pager = () => screen.getByTestId('home-trainings-pager')
     const height = () => [pager().props.style].flat(Infinity).reduce((h, st) => st?.height ?? h, undefined)
     expect(height()).toBe(96)
     fireEvent(pager(), 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 343 } } })
     expect(height()).toBe(140)
   })
 
-  it('demande « Ma disponibilité », comme la carte du match', () => {
+  it('demande « Ma disponibilité » sur la séance dirigée, comme la carte du match', () => {
     render(<NextTrainingSection />)
-    measure('guided')
+    measure()
     expect(screen.getByText('Ma disponibilité')).toBeTruthy()
-    // The match card's own control, not a copy of it.
+    // The match card's own control, not a copy of it — and a regular evening asks nothing.
     expect(screen.UNSAFE_getAllByType(MyAvailability)).toHaveLength(1)
     fireEvent.press(screen.getByTestId('training-answer-t-dirige-2026-09-30-available'))
     expect(fns.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
@@ -251,7 +279,7 @@ describe('l’accueil', () => {
   it('ajoute cette séance, ou toute la série, à l’agenda', () => {
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
     render(<NextTrainingSection />)
-    measure('guided')
+    measure()
     fireEvent.press(screen.getByTestId('training-calendar-t-dirige-2026-09-30'))
     pressAlert('Cette séance')
     expect(openMatchInCalendar).toHaveBeenCalledWith(expect.objectContaining({ title: 'Dirigé jeunes' }))
@@ -262,21 +290,28 @@ describe('l’accueil', () => {
 
   it('ne propose pas l’agenda pour un créneau libre, qui revient chaque semaine', () => {
     render(<NextTrainingSection />)
-    measure('regular')
+    measure()
     expect(screen.queryByTestId('training-calendar-t-mardi-2026-09-29')).toBeNull()
   })
 
   it('ne donne que le créneau libre à qui aucune séance dirigée n’attend', () => {
     mockAuth.user = member('p1', 'Quentin', 'Colle')
     render(<NextTrainingSection />)
-    expect(screen.getByTestId('home-trainings-regular')).toBeTruthy()
-    expect(screen.queryByTestId('home-trainings-guided')).toBeNull()
+    measure()
+    expect(screen.getByTestId('training-t-mardi-2026-09-29')).toBeTruthy()
+    expect(screen.queryByTestId('training-t-dirige-2026-09-30')).toBeNull()
+  })
+
+  it('mène à tous les entraînements, en bas', () => {
+    render(<NextTrainingSection />)
+    fireEvent.press(screen.getByTestId('home-all-trainings'))
+    expect(mockPush).toHaveBeenCalledWith('/entrainements')
   })
 
   it('n’offre pas d’annuler depuis l’accueil, même à un administrateur', () => {
     mockAuth.user = member('p2', 'Enzo', 'Lotz', { role: 'club_admin' })
     render(<NextTrainingSection />)
-    measure('guided')
+    measure()
     expect(screen.queryByTestId('training-cancel-t-dirige-2026-09-30')).toBeNull()
   })
 

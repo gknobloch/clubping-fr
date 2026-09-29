@@ -5,9 +5,9 @@ import { MemoryRouter } from 'react-router-dom'
 import type { Club, MemberGroup, Training, TrainingAvailability, TrainingSession, User } from '@/types'
 import { NextTrainings } from '@/components/NextTrainings'
 
-// #608 — the week's trainings on the web Accueil: the next guided session the
-// member is expected at, to answer on the spot, and the next evening of their
-// regular slot, called off or not.
+// #608 — the trainings on the web Accueil: the member's next five sessions,
+// guided and regular mixed in date order, two to a page from md: up — a guided
+// one answered on the spot, a regular evening shown called off or not.
 
 const CLUB = 'club-1'
 
@@ -67,83 +67,120 @@ beforeEach(() => {
     { trainingId: 't-mardi', date: '2026-10-06', cancelled: true, note: 'Gymnase fermé' },
   ]
   data.trainingAvailabilities = []
+  setViewport('desktop')
   for (const fn of [
     data.addTraining, data.updateTraining, data.deleteTraining, data.addTrainingDates,
     data.setTrainingSessionState, data.deleteTrainingDate, data.setTrainingAvailability,
   ]) fn.mockReset()
 })
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+/** md: and up pages two cards at a time; below, one. */
+function setViewport(kind: 'mobile' | 'desktop') {
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    matches: kind === 'desktop',
+    media,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
+}
 
 const renderBlock = () => render(<MemoryRouter><NextTrainings /></MemoryRouter>)
 const user = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
+const block = () => screen.getByRole('region', { name: 'Prochains entraînements' })
+const cards = () => within(block()).queryAllByRole('article').map((a) => a.getAttribute('aria-label'))
+const next = (u: ReturnType<typeof user>) => u.click(within(block()).getByRole('button', { name: 'Séances suivantes' }))
+
 describe('Prochains entraînements, on the Accueil', () => {
-  it('gives each kind its own carousel of the next three', async () => {
+  it('mixes both kinds in date order, two to a page', async () => {
     auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
-    const regular = screen.getByRole('group', { name: 'Entraînements libres' })
-    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
-    expect(within(regular).getByRole('article')).toHaveAccessibleName('Libre du mardi, mardi 29 septembre')
+    expect(cards()).toEqual(['Libre du mardi, mardi 29 septembre', 'Dirigé jeunes, mercredi 30 septembre'])
+    expect(within(block()).getByText('1/3')).toBeInTheDocument()
     const u = user()
-    await u.click(within(regular).getByRole('button', { name: 'Séance suivante' }))
+    await next(u)
+    expect(cards()).toEqual(['Libre du mardi, mardi 6 octobre', 'Libre du mardi, mardi 13 octobre'])
     // The Tuesday called off stays in the row, saying so.
-    expect(within(regular).getByRole('article')).toHaveTextContent('Annulée — Gymnase fermé')
-    // One guided date: a card, no stepping.
-    expect(within(guided).queryByText(/\/\d/)).not.toBeInTheDocument()
-    expect(within(guided).getByRole('article')).toHaveTextContent('mercredi 30 septembre · 18h30')
-  })
-
-  it('says a weekly slot goes on, without a count nobody reads', async () => {
-    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
-    renderBlock()
-    const regular = screen.getByRole('group', { name: 'Entraînements libres' })
-    expect(regular).not.toHaveTextContent('à venir')
-    expect(within(regular).getByText('1/4')).toBeInTheDocument()
-    const u = user()
-    for (let n = 0; n < 3; n++) await u.click(within(regular).getByRole('button', { name: 'Séance suivante' }))
-    const more = within(regular).getByRole('link', { name: /Et les suivantes/ })
+    expect(within(block()).getAllByRole('article')[0]).toHaveTextContent('Annulée — Gymnase fermé')
+    await next(u)
+    // The fifth, and beside it: a weekly slot goes on, without a count nobody reads.
+    expect(cards()).toEqual(['Libre du mardi, mardi 20 octobre'])
+    const more = within(block()).getByRole('link', { name: /Et les suivantes/ })
     expect(more).toHaveAttribute('href', '/entrainements')
+    expect(block()).not.toHaveTextContent('à venir')
   })
 
-  it('counts what is left of a guided series', async () => {
+  it('pages one at a time below md:', () => {
+    setViewport('mobile')
     auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
-    data.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14', '2026-12-02', '2026-12-09'].map((date) => ({
-      trainingId: 't-dirige', date, cancelled: false,
-    }))
     renderBlock()
-    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
-    expect(guided).toHaveTextContent('Entraînements dirigés · 5 à venir')
+    expect(cards()).toEqual(['Libre du mardi, mardi 29 septembre'])
+    expect(within(block()).getByText('1/6')).toBeInTheDocument()
+  })
+
+  it('counts what is left when every series has a last date', async () => {
+    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
+    data.trainings = [dirige]
+    data.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14', '2026-11-04', '2026-12-02', '2026-12-09', '2027-01-13']
+      .map((date) => ({ trainingId: 't-dirige', date, cancelled: false }))
+    renderBlock()
     const u = user()
-    for (let n = 0; n < 3; n++) await u.click(within(guided).getByRole('button', { name: 'Séance suivante' }))
-    expect(within(guided).getByRole('link', { name: /\+2/ })).toHaveTextContent('2 autres séances à venir')
+    await next(u)
+    await next(u)
+    expect(cards()).toEqual(['Dirigé jeunes, mercredi 2 décembre'])
+    expect(within(block()).getByRole('link', { name: /\+2/ })).toHaveTextContent('2 autres séances à venir')
+  })
+
+  it('ends on a lone card, and no « more », when there is nothing past five', async () => {
+    auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
+    data.trainings = [dirige]
+    data.trainingSessions = ['2026-09-30', '2026-10-07', '2026-10-14']
+      .map((date) => ({ trainingId: 't-dirige', date, cancelled: false }))
+    renderBlock()
+    expect(within(block()).getByText('1/2')).toBeInTheDocument()
+    await next(user())
+    expect(cards()).toEqual(['Dirigé jeunes, mercredi 14 octobre'])
+    expect(within(block()).queryByRole('link', { name: /à venir|Et les suivantes/ })).not.toBeInTheDocument()
   })
 
   it('asks « Ma disponibilité » on a guided session, as the match card does', async () => {
     auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
-    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
+    const guided = within(block()).getByRole('article', { name: 'Dirigé jeunes, mercredi 30 septembre' })
     expect(within(guided).getByText('Ma disponibilité')).toBeInTheDocument()
     await user().click(within(guided).getByRole('button', { name: 'OUI' }))
     expect(data.setTrainingAvailability).toHaveBeenCalledWith('t-dirige', '2026-09-30', 'p2', 'available')
     // Answering only: the calendar is run from its own page.
-    expect(within(guided).queryByRole('button', { name: /^Actions/ })).not.toBeInTheDocument()
+    expect(within(block()).queryByRole('button', { name: /^Actions/ })).not.toBeInTheDocument()
+    // A regular evening asks nothing.
+    const tuesday = within(block()).getByRole('article', { name: 'Libre du mardi, mardi 29 septembre' })
+    expect(within(tuesday).queryByText('Ma disponibilité')).not.toBeInTheDocument()
   })
 
   it('offers this session or the whole series to the agenda', async () => {
     auth.user = { id: 'p2', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
-    const guided = screen.getByRole('group', { name: 'Entraînements dirigés' })
+    const guided = within(block()).getByRole('article', { name: 'Dirigé jeunes, mercredi 30 septembre' })
     await user().click(within(guided).getByRole('button', { name: 'Ajouter à mon agenda' }))
     expect(within(guided).getByRole('menuitem', { name: 'Cette séance' })).toBeInTheDocument()
     expect(within(guided).getByRole('menuitem', { name: 'Toute la série (1 date)' })).toBeInTheDocument()
   })
 
-  it('gives someone no guided session is for the regular slot alone', () => {
+  it('leads to every training at the bottom', () => {
     auth.user = { id: 'p1', role: 'player', clubId: CLUB, isPlayer: true }
     renderBlock()
-    expect(screen.getByRole('group', { name: 'Entraînements libres' })).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Entraînements dirigés' })).not.toBeInTheDocument()
+    // No guided session is for this member: the regular slot alone.
+    expect(cards()).toEqual(['Libre du mardi, mardi 29 septembre', 'Libre du mardi, mardi 6 octobre'])
+    expect(within(block()).getByRole('link', { name: 'Tous les entraînements' })).toHaveAttribute('href', '/entrainements')
   })
 
   it('shows nothing when no session is waiting on this member', () => {
