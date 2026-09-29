@@ -88,6 +88,10 @@ export default function DetailLayout() {
       <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
       <Stack.Screen name="round" options={{ title: 'Journée' }} />
       <Stack.Screen name="mes-matchs" options={{ title: 'Mes matchs' }} />
+      {/* The Entraînements list, pushed from the accueil so it has a way back (#608). */}
+      <Stack.Screen name="seances" options={{ title: 'Entraînements' }} />
+      {/* One journée of the Journées screen, opened from the accueil (#608). */}
+      <Stack.Screen name="journee" options={{ title: 'Journées' }} />
     </Stack>
   )
 }

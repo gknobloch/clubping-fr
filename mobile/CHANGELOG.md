@@ -51,6 +51,31 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   signalés, et s'y ajoutent d'un geste.
 - **L'import des licenciés FFTT** est une icône à côté du champ de recherche
   des joueurs, plutôt qu'un bandeau.
+- **Un onglet Entraînements.** Toutes les séances à venir du club, dix par
+  dix : les entraînements dirigés, où chacun dit s'il vient, et les créneaux
+  libres. Une séance annulée reste affichée avec son motif, et un
+  administrateur l'annule ou la rétablit depuis le gymnase.
+- **L'accueil dit ce que la semaine tient**, après les matchs : les cinq
+  prochaines séances, dirigées et libres mêlées, en carrousel — deux par page
+  sur une tablette —, et « Ma disponibilité » sur une séance dirigée, comme
+  pour un match.
+- **Sur l'accueil d'un membre qui ne joue pas**, chaque prochaine journée
+  ouvre les Journées sur elle, et une tablette lui donne toute la largeur,
+  comme à un joueur.
+- **Une séance dirigée s'ajoute à l'agenda**, seule ou avec toute sa série.
+- **Les entraînements du club se gèrent depuis l'onglet Club** : chaque
+  créneau et chaque série, avec son horaire, son lieu, son public et ses
+  responsables. Un administrateur les crée, les modifie et les supprime ; lui
+  et le responsable d'une série dirigée y ajoutent des dates, chaque semaine
+  ou cochées sur un calendrier.
+- **Le responsable d'une série dirigée** — son encadrant — annule ou rétablit
+  une séance depuis l'application, même sans être administrateur du club, et
+  retire une date saisie par erreur.
+- **Des rappels à la carte.** Mon compte règle séparément les notifications
+  des matchs, des entraînements dirigés et des entraînements libres, et le
+  délai du rappel, de la veille à une semaine avant. Les dirigés sont activés
+  d'office, trois jours avant ; les libres, qui reviennent chaque semaine, ne
+  le sont pas. Une séance annulée après son rappel donne lieu à un avis.
 
 ## 1.5.0 — 20 septembre 2026
 

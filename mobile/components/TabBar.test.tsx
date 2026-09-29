@@ -27,6 +27,7 @@ describe('pathToTab', () => {
     ['/equipes', 'equipes'],
     ['/journees', 'journees'],
     ['/joueurs', 'joueurs'],
+    ['/entrainements', 'entrainements'],
   ])('maps the section %s to %s', (path, tab) => {
     expect(pathToTab(path)).toBe(tab)
   })
@@ -37,6 +38,11 @@ describe('pathToTab', () => {
     ['/membres', 'joueurs'],
     ['/joueurs/import', 'joueurs'],
     ['/club/membres', 'club'],
+    // The sessions, pushed from the accueil or the Club (#608), each with a way back.
+    ['/seances', 'entrainements'],
+    // A journée opened from the accueil (#608).
+    ['/journee', 'journees'],
+    ['/club/entrainements', 'club'],
     ['/team/t1', 'equipes'],
     ['/team/phase-games', 'equipes'],
   ])('keeps the section highlighted while drilling into %s', (path, tab) => {

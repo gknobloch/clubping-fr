@@ -67,7 +67,7 @@ beforeEach(() => {
     users: [admin('a1', 'Virginie', 'Barlinge'), admin('a2', 'Grégory', 'Canaque'),
       ...PLAYERS.map((p): User => ({ ...p, role: 'player', isPlayer: true }))],
     players: PLAYERS, teams: [team], divisions: [division], competitions: [seniors, veterans],
-    memberGroups: [coaches], competitionGroups: [], gameSelections: [], seasons: [], playerSeasonCategories: [],
+    memberGroups: [coaches], trainings: [], trainingSessions: [], competitionGroups: [], gameSelections: [], seasons: [], playerSeasonCategories: [],
     refreshing: false, refresh: jest.fn(),
     ...fns,
   })

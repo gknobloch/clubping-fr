@@ -33,6 +33,9 @@ import type {
   PlayerSeasonCategory,
   PlayerSeasonLicence,
   MemberGroup,
+  Training,
+  TrainingSession,
+  TrainingAvailability,
   User,
 } from '@shared/types'
 import type { PlayerImportWrites } from '@shared/lib/ffttPlayers'
@@ -40,6 +43,10 @@ import {
   MEMBER_GROUP_MESSAGES, groupNameTaken, normalizeGroupName, withGroupMembers, withMemberGroups,
   type MemberGroupResult,
 } from '@shared/lib/memberGroups'
+import {
+  TRAINING_FAILED, trainingRefusal, validateTrainingDraft, withAddedDates, withAnswer, withSessionState,
+  type TrainingDraft, type TrainingResult,
+} from '@shared/lib/trainings'
 import { apiUrl } from '@/constants/api'
 import { dataHeaders, getSessionToken, getSessionUserId, onSessionChange } from '@/utils/api'
 import { clearCache, readCache, writeCache } from '@/utils/offlineCache'
@@ -60,6 +67,10 @@ interface DataState {
   playerSeasonLicences: PlayerSeasonLicence[]
   /** The member's own club's groups (#602) — every club's for a general admin. */
   memberGroups: MemberGroup[]
+  /** The member's own club's trainings (#608), scoped like its groups. */
+  trainings: Training[]
+  trainingSessions: TrainingSession[]
+  trainingAvailabilities: TrainingAvailability[]
   competitions: Competition[]
   /**
    * The club's competition → group links (#604). The payload also carries a
@@ -86,6 +97,9 @@ const emptyState: DataState = {
   playerSeasonCategories: [],
   playerSeasonLicences: [],
   memberGroups: [],
+  trainings: [],
+  trainingSessions: [],
+  trainingAvailabilities: [],
   competitions: [],
   competitionGroups: [],
   matchDays: [],
@@ -113,6 +127,10 @@ const withDefaults = (data: DataState): DataState => ({
   playerSeasonCategories: data.playerSeasonCategories ?? [],
   playerSeasonLicences: data.playerSeasonLicences ?? [],
   memberGroups: data.memberGroups ?? [],
+  // A cache written before #608 has no trainings, which is what it shows.
+  trainings: data.trainings ?? [],
+  trainingSessions: data.trainingSessions ?? [],
+  trainingAvailabilities: data.trainingAvailabilities ?? [],
   competitions: data.competitions ?? [],
   competitionGroups: data.competitionGroups ?? [],
 })
@@ -199,6 +217,32 @@ interface DataContextValue extends DataState {
    */
   addClubAdmin: (clubId: string, userId: string) => Promise<ClubAdminResult>
   removeClubAdmin: (clubId: string, userId: string) => Promise<ClubAdminResult>
+  /** Answer for a guided session (#608); `null` withdraws the answer. */
+  setTrainingAvailability: (
+    trainingId: string, date: string, playerId: string, status: AvailabilityStatus | null,
+  ) => void
+  /**
+   * Call a session off or restore it — the evening the gym is closed, decided
+   * in the gym.
+   */
+  setTrainingSessionState: (
+    clubId: string, trainingId: string, date: string, state: { cancelled: boolean; note?: string },
+  ) => void
+  /**
+   * Take a guided date out of the series — one entered by mistake. Unlike
+   * cancelling, the session is gone, and the answers given for it with it.
+   */
+  deleteTrainingDate: (clubId: string, trainingId: string, date: string) => void
+  /**
+   * Create or edit a series (#608) — awaited, as on the web: the API checks
+   * the times and the weekday, and the sheet stays open to say why it refused.
+   */
+  addTraining: (clubId: string, draft: TrainingDraft) => Promise<TrainingResult>
+  updateTraining: (clubId: string, id: string, draft: TrainingDraft) => Promise<TrainingResult>
+  /** The series, its dates and their answers. */
+  deleteTraining: (clubId: string, id: string) => void
+  /** Add dates to a guided series. */
+  addTrainingDates: (clubId: string, trainingId: string, dates: string[]) => void
 }
 
 export type ClubAdminResult = { ok: true } | { ok: false; message: string }
@@ -818,6 +862,132 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [clubAdminRequest],
   )
 
+  // --- Trainings (#608) — optimistic, like a match availability ---
+  const setTrainingAvailability = useCallback(
+    (trainingId: string, date: string, playerId: string, status: AvailabilityStatus | null) => {
+      setState((prev) => ({
+        ...prev,
+        trainingAvailabilities: withAnswer(prev.trainingAvailabilities, trainingId, date, playerId, status),
+      }))
+      if (apiAvailable) {
+        fetch(apiUrl(status ? '/training-availabilities/set' : '/training-availabilities/clear'), {
+          method: 'POST',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ trainingId, date, playerId, ...(status ? { status } : {}) }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  const setTrainingSessionState = useCallback(
+    (clubId: string, trainingId: string, date: string, next: { cancelled: boolean; note?: string }) => {
+      setState((prev) => {
+        const training = prev.trainings.find((t) => t.id === trainingId)
+        if (!training) return prev
+        return { ...prev, trainingSessions: withSessionState(prev.trainingSessions, training, date, next) }
+      })
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/trainings/${trainingId}/sessions/${date}`), {
+          method: 'PUT',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ cancelled: next.cancelled, note: next.note ?? '' }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  const deleteTrainingDate = useCallback(
+    (clubId: string, trainingId: string, date: string) => {
+      setState((prev) => ({
+        ...prev,
+        trainingSessions: prev.trainingSessions.filter((x) => !(x.trainingId === trainingId && x.date === date)),
+        trainingAvailabilities: prev.trainingAvailabilities.filter(
+          (a) => !(a.trainingId === trainingId && a.date === date),
+        ),
+      }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/trainings/${trainingId}/sessions/${date}`), {
+          method: 'DELETE',
+          headers: dataHeaders(),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  const saveTraining = useCallback(
+    async (clubId: string, draft: TrainingDraft, id?: string): Promise<TrainingResult> => {
+      const invalid = validateTrainingDraft(draft)
+      if (invalid) return { ok: false, message: invalid }
+      // Nothing is claimed saved that never left the phone (#495's rule).
+      if (!apiAvailable) return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      try {
+        const res = await fetch(
+          apiUrl(id ? `/clubs/${clubId}/trainings/${id}` : `/clubs/${clubId}/trainings`),
+          {
+            method: id ? 'PATCH' : 'POST',
+            headers: dataHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(draft),
+          },
+        )
+        const body = (await res.json().catch(() => ({}))) as { training?: Training; error?: string }
+        if (!res.ok || !body.training) return { ok: false, message: trainingRefusal(body.error) }
+        // The server's copy: it keeps groups, addresses and managers to the club's own.
+        const saved = body.training
+        setState((prev) => ({
+          ...prev,
+          trainings: id ? prev.trainings.map((t) => (t.id === id ? saved : t)) : [...prev.trainings, saved],
+        }))
+        return { ok: true, training: saved }
+      } catch {
+        return { ok: false, message: TRAINING_FAILED }
+      }
+    },
+    [apiAvailable],
+  )
+
+  const addTraining = useCallback(
+    (clubId: string, draft: TrainingDraft) => saveTraining(clubId, draft),
+    [saveTraining],
+  )
+  const updateTraining = useCallback(
+    (clubId: string, id: string, draft: TrainingDraft) => saveTraining(clubId, draft, id),
+    [saveTraining],
+  )
+
+  const deleteTraining = useCallback(
+    (clubId: string, id: string) => {
+      setState((prev) => ({
+        ...prev,
+        trainings: prev.trainings.filter((t) => t.id !== id),
+        trainingSessions: prev.trainingSessions.filter((x) => x.trainingId !== id),
+        trainingAvailabilities: prev.trainingAvailabilities.filter((a) => a.trainingId !== id),
+      }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/trainings/${id}`), { method: 'DELETE', headers: dataHeaders() })
+          .catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
+  const addTrainingDates = useCallback(
+    (clubId: string, trainingId: string, dates: string[]) => {
+      if (!dates.length) return
+      setState((prev) => ({ ...prev, trainingSessions: withAddedDates(prev.trainingSessions, trainingId, dates) }))
+      if (apiAvailable) {
+        fetch(apiUrl(`/clubs/${clubId}/trainings/${trainingId}/sessions`), {
+          method: 'POST',
+          headers: dataHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ dates }),
+        }).catch(() => {})
+      }
+    },
+    [apiAvailable],
+  )
+
   const value = useMemo<DataContextValue>(
     () => ({
       ...state,
@@ -847,6 +1017,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteClubChannel,
       addClubAdmin,
       removeClubAdmin,
+      setTrainingAvailability,
+      setTrainingSessionState,
+      deleteTrainingDate,
+      addTraining,
+      updateTraining,
+      deleteTraining,
+      addTrainingDates,
     }),
     [
       state, loading, refreshing, error, stale, lastSyncedAt, refresh, updatePlayer, updateTeam,
@@ -855,6 +1032,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addMemberGroup, renameMemberGroup, deleteMemberGroup, setMemberGroupMembers, setGroupsOfMember,
       setCompetitionGroup, addClubChannel, updateClubChannel, deleteClubChannel,
       addClubAdmin, removeClubAdmin,
+      setTrainingAvailability, setTrainingSessionState, deleteTrainingDate,
+      addTraining, updateTraining, deleteTraining, addTrainingDates,
     ],
   )
 

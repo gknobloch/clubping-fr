@@ -12,23 +12,25 @@ import { ClubChannels } from '@/components/club/ClubChannels'
 import { ClubAdminsSection } from '@/components/club/ClubAdminsSection'
 import { ClubGroupsSection } from '@/components/club/ClubGroupsSection'
 import { ClubCompetitionsSection } from '@/components/club/ClubCompetitionsSection'
+import { ClubTrainingsSection } from '@/components/club/ClubTrainingsSection'
+import { clubTrainings, mayManageTrainings } from '@shared/lib/trainings'
 import { clubMemberGroups, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { canManageClub } from '@/utils/roles'
 
 // ---------------------------------------------------------------------------
 // Mon club (#365) — en sections depuis #604
 //
-// Aperçu, Canaux, Administrateurs, Groupes, Compétitions. Sur un téléphone,
-// empilées dans un seul défilement, comme le /club du web. Sur une tablette,
-// un rail à gauche et la section choisie à côté — le motif de Joueurs et
-// d'Équipes (#447, #466) : cinq sections qui s'allongent (quarante joueurs
+// Aperçu, Canaux, Administrateurs, Groupes, Compétitions, Entraînements (#608).
+// Sur un téléphone, empilées dans un seul défilement, comme le /club du web.
+// Sur une tablette, un rail à gauche et la section choisie à côté — le motif
+// de Joueurs et d'Équipes (#447, #466) : des sections qui s'allongent (quarante joueurs
 // dans une compétition) ne se lisent plus bout à bout sur une dalle.
 //
 // Le choix vit dans la route (`?section=`), comme la sélection des autres
 // volets (#585) : une rotation ou un retour le retrouve.
 // ---------------------------------------------------------------------------
 
-type SectionId = 'apercu' | 'canaux' | 'administrateurs' | 'groupes' | 'competitions'
+type SectionId = 'apercu' | 'canaux' | 'administrateurs' | 'groupes' | 'competitions' | 'entrainements'
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: 'apercu', label: 'Aperçu', icon: 'business-outline' },
@@ -36,6 +38,8 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: keyof typeof Ionicon
   { id: 'administrateurs', label: 'Administrateurs', icon: 'shield-checkmark-outline' },
   { id: 'groupes', label: 'Groupes', icon: 'people-outline' },
   { id: 'competitions', label: 'Compétitions', icon: 'trophy-outline' },
+  // The club's training series (#608) — what it trains, when and for whom.
+  { id: 'entrainements', label: 'Entraînements', icon: 'barbell-outline' },
 ]
 
 export default function ClubScreen() {
@@ -67,7 +71,12 @@ export default function ClubScreen() {
   const groups = clubMemberGroups(memberGroups, club.id)
   const canManageGroups = mayManageMemberGroups(user, club.id)
   // A member of a club with no group is spared the section, rail entry and all.
-  const sections = SECTIONS.filter((x) => x.id !== 'groupes' || groups.length > 0 || canManageGroups)
+  const series = clubTrainings(data.trainings, club.id)
+  const canManageSeries = mayManageTrainings(user, club.id)
+  // Likewise a club with no training, for whoever cannot create one.
+  const sections = SECTIONS.filter((x) =>
+    (x.id !== 'groupes' || groups.length > 0 || canManageGroups) &&
+    (x.id !== 'entrainements' || series.length > 0 || canManageSeries))
   const selected: SectionId = sections.some((x) => x.id === params.section)
     ? (params.section as SectionId)
     : 'apercu'
@@ -109,6 +118,22 @@ export default function ClubScreen() {
             onRename={(groupId, name) => data.renameMemberGroup(club.id, groupId, name)}
             onSetMembers={(groupId, ids) => data.setMemberGroupMembers(club.id, groupId, ids)}
             onDelete={(groupId) => data.deleteMemberGroup(club.id, groupId)}
+          />
+        )
+      case 'entrainements':
+        return (
+          <ClubTrainingsSection
+            club={club}
+            series={series}
+            sessions={data.trainingSessions}
+            groups={groups}
+            users={users}
+            viewer={user}
+            canManage={canManageSeries}
+            onCreate={(draft) => data.addTraining(club.id, draft)}
+            onUpdate={(trainingId, draft) => data.updateTraining(club.id, trainingId, draft)}
+            onDelete={(trainingId) => data.deleteTraining(club.id, trainingId)}
+            onAddDates={(trainingId, dates) => data.addTrainingDates(club.id, trainingId, dates)}
           />
         )
       case 'competitions':

@@ -32,6 +32,8 @@ import type {
   LifecycleStatus,
   PlayerStatus,
   Role,
+  Training,
+  TrainingKind,
 } from '../../src/types'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 
@@ -277,6 +279,11 @@ export interface UserRow {
    * Optional because a database before 0056 has no such column.
    */
   last_client_version?: string | null
+  /**
+   * JSON, only what the member changed from the defaults (#608); NULL = every
+   * default. Read through `parsePreferences`.
+   */
+  notification_preferences: string | null
 }
 
 /** A club's own group of members (#602). */
@@ -297,3 +304,54 @@ export interface MemberGroupMemberRow {
   group_id: string
   user_id: string
 }
+
+/** A training series (#608). */
+export interface TrainingRow {
+  id: string
+  club_id: string
+  kind: TrainingKind
+  display_name: string
+  weekday: number | null
+  start_time: string
+  end_time: string | null
+  address_id: string | null
+  /** JSON array of member_groups ids; [] = the whole club. */
+  member_group_ids: string
+  valid_from: string | null
+  valid_until: string | null
+  notes: string | null
+  /** JSON array of users ids who run a guided series' schedule (0058). */
+  manager_ids: string
+  /** The key of the series' calendar link (0058). */
+  calendar_token: string | null
+}
+
+/** One dated session of a guided training, or an exception to a regular one. */
+export interface TrainingSessionRow {
+  training_id: string
+  date: string
+  cancelled: number
+  note: string | null
+}
+
+export interface TrainingAvailabilityRow {
+  training_id: string
+  date: string
+  player_id: string
+  status: AvailabilityStatus
+}
+
+/** A training row as the payload and the sweep read it. */
+export const trainingFromRow = (r: TrainingRow): Training => ({
+  id: r.id, clubId: r.club_id, kind: r.kind, displayName: r.display_name,
+  ...(r.weekday ? { weekday: r.weekday } : {}),
+  startTime: r.start_time,
+  ...(r.end_time ? { endTime: r.end_time } : {}),
+  ...(r.address_id ? { addressId: r.address_id } : {}),
+  memberGroupIds: jsonParseIds(r.member_group_ids),
+  ...(r.valid_from ? { validFrom: r.valid_from } : {}),
+  ...(r.valid_until ? { validUntil: r.valid_until } : {}),
+  ...(r.notes ? { notes: r.notes } : {}),
+  managerIds: jsonParseIds(r.manager_ids),
+  ...(r.calendar_token ? { calendarToken: r.calendar_token } : {}),
+})

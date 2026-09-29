@@ -12,7 +12,12 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import { pointsFor } from '@shared/lib/phasePoints'
-import { setNotificationsEnabled } from '@/utils/push'
+import { setNotificationPreferences, setNotificationsEnabled } from '@/utils/push'
+import {
+  LEAD_DAY_CHOICES, NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, hasChoosableLead,
+  leadDaysLabel, resolveNotificationPreferences,
+  type CategoryPreference, type NotificationCategory, type NotificationPreferences,
+} from '@shared/lib/notificationPreferences'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
@@ -26,7 +31,9 @@ const OWN_FIELDS: readonly ContactField[] = ['email', 'phone', 'birthDate', 'bir
 
 export default function MonCompteScreen() {
   const { user, logout } = useAuth()
-  const { players, teams, clubs, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const {
+    players, teams, clubs, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
+  } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   // Seeded from the session's own user, which is the only payload that carries
@@ -34,6 +41,17 @@ export default function MonCompteScreen() {
   // pushed to them. Absent reads as on, matching the column's default.
   const [notify, setNotify] = useState(user?.notificationsEnabled !== false)
   const [savingNotify, setSavingNotify] = useState(false)
+  // Per category (#608), from the same session payload and for the same
+  // reason. Resolved here so a member who never touched them reads the
+  // current defaults: matches and guided sessions on, regular slots off.
+  const [prefs, setPrefs] = useState<NotificationPreferences>(
+    () => resolveNotificationPreferences(user?.notificationPreferences),
+  )
+  // The training rows only for a club that publishes trainings: two switches
+  // about something the club does not do would be two questions nobody can
+  // answer.
+  const hasTrainings = !!user?.clubId && trainings.some((t) => t.clubId === user.clubId)
+  const categories = NOTIFICATION_CATEGORIES.filter((c) => c === 'match' || hasTrainings)
 
   const player = user?.isPlayer ? players.find((p) => p.id === user.id) : null
   const club = player ? clubs.find((c) => c.id === player.clubId) : null
@@ -56,6 +74,18 @@ export default function MonCompteScreen() {
       Alert.alert('Erreur', "Impossible d'enregistrer ce réglage.")
     } finally {
       setSavingNotify(false)
+    }
+  }
+
+  // Optimistic like the master switch, and put back the same way.
+  async function changeCategory(category: NotificationCategory, change: Partial<CategoryPreference>) {
+    const before = prefs[category]
+    setPrefs((p) => ({ ...p, [category]: { ...p[category], ...change } }))
+    try {
+      await setNotificationPreferences({ [category]: change })
+    } catch {
+      setPrefs((p) => ({ ...p, [category]: before }))
+      Alert.alert('Erreur', "Impossible d'enregistrer ce réglage.")
     }
   }
 
@@ -195,19 +225,61 @@ export default function MonCompteScreen() {
           <Text style={styles.sectionTitle}>Notifications</Text>
           <View style={styles.switchRow}>
             <View style={styles.switchLabels}>
-              <Text style={styles.switchTitle}>Rappels et changements</Text>
-              <Text style={styles.switchHint}>
-                Une demande de disponibilité une semaine avant chaque match, et —
-                si vous êtes capitaine — les dispos qui changent d'ici là.
-              </Text>
+              <Text style={styles.switchTitle}>Recevoir des notifications</Text>
+              <Text style={styles.switchHint}>Sur tous les appareils où vous êtes connecté.</Text>
             </View>
             <Switch
+              testID="notify-master"
               value={notify}
               disabled={savingNotify}
               onValueChange={toggleNotifications}
               trackColor={{ true: colors.accent, false: colors.border }}
             />
           </View>
+          {/* The categories only while the master switch is on: under it
+              they would be settings that change nothing. */}
+          {notify && categories.map((category) => {
+            const pref = prefs[category]
+            const label = NOTIFICATION_CATEGORY_LABELS[category]
+            return (
+              <View key={category} style={styles.category} testID={`notify-${category}`}>
+                <View style={styles.switchRow}>
+                  <View style={styles.switchLabels}>
+                    <Text style={styles.switchTitle}>{label.title}</Text>
+                    <Text style={styles.switchHint}>{label.hint}</Text>
+                  </View>
+                  <Switch
+                    testID={`notify-${category}-switch`}
+                    value={pref.enabled}
+                    onValueChange={(enabled) => changeCategory(category, { enabled })}
+                    trackColor={{ true: colors.accent, false: colors.border }}
+                  />
+                </View>
+                {pref.enabled && hasChoosableLead(category) && (
+                  <View style={styles.leads} accessibilityRole="radiogroup" accessibilityLabel="Quand prévenir">
+                    {LEAD_DAY_CHOICES.map((days) => {
+                      const on = pref.leadDays === days
+                      return (
+                        <TouchableOpacity
+                          key={days}
+                          testID={`notify-${category}-lead-${days}`}
+                          onPress={() => !on && changeCategory(category, { leadDays: days })}
+                          style={[styles.lead, on && styles.leadOn]}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={leadDaysLabel(days)}
+                        >
+                          <Text style={[styles.leadText, on && styles.leadTextOn]}>
+                            {days === 1 ? 'La veille' : `${days} j`}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                )}
+              </View>
+            )
+          })}
         </View>
 
         {/* Logout */}
@@ -287,6 +359,15 @@ const styles = StyleSheet.create({
   switchLabels: { flex: 1, gap: 2 },
   switchTitle: { fontSize: 15, color: colors.textPrimary, fontFamily: fonts.medium },
   switchHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
+  category: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, marginTop: 4, gap: 8 },
+  leads: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  lead: {
+    minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: 22,
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+  },
+  leadOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  leadText: { fontSize: 13, fontFamily: fonts.medium, color: colors.textPrimary },
+  leadTextOn: { color: '#fff' },
   teamRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6,
     borderTopWidth: 1, borderTopColor: colors.border,

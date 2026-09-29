@@ -50,6 +50,8 @@ export function pathToTab(
   if (path.startsWith('/player')) return 'joueurs'
   // Les membres d'un groupe (#602) : la liste des Joueurs, poussée.
   if (path.startsWith('/membres')) return 'joueurs'
+  // Les séances poussées depuis l'accueil (#608) : la liste des Entraînements.
+  if (path.startsWith('/seances')) return 'entrainements'
   if (path.startsWith('/team')) return 'equipes'
   // La journée d'un club, tous ses matchs (#585). L'axe est dit par la route
   // elle-même, là où `/match` le lit dans `from` — donc rien à déduire.
@@ -57,9 +59,11 @@ export function pathToTab(
   if (path.startsWith('/match')) {
     return gameAxisFromParam(params.from) === 'round' ? 'journees' : 'equipes'
   }
-  if (path.startsWith('/journees')) return 'journees'
+  // `/journee`, the Journées screen pushed from the accueil (#608), and the tab.
+  if (path.startsWith('/journee')) return 'journees'
   if (path.startsWith('/equipes')) return 'equipes'
   if (path.startsWith('/joueurs')) return 'joueurs'
+  if (path.startsWith('/entrainements')) return 'entrainements'
   if (path.startsWith('/club')) return 'club'
   if (path.startsWith('/compte')) return 'compte'
   return 'index' // Accueil
@@ -122,7 +126,15 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
         activeOpacity={0.7}
       >
         {options.tabBarIcon?.({ focused: isActive, color, size: 24 })}
-        <Text style={[styles.label, { color }]} numberOfLines={1}>
+        {/* Six tabs on a 390pt phone leave ~65pt each (#608): the one long
+            label, « Entraînements », shrinks a little to fit whole rather than
+            end in an ellipsis. The others fit at full size and do not move. */}
+        <Text
+          style={[styles.label, { color }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+        >
           {label}
         </Text>
       </TouchableOpacity>
@@ -199,7 +211,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', width: '100%' },
   rowCentred: { maxWidth: TAB_ROW_MAX_WIDTH, alignSelf: 'center' },
-  item: { flex: 1, alignItems: 'center', gap: 3 },
+  item: { flex: 1, alignItems: 'center', gap: 3, paddingHorizontal: 2 },
   // Not `flex: 1`: five destinations spread down 800pt would be a tap target
   // the height of a hand. They sit at the top of the rail, as a menu does.
   railItem: { alignItems: 'center', gap: 3, paddingVertical: 14 },

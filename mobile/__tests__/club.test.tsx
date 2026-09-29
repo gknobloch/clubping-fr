@@ -23,6 +23,8 @@ const mockData: Record<string, unknown> & {
   clubs: [],
   users: [],
   memberGroups: [],
+  trainings: [],
+  trainingSessions: [],
   // What the Compétitions section reads (#604) — nothing unless a test says so.
   competitions: [],
   competitionGroups: [],

@@ -27,6 +27,9 @@ import type {
   PlayerSeasonCategory,
   PlayerSeasonLicence,
   MemberGroup,
+  Training,
+  TrainingSession,
+  TrainingAvailability,
   MatchDay,
   Game,
   GameAvailability,
@@ -54,6 +57,9 @@ import {
   mockCompetitions,
   mockCompetitionGroups,
   mockMemberGroups,
+  mockTrainings,
+  mockTrainingSessions,
+  mockTrainingAvailabilities,
 } from '@/mock/data'
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { seasonIdFromName } from '@/lib/season'
@@ -70,6 +76,10 @@ import {
   MEMBER_GROUP_MESSAGES, groupNameTaken, normalizeGroupName, withGroupMembers, withMemberGroups,
   type MemberGroupResult,
 } from '@/lib/memberGroups'
+import {
+  TRAINING_FAILED, trainingRefusal, validateTrainingDraft, withAddedDates, withAnswer, withSessionState,
+  type TrainingDraft, type TrainingResult,
+} from '@/lib/trainings'
 
 // Chronology-aware demotion (#227): what stops being active is archived when
 // older than what becomes active, back to 'upcoming' when newer (rollback).
@@ -546,6 +556,26 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   setMemberGroupMembers: (clubId: string, groupId: string, memberIds: string[]) => void
   /** Replace which of the club's groups one member is in. */
   setGroupsOfMember: (clubId: string, memberId: string, groupIds: string[]) => void
+  trainings: Training[]
+  trainingSessions: TrainingSession[]
+  trainingAvailabilities: TrainingAvailability[]
+  /** Create a training series (#608). Awaited: the API checks times and weekday. */
+  addTraining: (clubId: string, draft: TrainingDraft) => Promise<TrainingResult>
+  updateTraining: (clubId: string, id: string, draft: TrainingDraft) => Promise<TrainingResult>
+  /** The series, its dates and their answers. */
+  deleteTraining: (clubId: string, id: string) => void
+  /** Add dates to a guided series. */
+  addTrainingDates: (clubId: string, trainingId: string, dates: string[]) => void
+  /** Call a date off, restore it, or leave a note — an exception on a regular slot. */
+  setTrainingSessionState: (
+    clubId: string, trainingId: string, date: string, state: { cancelled: boolean; note?: string },
+  ) => void
+  /** Remove a guided date entered by mistake, with its answers. */
+  deleteTrainingDate: (clubId: string, trainingId: string, date: string) => void
+  /** Answer for a guided session; `null` withdraws the answer. */
+  setTrainingAvailability: (
+    trainingId: string, date: string, playerId: string, status: AvailabilityStatus | null,
+  ) => void
   setAvatar: (id: string, base64: string, contentType: string) => Promise<void>
   removeAvatar: (id: string) => Promise<void>
   matchDays: MatchDay[]
@@ -611,6 +641,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     initialData?.playerSeasonLicences ?? [],
   )
   const [memberGroups, setMemberGroups] = useState<MemberGroup[]>(initialData?.memberGroups ?? [])
+  const [trainings, setTrainings] = useState<Training[]>(initialData?.trainings ?? [])
+  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>(initialData?.trainingSessions ?? [])
+  const [trainingAvailabilities, setTrainingAvailabilities] = useState<TrainingAvailability[]>(
+    initialData?.trainingAvailabilities ?? [],
+  )
   const [matchDays, setMatchDays] = useState<MatchDay[]>(initialData?.matchDays ?? [])
   const [games, setGames] = useState<Game[]>(initialData?.games ?? [])
   const [gameAvailabilities, setGameAvailabilities] = useState<GameAvailability[]>(
@@ -663,6 +698,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       // Defaulted like the tables before it: a cache written before #602
       // carries none, and "no groups" is the right reading of that.
       setMemberGroups(data.memberGroups ?? [])
+      // Likewise before #608: a cache with no trainings has none to show.
+      setTrainings(data.trainings ?? [])
+      setTrainingSessions(data.trainingSessions ?? [])
+      setTrainingAvailabilities(data.trainingAvailabilities ?? [])
       setMatchDays(data.matchDays)
       setGames(data.games)
       setGameAvailabilities(data.gameAvailabilities)
@@ -682,6 +721,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         playerSeasonCategories: mockPlayerSeasonCategories,
         playerSeasonLicences: mockPlayerSeasonLicences,
         memberGroups: mockMemberGroups,
+        trainings: mockTrainings,
+        trainingSessions: mockTrainingSessions,
+        trainingAvailabilities: mockTrainingAvailabilities,
         matchDays: mockMatchDays, games: mockGames,
         gameAvailabilities: mockGameAvailabilities,
         gameSelections: mockGameSelections, users: mockUsers,
@@ -2028,6 +2070,93 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     [persist],
   )
 
+  // --- Trainings (#608) ---
+  // A series is awaited, like a group's name: the API checks it, and the form
+  // has to stay open to say why it refused. Everything else — dates,
+  // exceptions, answers — is optimistic, as a match availability is.
+  const saveTraining = useCallback(
+    async (clubId: string, draft: TrainingDraft, id?: string): Promise<TrainingResult> => {
+      const invalid = validateTrainingDraft(draft)
+      if (invalid) return { ok: false, message: invalid }
+      const local: Training = { ...draft, id: id ?? nextId('training'), clubId }
+      let saved = local
+      if (persist) {
+        try {
+          const res = await fetch(
+            id ? `/api/clubs/${clubId}/trainings/${id}` : `/api/clubs/${clubId}/trainings`,
+            { method: id ? 'PATCH' : 'POST', headers: authHeaders(), body: JSON.stringify(id ? draft : local) },
+          )
+          const body = await res.json().catch(() => ({})) as { training?: Training; error?: string }
+          if (!res.ok || !body.training) return { ok: false, message: trainingRefusal(body.error) }
+          // The server's copy: it keeps groups and addresses to the club's own.
+          saved = body.training
+        } catch {
+          return { ok: false, message: TRAINING_FAILED }
+        }
+      }
+      setTrainings((prev) => (id ? prev.map((t) => (t.id === id ? saved : t)) : [...prev, saved]))
+      return { ok: true, training: saved }
+    },
+    [persist],
+  )
+
+  const addTraining = useCallback(
+    (clubId: string, draft: TrainingDraft) => saveTraining(clubId, draft),
+    [saveTraining],
+  )
+  const updateTraining = useCallback(
+    (clubId: string, id: string, draft: TrainingDraft) => saveTraining(clubId, draft, id),
+    [saveTraining],
+  )
+
+  const deleteTraining = useCallback((clubId: string, id: string) => {
+    setTrainings((prev) => prev.filter((t) => t.id !== id))
+    setTrainingSessions((prev) => prev.filter((s) => s.trainingId !== id))
+    setTrainingAvailabilities((prev) => prev.filter((a) => a.trainingId !== id))
+    if (persist) api(`/clubs/${clubId}/trainings/${id}`, { method: 'DELETE' })
+  }, [persist])
+
+  const addTrainingDates = useCallback((clubId: string, trainingId: string, dates: string[]) => {
+    if (!dates.length) return
+    setTrainingSessions((prev) => withAddedDates(prev, trainingId, dates))
+    if (persist) {
+      api(`/clubs/${clubId}/trainings/${trainingId}/sessions`, { method: 'POST', body: JSON.stringify({ dates }) })
+    }
+  }, [persist])
+
+  const setTrainingSessionState = useCallback(
+    (clubId: string, trainingId: string, date: string, state: { cancelled: boolean; note?: string }) => {
+      const training = trainings.find((t) => t.id === trainingId)
+      if (!training) return
+      setTrainingSessions((prev) => withSessionState(prev, training, date, state))
+      if (persist) {
+        api(`/clubs/${clubId}/trainings/${trainingId}/sessions/${date}`, {
+          method: 'PUT', body: JSON.stringify({ cancelled: state.cancelled, note: state.note ?? '' }),
+        })
+      }
+    },
+    [persist, trainings],
+  )
+
+  const deleteTrainingDate = useCallback((clubId: string, trainingId: string, date: string) => {
+    setTrainingSessions((prev) => prev.filter((s) => !(s.trainingId === trainingId && s.date === date)))
+    setTrainingAvailabilities((prev) => prev.filter((a) => !(a.trainingId === trainingId && a.date === date)))
+    if (persist) api(`/clubs/${clubId}/trainings/${trainingId}/sessions/${date}`, { method: 'DELETE' })
+  }, [persist])
+
+  const setTrainingAvailability = useCallback(
+    (trainingId: string, date: string, playerId: string, status: AvailabilityStatus | null) => {
+      setTrainingAvailabilities((prev) => withAnswer(prev, trainingId, date, playerId, status))
+      if (persist) {
+        api(status ? '/training-availabilities/set' : '/training-availabilities/clear', {
+          method: 'POST',
+          body: JSON.stringify({ trainingId, date, playerId, ...(status ? { status } : {}) }),
+        })
+      }
+    },
+    [persist],
+  )
+
   // Avatars are stored base64 in D1 behind PUT/DELETE /users/:id/avatar; the
   // players list only carries avatarUpdatedAt for cache-busting, so we bump it
   // optimistically and the Avatar component refetches.
@@ -2280,6 +2409,16 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       deleteMemberGroup,
       setMemberGroupMembers,
       setGroupsOfMember,
+      trainings,
+      trainingSessions,
+      trainingAvailabilities,
+      addTraining,
+      updateTraining,
+      deleteTraining,
+      addTrainingDates,
+      setTrainingSessionState,
+      deleteTrainingDate,
+      setTrainingAvailability,
       setAvatar,
       removeAvatar,
       updateMatchDay,
@@ -2302,6 +2441,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       playerSeasonLicences, setClubSeasonLicences,
       memberGroups, addMemberGroup, renameMemberGroup, deleteMemberGroup,
       setMemberGroupMembers, setGroupsOfMember,
+      trainings, trainingSessions, trainingAvailabilities, addTraining, updateTraining, deleteTraining,
+      addTrainingDates, setTrainingSessionState, deleteTrainingDate, setTrainingAvailability,
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,

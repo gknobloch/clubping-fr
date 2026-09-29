@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { orderPhases, defaultPhase } from '@shared/lib/phases'
@@ -131,7 +131,11 @@ export default function JourneesScreen() {
   // Phases ordered for the < > switcher (chronological by name); default active.
   const orderedPhases = useMemo(() => orderPhases(phases), [phases])
   const fallbackPhase = useMemo(() => defaultPhase(phases), [phases])
-  const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
+  // Opened on one journée (#608): the accueil's « Prochaines journées » pushes
+  // this screen with the round it names. Read once, as the starting point —
+  // the switchers are the member's from then on.
+  const opened = useLocalSearchParams<{ phase?: string; journee?: string }>()
+  const [phaseId, setPhaseId] = useState<string | undefined>(opened.phase || undefined)
   const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
@@ -184,7 +188,9 @@ export default function JourneesScreen() {
     [phase, matchDays, groups, divisions, games, clubTeams],
   )
 
-  const [mdNumber, setMdNumber] = useState<number | null>(null)
+  const [mdNumber, setMdNumber] = useState<number | null>(
+    opened.journee && Number.isFinite(Number(opened.journee)) ? Number(opened.journee) : null,
+  )
   // Default (and re-default on phase change) to the active match-day.
   const effectiveMdNumber = mdNumber ?? activeMatchDayNumber(matchDayGroups)
   const mdIndex = matchDayGroups.findIndex((g) => g.number === effectiveMdNumber)

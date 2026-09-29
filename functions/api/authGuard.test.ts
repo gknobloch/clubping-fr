@@ -197,4 +197,10 @@ describe('AUTH_GUARD_DISABLED (#138)', () => {
       expect(res.status).toBe(401)
     })
   }
+
+  it('lets a guided series\' calendar through by its own key, GET only (#608)', () => {
+    expect(needsSession('GET', '/api/trainings/t1/calendar.ics')).toBe(false)
+    expect(needsSession('POST', '/api/trainings/t1/calendar.ics')).toBe(true)
+    expect(needsSession('GET', '/api/trainings/t1/other')).toBe(true)
+  })
 })

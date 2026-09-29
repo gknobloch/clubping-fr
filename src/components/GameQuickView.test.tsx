@@ -27,7 +27,7 @@ const testData = {
   competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [],
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
   playerSeasonCategories: mockPlayerSeasonCategories,
-  playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [],
+  playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
   playerPhasePoints: mockPlayerPhasePoints, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,

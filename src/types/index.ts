@@ -1,4 +1,5 @@
 import type { PlayerCategory } from '../lib/playerCategories'
+import type { NotificationPreferencesPatch } from '../lib/notificationPreferences'
 
 // Captaincy is per-team (see Team.captainId), so it is NOT a role — it's derived.
 export type Role = 'general_admin' | 'club_admin' | 'player'
@@ -307,6 +308,84 @@ export interface MemberGroup {
 
 export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
 
+/**
+ * The two calendars a club trains on (#608). A *regular* training is a slot —
+ * "tous les mardis à 20 h" — that holds all season bar its exceptions; a
+ * *guided* one (entraînement dirigé) follows a coach's schedule, one dated
+ * session at a time.
+ */
+export type TrainingKind = 'guided' | 'regular'
+
+/**
+ * A training series (#608): its club, time, place and who is expected. Where
+ * its dates come from depends on `kind` — see `TrainingSession` — and
+ * `src/lib/trainings.ts` is the one place that turns a series into dates.
+ */
+export interface Training {
+  id: string
+  clubId: string
+  kind: TrainingKind
+  displayName: string
+  /** Regular only: ISO weekday, 1 = lundi … 7 = dimanche. */
+  weekday?: number
+  /** "20:00". */
+  startTime: string
+  endTime?: string
+  /** One of the club's addresses; absent = the club's default. */
+  addressId?: string
+  /**
+   * The club's member groups (#602) this training is for. **Empty means the
+   * whole club**, as an empty category list means every category (#482).
+   */
+  memberGroupIds: string[]
+  /** Regular only: the period the slot runs; either end may be open. */
+  validFrom?: string
+  validUntil?: string
+  notes?: string
+  /**
+   * Guided only: members who run this series' schedule besides the club's
+   * admins — the coach, typically. They add and remove dates, call a session
+   * off, and answer for whoever is expected; the series itself (time, place,
+   * audience, who runs it) stays the admins'. Empty for a regular slot.
+   */
+  managerIds: string[]
+  /**
+   * The key of the series' calendar link (#608) — a GET that needs no session,
+   * since a phone's calendar or browser cannot carry one. Club-scoped like the
+   * rest of the training, and it reveals the series' dates and place only.
+   */
+  calendarToken?: string
+}
+
+/**
+ * One date of a training somebody said something about, keyed on
+ * (trainingId, date).
+ *
+ * For a guided training a row IS a session — no row, no session. For a regular
+ * one a row is an exception to the slot, the Tuesday the gym is closed, and
+ * every other Tuesday has none.
+ */
+export interface TrainingSession {
+  trainingId: string
+  date: string
+  /** Called off, but still shown — members have to see that it is. */
+  cancelled: boolean
+  note?: string
+}
+
+/**
+ * A member's answer for one guided session (#608), keyed on
+ * (trainingId, date, playerId). Regular sessions ask for none. No row means no
+ * answer, as for a match.
+ */
+export interface TrainingAvailability {
+  trainingId: string
+  date: string
+  playerId: string
+  status: AvailabilityStatus
+}
+
+
 export type AvailabilityOverriddenBy = 'captain' | 'club_admin'
 
 export interface GameAvailability {
@@ -393,6 +472,13 @@ export interface DataState {
    * people is nobody else's business.
    */
   memberGroups: MemberGroup[]
+  /**
+   * The viewer's own club's trainings (#608), scoped like `memberGroups`: a
+   * club's training schedule, and who says they are coming, is its own.
+   */
+  trainings: Training[]
+  trainingSessions: TrainingSession[]
+  trainingAvailabilities: TrainingAvailability[]
   matchDays: MatchDay[]
   games: Game[]
   gameAvailabilities: GameAvailability[]
@@ -445,6 +531,12 @@ export interface User {
    * the session's own user and nowhere else.
    */
   notificationsEnabled?: boolean
+  /**
+   * What this member wants pushed, per category (#608) — filled in exactly
+   * where `notificationsEnabled` is, and for the same reason. Read it through
+   * `resolveNotificationPreferences`, which supplies the defaults.
+   */
+  notificationPreferences?: NotificationPreferencesPatch
 }
 
 /**

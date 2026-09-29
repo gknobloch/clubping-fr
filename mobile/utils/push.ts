@@ -5,6 +5,7 @@ import type * as NotificationsModule from 'expo-notifications'
 import { Notifications } from '@/utils/expoNotifications'
 import { apiUrl } from '@/constants/api'
 import { dataHeaders } from '@/utils/api'
+import type { NotificationPreferencesPatch } from '@shared/lib/notificationPreferences'
 
 /**
  * The device's side of the push notifications (#495): ask for permission, get
@@ -174,6 +175,32 @@ export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
     body: JSON.stringify({ enabled }),
   })
   if (!res.ok) throw new Error('preference_not_saved')
+}
+
+/**
+ * Change what this member wants pushed, per category (#608). Partial: only the
+ * categories named are touched, and the server merges them into what it holds.
+ */
+export async function setNotificationPreferences(categories: NotificationPreferencesPatch): Promise<void> {
+  const res = await fetch(apiUrl('/notifications/preferences'), {
+    method: 'PATCH',
+    headers: dataHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ categories }),
+  })
+  if (!res.ok) throw new Error('preference_not_saved')
+}
+
+/**
+ * The training session a tapped notification is about (#608), or null — a
+ * reminder or a cancellation carries its series and its date.
+ */
+export function trainingOf(
+  response: NotificationsModule.NotificationResponse | null,
+): { trainingId: string; date: string } | null {
+  const data = response?.notification.request.content.data as { trainingId?: unknown; date?: unknown } | undefined
+  if (typeof data?.trainingId !== 'string' || !data.trainingId) return null
+  if (typeof data.date !== 'string' || !data.date) return null
+  return { trainingId: data.trainingId, date: data.date }
 }
 
 /**

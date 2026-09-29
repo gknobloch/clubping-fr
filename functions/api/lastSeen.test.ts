@@ -34,6 +34,7 @@ function member(over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow {
     first_login_at: null,
     last_seen_at: null,
     notifications_enabled: 1,
+    notification_preferences: null,
     ...over,
   }
 }

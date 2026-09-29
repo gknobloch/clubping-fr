@@ -35,6 +35,11 @@ const mockData = {
   setGameSelection: jest.fn(),
   refreshing: false,
   refresh: jest.fn(),
+  // Trainings (#608): none, unless a test says so — the accueil's training
+  // card then renders nothing.
+  trainings: [], trainingSessions: [], trainingAvailabilities: [],
+  users: [],
+  memberGroups: [],
 }
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))

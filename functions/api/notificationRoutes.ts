@@ -1,8 +1,18 @@
 import { Hono } from 'hono'
 import type { Env } from './auth'
 import { fetchReceipts, isExpoPushToken, sendPushes, type OutgoingPush, type PushTicket } from './push'
-import { jsonParseIds } from './rows'
-import type { AvailabilityStatus } from '../../src/types'
+import { jsonParseIds, trainingFromRow, type TrainingRow, type TrainingSessionRow } from './rows'
+import type { AvailabilityStatus, MemberGroup, TrainingKind } from '../../src/types'
+import {
+  mergePreferences, parsePreferences, resolveNotificationPreferences, sanitizePreferencesPatch,
+  type NotificationCategory, type NotificationPreferences,
+} from '../../src/lib/notificationPreferences'
+import {
+  TRAINING_CANCELLED, TRAINING_REMINDER, TRAINING_REMINDER_HORIZON_DAYS,
+  cancellationsDue, categoryOfTraining, expectedMemberIds, occurrenceKey, trainingCancelledPush,
+  trainingOccurrences, trainingReminderPush, trainingRemindersDue, trainingSentKey,
+  type DueTrainingNotification, type OccurrenceAudience, type TrainingLabels, type TrainingMember,
+} from '../../src/lib/trainings'
 import {
   AVAILABILITY_REQUEST,
   AVAILABILITY_WINDOW_DAYS,
@@ -84,20 +94,43 @@ notificationsApp.post('/push-tokens/forget', async (c) => {
 })
 
 /**
- * The member's own switch — their own, and nobody else's.
+ * The member's own switches — their own, and nobody else's.
  *
  * Not a field of PATCH /players/:id, which is the form a club admin fills in
  * about someone. Whether a phone rings is a decision for the person holding
  * it, so this reads the session and never takes an id.
+ *
+ * Two halves, either or both: `enabled`, the master switch every build since
+ * #495 sends, and `categories` (#608), a partial per-category change merged
+ * into what the member already chose. A body carrying neither is refused.
  */
 notificationsApp.patch('/preferences', async (c) => {
   const user = c.get('user')
   if (!user) return c.json({ error: 'unauthorized' }, 401)
-  const { enabled } = await c.req.json<{ enabled?: unknown }>()
-  if (typeof enabled !== 'boolean') return c.json({ error: 'invalid_params' }, 400)
-  await c.env.DB.prepare('UPDATE users SET notifications_enabled = ? WHERE id = ?')
-    .bind(enabled ? 1 : 0, user.id).run()
-  return c.json({ ok: true, enabled })
+  const body = await c.req.json<{ enabled?: unknown; categories?: unknown }>()
+  const hasEnabled = typeof body.enabled === 'boolean'
+  const patch = sanitizePreferencesPatch(body.categories)
+  const hasCategories = Object.keys(patch).length > 0
+  if (!hasEnabled && !hasCategories) return c.json({ error: 'invalid_params' }, 400)
+  if (hasEnabled) {
+    await c.env.DB.prepare('UPDATE users SET notifications_enabled = ? WHERE id = ?')
+      .bind(body.enabled ? 1 : 0, user.id).run()
+  }
+  let stored = parsePreferences(user.notification_preferences)
+  if (hasCategories) {
+    // Read again rather than trusted from the session's row: two switches
+    // flicked in quick succession must not have the second undo the first.
+    const row = await c.env.DB.prepare('SELECT notification_preferences FROM users WHERE id = ?')
+      .bind(user.id).first<{ notification_preferences: string | null }>()
+    stored = mergePreferences(parsePreferences(row?.notification_preferences ?? null), patch)
+    await c.env.DB.prepare('UPDATE users SET notification_preferences = ? WHERE id = ?')
+      .bind(JSON.stringify(stored), user.id).run()
+  }
+  return c.json({
+    ok: true,
+    ...(hasEnabled ? { enabled: body.enabled } : {}),
+    notificationPreferences: stored,
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -148,7 +181,9 @@ notificationsApp.post('/dispatch', async (c) => {
   const today = typeof body.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.today)
     ? body.today
     : new Date().toISOString().slice(0, 10)
-  return c.json(await dispatchAvailabilityRequests(c.env, today))
+  const matches = await dispatchAvailabilityRequests(c.env, today)
+  const trainings = await dispatchTrainingNotifications(c.env, today)
+  return c.json({ ...matches, trainings })
 })
 
 /** Constant-time compare, so a wrong secret cannot be found one byte at a time. */
@@ -231,7 +266,7 @@ export async function dispatchAvailabilityRequests(
   const due = availabilityRequestsDue(squads, today, alreadySent)
   if (!due.length) return { games: gameIds.length, due: 0, sent: 0, prunedTokens: 0, receipts }
 
-  const tokens = await tokensByUser(db)
+  const tokens = await tokensByUser(db, 'match')
   const messages: OutgoingPush[] = []
   const notified: Array<{ userId: string; gameId: string }> = []
   for (const d of due) {
@@ -261,6 +296,228 @@ export async function dispatchAvailabilityRequests(
     prunedTokens: delivery.invalidTokens.length,
     receipts,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Training reminders (#608)
+// ---------------------------------------------------------------------------
+
+interface TrainingDispatchReport {
+  /** Sessions inside the horizon, cancelled ones included. */
+  sessions: number
+  reminders: number
+  cancellations: number
+}
+
+interface MemberRow {
+  id: string
+  club_id: string | null
+  is_player: number
+  status: string
+  notification_preferences: string | null
+}
+
+/**
+ * Remind whoever is expected at a training session inside their own lead time,
+ * and tell whoever was counting on a session that it is off.
+ *
+ * The same ledger as the matches (#495), under two more kinds, with the
+ * occurrence key (`training@date`) in the `game_id` column: a reminder goes out
+ * once per member and session, and so does a cancellation. What is new is that
+ * the window is each member's own — so the sweep looks as far ahead as anyone
+ * may choose, and `trainingRemindersDue` decides per member.
+ *
+ * Runs after the match sweep, which has already collected yesterday's receipts
+ * — a training reminder that never arrived has had its ledger row taken back
+ * by then, and is due again below.
+ */
+export async function dispatchTrainingNotifications(
+  env: Env['Bindings'],
+  today: string,
+): Promise<TrainingDispatchReport> {
+  const db = env.DB
+  const report: TrainingDispatchReport = { sessions: 0, reminders: 0, cancellations: 0 }
+  const until = addDays(today, TRAINING_REMINDER_HORIZON_DAYS)
+
+  const trainingRows = (await db.prepare('SELECT * FROM trainings').all<TrainingRow>()).results
+  if (!trainingRows.length) return report
+  const sessionRows = (await db.prepare(
+    'SELECT * FROM training_sessions WHERE date BETWEEN ? AND ?',
+  ).bind(today, until).all<TrainingSessionRow>()).results
+
+  const occurrences = trainingOccurrences(
+    trainingRows.map(trainingFromRow),
+    sessionRows.map((r) => ({
+      trainingId: r.training_id, date: r.date, cancelled: r.cancelled === 1,
+      ...(r.note ? { note: r.note } : {}),
+    })),
+    today,
+    until,
+  )
+  report.sessions = occurrences.length
+  if (!occurrences.length) return report
+
+  const clubIds = [...new Set(occurrences.map((o) => o.training.clubId))]
+  const [members, groups, places] = await Promise.all([
+    clubMembers(db, clubIds),
+    clubMemberGroups(db, clubIds),
+    clubPlaces(db, clubIds),
+  ])
+  const preferences = new Map<string, NotificationPreferences>(
+    members.map((m) => [m.id, resolveNotificationPreferences(parsePreferences(m.notification_preferences))]),
+  )
+  const defaults = resolveNotificationPreferences(null)
+  const preferencesOf = (userId: string) => preferences.get(userId) ?? defaults
+  const asMembers: TrainingMember[] = members.map((m) => ({
+    id: m.id, clubId: m.club_id ?? undefined, isPlayer: m.is_player === 1, status: m.status,
+  }))
+
+  const audiences: OccurrenceAudience[] = []
+  const labels = new Map<string, TrainingLabels>()
+  for (const o of occurrences) {
+    const key = occurrenceKey(o.training.id, o.date)
+    audiences.push({
+      key, kind: o.training.kind, date: o.date, cancelled: o.cancelled,
+      memberIds: expectedMemberIds(o.training, groups, asMembers),
+    })
+    const place = placeOf(places, o.training.clubId, o.training.addressId)
+    labels.set(key, {
+      trainingId: o.training.id, kind: o.training.kind, displayName: o.training.displayName,
+      date: o.date, startTime: o.training.startTime,
+      ...(place ? { place } : {}),
+      ...(o.note ? { note: o.note } : {}),
+    })
+  }
+
+  const keys = audiences.map((a) => a.key)
+  const reminded = await ledgerRows(db, TRAINING_REMINDER, keys)
+  const remindedKeys = new Set(reminded.map((r) => trainingSentKey(r.user_id, r.game_id)))
+  const reminders = trainingRemindersDue(audiences, preferencesOf, today, remindedKeys)
+
+  // Who was counting on each cancelled session: reminded of it, or said they
+  // were coming. Not everyone expected — see `cancellationsDue`.
+  const cancelledKeys = audiences.filter((a) => a.cancelled).map((a) => a.key)
+  let cancellations: DueTrainingNotification[] = []
+  if (cancelledKeys.length) {
+    const counting = new Map<string, Set<string>>()
+    const add = (key: string, userId: string) =>
+      counting.set(key, (counting.get(key) ?? new Set()).add(userId))
+    const wanted = new Set(cancelledKeys)
+    for (const r of reminded) if (wanted.has(r.game_id)) add(r.game_id, r.user_id)
+    const coming = await db.prepare(
+      `SELECT training_id, date, player_id FROM training_availabilities
+        WHERE status IN ('available', 'maybe') AND date BETWEEN ? AND ?`,
+    ).bind(today, until).all<{ training_id: string; date: string; player_id: string }>()
+    for (const r of coming.results) {
+      const key = occurrenceKey(r.training_id, r.date)
+      if (wanted.has(key)) add(key, r.player_id)
+    }
+    const told = new Set(
+      (await ledgerRows(db, TRAINING_CANCELLED, cancelledKeys)).map((r) => trainingSentKey(r.user_id, r.game_id)),
+    )
+    cancellations = cancellationsDue(audiences, counting, preferencesOf, today, told)
+  }
+  if (!reminders.length && !cancellations.length) return report
+
+  const kindOf = new Map(audiences.map((a) => [a.key, a.kind]))
+  const send = async (
+    kind: string,
+    due: DueTrainingNotification[],
+    message: (l: TrainingLabels) => PushMessage,
+  ) => {
+    const messages: OutgoingPush[] = []
+    const notified: Array<{ userId: string; gameId: string }> = []
+    for (const trainingKind of ['guided', 'regular'] as TrainingKind[]) {
+      const mine = due.filter((d) => kindOf.get(d.key) === trainingKind)
+      if (!mine.length) continue
+      const tokens = await tokensByUser(db, categoryOfTraining(trainingKind), mine.map((d) => d.userId))
+      for (const d of mine) {
+        const deviceTokens = tokens.get(d.userId)
+        const l = labels.get(d.key)
+        // No device: nothing recorded either, as for a match — installing the
+        // app on Monday still brings Tuesday's reminder.
+        if (!deviceTokens?.length || !l) continue
+        const m = message(l)
+        const ref = { kind, userId: d.userId, gameId: d.key }
+        for (const to of deviceTokens) messages.push({ to, ...m, ref })
+        notified.push({ userId: d.userId, gameId: d.key })
+      }
+    }
+    if (!messages.length) return 0
+    const delivery = await sendPushes(env, messages)
+    await recordSent(db, kind, notified)
+    await pruneTokens(db, delivery.invalidTokens)
+    await recordTickets(db, delivery.tickets)
+    return notified.length
+  }
+
+  report.reminders = await send(TRAINING_REMINDER, reminders, (l) => trainingReminderPush(l, today))
+  report.cancellations = await send(TRAINING_CANCELLED, cancellations, trainingCancelledPush)
+  return report
+}
+
+/** The members of these clubs, with what they want pushed. */
+async function clubMembers(db: D1Database, clubIds: string[]): Promise<MemberRow[]> {
+  const out: MemberRow[] = []
+  for (const chunk of chunked(clubIds)) {
+    const holes = chunk.map(() => '?').join(',')
+    const r = await db.prepare(
+      `SELECT id, club_id, is_player, status, notification_preferences FROM users WHERE club_id IN (${holes})`,
+    ).bind(...chunk).all<MemberRow>()
+    out.push(...r.results)
+  }
+  return out
+}
+
+/** These clubs' member groups (#602), memberships folded in. */
+async function clubMemberGroups(db: D1Database, clubIds: string[]): Promise<MemberGroup[]> {
+  const byId = new Map<string, MemberGroup>()
+  for (const chunk of chunked(clubIds)) {
+    const holes = chunk.map(() => '?').join(',')
+    const r = await db.prepare(
+      `SELECT g.id AS id, g.club_id AS club_id, g.display_name AS display_name, m.user_id AS user_id
+         FROM member_groups g
+         LEFT JOIN member_group_members m ON m.group_id = g.id
+        WHERE g.club_id IN (${holes})`,
+    ).bind(...chunk).all<{ id: string; club_id: string; display_name: string; user_id: string | null }>()
+    for (const row of r.results) {
+      const g = byId.get(row.id) ?? { id: row.id, clubId: row.club_id, displayName: row.display_name, memberIds: [] }
+      if (row.user_id) g.memberIds.push(row.user_id)
+      byId.set(row.id, g)
+    }
+  }
+  return [...byId.values()]
+}
+
+interface PlaceRow {
+  id: string
+  club_id: string
+  label: string | null
+  city: string | null
+  is_default: number
+}
+
+async function clubPlaces(db: D1Database, clubIds: string[]): Promise<PlaceRow[]> {
+  const out: PlaceRow[] = []
+  for (const chunk of chunked(clubIds)) {
+    const holes = chunk.map(() => '?').join(',')
+    const r = await db.prepare(
+      `SELECT id, club_id, label, city, is_default FROM club_addresses WHERE club_id IN (${holes})`,
+    ).bind(...chunk).all<PlaceRow>()
+    out.push(...r.results)
+  }
+  return out
+}
+
+/**
+ * Where a session is, in the few words a notification has room for: the
+ * address the training names, else the club's default — its label if it has
+ * one, its city otherwise.
+ */
+function placeOf(places: PlaceRow[], clubId: string, addressId: string | undefined): string | undefined {
+  const own = places.filter((p) => p.club_id === clubId)
+  const a = (addressId && own.find((p) => p.id === addressId)) || own.find((p) => p.is_default === 1) || own[0]
+  return a ? (a.label || a.city || undefined) : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +564,7 @@ export async function notifyAvailabilityChange(
     const name = await playerName(env.DB, args.playerId)
     const selected = await isSelected(env.DB, args.gameId, team.id, args.playerId)
     const message = availabilityChangePush(labels, name, args.from, args.to, selected)
-    await pushTo(env, captains, message)
+    await pushTo(env, 'match', captains, message)
   } catch (e) {
     console.error('[push] changement de dispo non notifié', e)
   }
@@ -386,8 +643,13 @@ async function playerName(db: D1Database, playerId: string): Promise<string> {
 }
 
 /** Send one message to several members, on every device each of them has. */
-async function pushTo(env: Env['Bindings'], userIds: string[], message: PushMessage) {
-  const tokens = await tokensByUser(env.DB, userIds)
+async function pushTo(
+  env: Env['Bindings'],
+  category: NotificationCategory,
+  userIds: string[],
+  message: PushMessage,
+) {
+  const tokens = await tokensByUser(env.DB, category, userIds)
   const messages: OutgoingPush[] = []
   for (const userId of userIds) {
     for (const to of tokens.get(userId) ?? []) messages.push({ to, ...message })
@@ -413,36 +675,65 @@ const chunked = <T>(items: T[], size = BIND_CHUNK): T[][] => {
   return out
 }
 
+interface TokenRow {
+  token: string
+  user_id: string
+  notification_preferences?: string | null
+}
+
 /**
  * The devices to ring, per member, with anyone who switched notifications off
- * already dropped — the preference is enforced here rather than at each call
- * site so no future sender can forget it.
+ * already dropped — the master switch, and the category this message belongs
+ * to (#608). Both are enforced here rather than at each call site, and the
+ * category is a required argument, so no future sender can forget either.
  */
 async function tokensByUser(
   db: D1Database,
+  category: NotificationCategory,
   userIds?: string[],
 ): Promise<Map<string, string[]>> {
   const byUser = new Map<string, string[]>()
-  const collect = (rows: Array<{ token: string; user_id: string }>) => {
-    for (const r of rows) byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), r.token])
+  const collect = (rows: TokenRow[]) => {
+    for (const r of rows) {
+      if (!resolveNotificationPreferences(parsePreferences(r.notification_preferences))[category].enabled) continue
+      byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), r.token])
+    }
   }
   const base =
-    `SELECT p.token AS token, p.user_id AS user_id
+    `SELECT p.token AS token, p.user_id AS user_id, u.notification_preferences AS notification_preferences
        FROM push_tokens p
        JOIN users u ON u.id = p.user_id
       WHERE u.notifications_enabled = 1`
   if (!userIds) {
-    const r = await db.prepare(base).all<{ token: string; user_id: string }>()
+    const r = await db.prepare(base).all<TokenRow>()
     collect(r.results)
     return byUser
   }
   for (const chunk of chunked([...new Set(userIds)])) {
     const holes = chunk.map(() => '?').join(',')
     const r = await db.prepare(`${base} AND p.user_id IN (${holes})`)
-      .bind(...chunk).all<{ token: string; user_id: string }>()
+      .bind(...chunk).all<TokenRow>()
     collect(r.results)
   }
   return byUser
+}
+
+/** The ledger's rows of one kind, for these matches (or training sessions). */
+async function ledgerRows(
+  db: D1Database,
+  kind: string,
+  gameIds: string[],
+): Promise<Array<{ user_id: string; game_id: string }>> {
+  const rows: Array<{ user_id: string; game_id: string }> = []
+  for (const chunk of chunked(gameIds)) {
+    const holes = chunk.map(() => '?').join(',')
+    const r = await db.prepare(
+      `SELECT user_id, game_id FROM notifications_sent
+        WHERE kind = ? AND game_id IN (${holes})`,
+    ).bind(kind, ...chunk).all<{ user_id: string; game_id: string }>()
+    rows.push(...r.results)
+  }
+  return rows
 }
 
 /** Which (member, match) pairs have already been told, for these matches. */
@@ -451,16 +742,7 @@ async function sentLedger(
   kind: string,
   gameIds: string[],
 ): Promise<Set<string>> {
-  const sent = new Set<string>()
-  for (const chunk of chunked(gameIds)) {
-    const holes = chunk.map(() => '?').join(',')
-    const r = await db.prepare(
-      `SELECT user_id, game_id FROM notifications_sent
-        WHERE kind = ? AND game_id IN (${holes})`,
-    ).bind(kind, ...chunk).all<{ user_id: string; game_id: string }>()
-    for (const row of r.results) sent.add(sentKey(row.user_id, row.game_id))
-  }
-  return sent
+  return new Set((await ledgerRows(db, kind, gameIds)).map((row) => sentKey(row.user_id, row.game_id)))
 }
 
 async function recordSent(

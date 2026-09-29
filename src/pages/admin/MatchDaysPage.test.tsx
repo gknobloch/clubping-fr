@@ -73,7 +73,7 @@ function baseData() {
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
-    playerSeasonLicences: [],
+    playerSeasonLicences: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
     playerSeasonCategories: mockPlayerSeasonCategories,
     playerPhasePoints: mockPlayerPhasePoints,
   }
@@ -147,9 +147,9 @@ describe('MatchDaysPage — sélecteur de phase (#432)', () => {
   /** Deliberately not chronological — this is what the API can hand back. */
   const SHUFFLED = [OLDEST, NEWEST, MIDDLE]
 
-  function renderWithPhases(phases: Phase[]) {
+  function renderWithPhases(phases: Phase[], url = '/journees') {
     render(
-      <MemoryRouter initialEntries={['/journees']}>
+      <MemoryRouter initialEntries={[url]}>
         <DataProvider initialData={{ ...baseData(), phases }}>
           <MatchDaysPage />
         </DataProvider>
@@ -194,6 +194,24 @@ describe('MatchDaysPage — sélecteur de phase (#432)', () => {
     fireEvent.click(screen.getAllByLabelText('Phase suivante')[0])
     fireEvent.click(screen.getAllByLabelText('Phase suivante')[0])
     for (const b of screen.getAllByLabelText('Phase suivante')) expect(b).toBeDisabled()
+  })
+
+  // #608 — a journée of the accueil's « Prochaines journées » opens the page on it.
+  it('opens on the phase and the journée a link names', () => {
+    renderWithPhases(SHUFFLED, '/journees?phase=phase-27-1')
+    expect(new Set(switcherLabels())).toEqual(new Set(['Saison 2026/2027 Phase 1']))
+  })
+
+  it('opens on the journée a link names, not the current one', () => {
+    const groups = clubMatchDayGroups()
+    const active = activeMatchDayNumber(groups)
+    const other = groups.find((g) => g.number !== active)
+    expect(other, 'mock data needs a second journée').toBeDefined()
+
+    renderWithPhases(mockPhases, `/journees?phase=${PHASE_ID}&journee=${other!.number}`)
+
+    expect(screen.getByText(`Journée ${other!.number}`)).toBeInTheDocument()
+    expect(screen.queryByText(`Journée ${active}`)).not.toBeInTheDocument()
   })
 
   it('names the journée and the week it covers, instead of a bare "J8"', () => {

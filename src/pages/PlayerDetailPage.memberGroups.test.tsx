@@ -33,6 +33,7 @@ function renderPlayer(id: string, memberGroups: MemberGroup[] = mockMemberGroups
           games: mockGames, gameAvailabilities: mockGameAvailabilities,
           gameSelections: mockGameSelections, users: mockUsers,
           playerSeasonLicences: [], playerSeasonCategories: [], memberGroups,
+          trainings: [], trainingSessions: [], trainingAvailabilities: [],
           playerPhasePoints: mockPlayerPhasePoints,
         }}
       >

@@ -289,6 +289,8 @@ export function formatMatchDayRange(startDate: string, endDate: string): string 
 export interface UpcomingRound {
   /** `phaseId:number` — rounds are numbered per phase, not globally. */
   id: string
+  /** The phase it belongs to — what a screen needs to open this round (#608). */
+  phaseId: string
   number: number
   /** Earliest and latest date among the rows merged here; equal when the
    *  club's teams all play on the same day. */
@@ -354,10 +356,11 @@ export function upcomingRounds<
     // A journée the club does not play in is not their journée. Without a club
     // scope every journée counts, including one with no games recorded yet.
     if (mine && !counts.has(md.id)) continue
-    const id = `${phaseOf(md)}:${md.number}`
+    const phaseId = phaseOf(md)
+    const id = `${phaseId}:${md.number}`
     const found = rounds.get(id)
     if (!found) {
-      rounds.set(id, { id, number: md.number, from: md.date, to: md.date, games: counts.get(md.id) ?? 0 })
+      rounds.set(id, { id, phaseId, number: md.number, from: md.date, to: md.date, games: counts.get(md.id) ?? 0 })
       continue
     }
     if (md.date < found.from) found.from = md.date

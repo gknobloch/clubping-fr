@@ -12,7 +12,7 @@ import { MatchDate } from '@/components/MatchDate'
 import { GameQuickView } from '@/components/GameQuickView'
 import { PlayerPhaseHistory } from '@/components/PlayerPhaseHistory'
 import { SelectionSheet } from '@/components/SelectionSheet'
-import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck } from '@/components/Availability'
+import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck, MyAvailabilityField } from '@/components/Availability'
 import { HomeIcon, AwayIcon, Pill, PhaseSwitchButton, AlertIcon, ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
@@ -27,6 +27,7 @@ import {
   upcomingRounds, upcomingTeamGames,
 } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
+import { NextTrainings } from '@/components/NextTrainings'
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -164,9 +165,11 @@ export function HomePage() {
           {/* The next match, full width: from md: up the card splits in two on
               its own — the game on the left, the team's answers on the right —
               so it no longer shares the row with two counters (#461). */}
-          <div className="flex flex-col gap-3">
+          {/* A named region, as « Prochains entraînements » is below it: both
+              carry a « Ma disponibilité », and each is found by its own (#608). */}
+          <section aria-labelledby="home-matches" className="flex flex-col gap-3">
             <div className="flex h-7 items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochains matchs</p>
+              <h2 id="home-matches" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochains matchs</h2>
               {upcoming.length > 1 && (
                 <div className="flex items-center gap-1">
                   <PhaseSwitchButton
@@ -275,8 +278,7 @@ export function HomePage() {
                             triplets in one card, one meaning "me" and the other
                             "everyone", have to say which is which (#461). */}
                         <div className="mt-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ma disponibilité</p>
-                          <div className="mt-1" role="group" aria-label="Ma disponibilité">
+                          <MyAvailabilityField>
                             {locked !== undefined ? (
                               <span className="text-xs italic text-slate-500">Joue en Équipe {locked}</span>
                             ) : myPlayerId ? (
@@ -288,7 +290,7 @@ export function HomePage() {
                             ) : (
                               <AvailabilityChip status={availOf(g.id)} />
                             )}
-                          </div>
+                          </MyAvailabilityField>
                         </div>
                       </div>
 
@@ -441,7 +443,7 @@ export function HomePage() {
                 )
               })()
             )}
-          </div>
+          </section>
 
           {/* Season facts, not match facts: a footer under the card rather than
               a column beside it. One line each from md: up — label at one end,
@@ -489,14 +491,21 @@ export function HomePage() {
                 </h2>
                 <ul>
                   {next.map((round) => (
-                    <li key={round.id} className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-800">Journée {round.number}</span>
-                        <span className="block text-xs text-slate-500">{formatRoundDates(round)}</span>
-                      </span>
-                      <span className="text-sm text-slate-500">
-                        {round.games} match{round.games > 1 ? 's' : ''}
-                      </span>
+                    <li key={round.id} className="border-t border-slate-100">
+                      {/* Opens the Journées page on this journée (#608). */}
+                      <Link
+                        to={`/journees?${new URLSearchParams({ phase: round.phaseId, journee: String(round.number) })}`}
+                        className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-slate-800">Journée {round.number}</span>
+                          <span className="block text-xs text-slate-500">{formatRoundDates(round)}</span>
+                        </span>
+                        <span className="text-sm text-slate-500">
+                          {round.games} match{round.games > 1 ? 's' : ''}
+                        </span>
+                        <ChevronRightIcon className="h-4 w-4 text-slate-400" />
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -509,6 +518,11 @@ export function HomePage() {
       {/* Match history — one phase (season) at a time via the switcher (#233),
           defaulting to the active one. */}
       {myPlayerId && <PlayerPhaseHistory playerId={myPlayerId} title="Tous mes matchs" />}
+
+      {/* The trainings, as a group of their own after everything about matches
+          (#608) — the two never interleave. For anyone expected, player or not:
+          belonging to a coached group does not take a team. */}
+      <NextTrainings />
 
       {quickGame && (
         <GameQuickView gameId={quickGame.gameId} teamId={quickGame.teamId} onClose={() => setQuickGame(null)} />

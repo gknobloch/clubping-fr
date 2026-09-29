@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { UserRow } from './rows'
 import { sendEmail } from './email'
+import { parsePreferences } from '../../src/lib/notificationPreferences'
 
 // Shared environment for the whole API. Secrets/vars are configured as
 // Cloudflare Pages bindings (see wrangler.toml notes).
@@ -245,6 +246,10 @@ function serializeUser(r: UserRow) {
     // that answers about the person asking — one member's preference is not
     // part of the club's dataset.
     notificationsEnabled: r.notifications_enabled !== 0,
+    // Per category (#608), sparse: only what the member changed. The client
+    // resolves the defaults, so a default revised later reaches everyone who
+    // never touched it.
+    notificationPreferences: parsePreferences(r.notification_preferences),
   }
 }
 

@@ -257,6 +257,17 @@ invisible dans le diff comme dans la revue.
   lister verbatim répétait « Journée 1 — 1 match » une fois par poule.
 - Un club sans équipe ne voit **rien**, ce qui est où une inscription toute
   fraîche laisse son administrateur.
+- **Une journée listée mène à elle** (#608) : chaque ligne ouvre les Journées
+  sur cette journée, la phase portée par `UpcomingRound.phaseId`. Sur le web,
+  `/journees?phase=…&journee=…` ; dans l'app, `/journee` avec les mêmes
+  paramètres, poussé avec son chevron — l'onglet est une racine, sans retour
+  vers l'accueil. Les paramètres ne sont lus qu'une fois, comme point de
+  départ : les sélecteurs sont au membre ensuite.
+- **La vue générique prend la largeur de celle d'un joueur** sur une tablette.
+  Elle gardait la colonne d'un téléphone, défendable tant qu'elle n'était
+  qu'une courte pile de cartes ; les entraînements y sont maintenant deux par
+  page, et le même bloc à deux largeurs selon qu'on joue ou non se lisait
+  comme deux écrans différents.
 - Corrigé sur le web en #474, puis retrouvé intact dans l'app en #522 : les
   deux écrans passent maintenant par le même code, `formatRoundDates` compris :
   une plage de dates et non une date, parce que chaque poule a son propre
@@ -792,6 +803,178 @@ invisible dans le diff comme dans la revue.
   l'écran des Joueurs lui-même, pas une copie. Seule exception : la fiche en
   volet, à côté de la liste, qui filtre la liste **en place** (`setParams`) et
   n'a rien à défaire.
+
+### Entraînements collectifs (#608)
+- **Deux calendriers, une table.** Un entraînement *libre* est un créneau —
+  « tous les mardis à 20 h » — qui tient toute la saison sauf ses exceptions ;
+  un entraînement *dirigé* suit le planning d'un encadrant, une date à la
+  fois. Les deux sont une ligne `trainings` (la série : club, horaire, lieu,
+  pour qui) ; ce qui diffère, c'est d'où viennent les dates.
+- **`training_sessions` est une ligne par date dont on a dit quelque chose.**
+  Pour une série dirigée, la ligne EST la séance : pas de ligne, pas de
+  séance. Pour un créneau libre, c'est une exception — le mardi où le gymnase
+  est fermé — et les autres mardis n'en ont aucune. Un créneau n'est jamais
+  matérialisé en quarante lignes : il se déroule à la lecture.
+- `trainingOccurrences` (`src/lib/trainings.ts`) est la seule dérivation des
+  dates, partagée par le web, l'app et le balayage. Une exception pour un jour
+  que le créneau n'a pas est ignorée : elle n'est l'exception de rien.
+- **Annulée n'est pas supprimée.** Une séance annulée reste affichée, avec son
+  motif, parce que les membres doivent voir qu'elle l'est — et le balayage la
+  lit pour prévenir ceux qui comptaient dessus. Supprimer, c'est pour une date
+  saisie par erreur. Une exception qui ne dit plus rien (rétablie, sans note)
+  est supprimée plutôt que gardée vide.
+- **Annuler et retirer sont deux gestes**, offerts ensemble sous le « … »
+  d'une séance dirigée, sur le web comme dans l'app. *Annuler* : la séance
+  n'a pas lieu — elle reste listée, barrée, avec son motif, et ceux qui
+  comptaient dessus sont prévenus. *Retirer cette date* : elle n'aurait jamais
+  dû exister — la ligne disparaît, les réponses avec elle, et personne n'est
+  prévenu. Un créneau libre n'a que le premier : ses mardis ne sont pas des
+  lignes qu'on aurait pu saisir par erreur. La confirmation du retrait dit
+  « Garder », jamais « Annuler », qui s'y lirait comme l'autre geste.
+- **Le type ne change jamais après la création** : les lignes d'une série
+  dirigée sont ses séances, celles d'un créneau ses exceptions, et basculer
+  transformerait l'un en l'autre sans un mot.
+- **Qui est attendu, ce sont les groupes (#602).** Aucun groupe veut dire *tout
+  le club* — comme une liste de catégories vide (#482) — et « tout le club »
+  veut dire ses licenciés actifs : lu littéralement, il sonnerait le trésorier
+  pour un mardi. Un groupe, lui, compte tous ses membres, licenciés ou non.
+- **Seules les séances dirigées demandent une réponse.** Un créneau libre est
+  là où viennent les habitués ; le leur demander chaque semaine apprendrait au
+  club à couper l'app. « Sans réponse » est l'absence de ligne, comme pour un
+  match, et le décompte ne porte que sur les attendus.
+- Écrire le calendrier suit `administers`, le club lu dans l'URL et chaque
+  requête épinglée à lui, comme les groupes. Répondre suit le membre : lui-même,
+  ou qui administre son club — l'encadrant, pour le licencié qui l'a dit à la
+  porte. `GET /api/data` ne porte que les entraînements du club de celui qui
+  regarde.
+- **Dans l'app, Entraînements est un sixième onglet**, à côté de Club et non à
+  sa place : Accueil · Club · Équipes · Journées · Entraînements · Joueurs,
+  l'ordre du web. Le rail d'une tablette a la place ; sur un téléphone chaque
+  onglet a ~65 pt à 390 pt, donc `TabBar` laisse un libellé rétrécir
+  (`adjustsFontSizeToFit`, jusqu'à 80 %) plutôt que de couper
+  « Entraînements » en « Entraînem… ». Un essai à cinq, Club rangé dans Mon
+  compte, a été écarté : le club y devenait introuvable.
+- **L'onglet est masqué, jamais désinscrit** (`tabBarItemStyle`, comme Compte),
+  pour un club qui ne publie aucun entraînement — une destination toujours
+  vide est une question à laquelle personne ne peut répondre. `href: null`
+  ferait passer un `router.push` à l'OS, et une notification ouvre
+  Entraînements au démarrage à froid, avant que les données disent si le club
+  en publie.
+- **Sur l'accueil, les entraînements sont un groupe à eux**, après tout ce qui
+  concerne les matchs (carte, compteurs, « Tous mes matchs ») — les deux ne
+  s'entremêlent jamais. **Un seul carrousel**, dirigés et libres mêlés dans
+  l'ordre des dates (`upcomingSessionsFor` sans sorte) : chaque carte porte
+  déjà sa pastille « Dirigé » / « Libre ». Deux colonnes, une par sorte, ont
+  été essayées et retirées — deux rangées à lire pour une seule question,
+  « quand est mon prochain entraînement ? ». Les cinq prochaines séances du
+  membre (`ACCUEIL_SESSIONS`), **deux par page** sur une tablette et à partir
+  de `md:` sur le web, une sur un téléphone ; la dernière page porte ce qui
+  reste (`carouselPages`). Les points dans l'app, ‹ 1/3 › sur le web, comme le
+  carrousel des matchs, et « Tous les entraînements » en dessous. Chaque carte
+  est celle de la liste. Une séance annulée reste dans la rangée, et le dit.
+  Rien quand aucune séance n'attend ce membre.
+- **La liste montre tout, dix par dix** (« Voir plus »), sur le web comme dans
+  l'app. Un horizon par sorte a été essayé et retiré : il coupait les séances
+  dirigées de décembre et les mardis au-delà d'un mois, précisément ce qu'un
+  membre vient y chercher. Le seul horizon est un an (`LIST_HORIZON_DAYS`),
+  qu'on n'atteint pas en pratique : il ne sert qu'à ne pas dérouler un créneau
+  sans fin pour toujours. Les cinq séances, c'est l'accueil seulement.
+- **Au-delà de cinq, l'accueil le dit** : un carrousel qui s'arrête à cinq
+  sans un mot se lit comme « il y en a cinq ». Une dernière carte mène à la
+  liste (`accueilSessions`) — « +5 autres séances à venir » quand chaque série
+  a une fin ; « Et les suivantes » dès qu'un créneau n'en a pas
+  (`isOpenEnded`), où un total serait un nombre que personne ne lit. Elle
+  compte comme une carte dans la pagination : sur une tablette, la cinquième
+  séance partage sa page avec elle plutôt que de rester seule à côté d'un
+  vide.
+- **Depuis l'accueil ou le Club, la liste des séances est poussée, jamais
+  l'onglet** : pousser `/entrainements` changeait d'onglet, et un onglet est
+  une racine — la liste s'affichait sans retour vers l'écran d'où l'on
+  venait. Même réponse que pour les membres d'un groupe (#602) : l'écran de
+  l'onglet lui-même, poussé avec son chevron — `(detail)/seances` depuis
+  l'accueil (l'onglet Entraînements allumé), `club/entrainements` depuis le
+  Club (le Club reste allumé). Une notification ouvre toujours l'onglet : il
+  n'y a rien derrière elle où revenir.
+- **Les séries sont au Club ; leurs séances, aux Entraînements.** Une série
+  décrit le club — ce qu'il entraîne, quand, où, pour qui, et qui la tient —
+  alors que la page Entraînements est la semaine qu'on lit et à laquelle on
+  répond. Sur le web, `ClubTrainings` est une section de `/club` (et de
+  `/clubs/:id` pour un administrateur général) : créer, modifier, poser les
+  dates d'une série dirigée, supprimer. `/entrainements` ne garde que les
+  séances — annuler, rétablir, retirer une date — et un « Gérer les séries »
+  vers `/club#entrainements` pour qui tient une série. Dans l'app, une section
+  Entraînements du Club, une entrée de plus dans le rail d'une tablette, où
+  l'on fait la même chose que sur le web ; chaque série y mène à ses séances.
+  Un essai en section repliable en tête de la page Entraînements a été écarté.
+- **« Ma disponibilité », pas « Vous venez ? »** — et le même contrôle, pas un
+  sosie : `MyAvailability` dans l'app, `MyAvailabilityField` autour
+  d'`AvailabilityButtons` sur le web, partagés par la carte du match et celle
+  d'une séance dirigée. La première carte de séance en portait une copie, qui
+  avait déjà dérivé (44 pt et une bordure de 1 contre 40 pt et 1,5) : sur
+  l'accueil, la même question en deux tailles, l'une sous l'autre.
+- **Une série dirigée a ses responsables** (`managerIds`, 0058) : son
+  encadrant, qui n'est presque jamais administrateur. Ils tiennent le
+  *planning* — ajouter et retirer des dates, annuler une séance, répondre pour
+  les attendus ; la série elle-même (horaire, lieu, pour qui, et qui la tient)
+  reste aux administrateurs. `mayManageSchedule` côté écrans, `runsSchedule`
+  côté API, et la question est posée avant « existe-t-elle ? », pour qu'un
+  inconnu n'apprenne rien des entraînements d'un autre club. Un créneau libre
+  n'a pas de responsable : il n'a pas de planning à tenir.
+- **Ajouter à l'agenda : cette séance, ou toute la série**, pour une séance
+  dirigée. Sur le web, un .ics construit sur place — un VEVENT par date encore
+  maintenue à partir d'aujourd'hui, l'UID clavé sur (série, date) pour qu'un
+  second import mette à jour au lieu de doubler. Dans l'app, une séance passe
+  par l'écran natif comme un match (#416) ; **la série ne peut pas** : cet
+  écran prend un seul événement, et en écrire plusieurs demanderait la
+  permission d'agenda que l'app refuse exprès (#418). La série est donc le .ics
+  de l'API, ouvert dans le navigateur du téléphone, qui le passe à l'agenda
+  (« Ajouter tout » sur iOS). Ce navigateur ne porte aucune session : le lien
+  porte la clé de la série (`calendar_token`), vérifiée en temps constant, et
+  une mauvaise clé répond 404 comme une série absente. Il ne révèle que les
+  dates et le lieu de cette série.
+- **`ics.ts` ne touche pas au DOM** : l'API s'en sert pour le .ics d'une série,
+  donc `downloadIcs` vit à part (`icsDownload.ts`).
+- **Les dates d'une série dirigée se posent de deux façons** : chaque semaine
+  (une première date, « chaque semaine jusqu'au »), ou cochées sur un
+  calendrier (`MultiDateCalendar`) pour un encadrant dont le planning n'est pas
+  hebdomadaire. Les dates que la série a déjà sont montrées et jamais
+  comptées deux fois ; le passé ne se coche pas.
+- **L'app tient les séries comme le web** : `TrainingEditorSheet` est le
+  formulaire de `TrainingEditor`, champ pour champ, et `AddDatesSheet` celui
+  d'`AddDatesDialog`. **Sans sélecteur natif** : une heure se règle par − / +
+  et les minutes par quart d'heure (`TimeField`), une date s'ouvre sur un mois
+  (`MonthCalendar`, le calendrier du web en natif). Un module natif de date
+  aurait exigé une nouvelle version sur les stores là où ceci part par une mise
+  à jour. `sessionDates` est la règle des dates des deux côtés, pour que « 3
+  séances » soient les trois mêmes.
+- La création attend l'API dans l'app aussi, et **refuse hors connexion** :
+  annoncer une série enregistrée qui n'a jamais quitté le téléphone est le
+  piège de #495.
+- **Les rappels sont le registre de #495 sous deux autres `kind`**
+  (`training_reminder`, `training_cancelled`), la clé d'occurrence
+  (`training@date`) dans la colonne `game_id`. La question reste « qui, parmi
+  les attendus, n'a pas encore été prévenu ? » — et c'est ce qui rend le délai
+  propre à chacun : un membre qui a choisi « la veille » n'est simplement pas
+  dû avant.
+- Jamais le jour même : le balayage passe en début de soirée, après la plupart
+  des séances du jour. Un avis d'annulation, lui, part aussi le jour même, et
+  seulement à qui comptait dessus — prévenu, ou qui avait dit venir.
+
+### Préférences de notification (#608)
+- **Par catégorie, par membre, jamais par appareil** : matchs, dirigés, libres.
+  Stockées dans `users.notification_preferences`, **creuses** — seul ce que le
+  membre a changé — et résolues par `resolveNotificationPreferences`, pour
+  qu'un défaut révisé plus tard atteigne tous ceux qui n'y ont pas touché.
+- **Matchs et dirigés activés, libres désactivés, trois jours avant.** Seuls les
+  entraînements laissent choisir le délai (1, 2, 3, 5 ou 7 jours) : les sept
+  jours d'un match sont l'avance du capitaine pour combler un trou, pas celle
+  du joueur.
+- `notifications_enabled` reste l'interrupteur général : un build qui ne
+  connaît que lui continue de marcher, et l'écran ne montre les catégories que
+  sous lui allumé.
+- **`tokensByUser` prend la catégorie en argument obligatoire**, et filtre
+  dessus comme sur l'interrupteur général : aucun expéditeur futur ne peut
+  oublier l'une ou l'autre. L'alerte capitaine est de la catégorie matchs.
 
 ### Imports and pool changes (#422)
 - Imports are additive by default: they create what is missing and never remove
