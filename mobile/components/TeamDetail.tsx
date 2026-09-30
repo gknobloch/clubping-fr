@@ -10,6 +10,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
 import { mayManageTeam } from '@shared/lib/teamAuthority'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { sortByName } from '@shared/lib/sortByName'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import {
@@ -58,7 +59,7 @@ export function TeamDetail({
 }) {
   const id = teamId
   const {
-    teams, players, clubs, seasons, phases, divisions, matchDays, games, playerSeasonLicences, playerSeasonCategories,
+    teams, players, clubs, seasons, phases, divisions, groups, matchDays, games, playerSeasonLicences, playerSeasonCategories,
     competitions, competitionGroups, memberGroups, updateTeam,
   } = useAppData()
   const { user } = useAuth()
@@ -75,6 +76,7 @@ export function TeamDetail({
   const team = teams.find((t) => t.id === id)
   const club = clubs.find((c) => c.id === team?.clubId)
   const division = divisions.find((d) => d.id === team?.divisionId)
+  const pool = team ? poolLabel(team, groups) : undefined
   const isCaptain = !!(user && team && mayManageTeam(user, team))
 
   // The FFTT did not list these licences this season (#488): a squad list is
@@ -232,7 +234,12 @@ export function TeamDetail({
           <TeamColorBadge color={team.color} number={team.number} size={48} />
           <View style={styles.identityText}>
             <Text style={styles.teamName} numberOfLines={1}>{getTeamName(team, clubs)}</Text>
-            {division && <Text style={styles.levelBadge}>{division.displayName}</Text>}
+            {division && (
+            <View style={styles.levelRow}>
+              <Text style={styles.levelBadge}>{division.displayName}</Text>
+              {pool ? <Text style={styles.levelBadge}>{pool}</Text> : null}
+            </View>
+          )}
           </View>
           {!!team.whatsappLink && (
             <TouchableOpacity
@@ -453,6 +460,7 @@ const styles = StyleSheet.create({
   },
   identityText: { flex: 1, gap: 6 },
   teamName: { fontSize: 16, fontFamily: fonts.bold, color: colors.textPrimary },
+  levelRow: { flexDirection: 'row', gap: 4 },
   levelBadge: {
     alignSelf: 'flex-start',
     fontSize: 11,

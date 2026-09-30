@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet, FlatList, RefreshControl } fr
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAppData } from '@/contexts/DataContext'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { orderPhases, defaultPhase } from '@shared/lib/phases'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
@@ -37,7 +38,7 @@ import { fonts } from '@/constants/typography'
 // way out.
 // ---------------------------------------------------------------------------
 export default function EquipesScreen() {
-  const { teams, clubs, phases, divisions, refreshing, refresh } = useAppData()
+  const { teams, clubs, phases, divisions, groups, refreshing, refresh } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const { isTwoPane } = useLayout()
@@ -141,6 +142,7 @@ export default function EquipesScreen() {
       }}
       renderItem={({ item: team }) => {
         const division = divisions.find((d) => d.id === team.divisionId)
+        const pool = poolLabel(team, groups)
         const isSelected = team.id === selectedTeam?.id
         return (
           <TouchableOpacity
@@ -152,7 +154,12 @@ export default function EquipesScreen() {
             <TeamColorBadge color={team.color} number={team.number} size={40} />
             <View style={styles.cardBody}>
               <Text style={styles.teamName}>{getTeamName(team, clubs)}</Text>
-              {division && <Text style={styles.levelBadge}>{division.displayName}</Text>}
+              {division && (
+                <View style={styles.levelRow}>
+                  <Text style={styles.levelBadge}>{division.displayName}</Text>
+                  {pool ? <Text style={styles.levelBadge}>{pool}</Text> : null}
+                </View>
+              )}
             </View>
             {/* The chevron promises a screen to come. Beside its own fiche it
                 promises nothing — the highlight is what says which row is
@@ -220,6 +227,7 @@ const styles = StyleSheet.create({
   cardSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   cardBody: { flex: 1, gap: 4 },
   teamName: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  levelRow: { flexDirection: 'row', gap: 4 },
   levelBadge: {
     alignSelf: 'flex-start',
     fontSize: 11,
