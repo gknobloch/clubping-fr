@@ -121,13 +121,15 @@ export function GameQuickView({
         {/* The slot, and the one-click way to block it in one's own agenda
             (#426) — the same pairing as the mobile match header. */}
         <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="text-sm text-slate-500">
-            <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
-            {time ? ` · ${time}` : ''}
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm text-slate-500">
+              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
+              {time ? ` · ${time}` : ''}
+            </p>
+            <MatchVenueLink venue={venue} />
+          </div>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
-        <MatchVenueLink venue={venue} className="md:mt-1" />
 
         {/* Availabilities + line-up */}
         <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">

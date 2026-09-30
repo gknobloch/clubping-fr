@@ -268,15 +268,17 @@ export function HomePage() {
                             player's own agenda (#426): answering OUI and
                             writing the match down are one gesture apart. */}
                         <div className="mt-1 flex items-center justify-between gap-2">
-                          <p className="text-sm text-slate-500">
-                            <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
-                            {time ? ` · ${time}` : ''}
-                          </p>
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-sm text-slate-500">
+                              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
+                              {time ? ` · ${time}` : ''}
+                            </p>
+                            {/* Where, in full and one tap from the route (#611) —
+                                the same lines as the match screen's. */}
+                            <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} />
+                          </div>
                           <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>
-                        {/* Where, in full and one tap from the route (#611) —
-                            the same line as the match screen's. */}
-                        <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} className="md:mt-1" />
                         {/* Labelled now that the team's own answers sit beside
                             it from md: up: two identical OUI / PE / NON
                             triplets in one card, one meaning "me" and the other

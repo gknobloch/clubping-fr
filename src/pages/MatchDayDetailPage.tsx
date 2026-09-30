@@ -207,17 +207,22 @@ export function MatchDayDetailPage() {
         <p className="mt-1 text-sm text-slate-600">
           {isHome ? 'Reçoit' : 'Se déplace à'} {getTeamLabel(opponentId)}
         </p>
+        {/* When and where in one column beside the calendar icon, as in the
+            app's match header: stacked under the icon's 44px row instead, the
+            venue pushed «Composer l'équipe» off a phone screen (#611). */}
         <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="text-sm text-slate-500">
-            <MatchDate
-              label={dateLabel}
-              confirmed={isSlotConfirmed(game, matchDay, homeTeam)}
-            />
-            {time ? ` · ${time}` : ''}
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm text-slate-500">
+              <MatchDate
+                label={dateLabel}
+                confirmed={isSlotConfirmed(game, matchDay, homeTeam)}
+              />
+              {time ? ` · ${time}` : ''}
+            </p>
+            <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} />
+          </div>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
-        <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} className="md:mt-1" />
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
           <span

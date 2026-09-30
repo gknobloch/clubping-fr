@@ -19,7 +19,10 @@ export function MatchVenueLink({ venue, className = '' }: { venue: MatchVenue | 
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`${name ? `${name}, ` : ''}${line} — ouvrir dans le plan`}
-      className={`group flex min-h-11 gap-1.5 text-sm text-slate-500 hover:text-accent-700 md:min-h-0 ${name ? 'items-start py-1 md:py-0' : 'items-center'} ${className}`}
+      // The 44px a phone target needs (#381) comes from the ::after, not from
+      // padding: the link sits between the date and the next block on pages
+      // whose budget is a phone screen (#306), and its box stays its text.
+      className={`group relative flex gap-1.5 text-sm text-slate-500 after:absolute after:inset-x-0 after:-inset-y-3 after:content-[''] hover:text-accent-700 md:after:-inset-y-0.5 ${name ? 'items-start' : 'items-center'} ${className}`}
     >
       {/* Level with the first line, whichever it is: two lines centred on the
           icon would leave it pointing between the hall and its street. */}
