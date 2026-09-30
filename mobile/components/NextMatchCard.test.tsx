@@ -70,6 +70,7 @@ function renderCard({
       teamName="Rixheim PPA 5"
       opponentName="Kembs TT 3"
       venue={{
+        kind: 'address',
         name: 'Salle des sports',
         address: { id: 'a1', label: 'Salle des sports', street: '12 rue du Stade', postalCode: '68170', city: 'Rixheim', isDefault: true },
       }}

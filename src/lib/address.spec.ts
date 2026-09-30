@@ -19,14 +19,14 @@ describe('formatAddress', () => {
 })
 
 describe('mapsSearchUrl', () => {
-  it('searches the street address, not the hall name', () => {
-    const url = new URL(mapsSearchUrl(address))
+  it('is a Google Maps search, which a phone hands to its maps app', () => {
+    const url = new URL(mapsSearchUrl(formatAddress(address)))
     expect(url.origin + url.pathname).toBe('https://www.google.com/maps/search/')
     expect(url.searchParams.get('query')).toBe('12 rue du Stade, 68170 Rixheim')
   })
 
   it('escapes what would otherwise cut the query short', () => {
-    const url = mapsSearchUrl({ ...address, street: '1 rue des Fleurs & Jardins' })
+    const url = mapsSearchUrl('1 rue des Fleurs & Jardins, 68170 Rixheim')
     expect(url).not.toContain(' ')
     expect(url).toContain('%26')
   })

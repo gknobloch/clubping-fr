@@ -5,8 +5,8 @@ import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
 import { todayIso } from '@/utils/weeks'
 import { fonts } from '@/constants/typography'
-import { formatAddress, mapsUrl } from '@/utils/club'
-import type { MatchVenue } from '@shared/lib/venue'
+import { mapsQueryUrl } from '@/utils/club'
+import { venueText, type MatchVenue } from '@shared/lib/venue'
 
 /**
  * Days-until label from a YYYY-MM-DD match date, and `null` for a match that
@@ -67,8 +67,8 @@ export function MatchHeader({
   confirmed?: boolean
   venueLabel?: string
   /**
-   * The venue in full (#611) — the hall's name, its address, and a tap that
-   * opens the maps app. Takes the place of `venueLabel`, which stays the short
+   * The venue in full (#611) — the hall's name and its address, or the home
+   * club's town when no address is on file, and a tap that opens the maps app. Takes the place of `venueLabel`, which stays the short
    * form for the cards that list several matches.
    */
   venue?: MatchVenue
@@ -88,6 +88,7 @@ export function MatchHeader({
   })
   const title = isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`
   const countdown = showCountdown ? countdownLabel(matchDayDate) : null
+  const venueInfo = venue ? venueText(venue) : null
 
   return (
     <View style={s.wrap}>
@@ -132,19 +133,19 @@ export function MatchHeader({
               {!confirmed ? 'Date à confirmer · ' : ''}{dateLabel}{time ? ` · ${time}` : ''}
             </Text>
           </View>
-          {venue ? (
+          {venueInfo ? (
             <TouchableOpacity
               style={s.metaRow}
-              onPress={() => Linking.openURL(mapsUrl(venue.address)).catch(() => {})}
+              onPress={() => Linking.openURL(mapsQueryUrl(venueInfo.query)).catch(() => {})}
               hitSlop={8}
               accessibilityRole="link"
-              accessibilityLabel={`${venue.name ? `${venue.name}, ` : ''}${formatAddress(venue.address)} — ouvrir dans le plan`}
+              accessibilityLabel={`${venueInfo.name ? `${venueInfo.name}, ` : ''}${venueInfo.line} — ouvrir dans le plan`}
               testID="match-venue"
             >
               <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
               <Text style={s.meta}>
-                {venue.name ? <Text style={s.venueName}>{venue.name} · </Text> : null}
-                <Text style={s.venueAddress}>{formatAddress(venue.address)}</Text>
+                {venueInfo.name ? <Text style={s.venueName}>{venueInfo.name} · </Text> : null}
+                <Text style={s.venueAddress}>{venueInfo.line}</Text>
               </Text>
             </TouchableOpacity>
           ) : venueLabel ? (

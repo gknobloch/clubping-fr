@@ -13,11 +13,9 @@ export function formatAddress(a: Address): string {
 }
 
 /**
- * A maps search for an address that opens anywhere: Google's cross-platform
- * URL, which a phone hands to its maps app and a desktop opens in the browser.
- * The query is the street address alone — a venue's name is for people, and a
- * geocoder asked for « Salle des sports » finds a hundred of them (#611).
+ * A maps search that opens anywhere: Google's cross-platform URL, which a
+ * phone hands to its maps app and a desktop opens in the browser (#611).
  */
-export function mapsSearchUrl(a: Address): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatAddress(a))}`
+export function mapsSearchUrl(query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
 }

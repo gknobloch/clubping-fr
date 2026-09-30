@@ -256,10 +256,22 @@ invisible dans le diff comme dans la revue.
   lieu que personne n'a choisi — même règle que l'étiquette courte.
 - **Le plan cherche l'adresse, jamais le nom** : un géocodeur à qui l'on
   demande « Salle des sports » en trouve cent.
-- **Rien quand rien n'est connu**, et c'est le cas ordinaire en déplacement :
-  les imports créent le club adverse sans adresse, et seul un club qui utilise
-  l'app remplit la sienne. Une adresse aux champs vides compte pour aucune ;
-  `formatAddress` saute un champ vide plutôt que d'imprimer une virgule.
+- **Sans adresse, la ville tirée du nom du club** (`townFromClubName`,
+  `src/lib/clubTown.ts`) : un nom FFTT est une ville et ce que le club dit de
+  lui-même, dans un ordre ou dans l'autre (« RIXHEIM PPA », « CSS BERGHEIM »,
+  « MULHOUSE TENNIS DE TABLE »). On retire les sigles — ce que
+  `normalizeFfttName` laisse en capitales —, les sigles pointés et les mots de
+  club ; le reste est la ville. Un mot court d'une ville reste lui aussi en
+  capitales (« Willer sur THUR »), donc un mot en capitales **voisin d'une
+  jointure** (« sur », « en », « de »…) est gardé. C'est une supposition : elle
+  ne sert qu'à un club sans aucune adresse, ce que le remplissage FFTT de #613
+  rend rare, et le plan cherche alors la ville (« Etival, France »). Elle vaut
+  aussi pour l'étiquette courte et pour le lieu de l'agenda.
+- **Rien quand rien n'est connu** : ni adresse, ni ville lisible dans le nom.
+  Une adresse aux champs vides compte pour aucune ; `formatAddress` saute un
+  champ vide plutôt que d'imprimer une virgule.
+- `normalizeFfttName` vit dans `src/lib/ffttNames.ts`, sans DOM, pour que l'app
+  la partage ; `ffttClub.ts` la réexporte.
 
 ### Accueil, vue générique (#474, #522)
 - **Les journées de l'accueil sont celles du club qui regarde.** `GET

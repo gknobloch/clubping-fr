@@ -239,13 +239,17 @@ describe("Détail d'un match — le lieu (#611)", () => {
     open.mockRestore()
   })
 
-  it('says nothing away at a club with no address on file', () => {
+  it("names the host's town, from its club's name, away at a club with no address on file", () => {
     // As an import creates it: no hall, and a club with no address.
     mockData.teams = [team, { ...opponent, gameLocationId: '' }]
     mockData.games = [{ ...game, homeTeamId: 't2', awayTeamId: 't1' }]
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
 
     render(<MatchDetailScreen />)
 
-    expect(screen.queryByTestId('match-venue')).toBeNull()
+    expect(screen.getByTestId('match-venue').props.accessibilityLabel).toBe('Mulhouse — ouvrir dans le plan')
+    fireEvent.press(screen.getByTestId('match-venue'))
+    expect(open).toHaveBeenCalledWith(`maps://?q=${encodeURIComponent('Mulhouse, France')}`)
+    open.mockRestore()
   })
 })
