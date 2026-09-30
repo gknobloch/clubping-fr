@@ -1,4 +1,4 @@
-import type { Group, Team } from '@/types'
+import type { Group, Team } from '../types'
 
 /** «P. 28» — the poule a team plays in, shown next to its division badge. */
 export function poolLabel(team: Pick<Team, 'groupId'>, groups: Pick<Group, 'id' | 'number'>[]): string | undefined {

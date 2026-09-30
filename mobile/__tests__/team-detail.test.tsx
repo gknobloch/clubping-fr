@@ -1,7 +1,7 @@
 import { Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
-import type { Club, Competition, Division, Phase, Player, Team, User } from '@shared/types'
+import type { Club, Competition, Division, Group, Phase, Player, Team, User } from '@shared/types'
 import TeamDetailScreen from '@/app/(tabs)/(detail)/team/[id]'
 
 // ---------------------------------------------------------------------------
@@ -20,6 +20,7 @@ const mockData = {
   clubs: [] as Club[],
   phases: [] as Phase[],
   divisions: [] as Division[],
+  groups: [] as Group[],
   matchDays: [],
   games: [],
   gameSelections: [],

@@ -25,7 +25,7 @@ import {
 import { useLayout } from '@/constants/layout'
 import { answerOverride, mayAnswerFor, mayManageTeam } from '@shared/lib/teamAuthority'
 import { sortByName } from '@shared/lib/sortByName'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolLabel as poolLabelOf } from '@shared/lib/poolLabel'
 import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
@@ -564,7 +564,7 @@ export default function JourneesScreen() {
         label={mineLabel.get(team.id)}
         mine={isMine}
         divisionLabel={divLabel(team)}
-        poolLabel={poolLabel(team, groups)}
+        poolLabel={poolLabelOf(team, groups)}
         playersPerGame={perGame(team)}
         matchDayNumber={md.number}
         matchDayDate={gameDate(game, md)}
@@ -675,7 +675,7 @@ export default function JourneesScreen() {
                       team={team}
                       title={getTeamName(team, clubs)}
                       divisionLabel={divLabel(team)}
-                      poolLabel={poolLabel(team, groups)}
+                      poolLabel={poolLabelOf(team, groups)}
                       days={days}
                       rows={matrixRows(team, days)}
                       columns={columns}
