@@ -13,6 +13,8 @@ import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { MatchVenueLink } from '@/components/MatchVenueLink'
+import { getMatchVenue } from '@/lib/venue'
 import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
 import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
@@ -165,8 +167,9 @@ export function MatchDayDetailPage() {
     }))
 
   const date = gameDate(game, matchDay)
+  const homeTeam = teams.find((t) => t.id === game.homeTeamId)
   // The receiving club's time (#287), never this team's when it travels.
-  const time = gameTime(game, matchDay, teams.find((t) => t.id === game.homeTeamId))
+  const time = gameTime(game, matchDay, homeTeam)
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -208,12 +211,13 @@ export function MatchDayDetailPage() {
           <p className="text-sm text-slate-500">
             <MatchDate
               label={dateLabel}
-              confirmed={isSlotConfirmed(game, matchDay, teams.find((t) => t.id === game.homeTeamId))}
+              confirmed={isSlotConfirmed(game, matchDay, homeTeam)}
             />
             {time ? ` · ${time}` : ''}
           </p>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
+        <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} className="md:mt-1" />
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
           <span

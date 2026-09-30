@@ -108,3 +108,16 @@ describe('GameQuickView — reaching the round (#347)', () => {
     expect(row).toContainElement(desktopLink()!)
   })
 })
+
+describe('GameQuickView — where the match is played (#611)', () => {
+  const asCaptain = { id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' }
+
+  it("gives an away match the host club's address, as a link to the map", () => {
+    // g1-1 is played at Etival, whose team names no hall: the club's own
+    // address stands in, and is not dressed up with a name nobody set.
+    renderAs(asCaptain)
+    const link = screen.getByRole('link', { name: /ouvrir dans le plan/ })
+    expect(link.textContent).toBe('1 rue du Sport, 68000 Etival')
+    expect(new URL(link.getAttribute('href')!).searchParams.get('query')).toBe('1 rue du Sport, 68000 Etival')
+  })
+})

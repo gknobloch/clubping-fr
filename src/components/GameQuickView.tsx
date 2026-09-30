@@ -12,7 +12,8 @@ import { ModalShell } from '@/components/ModalShell'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDate } from '@/components/MatchDate'
 import { getTeamName } from '@/lib/teamName'
-import { getVenue } from '@/lib/venue'
+import { getMatchVenue } from '@/lib/venue'
+import { MatchVenueLink } from '@/components/MatchVenueLink'
 import { gameDate, gameSchedule, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 
@@ -71,7 +72,7 @@ export function GameQuickView({
   const division = group ? divisions.find((d) => d.id === group.divisionId) : undefined
 
   const homeTeam = teams.find((t) => t.id === game.homeTeamId)
-  const venue = getVenue(homeTeam, clubs)
+  const venue = getMatchVenue(homeTeam, clubs)
   // The receiving club's time, never the viewing team's (#287).
   const time = gameSchedule(game, matchDay, homeTeam).time
 
@@ -123,10 +124,10 @@ export function GameQuickView({
           <p className="text-sm text-slate-500">
             <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
             {time ? ` · ${time}` : ''}
-            {venue ? ` · ${venue}` : ''}
           </p>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
+        <MatchVenueLink venue={venue} className="md:mt-1" />
 
         {/* Availabilities + line-up */}
         <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">

@@ -51,6 +51,15 @@ export function ClockIcon({ className = 'h-4 w-4' }: { className?: string }) {
   )
 }
 
+export function MapPinIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </svg>
+  )
+}
+
 // Stroke 1.5 rather than the 2 of the smaller icons here: this one is drawn at
 // 20–24px next to a date in the same slate-500, and a 2px stroke at that size
 // lays down enough ink to read as a darker grey than the text it accompanies.

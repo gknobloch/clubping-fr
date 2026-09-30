@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { CalendarPlusIcon } from '@/components/CalendarPlusIcon'
 import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
 import { todayIso } from '@/utils/weeks'
 import { fonts } from '@/constants/typography'
+import { formatAddress, mapsUrl } from '@/utils/club'
+import type { MatchVenue } from '@shared/lib/venue'
 
 /**
  * Days-until label from a YYYY-MM-DD match date, and `null` for a match that
@@ -43,6 +45,7 @@ export function MatchHeader({
   time,
   confirmed = true,
   venueLabel,
+  venue,
   showCountdown,
   label,
   labelMine,
@@ -63,6 +66,12 @@ export function MatchHeader({
    */
   confirmed?: boolean
   venueLabel?: string
+  /**
+   * The venue in full (#611) — the hall's name, its address, and a tap that
+   * opens the maps app. Takes the place of `venueLabel`, which stays the short
+   * form for the cards that list several matches.
+   */
+  venue?: MatchVenue
   showCountdown?: boolean
   /** Optional badge shown right of the team (e.g. "Mon équipe" / "Renfort"). */
   label?: string
@@ -123,7 +132,22 @@ export function MatchHeader({
               {!confirmed ? 'Date à confirmer · ' : ''}{dateLabel}{time ? ` · ${time}` : ''}
             </Text>
           </View>
-          {venueLabel ? (
+          {venue ? (
+            <TouchableOpacity
+              style={s.metaRow}
+              onPress={() => Linking.openURL(mapsUrl(venue.address)).catch(() => {})}
+              hitSlop={8}
+              accessibilityRole="link"
+              accessibilityLabel={`${venue.name ? `${venue.name}, ` : ''}${formatAddress(venue.address)} — ouvrir dans le plan`}
+              testID="match-venue"
+            >
+              <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+              <Text style={s.meta}>
+                {venue.name ? <Text style={s.venueName}>{venue.name} · </Text> : null}
+                <Text style={s.venueAddress}>{formatAddress(venue.address)}</Text>
+              </Text>
+            </TouchableOpacity>
+          ) : venueLabel ? (
             <View style={s.metaRow}>
               <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
               <Text style={s.meta}>{venueLabel}</Text>
@@ -174,6 +198,10 @@ const s = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
   metaUnconfirmed: { color: colors.warningText },
+  venueName: { fontFamily: fonts.medium, color: colors.textPrimary },
+  // Underlined as the web's link is: the one line of the header that goes
+  // somewhere, and nothing else about it says so.
+  venueAddress: { textDecorationLine: 'underline', textDecorationColor: colors.border },
   // Bare, like the team header's WhatsApp icon — the app's icon buttons carry
   // no chrome, and hitSlop rather than padding gives them their target.
   calendarBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },

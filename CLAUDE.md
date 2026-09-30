@@ -241,6 +241,22 @@ invisible dans le diff comme dans la revue.
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
 
+### Lieu d'un match (#611)
+- **L'écran du match dit où l'on joue, en entier** : le nom de la salle, puis
+  l'adresse, et un toucher ouvre le plan — Plans sur iOS, `geo:` sur Android,
+  la recherche Google Maps sur le web. Les listes gardent l'étiquette courte
+  (`getVenue`) ; l'écran du match et l'aperçu du web passent par
+  `getMatchVenue`, la seule dérivation de la forme longue.
+- **Seul le lieu de jeu configuré porte un nom.** Sans lui, c'est l'adresse
+  par défaut du club qui reçoit, sans nom : l'appeler « Siège » affirmerait un
+  lieu que personne n'a choisi — même règle que l'étiquette courte.
+- **Le plan cherche l'adresse, jamais le nom** : un géocodeur à qui l'on
+  demande « Salle des sports » en trouve cent.
+- **Rien quand rien n'est connu**, et c'est le cas ordinaire en déplacement :
+  les imports créent le club adverse sans adresse, et seul un club qui utilise
+  l'app remplit la sienne. Une adresse aux champs vides compte pour aucune ;
+  `formatAddress` saute un champ vide plutôt que d'imprimer une virgule.
+
 ### Accueil, vue générique (#474, #522)
 - **Les journées de l'accueil sont celles du club qui regarde.** `GET
   /api/data` porte la table entière, donc la lister telle quelle montre le
