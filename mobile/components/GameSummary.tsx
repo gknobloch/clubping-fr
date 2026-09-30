@@ -16,6 +16,7 @@ export function GameSummary({
   time,
   matchDayNumber,
   divisionLabel,
+  poolLabel,
   style,
 }: {
   title: string
@@ -27,9 +28,10 @@ export function GameSummary({
   time?: string
   matchDayNumber?: number
   divisionLabel?: string
+  poolLabel?: string
   style?: StyleProp<ViewStyle>
 }) {
-  const hasBadges = matchDayNumber != null || !!divisionLabel
+  const hasBadges = matchDayNumber != null || !!divisionLabel || !!poolLabel
   return (
     <View style={[s.info, style]}>
       {teamLabel ? <Text style={s.teamLabel}>{teamLabel}</Text> : null}
@@ -59,6 +61,7 @@ export function GameSummary({
         <View style={s.badges}>
           {matchDayNumber != null ? <Text style={s.badge}>J{matchDayNumber}</Text> : null}
           {divisionLabel ? <Text style={s.badge}>{divisionLabel}</Text> : null}
+          {poolLabel ? <Text style={s.badge}>{poolLabel}</Text> : null}
         </View>
       )}
     </View>

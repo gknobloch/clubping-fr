@@ -184,6 +184,7 @@ export function MatchDayMatrix({
   title,
   subtitle,
   divisionLabel,
+  poolLabel,
   search,
   days,
   rows,
@@ -204,6 +205,7 @@ export function MatchDayMatrix({
   title: string
   subtitle?: string
   divisionLabel?: string
+  poolLabel?: string
   /** The name filter, given only once the list is long enough to need it. */
   search?: { value: string; onChange: (value: string) => void }
   days: MatrixDay[]
@@ -252,7 +254,7 @@ export function MatchDayMatrix({
           <Text style={s.teamName} numberOfLines={1}>{title}</Text>
           {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
         </TouchableOpacity>
-        {divisionLabel ? <Text style={s.division}>{divisionLabel}</Text> : null}
+        {divisionLabel ? <Text style={s.division}>{poolLabel ? `${divisionLabel} · ${poolLabel}` : divisionLabel}</Text> : null}
         {pager && (
           <View style={s.pager}>
             <TouchableOpacity

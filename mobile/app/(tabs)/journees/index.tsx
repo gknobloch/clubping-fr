@@ -25,6 +25,7 @@ import {
 import { useLayout } from '@/constants/layout'
 import { answerOverride, mayAnswerFor, mayManageTeam } from '@shared/lib/teamAuthority'
 import { sortByName } from '@shared/lib/sortByName'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { computeBrulage, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
@@ -39,11 +40,11 @@ import { fonts } from '@/constants/typography'
 // Match card — consistent with the Accueil next-match header
 // ---------------------------------------------------------------------------
 function MatchCard({
-  team, teamName, label, mine, divisionLabel, playersPerGame,
+  team, teamName, label, mine, divisionLabel, poolLabel, playersPerGame,
   matchDayNumber, matchDayDate, time, confirmed, opponentName, isHome, selectedCount, availableCount, onPress,
 }: {
   team: Team; teamName: string; label?: string; mine?: boolean
-  divisionLabel?: string; playersPerGame: number
+  divisionLabel?: string; poolLabel?: string; playersPerGame: number
   matchDayNumber: number; matchDayDate: string
   /** The receiving club's time — absent when its playing day is unknown (#287). */
   time?: string
@@ -58,6 +59,7 @@ function MatchCard({
         <MatchHeader
           matchDayNumber={matchDayNumber}
           divisionLabel={divisionLabel}
+          poolLabel={poolLabel}
           teamColor={team.color}
           teamNumber={team.number}
           isHome={isHome}
@@ -562,6 +564,7 @@ export default function JourneesScreen() {
         label={mineLabel.get(team.id)}
         mine={isMine}
         divisionLabel={divLabel(team)}
+        poolLabel={poolLabel(team, groups)}
         playersPerGame={perGame(team)}
         matchDayNumber={md.number}
         matchDayDate={gameDate(game, md)}
@@ -672,6 +675,7 @@ export default function JourneesScreen() {
                       team={team}
                       title={getTeamName(team, clubs)}
                       divisionLabel={divLabel(team)}
+                      poolLabel={poolLabel(team, groups)}
                       days={days}
                       rows={matrixRows(team, days)}
                       columns={columns}

@@ -22,6 +22,7 @@ import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { NextTrainingSection } from '@/components/NextTrainingSection'
 import { sortByName } from '@shared/lib/sortByName'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { getVenue, getVenueAddress } from '@shared/lib/venue'
@@ -130,6 +131,9 @@ export default function HomeScreen() {
   function getDivisionLabel(team: Team): string | undefined {
     const grp = groupMap.get(team.groupId)
     return grp ? divMap.get(grp.divisionId)?.displayName : undefined
+  }
+  function getPoolLabel(team: Team): string | undefined {
+    return poolLabel(team, groups)
   }
   function getPlayersPerGame(team: Team): number {
     const grp = groupMap.get(team.groupId)
@@ -337,6 +341,7 @@ export default function HomeScreen() {
                           time={h.time || undefined}
                           confirmed={h.confirmed}
                           divisionLabel={getDivisionLabel(myActiveTeam)}
+                          poolLabel={getPoolLabel(myActiveTeam)}
                           teamColor={myActiveTeam.color}
                           teamNumber={myActiveTeam.number}
                           isHome={h.isHome}

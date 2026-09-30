@@ -7,6 +7,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { sortByName } from '@shared/lib/sortByName'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
@@ -43,7 +44,7 @@ function shortDate(iso: string): string {
 
 export default function PhaseGamesScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>()
-  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections } = useAppData()
+  const { teams, players, clubs, phases, divisions, groups, matchDays, games, gameSelections } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
   const openTeam = useOpenTeam()
@@ -316,6 +317,7 @@ export default function PhaseGamesScreen() {
                 <MatchHeader
                   matchDayNumber={md.number}
                   divisionLabel={divisions.find((d) => d.id === team.divisionId)?.displayName}
+                  poolLabel={poolLabel(team, groups)}
                   teamColor={team.color}
                   teamNumber={team.number}
                   isHome={isHome}

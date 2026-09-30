@@ -22,6 +22,7 @@ import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
 import { gameAxisFromParam, gameNeighbours, type GameStep } from '@shared/lib/gameNeighbours'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { sortByName } from '@shared/lib/sortByName'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
@@ -225,6 +226,7 @@ export function MatchDetail({
             <MatchHeader
               matchDayNumber={matchDay.number}
               divisionLabel={div?.displayName}
+              poolLabel={poolLabel(team, groups)}
               teamColor={team.color}
               teamNumber={team.number}
               isHome={isHome}

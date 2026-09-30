@@ -34,6 +34,7 @@ function countdownLabel(dateStr: string): string | null {
 export function MatchHeader({
   matchDayNumber,
   divisionLabel,
+  poolLabel,
   teamColor,
   teamNumber,
   isHome,
@@ -50,6 +51,7 @@ export function MatchHeader({
 }: {
   matchDayNumber: number
   divisionLabel?: string
+  poolLabel?: string
   teamColor?: string
   teamNumber: number
   isHome: boolean
@@ -86,6 +88,7 @@ export function MatchHeader({
         <View style={s.badges}>
           <Text style={s.badge}>J{matchDayNumber}</Text>
           {divisionLabel ? <Text style={s.badge}>{divisionLabel}</Text> : null}
+          {poolLabel ? <Text style={s.badge}>{poolLabel}</Text> : null}
           <TeamBadge color={teamColor} label={`Équipe ${teamNumber}`} />
           {label ? (
             <View style={[s.label, labelMine && s.labelMine]}>
