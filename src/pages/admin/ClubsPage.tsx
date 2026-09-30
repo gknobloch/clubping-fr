@@ -9,6 +9,7 @@ import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/comp
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportClubModal } from '@/components/ImportClubModal'
 import { useConfirm } from '@/components/useConfirm'
+import { clubsMissingVenue, type VenueFillResult } from '@/lib/clubVenues'
 
 export function ClubsPage() {
   const navigate = useNavigate()
@@ -75,6 +76,7 @@ export function ClubsPage() {
           </>
         }
       />
+      <VenueBackfill />
       {archivedClubs.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
@@ -219,6 +221,55 @@ export function ClubsPage() {
       )}
 
       {importOpen && <ImportClubModal onClose={() => setImportOpen(false)} />}
+    </div>
+  )
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`
+
+/**
+ * Fills the clubs the imports created bare with the hall FFTT publishes for
+ * each (#613). The imports do it themselves for what they create from now
+ * on; this is for the clubs created before, and for any FFTT did not answer
+ * the first time. It only ever fills a blank, so running it twice is harmless.
+ *
+ * A strip that says how many are missing rather than a third header action:
+ * it is only there while there is something to do.
+ */
+function VenueBackfill() {
+  const { clubs, fillMissingClubVenues } = useAppData()
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [result, setResult] = useState<VenueFillResult | null>(null)
+  const missing = clubsMissingVenue(clubs)
+
+  const run = async () => {
+    setResult(null)
+    setProgress({ done: 0, total: missing.length })
+    const r = await fillMissingClubVenues(missing, (done, total) => setProgress({ done, total }))
+    setProgress(null)
+    setResult(r)
+  }
+
+  if (!progress && !result && missing.length === 0) return null
+
+  return (
+    <div role="status" className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        {progress
+          ? `Lecture de la FFTT… ${progress.done} / ${progress.total}`
+          : result
+            ? [
+                plural(result.filled, 'adresse ajoutée', 'adresses ajoutées'),
+                result.noInfo ? plural(result.noInfo, 'club sans salle à la FFTT', 'clubs sans salle à la FFTT') : '',
+                result.failed ? plural(result.failed, 'échec', 'échecs') : '',
+              ].filter(Boolean).join(' · ')
+            : `${plural(missing.length, 'club n\'a', 'clubs n\'ont')} aucune adresse — la FFTT publie la salle de chacun.`}
+      </p>
+      {!progress && missing.length > 0 && (
+        <button type="button" onClick={run} className={`${NEUTRAL_BUTTON_CLASS} shrink-0`}>
+          Compléter depuis la FFTT
+        </button>
+      )}
     </div>
   )
 }
