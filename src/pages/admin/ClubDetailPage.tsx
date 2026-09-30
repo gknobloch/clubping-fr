@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { UNNAMED_HALL } from '@/lib/address'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { ClubDetailView } from '@/components/ClubDetailView'
@@ -107,7 +108,7 @@ export function ClubDetailPage() {
     if (selected.has('displayName')) updateClub(club.id, { displayName: detail.displayName })
     if (selected.has('venue')) {
       const patch = {
-        label: detail.venueLabel || 'Salle', street: detail.street,
+        label: detail.venueLabel || UNNAMED_HALL, street: detail.street,
         postalCode: detail.postalCode, city: detail.city,
       }
       if (defaultAddress) updateClubAddress(club.id, defaultAddress.id, patch)

@@ -15,6 +15,7 @@ import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibilit
 import { groupNameTaken, normalizeGroupName } from '../../src/lib/memberGroups'
 import { buildTrainingEvent, isIsoDate, isTime, seriesCalendarDates, trainingEventUid } from '../../src/lib/trainings'
 import { toIcsMany } from '../../src/lib/ics'
+import { UNNAMED_HALL } from '../../src/lib/address'
 import {
   fixtureOverride, mayAnswerOnFixture, mayManageTeam,
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
@@ -3485,7 +3486,7 @@ app.post('/clubs/:clubId/fftt-venue', async (c) => {
   const d = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
   const field = (k: string) => (typeof d[k] === 'string' ? (d[k] as string).trim().slice(0, 200) : '')
   const venue = {
-    label: field('label') || 'Salle',
+    label: field('label') || UNNAMED_HALL,
     street: field('street'), postalCode: field('postalCode'), city: field('city'),
   }
   if (!venue.street && !venue.postalCode && !venue.city) return c.json({ error: 'invalid_params' }, 400)
@@ -4935,7 +4936,7 @@ app.patch('/onboarding/requests/:id', async (c) => {
     if (street || postalCode || city) {
       await db
         .prepare('INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_default) VALUES (?, ?, ?, ?, ?, ?, 1)')
-        .bind(newId('addr'), clubId, (b.club?.venueLabel ?? '').trim() || 'Salle', street, postalCode, city)
+        .bind(newId('addr'), clubId, (b.club?.venueLabel ?? '').trim() || UNNAMED_HALL, street, postalCode, city)
         .run()
     }
   }

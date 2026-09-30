@@ -3,6 +3,13 @@
 import type { Address } from '../types'
 
 /**
+ * The label an address gets when nobody named the hall — what the imports
+ * write when FFTT gives no `nomsalle`. A placeholder, not a name: the match
+ * screens never print it as one (#611).
+ */
+export const UNNAMED_HALL = 'Salle'
+
+/**
  * Full address on one line, as one would write it on an envelope. A part the
  * club left blank is dropped rather than printed as a stray comma — an address
  * imported with a city and no street still reads « 68170 Rixheim ».

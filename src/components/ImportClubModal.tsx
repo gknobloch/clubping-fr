@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { UNNAMED_HALL } from '@/lib/address'
 import { Link } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { fetchClubDetailXmlFromBrowser, hasVenueInfo, parseClubDetailXml } from '@/lib/ffttClub'
@@ -83,7 +84,7 @@ export function ImportClubModal({ onClose }: { onClose: () => void }) {
       addresses: hasVenueInfo(draft)
         ? [{
             id: `addr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            label: draft.venueLabel || 'Salle', street: draft.street,
+            label: draft.venueLabel || UNNAMED_HALL, street: draft.street,
             postalCode: draft.postalCode, city: draft.city, isDefault: true,
           }]
         : [],

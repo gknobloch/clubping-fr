@@ -1,5 +1,5 @@
 import type { Address, Club, Team } from '../types'
-import { formatAddress } from './address'
+import { UNNAMED_HALL, formatAddress } from './address'
 import { townFromClubName } from './clubTown'
 
 /**
@@ -25,20 +25,25 @@ function homeTown(homeTeam: Team | undefined, clubs: Club[]): string | undefined
   return homeClub ? townFromClubName(homeClub.displayName) : undefined
 }
 
-// Venue label for a home team's games: its configured game location if set,
-// else the club's default (or first) address's city, else the town its name
-// carries.
+// Venue label for a home team's games: the hall and its city — the configured
+// game location if set, else the club's default (or first) address — else the
+// town the club's name carries.
 export function getVenue(homeTeam: Team | undefined, clubs: Club[]): string | undefined {
   const addr = getVenueAddress(homeTeam, clubs)
   if (!addr) return homeTown(homeTeam, clubs)
-  const name = venueName(addr, homeTeam)
+  const name = hallName(addr)
   return name ? `${name}, ${addr.city}` : addr.city
 }
 
-// Only a configured game location earns its label: the club's own address is
-// a fallback, and naming it would claim a venue nobody set.
-function venueName(addr: Address, homeTeam: Team | undefined): string | undefined {
-  return addr.id === homeTeam?.gameLocationId && addr.label ? addr.label : undefined
+/**
+ * The hall's name, whenever the address carries one (#611) — the configured
+ * game location's, the club's default address's, or the one FFTT published
+ * for an opponent (#613). Never the placeholder an import writes when FFTT
+ * names no hall: « Salle » is not a name.
+ */
+function hallName(addr: Address): string | undefined {
+  const label = addr.label?.trim()
+  return label && label.toLocaleLowerCase('fr-FR') !== UNNAMED_HALL.toLocaleLowerCase('fr-FR') ? label : undefined
 }
 
 /**
@@ -49,7 +54,7 @@ function venueName(addr: Address, homeTeam: Team | undefined): string | undefine
 export type MatchVenue =
   | {
       kind: 'address'
-      /** The hall's name — only for the home team's configured game location. */
+      /** The hall's name, when the address carries a real one. */
       name?: string
       address: Address
     }
@@ -63,7 +68,7 @@ export type MatchVenue =
  */
 export function getMatchVenue(homeTeam: Team | undefined, clubs: Club[]): MatchVenue | undefined {
   const address = getVenueAddress(homeTeam, clubs)
-  if (address && formatAddress(address)) return { kind: 'address', name: venueName(address, homeTeam), address }
+  if (address && formatAddress(address)) return { kind: 'address', name: hallName(address), address }
   const town = homeTown(homeTeam, clubs)
   return town ? { kind: 'town', town } : undefined
 }

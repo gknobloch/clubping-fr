@@ -12,6 +12,7 @@
 // club, since they are scalar rather than a repeating element.
 // An unknown club number returns a <liste> with no <club> child.
 
+import { UNNAMED_HALL } from './address'
 import { normalizeFfttName } from './ffttNames'
 
 // Moved to ffttNames.ts so the mobile app can share it; re-exported for the
@@ -105,7 +106,7 @@ export function clubSyncFields(
   current?: { displayName: string; venue: ClubVenue | null },
 ): ClubSyncField[] {
   const incomingVenue: ClubVenue = {
-    label: incoming.venueLabel || 'Salle',
+    label: incoming.venueLabel || UNNAMED_HALL,
     street: incoming.street,
     postalCode: incoming.postalCode,
     city: incoming.city,

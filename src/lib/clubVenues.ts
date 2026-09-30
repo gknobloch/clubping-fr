@@ -1,4 +1,5 @@
 import type { Address, Club } from '../types'
+import { UNNAMED_HALL } from './address'
 import { hasVenueInfo, parseClubDetailXml } from './ffttClub'
 
 /**
@@ -45,7 +46,7 @@ export function clubsMissingVenue(clubs: Club[]): Club[] {
 export function venueFromClubDetailXml(xml: string): ClubVenue | null {
   const d = parseClubDetailXml(xml)
   if (!d || !hasVenueInfo(d)) return null
-  return { label: d.venueLabel || 'Salle', street: d.street, postalCode: d.postalCode, city: d.city }
+  return { label: d.venueLabel || UNNAMED_HALL, street: d.street, postalCode: d.postalCode, city: d.city }
 }
 
 export async function fillVenuesFromFftt(clubs: Club[], deps: VenueFillDeps): Promise<VenueFillResult> {

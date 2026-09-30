@@ -21,10 +21,18 @@ describe('getMatchVenue (#611)', () => {
     expect(getMatchVenue(team('a-hall'), [club([seat, hall])])).toEqual({ kind: 'address', name: 'Gymnase Jules Ferry', address: hall })
   })
 
-  it("falls back to the club's default address, unnamed", () => {
-    // The fallback is a guess at where they play: naming it « Siège » would
-    // claim a venue nobody set.
-    expect(getMatchVenue(team(''), [club([hall, seat])])).toEqual({ kind: 'address', name: undefined, address: seat })
+  it("falls back to the club's default address, and names its hall", () => {
+    // An opponent's hall as FFTT published it (#613): no team configured it,
+    // and the name is still worth printing.
+    expect(getMatchVenue(team(''), [club([hall, { ...seat, label: 'Gymnase Jean Moulin' }])]))
+      .toEqual({ kind: 'address', name: 'Gymnase Jean Moulin', address: { ...seat, label: 'Gymnase Jean Moulin' } })
+  })
+
+  it('never prints the placeholder an import writes when FFTT names no hall', () => {
+    const unnamed = { ...seat, label: 'Salle' }
+    expect(getMatchVenue(team(''), [club([unnamed])])).toEqual({ kind: 'address', name: undefined, address: unnamed })
+    expect(getVenue(team(''), [club([unnamed])])).toBe('Rixheim')
+    expect(getMatchVenue(team(''), [club([{ ...seat, label: ' ' }])])).toMatchObject({ name: undefined })
   })
 
   it("falls back to the town in the club's name when no address is on file", () => {
@@ -45,7 +53,7 @@ describe('getMatchVenue (#611)', () => {
 
   it('agrees with the short label the lists print', () => {
     expect(getVenue(team('a-hall'), [club([seat, hall])])).toBe('Gymnase Jules Ferry, Rixheim')
-    expect(getVenue(team(''), [club([seat])])).toBe('Rixheim')
+    expect(getVenue(team(''), [club([seat])])).toBe('Siège, Rixheim')
   })
 })
 

@@ -251,9 +251,12 @@ invisible dans le diff comme dans la revue.
 - **Sur la carte de l'accueil, l'adresse réclame son propre toucher** : l'en-tête
   entier ouvre le match, et la ligne du lieu ouvre le plan à la place — comme
   l'icône d'agenda à côté d'elle.
-- **Seul le lieu de jeu configuré porte un nom.** Sans lui, c'est l'adresse
-  par défaut du club qui reçoit, sans nom : l'appeler « Siège » affirmerait un
-  lieu que personne n'a choisi — même règle que l'étiquette courte.
+- **Le nom de la salle s'affiche dès que l'adresse en porte un** : lieu de jeu
+  configuré, adresse par défaut du club, ou salle publiée par la FFTT pour un
+  adversaire (#613). Jamais le substitut `UNNAMED_HALL` (« Salle ») qu'écrivent
+  les imports quand la FFTT ne nomme aucune salle : ce n'est pas un nom. C'est
+  une constante, et non un littéral répété, parce que la règle d'affichage et
+  chaque écriture doivent s'accorder dessus.
 - **Le plan cherche l'adresse, jamais le nom** : un géocodeur à qui l'on
   demande « Salle des sports » en trouve cent.
 - **Sans adresse, la ville tirée du nom du club** (`townFromClubName`,
