@@ -186,7 +186,7 @@ describe('HomePage — where the next match is played (#611)', () => {
     renderAs({ id: ROSTER_MEMBER_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
 
     const links = screen.getAllByRole('link', { name: /ouvrir dans le plan/ })
-    expect(links[0]).toHaveTextContent('Gymnase principal · 12 rue du Sport, 68170 Rixheim')
+    expect(links[0]).toHaveTextContent('Gymnase principal12 rue du Sport, 68170 Rixheim')
     expect(links[0].getAttribute('href')).toContain('google.com/maps/search/')
   })
 })

@@ -19,12 +19,15 @@ export function MatchVenueLink({ venue, className = '' }: { venue: MatchVenue | 
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`${name ? `${name}, ` : ''}${line} — ouvrir dans le plan`}
-      className={`group flex min-h-11 items-center gap-1.5 text-sm text-slate-500 hover:text-accent-700 md:min-h-0 ${className}`}
+      className={`group flex min-h-11 gap-1.5 text-sm text-slate-500 hover:text-accent-700 md:min-h-0 ${name ? 'items-start py-1 md:py-0' : 'items-center'} ${className}`}
     >
-      <MapPinIcon className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-accent-600" />
+      {/* Level with the first line, whichever it is: two lines centred on the
+          icon would leave it pointing between the hall and its street. */}
+      <MapPinIcon className={`h-4 w-4 shrink-0 text-slate-400 group-hover:text-accent-600 ${name ? 'mt-0.5' : ''}`} />
       <span className="min-w-0">
-        {name && <span className="font-medium text-slate-700 group-hover:text-accent-700">{name} · </span>}
-        <span className="underline decoration-slate-300 underline-offset-2 group-hover:decoration-accent-400">{line}</span>
+        {/* The hall, then where it is: two lines, the way an address is written. */}
+        {name && <span className="block">{name}</span>}
+        <span className="block underline decoration-slate-300 underline-offset-2 group-hover:decoration-accent-400">{line}</span>
       </span>
     </a>
   )

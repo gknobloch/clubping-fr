@@ -11,7 +11,9 @@ describe('MatchVenueLink (#611)', () => {
   it('names the hall, prints the address, and opens the maps search in a new tab', () => {
     render(<MatchVenueLink venue={{ kind: 'address', name: 'Gymnase principal', address }} />)
     const link = screen.getByRole('link', { name: /ouvrir dans le plan/ })
-    expect(link.textContent).toBe('Gymnase principal · 12 rue du Sport, 68170 Rixheim')
+    // The hall on the first line, the address below it.
+    const [hall, where] = [...link.querySelectorAll('span.block')].map((el) => el.textContent)
+    expect([hall, where]).toEqual(['Gymnase principal', '12 rue du Sport, 68170 Rixheim'])
     expect(link.getAttribute('href')).toBe(
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('12 rue du Sport, 68170 Rixheim')}`,
     )

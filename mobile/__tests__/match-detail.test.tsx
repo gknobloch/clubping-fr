@@ -225,6 +225,8 @@ describe("Détail d'un match — le lieu (#611)", () => {
     expect(venue.props.accessibilityLabel).toBe(
       'Salle des sports, 12 rue du Stade, 68170 Rixheim — ouvrir dans le plan',
     )
+    // Two lines: the hall, then the address — neither folded into the other.
+    expect(screen.getByText('Salle des sports')).toBeTruthy()
     expect(screen.getByText('12 rue du Stade, 68170 Rixheim')).toBeTruthy()
   })
 

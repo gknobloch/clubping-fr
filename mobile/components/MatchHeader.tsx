@@ -135,18 +135,24 @@ export function MatchHeader({
           </View>
           {venueInfo ? (
             <TouchableOpacity
-              style={s.metaRow}
+              style={[s.metaRow, venueInfo.name ? s.venueTwoLines : null]}
               onPress={() => Linking.openURL(mapsQueryUrl(venueInfo.query)).catch(() => {})}
               hitSlop={8}
               accessibilityRole="link"
               accessibilityLabel={`${venueInfo.name ? `${venueInfo.name}, ` : ''}${venueInfo.line} — ouvrir dans le plan`}
               testID="match-venue"
             >
-              <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-              <Text style={s.meta}>
-                {venueInfo.name ? <Text style={s.venueName}>{venueInfo.name} · </Text> : null}
-                <Text style={s.venueAddress}>{venueInfo.line}</Text>
-              </Text>
+              <Ionicons
+                name="location-outline"
+                size={14}
+                color={colors.textSecondary}
+                style={venueInfo.name ? s.venueIconTop : undefined}
+              />
+              {/* The hall, then where it is: two lines, the way an address is written. */}
+              <View style={s.venueLines}>
+                {venueInfo.name ? <Text style={s.meta}>{venueInfo.name}</Text> : null}
+                <Text style={[s.meta, s.venueAddress]}>{venueInfo.line}</Text>
+              </View>
             </TouchableOpacity>
           ) : venueLabel ? (
             <View style={s.metaRow}>
@@ -199,7 +205,11 @@ const s = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
   metaUnconfirmed: { color: colors.warningText },
-  venueName: { fontFamily: fonts.medium, color: colors.textPrimary },
+  // Level with the first line rather than centred on both: centred, the pin
+  // would point between the hall and its street.
+  venueTwoLines: { alignItems: 'flex-start' },
+  venueIconTop: { marginTop: 2 },
+  venueLines: { flexShrink: 1, gap: 2 },
   // Underlined as the web's link is: the one line of the header that goes
   // somewhere, and nothing else about it says so.
   venueAddress: { textDecorationLine: 'underline', textDecorationColor: colors.border },
