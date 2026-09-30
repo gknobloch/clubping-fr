@@ -24,7 +24,7 @@ import { NextTrainingSection } from '@/components/NextTrainingSection'
 import { sortByName } from '@shared/lib/sortByName'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
-import { getVenue, getVenueAddress } from '@shared/lib/venue'
+import { getMatchVenue, getVenue, getVenueAddress, type MatchVenue } from '@shared/lib/venue'
 import {
   formatRoundDates, gameDate, gameTime, isSlotConfirmed, upcomingRounds, upcomingTeamGames,
 } from '@/utils/matchdays'
@@ -208,7 +208,9 @@ export default function HomeScreen() {
 
   // ── Hero view-models (one per upcoming game, for the carousel) ──
   type Hero = {
-    game: Game; md: MatchDay; isHome: boolean; oppId: string; venueLabel?: string
+    game: Game; md: MatchDay; isHome: boolean; oppId: string
+    /** The hall and its address, as the match screen shows them (#611). */
+    venue?: MatchVenue
     /** The receiving club's time — '' when its playing day is unknown (#287). */
     time: string
     /** False while that club's playing day is unknown: the date is a guess (#429). */
@@ -234,7 +236,7 @@ export default function HomeScreen() {
             game, md, isHome, time,
             confirmed: isSlotConfirmed(game, md, homeTeam),
             oppId: isHome ? game.awayTeamId : game.homeTeamId,
-            venueLabel: venueFor(homeTeam),
+            venue: getMatchVenue(homeTeam, clubs),
             calendarEvent: buildMatchEvent({
               date: gameDate(game, md),
               time,
@@ -342,7 +344,7 @@ export default function HomeScreen() {
                           isHome={h.isHome}
                           teamName={getTeamName(myActiveTeam, clubs)}
                           opponentName={getOpponentName(h.oppId)}
-                          venueLabel={h.venueLabel}
+                          venue={h.venue}
                           myAvailability={myPlayerId ? getAvailability(myPlayerId, h.game.id) : undefined}
                           canSetAvailability={!!myPlayerId}
                           onPickAvailability={(status) => myPlayerId && setAvailability(myPlayerId, h.game.id, status)}

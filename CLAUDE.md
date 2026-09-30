@@ -242,11 +242,15 @@ invisible dans le diff comme dans la revue.
   détecte.
 
 ### Lieu d'un match (#611)
-- **L'écran du match dit où l'on joue, en entier** : le nom de la salle, puis
-  l'adresse, et un toucher ouvre le plan — Plans sur iOS, `geo:` sur Android,
-  la recherche Google Maps sur le web. Les listes gardent l'étiquette courte
-  (`getVenue`) ; l'écran du match et l'aperçu du web passent par
-  `getMatchVenue`, la seule dérivation de la forme longue.
+- **Là où l'on regarde un match, on voit où il se joue, en entier** : le nom
+  de la salle, puis l'adresse, et un toucher ouvre le plan — Plans sur iOS,
+  `geo:` sur Android, la recherche Google Maps sur le web. L'écran du match,
+  la carte du prochain match de l'accueil et l'aperçu du web passent par
+  `getMatchVenue`, la seule dérivation de la forme longue ; les listes de
+  matchs gardent l'étiquette courte (`getVenue`).
+- **Sur la carte de l'accueil, l'adresse réclame son propre toucher** : l'en-tête
+  entier ouvre le match, et la ligne du lieu ouvre le plan à la place — comme
+  l'icône d'agenda à côté d'elle.
 - **Seul le lieu de jeu configuré porte un nom.** Sans lui, c'est l'adresse
   par défaut du club qui reçoit, sans nom : l'appeler « Siège » affirmerait un
   lieu que personne n'a choisi — même règle que l'étiquette courte.

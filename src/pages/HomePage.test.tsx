@@ -180,6 +180,17 @@ describe('HomePage — the time on the next-match card (#427)', () => {
 // class that decides, exactly as the two "Composer l'équipe" elements above are
 // told apart by role.
 // ---------------------------------------------------------------------------
+describe('HomePage — where the next match is played (#611)', () => {
+  it("names the home team's hall and links its address to the map", () => {
+    // g1-8 is team-1 at home, in addr-1.
+    renderAs({ id: ROSTER_MEMBER_ID, role: 'player', isPlayer: true, clubId: CLUB_ID })
+
+    const links = screen.getAllByRole('link', { name: /ouvrir dans le plan/ })
+    expect(links[0]).toHaveTextContent('Gymnase principal · 12 rue du Sport, 68170 Rixheim')
+    expect(links[0].getAttribute('href')).toContain('google.com/maps/search/')
+  })
+})
+
 describe('HomePage — the next-match card carries the team (#461)', () => {
   const roster = () => screen.getByRole('list', { name: /Disponibilité de l'équipe/ })
 

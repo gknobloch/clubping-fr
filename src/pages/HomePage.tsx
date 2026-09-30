@@ -16,7 +16,8 @@ import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck, 
 import { HomeIcon, AwayIcon, Pill, PhaseSwitchButton, AlertIcon, ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
-import { getVenue } from '@/lib/venue'
+import { getMatchVenue } from '@/lib/venue'
+import { MatchVenueLink } from '@/components/MatchVenueLink'
 import { sortByName } from '@/lib/sortByName'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
@@ -269,10 +270,13 @@ export function HomePage() {
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <p className="text-sm text-slate-500">
                             <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
-                            {time ? ` · ${time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
+                            {time ? ` · ${time}` : ''}
                           </p>
                           <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>
+                        {/* Where, in full and one tap from the route (#611) —
+                            the same line as the match screen's. */}
+                        <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} className="md:mt-1" />
                         {/* Labelled now that the team's own answers sit beside
                             it from md: up: two identical OUI / PE / NON
                             triplets in one card, one meaning "me" and the other
