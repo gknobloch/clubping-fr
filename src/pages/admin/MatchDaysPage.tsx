@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { poolLabel } from '@/lib/poolLabel'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
@@ -619,6 +620,7 @@ export function MatchDaysPage() {
         opponentName: getTeamLabel(opponentId),
         teamName: getTeamLabel(team.id),
         divisionName: divisions.find((d) => d.id === team.divisionId)?.displayName,
+        poolLabel: poolLabel(team, groups),
         isMine: !!user?.id && roster.includes(user.id),
         isHome,
         dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),

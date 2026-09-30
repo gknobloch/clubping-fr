@@ -49,6 +49,7 @@ export function NextMatchCard({
   time,
   confirmed,
   divisionLabel,
+  poolLabel,
   teamColor,
   teamNumber,
   isHome,
@@ -77,6 +78,7 @@ export function NextMatchCard({
   /** False while the receiving club's playing day is unknown (#429). */
   confirmed: boolean
   divisionLabel?: string
+  poolLabel?: string
   teamColor?: string
   teamNumber: number
   isHome: boolean
@@ -123,6 +125,7 @@ export function NextMatchCard({
         <MatchHeader
           matchDayNumber={matchDayNumber}
           divisionLabel={divisionLabel}
+          poolLabel={poolLabel}
           teamColor={teamColor}
           teamNumber={teamNumber}
           isHome={isHome}

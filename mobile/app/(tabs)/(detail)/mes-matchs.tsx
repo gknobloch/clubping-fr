@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { poolLabel } from '@shared/lib/poolLabel'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -30,7 +31,7 @@ export default function MesMatchsScreen() {
   const { playerId } = useLocalSearchParams<{ playerId?: string }>()
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, divisions, gameSelections, refreshing, refresh,
+    clubs, teams, players, matchDays, games, phases, divisions, groups, gameSelections, refreshing, refresh,
   } = useAppData()
 
   // The player whose matches we show — the param, else the logged-in player.
@@ -168,6 +169,7 @@ export default function MesMatchsScreen() {
                     <MatchHeader
                       matchDayNumber={md.number}
                       divisionLabel={divMap.get(team.divisionId)?.displayName}
+                      poolLabel={poolLabel(team, groups)}
                       teamColor={team.color}
                       teamNumber={team.number}
                       isHome={game.homeTeamId === team.id}

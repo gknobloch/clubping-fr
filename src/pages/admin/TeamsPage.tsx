@@ -16,6 +16,7 @@ import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
 import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
+import { poolLabel } from '@/lib/poolLabel'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { withSeasonCategory } from '@/lib/seasonCategories'
@@ -435,7 +436,11 @@ export function TeamsPage() {
                       <p className="truncate font-display text-base font-semibold text-slate-800">
                         {getClubName(team.clubId)} {team.number}
                       </p>
-                      {division && <p className="truncate text-xs font-medium text-slate-500">{division.displayName}</p>}
+                      {division && (
+                        <p className="truncate text-xs font-medium text-slate-500">
+                          {division.displayName}{poolLabel(team, groups) ? ` · ${poolLabel(team, groups)}` : ''}
+                        </p>
+                      )}
                       {team.isArchived && (
                         <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">Archivé</span>
                       )}

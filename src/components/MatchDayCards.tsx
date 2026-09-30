@@ -11,6 +11,7 @@ export interface MatchDayCardEntry {
   /** Own team name, for the "Rixheim PPA 5 – Kembs TT 3" line. */
   teamName: string
   divisionName?: string
+  poolLabel?: string
   /** The signed-in player is on this team — shown first and called out. */
   isMine?: boolean
   isHome: boolean
@@ -40,7 +41,7 @@ export function MatchDayCards({ entries }: { entries: MatchDayCardEntry[] }) {
 
   return (
     <ul className="flex flex-col gap-3">
-      {entries.map(({ team, game, matchDay, teamName, divisionName, isMine, opponentName, isHome, dateLabel, confirmed, time, availableCount, selectedCount, playersPerGame }) => {
+      {entries.map(({ team, game, matchDay, teamName, divisionName, poolLabel, isMine, opponentName, isHome, dateLabel, confirmed, time, availableCount, selectedCount, playersPerGame }) => {
         const short = selectedCount < playersPerGame || availableCount < playersPerGame
         const matchup = isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`
         return (
@@ -62,6 +63,11 @@ export function MatchDayCards({ entries }: { entries: MatchDayCardEntry[] }) {
                   {divisionName && (
                     <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
                       {divisionName}
+                    </span>
+                  )}
+                  {poolLabel && (
+                    <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                      {poolLabel}
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">

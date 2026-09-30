@@ -13,7 +13,7 @@ import {
   resetWindowSize,
   setWindowSize,
 } from '@/__tests__/support/window'
-import type { Club, Division, Phase, Player, Team, User } from '@shared/types'
+import type { Club, Division, Group, Phase, Player, Team, User } from '@shared/types'
 import EquipesScreen from '@/app/(tabs)/equipes'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,7 @@ const mockData = {
   clubs: [] as Club[],
   phases: [] as Phase[],
   divisions: [] as Division[],
+  groups: [] as Group[],
   matchDays: [],
   games: [],
   gameSelections: [],
