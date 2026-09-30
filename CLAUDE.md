@@ -993,6 +993,25 @@ invisible dans le diff comme dans la revue.
   new `groupId` moves it, and its fixtures in the poule it leaves go with it.
   The phase never moves: team ids are derived from (club, phase, number) (#282).
 
+### La salle d'un club adverse (#613)
+- Les imports créent le club adverse **nu** — un numéro, un nom. La FFTT publie
+  pourtant sa salle (`xml_club_detail.php`), et c'est sans elle qu'un match à
+  l'extérieur n'avait aucun lieu à montrer (#611).
+- **La FFTT bloque Cloudflare** : c'est donc le navigateur qui lit la fiche et
+  la remet à `POST /clubs/:id/fftt-venue`, après chaque import pour les clubs
+  qu'il vient de créer (en arrière-plan : le résumé n'attend pas la FFTT), et
+  sur `/clubs` pour l'administrateur général, en rattrapage.
+  `fillVenuesFromFftt` (`src/lib/clubVenues.ts`) est la seule règle des deux.
+- **La route ne remplit qu'un blanc** : un club qui a une adresse, quelle
+  qu'elle soit, répond 409, et la condition est dans l'`INSERT` lui-même — deux
+  exécutions concurrentes ne peuvent pas atterrir toutes les deux. Rejouer
+  l'import ou le rattrapage ne fait donc rien.
+- **Qui** : un administrateur général ; ou l'administrateur d'un club qui
+  partage une poule avec lui — ceux dont l'import l'a créé — **tant que ce club
+  n'a aucun administrateur à lui**. Un club qui utilise l'app tient sa propre
+  adresse. La donnée vient du navigateur, comme les noms de clubs que l'import
+  crée déjà : la confiance est la même.
+
 ### Import from a file (#260, #486)
 - **One FFTT export holds every poule of a division**, one page each (the real
   "GE 7 phase 1" file holds poules 42 to 45). The extracted lines are cut into
