@@ -27,6 +27,18 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.6.0 — 1er octobre 2026
+
+Les entraînements du club dans l'application, et le lieu de chaque match en un
+toucher.
+
+- **Le lieu du match, en entier.** L'écran du match et la carte du prochain
+  match de l'accueil montrent la salle, puis son adresse, et un toucher ouvre le
+  plan. Sans adresse, c'est la ville du club qui est cherchée. Les salles des
+  clubs adverses sont reprises de la FFTT.
+- **Le numéro de poule** s'affiche à côté du badge de division, sur la liste et
+  la fiche des équipes.
+
 - **Un administrateur de club corrige l'e-mail et le téléphone d'un licencié
   depuis l'application.** La fiche joueur porte désormais une section
   Coordonnées avec son bouton Modifier, y compris pour quelqu'un qui n'en a
@@ -76,6 +88,15 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
   délai du rappel, de la veille à une semaine avant. Les dirigés sont activés
   d'office, trois jours avant ; les libres, qui reviennent chaque semaine, ne
   le sont pas. Une séance annulée après son rappel donne lieu à un avis.
+
+### Play
+
+Les entraînements du club dans l'application, et le lieu de chaque match en un toucher.
+
+- Un onglet Entraînements : répondre, voir qui vient, ajouter à l'agenda.
+- Des rappels réglables par catégorie.
+- Les groupes du club, et les compétitions réservées à un groupe.
+- Le lieu du match, avec le plan.
 
 ## 1.5.0 — 20 septembre 2026
 
