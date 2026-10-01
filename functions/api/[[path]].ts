@@ -15,6 +15,7 @@ import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibilit
 import { groupNameTaken, normalizeGroupName } from '../../src/lib/memberGroups'
 import { buildTrainingEvent, isIsoDate, isTime, seriesCalendarDates, trainingEventUid } from '../../src/lib/trainings'
 import { toIcsMany } from '../../src/lib/ics'
+import { UNNAMED_HALL } from '../../src/lib/address'
 import {
   fixtureOverride, mayAnswerOnFixture, mayManageTeam,
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
@@ -200,6 +201,17 @@ async function clubIdsWhere(
 /** The clubs fielding a team in these poules — who may touch their calendar. */
 const clubsInGroups = (db: D1Database, groupIds: string[]) =>
   clubIdsWhere(db, (holes) => `SELECT DISTINCT club_id FROM teams WHERE group_id IN (${holes})`, groupIds)
+
+/** The clubs fielding a team in any poule where this club fields one (#613). */
+async function clubsSharingAPoule(db: D1Database, clubId: string): Promise<string[]> {
+  const r = await db.prepare(
+    `SELECT DISTINCT other.club_id AS club_id
+       FROM teams mine
+       JOIN teams other ON other.group_id = mine.group_id
+      WHERE mine.club_id = ? AND mine.group_id != ''`,
+  ).bind(clubId).all<{ club_id: string | null }>()
+  return r.results.flatMap((row) => (row.club_id ? [row.club_id] : []))
+}
 
 /** The clubs these teams belong to. */
 const clubsOfTeams = (db: D1Database, teamIds: string[]) =>
@@ -3441,6 +3453,58 @@ app.post('/clubs/:clubId/addresses', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * A club's hall as FFTT publishes it, for a club that has no address at all
+ * (#613). The imports create an opponent's club with a number and a name and
+ * nothing else, so an away match had nowhere to show (#611); FFTT blocks
+ * Cloudflare's egress, so it is the browser that reads the federation and
+ * hands the hall over here — the same trust as the club names an import
+ * already creates.
+ *
+ * It only ever fills a blank: a club with any address is refused (409), so
+ * nothing anyone wrote is overwritten and a second import or backfill is a
+ * no-op. The insert itself carries the condition, so two runs racing cannot
+ * both land.
+ *
+ * Who: a general admin, or an admin of a club that shares a poule with this
+ * one — the people whose import created it — and only while it has no
+ * administrator of its own. A club on the app keeps its own address.
+ */
+app.post('/clubs/:clubId/fftt-venue', async (c) => {
+  const clubId = c.req.param('clubId')
+  const db = c.env.DB
+  const viewer = managingViewer(c)
+  if (viewer.role !== 'general_admin') {
+    const ownAdmin = await db
+      .prepare("SELECT id FROM users WHERE role = 'club_admin' AND club_id = ? LIMIT 1")
+      .bind(clubId).first()
+    if (ownAdmin || !administersAny(viewer, await clubsSharingAPoule(db, clubId))) {
+      return c.json(notAllowed, 403)
+    }
+  }
+
+  const d = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
+  const field = (k: string) => (typeof d[k] === 'string' ? (d[k] as string).trim().slice(0, 200) : '')
+  const venue = {
+    label: field('label') || UNNAMED_HALL,
+    street: field('street'), postalCode: field('postalCode'), city: field('city'),
+  }
+  if (!venue.street && !venue.postalCode && !venue.city) return c.json({ error: 'invalid_params' }, 400)
+
+  if (!(await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first())) {
+    return c.json(notFound, 404)
+  }
+  const id = `addr-fftt-${clubId}`
+  const res = await db.prepare(
+    `INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_default)
+     SELECT ?, ?, ?, ?, ?, ?, 1
+      WHERE NOT EXISTS (SELECT 1 FROM club_addresses WHERE club_id = ?)`,
+  ).bind(id, clubId, venue.label, venue.street, venue.postalCode, venue.city, clubId).run()
+  if (!res.meta?.changes) return c.json({ error: 'has_address' }, 409)
+  const address: Address = { id, ...venue, isDefault: true }
+  return c.json({ address })
+})
+
 app.patch('/clubs/:clubId/addresses/:addressId', async (c) => {
   if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
   const clubId = c.req.param('clubId')
@@ -4872,7 +4936,7 @@ app.patch('/onboarding/requests/:id', async (c) => {
     if (street || postalCode || city) {
       await db
         .prepare('INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_default) VALUES (?, ?, ?, ?, ?, ?, 1)')
-        .bind(newId('addr'), clubId, (b.club?.venueLabel ?? '').trim() || 'Salle', street, postalCode, city)
+        .bind(newId('addr'), clubId, (b.club?.venueLabel ?? '').trim() || UNNAMED_HALL, street, postalCode, city)
         .run()
     }
   }

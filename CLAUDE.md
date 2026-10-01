@@ -241,6 +241,41 @@ invisible dans le diff comme dans la revue.
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
 
+### Lieu d'un match (#611)
+- **Là où l'on regarde un match, on voit où il se joue, en entier** : le nom
+  de la salle, puis l'adresse, et un toucher ouvre le plan — Plans sur iOS,
+  `geo:` sur Android, la recherche Google Maps sur le web. L'écran du match,
+  la carte du prochain match de l'accueil et l'aperçu du web passent par
+  `getMatchVenue`, la seule dérivation de la forme longue ; les listes de
+  matchs gardent l'étiquette courte (`getVenue`).
+- **Sur la carte de l'accueil, l'adresse réclame son propre toucher** : l'en-tête
+  entier ouvre le match, et la ligne du lieu ouvre le plan à la place — comme
+  l'icône d'agenda à côté d'elle.
+- **Le nom de la salle s'affiche dès que l'adresse en porte un** : lieu de jeu
+  configuré, adresse par défaut du club, ou salle publiée par la FFTT pour un
+  adversaire (#613). Jamais le substitut `UNNAMED_HALL` (« Salle ») qu'écrivent
+  les imports quand la FFTT ne nomme aucune salle : ce n'est pas un nom. C'est
+  une constante, et non un littéral répété, parce que la règle d'affichage et
+  chaque écriture doivent s'accorder dessus.
+- **Le plan cherche l'adresse, jamais le nom** : un géocodeur à qui l'on
+  demande « Salle des sports » en trouve cent.
+- **Sans adresse, la ville tirée du nom du club** (`townFromClubName`,
+  `src/lib/clubTown.ts`) : un nom FFTT est une ville et ce que le club dit de
+  lui-même, dans un ordre ou dans l'autre (« RIXHEIM PPA », « CSS BERGHEIM »,
+  « MULHOUSE TENNIS DE TABLE »). On retire les sigles — ce que
+  `normalizeFfttName` laisse en capitales —, les sigles pointés et les mots de
+  club ; le reste est la ville. Un mot court d'une ville reste lui aussi en
+  capitales (« Willer sur THUR »), donc un mot en capitales **voisin d'une
+  jointure** (« sur », « en », « de »…) est gardé. C'est une supposition : elle
+  ne sert qu'à un club sans aucune adresse, ce que le remplissage FFTT de #613
+  rend rare, et le plan cherche alors la ville (« Etival, France »). Elle vaut
+  aussi pour l'étiquette courte et pour le lieu de l'agenda.
+- **Rien quand rien n'est connu** : ni adresse, ni ville lisible dans le nom.
+  Une adresse aux champs vides compte pour aucune ; `formatAddress` saute un
+  champ vide plutôt que d'imprimer une virgule.
+- `normalizeFfttName` vit dans `src/lib/ffttNames.ts`, sans DOM, pour que l'app
+  la partage ; `ffttClub.ts` la réexporte.
+
 ### Accueil, vue générique (#474, #522)
 - **Les journées de l'accueil sont celles du club qui regarde.** `GET
   /api/data` porte la table entière, donc la lister telle quelle montre le
@@ -992,6 +1027,25 @@ invisible dans le diff comme dans la revue.
 - A team can change poule without being recreated — `PATCH /teams/:id` with a
   new `groupId` moves it, and its fixtures in the poule it leaves go with it.
   The phase never moves: team ids are derived from (club, phase, number) (#282).
+
+### La salle d'un club adverse (#613)
+- Les imports créent le club adverse **nu** — un numéro, un nom. La FFTT publie
+  pourtant sa salle (`xml_club_detail.php`), et c'est sans elle qu'un match à
+  l'extérieur n'avait aucun lieu à montrer (#611).
+- **La FFTT bloque Cloudflare** : c'est donc le navigateur qui lit la fiche et
+  la remet à `POST /clubs/:id/fftt-venue`, après chaque import pour les clubs
+  qu'il vient de créer (en arrière-plan : le résumé n'attend pas la FFTT), et
+  sur `/clubs` pour l'administrateur général, en rattrapage.
+  `fillVenuesFromFftt` (`src/lib/clubVenues.ts`) est la seule règle des deux.
+- **La route ne remplit qu'un blanc** : un club qui a une adresse, quelle
+  qu'elle soit, répond 409, et la condition est dans l'`INSERT` lui-même — deux
+  exécutions concurrentes ne peuvent pas atterrir toutes les deux. Rejouer
+  l'import ou le rattrapage ne fait donc rien.
+- **Qui** : un administrateur général ; ou l'administrateur d'un club qui
+  partage une poule avec lui — ceux dont l'import l'a créé — **tant que ce club
+  n'a aucun administrateur à lui**. Un club qui utilise l'app tient sa propre
+  adresse. La donnée vient du navigateur, comme les noms de clubs que l'import
+  crée déjà : la confiance est la même.
 
 ### Import from a file (#260, #486)
 - **One FFTT export holds every poule of a division**, one page each (the real

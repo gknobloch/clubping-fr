@@ -62,6 +62,8 @@ import {
   mockTrainingAvailabilities,
 } from '@/mock/data'
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
+import { fillVenuesFromFftt, type ClubVenue, type VenueFillResult } from '@/lib/clubVenues'
+import { fetchClubDetailXmlFromBrowser } from '@/lib/ffttClub'
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
@@ -464,6 +466,12 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   archiveClub: (id: string) => void
   deleteClub: (id: string) => void
   addClubAddress: (clubId: string, data: Omit<Address, 'id'>) => Address
+  /**
+   * Reads each club's hall from FFTT and writes it where the club has no
+   * address at all (#613) — an opponent the imports created bare. Runs after
+   * every import on its own; the general admin's backfill calls it by hand.
+   */
+  fillMissingClubVenues: (clubs: Club[], onProgress?: (done: number, total: number) => void) => Promise<VenueFillResult>
   updateClubAddress: (clubId: string, addressId: string, patch: Partial<Address>) => void
   deleteClubAddress: (clubId: string, addressId: string) => void
   setClubLogo: (clubId: string, base64: string, contentType: string) => void
@@ -1160,6 +1168,30 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [groups, teams, clubs])
 
+  // An opponent's hall, from FFTT (#613). Awaited rather than optimistic: the
+  // API only fills a blank, and a refusal (a club that already has an address,
+  // or one with its own admin) must leave the screen as it was.
+  const fillClubVenue = useCallback(async (clubId: string, venue: ClubVenue): Promise<boolean> => {
+    try {
+      const r = await fetch(`/api/clubs/${clubId}/fftt-venue`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(venue),
+      })
+      if (!r.ok) return false
+      const { address } = (await r.json()) as { address: Address }
+      setClubs((prev) => prev.map((c) =>
+        c.id === clubId && (c.addresses ?? []).length === 0 ? { ...c, addresses: [address] } : c))
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  const fillMissingClubVenues = useCallback(
+    (targets: Club[], onProgress?: (done: number, total: number) => void) =>
+      fillVenuesFromFftt(targets, { fetchXml: fetchClubDetailXmlFromBrowser, write: fillClubVenue, onProgress }),
+    [fillClubVenue],
+  )
+
   const importFfttGames = useCallback(async (
     groupIds: string[], teamId?: string, options?: ImportGamesOptions,
   ): Promise<FfttGamesImportResult | null> => {
@@ -1177,7 +1209,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       })
       if (!r.ok) return null
       const result = (await r.json()) as FfttGamesImportResult
-      if (result.createdClubs.length) setClubs((prev) => [...prev, ...result.createdClubs])
+      if (result.createdClubs.length) {
+        setClubs((prev) => [...prev, ...result.createdClubs])
+        // In the background: the import's summary does not wait on FFTT.
+        void fillMissingClubVenues(result.createdClubs)
+      }
       if (result.createdTeams.length) setTeams((prev) => [...prev, ...result.createdTeams])
       if (result.groups.length) {
         setGroups((prev) => [
@@ -1204,7 +1240,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     } catch {
       return null
     }
-  }, [applyImportDeletions])
+  }, [applyImportDeletions, fillMissingClubVenues])
 
   // --- FFTT groups import (#237, same browser-side transport as the games
   // import above: FFTT blocks Cloudflare egress, so the browser fetches the
@@ -1273,7 +1309,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       const result = (await r.json()) as ScheduleDocImportResult
       if (result.createdPhases.length) setPhases((prev) => [...prev, ...result.createdPhases])
       if (result.createdDivisions.length) setDivisions((prev) => [...prev, ...result.createdDivisions])
-      if (result.createdClubs.length) setClubs((prev) => [...prev, ...result.createdClubs])
+      if (result.createdClubs.length) {
+        setClubs((prev) => [...prev, ...result.createdClubs])
+        void fillMissingClubVenues(result.createdClubs)
+      }
       if (result.createdTeams.length) setTeams((prev) => [...prev, ...result.createdTeams])
       if (result.groups.length) {
         setGroups((prev) => [
@@ -1294,7 +1333,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     } catch {
       return null
     }
-  }, [applyImportDeletions])
+  }, [applyImportDeletions, fillMissingClubVenues])
 
   const deleteSeason = useCallback((id: string) => {
     // Cascade: find phases → divisions → groups → teams, match days, games, avail, selections
@@ -2350,6 +2389,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       archiveClub,
       deleteClub,
       addClubAddress,
+      fillMissingClubVenues,
       updateClubAddress,
       deleteClubAddress,
       setClubLogo,
@@ -2446,7 +2486,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, archiveClub, deleteClub, addClubAddress, updateClubAddress, deleteClubAddress,
+      updateClub, archiveClub, deleteClub, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

@@ -24,6 +24,7 @@ import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '
 import { gameAxisFromParam, gameNeighbours, type GameStep } from '@shared/lib/gameNeighbours'
 import { poolLabel } from '@shared/lib/poolLabel'
 import { sortByName } from '@shared/lib/sortByName'
+import { getMatchVenue, getVenue, getVenueAddress } from '@shared/lib/venue'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
@@ -147,17 +148,9 @@ export function MatchDetail({
   const playersPerGame = div?.playersPerGame ?? 4
 
   const homeTeam = teams.find((t) => t.id === game.homeTeamId)
-  const gameLocation = homeTeam
-    ? clubs.flatMap((c) => c.addresses ?? []).find((a) => a.id === homeTeam.gameLocationId)
-    : undefined
-  // No game-location address → fall back to the home club's own.
-  const homeClub = homeTeam ? clubs.find((c) => c.id === homeTeam.clubId) : undefined
-  const clubAddress = homeClub?.addresses?.find((a) => a.isDefault) ?? homeClub?.addresses?.[0]
-  // The header stays short — venue and city, or just the city for the fallback.
-  // The calendar event gets the whole address instead (#416).
-  const venueLabel = gameLocation
-    ? gameLocation.label ? `${gameLocation.label}, ${gameLocation.city}` : gameLocation.city
-    : clubAddress?.city
+  // The hall and its address, tappable into the maps app (#611); the calendar
+  // event gets the same address (#416).
+  const venue = getMatchVenue(homeTeam, clubs)
 
   const teamName = getTeamName(team, clubs)
   const matchup = isHome ? `${teamName} – ${opponentName}` : `${opponentName} – ${teamName}`
@@ -210,8 +203,8 @@ export function MatchDetail({
     matchDayNumber: matchDay.number,
     divisionLabel: div?.displayName,
     playersPerGame,
-    address: gameLocation ?? clubAddress,
-    venueLabel,
+    address: getVenueAddress(homeTeam, clubs),
+    venueLabel: getVenue(homeTeam, clubs),
   })
 
 
@@ -235,7 +228,7 @@ export function MatchDetail({
               matchDayDate={thisGameDate}
               time={thisGameTime || undefined}
               confirmed={slotConfirmed}
-              venueLabel={venueLabel}
+              venue={venue}
               onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
             />
           </View>

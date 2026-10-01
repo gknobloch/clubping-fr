@@ -4,6 +4,7 @@ import { colors } from '@/constants/colors'
 import { MyAvailability } from '@/components/MyAvailability'
 import { Avatar } from '@/components/Avatar'
 import { MatchHeader } from '@/components/MatchHeader'
+import type { MatchVenue } from '@shared/lib/venue'
 import { PlayerRow } from '@/components/PlayerRow'
 import type { AvailabilityStatus, Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
@@ -55,7 +56,7 @@ export function NextMatchCard({
   isHome,
   teamName,
   opponentName,
-  venueLabel,
+  venue,
   myAvailability,
   canSetAvailability,
   onPickAvailability,
@@ -84,7 +85,8 @@ export function NextMatchCard({
   isHome: boolean
   teamName: string
   opponentName: string
-  venueLabel?: string
+  /** Where it is played, tappable into the maps app (#611). */
+  venue?: MatchVenue
   myAvailability: AvailabilityStatus | undefined
   canSetAvailability: boolean
   onPickAvailability: (s: AvailabilityStatus) => void
@@ -134,7 +136,7 @@ export function NextMatchCard({
           matchDayDate={matchDayDate}
           time={time}
           confirmed={confirmed}
-          venueLabel={venueLabel}
+          venue={venue}
           showCountdown
           onAddToCalendar={onAddToCalendar}
         />

@@ -1,4 +1,4 @@
-import { Alert } from 'react-native'
+import { Alert, Linking } from 'react-native'
 import { fireEvent, screen, waitFor } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { Club, Division, Game, Group, MatchDay, Player, Team, User } from '@shared/types'
@@ -150,6 +150,8 @@ describe("Détail d'un match — ajouter au calendrier", () => {
   })
 
   it('titles an away match the way the header does — hosts first', async () => {
+    // As an import creates it: no hall, and a club with no address.
+    mockData.teams = [team, { ...opponent, gameLocationId: '' }]
     mockData.games = [{ ...game, homeTeamId: 't2', awayTeamId: 't1' }]
 
     render(<MatchDetailScreen />)
@@ -212,5 +214,44 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     await waitFor(() => expect(alert).toHaveBeenCalled())
     expect(alert.mock.calls[0][1]).toContain('calendrier')
     alert.mockRestore()
+  })
+})
+
+describe("Détail d'un match — le lieu (#611)", () => {
+  it('names the hall and prints its address under the date', () => {
+    render(<MatchDetailScreen />)
+
+    const venue = screen.getByTestId('match-venue')
+    expect(venue.props.accessibilityLabel).toBe(
+      'Salle des sports, 12 rue du Stade, 68170 Rixheim — ouvrir dans le plan',
+    )
+    // Two lines: the hall, then the address — neither folded into the other.
+    expect(screen.getByText('Salle des sports')).toBeTruthy()
+    expect(screen.getByText('12 rue du Stade, 68170 Rixheim')).toBeTruthy()
+  })
+
+  it('opens the address in the maps app', () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByTestId('match-venue'))
+
+    // jest-expo runs as iOS: Plans, searched on the street address.
+    expect(open).toHaveBeenCalledWith(`maps://?q=${encodeURIComponent('12 rue du Stade, 68170 Rixheim')}`)
+    open.mockRestore()
+  })
+
+  it("names the host's town, from its club's name, away at a club with no address on file", () => {
+    // As an import creates it: no hall, and a club with no address.
+    mockData.teams = [team, { ...opponent, gameLocationId: '' }]
+    mockData.games = [{ ...game, homeTeamId: 't2', awayTeamId: 't1' }]
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+
+    render(<MatchDetailScreen />)
+
+    expect(screen.getByTestId('match-venue').props.accessibilityLabel).toBe('Mulhouse — ouvrir dans le plan')
+    fireEvent.press(screen.getByTestId('match-venue'))
+    expect(open).toHaveBeenCalledWith(`maps://?q=${encodeURIComponent('Mulhouse, France')}`)
+    open.mockRestore()
   })
 })

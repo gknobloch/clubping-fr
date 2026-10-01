@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import type { Address, ClubChannelType } from '@shared/types'
-import { formatAddress } from '@shared/lib/address'
+import { formatAddress, mapsSearchUrl } from '@shared/lib/address'
 
 // Club helpers, kept out of the screen: a file under app/ is a route, and
 // expo-router expects a route to export a component, not utilities (#365).
@@ -18,14 +18,18 @@ export const CHANNEL_LABELS: Record<ClubChannelType, string> = {
 export { formatAddress }
 
 /**
- * Maps URL for an address. The platform schemes hand the address to the native
- * maps app; the web Google Maps URL is the fallback for anything else.
+ * Maps URL for a search — an address, or a town (#611). The platform schemes
+ * hand it to the native maps app; the web's Google Maps URL is the fallback
+ * for anything else.
  */
-export function mapsUrl(a: Address): string {
-  const query = encodeURIComponent(formatAddress(a))
+export function mapsQueryUrl(query: string): string {
+  const q = encodeURIComponent(query)
   return Platform.select({
-    ios: `maps://?q=${query}`,
-    android: `geo:0,0?q=${query}`,
-    default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+    ios: `maps://?q=${q}`,
+    android: `geo:0,0?q=${q}`,
+    default: mapsSearchUrl(query),
   })
 }
+
+/** Maps URL for an address. */
+export const mapsUrl = (a: Address): string => mapsQueryUrl(formatAddress(a))

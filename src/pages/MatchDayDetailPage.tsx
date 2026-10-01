@@ -13,6 +13,8 @@ import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { MatchVenueLink } from '@/components/MatchVenueLink'
+import { getMatchVenue } from '@/lib/venue'
 import { MatchDate } from '@/components/MatchDate'
 import { SelectionSheet } from '@/components/SelectionSheet'
 import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetView'
@@ -165,8 +167,9 @@ export function MatchDayDetailPage() {
     }))
 
   const date = gameDate(game, matchDay)
+  const homeTeam = teams.find((t) => t.id === game.homeTeamId)
   // The receiving club's time (#287), never this team's when it travels.
-  const time = gameTime(game, matchDay, teams.find((t) => t.id === game.homeTeamId))
+  const time = gameTime(game, matchDay, homeTeam)
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -204,14 +207,20 @@ export function MatchDayDetailPage() {
         <p className="mt-1 text-sm text-slate-600">
           {isHome ? 'Reçoit' : 'Se déplace à'} {getTeamLabel(opponentId)}
         </p>
+        {/* When and where in one column beside the calendar icon, as in the
+            app's match header: stacked under the icon's 44px row instead, the
+            venue pushed «Composer l'équipe» off a phone screen (#611). */}
         <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="text-sm text-slate-500">
-            <MatchDate
-              label={dateLabel}
-              confirmed={isSlotConfirmed(game, matchDay, teams.find((t) => t.id === game.homeTeamId))}
-            />
-            {time ? ` · ${time}` : ''}
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm text-slate-500">
+              <MatchDate
+                label={dateLabel}
+                confirmed={isSlotConfirmed(game, matchDay, homeTeam)}
+              />
+              {time ? ` · ${time}` : ''}
+            </p>
+            <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} />
+          </div>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
 

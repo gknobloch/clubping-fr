@@ -12,7 +12,8 @@ import { ModalShell } from '@/components/ModalShell'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { MatchDate } from '@/components/MatchDate'
 import { getTeamName } from '@/lib/teamName'
-import { getVenue } from '@/lib/venue'
+import { getMatchVenue } from '@/lib/venue'
+import { MatchVenueLink } from '@/components/MatchVenueLink'
 import { gameDate, gameSchedule, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 
@@ -71,7 +72,7 @@ export function GameQuickView({
   const division = group ? divisions.find((d) => d.id === group.divisionId) : undefined
 
   const homeTeam = teams.find((t) => t.id === game.homeTeamId)
-  const venue = getVenue(homeTeam, clubs)
+  const venue = getMatchVenue(homeTeam, clubs)
   // The receiving club's time, never the viewing team's (#287).
   const time = gameSchedule(game, matchDay, homeTeam).time
 
@@ -120,11 +121,13 @@ export function GameQuickView({
         {/* The slot, and the one-click way to block it in one's own agenda
             (#426) — the same pairing as the mobile match header. */}
         <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="text-sm text-slate-500">
-            <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
-            {time ? ` · ${time}` : ''}
-            {venue ? ` · ${venue}` : ''}
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm text-slate-500">
+              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
+              {time ? ` · ${time}` : ''}
+            </p>
+            <MatchVenueLink venue={venue} />
+          </div>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
 

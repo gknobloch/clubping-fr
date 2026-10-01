@@ -1,3 +1,4 @@
+import { Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { AvailabilityStatus, Player } from '@shared/types'
@@ -55,6 +56,7 @@ function renderCard({
   canEdit = (() => false) as (playerId: string) => boolean,
   isCaptain = false,
   onCompose = jest.fn(),
+  onOpenDetail = jest.fn(),
 } = {}) {
   render(
     <NextMatchCard
@@ -67,7 +69,11 @@ function renderCard({
       isHome
       teamName="Rixheim PPA 5"
       opponentName="Kembs TT 3"
-      venueLabel="Rixheim"
+      venue={{
+        kind: 'address',
+        name: 'Salle des sports',
+        address: { id: 'a1', label: 'Salle des sports', street: '12 rue du Stade', postalCode: '68170', city: 'Rixheim', isDefault: true },
+      }}
       myAvailability="available"
       canSetAvailability
       onPickAvailability={jest.fn()}
@@ -79,7 +85,7 @@ function renderCard({
       selectedCount={0}
       isCaptain={isCaptain}
       onCompose={onCompose}
-      onOpenDetail={jest.fn()}
+      onOpenDetail={onOpenDetail}
       onAddToCalendar={jest.fn()}
       wide={wide}
       team={team({ canEdit })}
@@ -191,5 +197,29 @@ describe('my own answer', () => {
     // One component for the one question: a copy had drifted to another size.
     expect(screen.UNSAFE_getAllByType(MyAvailability)).toHaveLength(1)
     expect(screen.UNSAFE_getByType(MyAvailability).props.status).toBe('available')
+  })
+})
+
+describe('where it is played (#611)', () => {
+  it('prints the hall and its address, as the match screen does', () => {
+    renderCard()
+
+    expect(screen.getByTestId('match-venue').props.accessibilityLabel).toBe(
+      'Salle des sports, 12 rue du Stade, 68170 Rixheim — ouvrir dans le plan',
+    )
+  })
+
+  it('opens the map, not the match, when the address is tapped', () => {
+    // The header is itself the way into the match: the venue has to claim
+    // its own tap, as the calendar icon beside it does.
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+    const onOpenDetail = jest.fn()
+    renderCard({ onOpenDetail })
+
+    fireEvent.press(screen.getByTestId('match-venue'))
+
+    expect(open).toHaveBeenCalledWith(`maps://?q=${encodeURIComponent('12 rue du Stade, 68170 Rixheim')}`)
+    expect(onOpenDetail).not.toHaveBeenCalled()
+    open.mockRestore()
   })
 })

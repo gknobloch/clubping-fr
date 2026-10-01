@@ -16,7 +16,8 @@ import { AvailabilityButtons, AvailabilityChip, AvailabilityPills, LineupCheck, 
 import { HomeIcon, AwayIcon, Pill, PhaseSwitchButton, AlertIcon, ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
 import { getTeamName } from '@/lib/teamName'
-import { getVenue } from '@/lib/venue'
+import { getMatchVenue } from '@/lib/venue'
+import { MatchVenueLink } from '@/components/MatchVenueLink'
 import { sortByName } from '@/lib/sortByName'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
@@ -267,10 +268,15 @@ export function HomePage() {
                             player's own agenda (#426): answering OUI and
                             writing the match down are one gesture apart. */}
                         <div className="mt-1 flex items-center justify-between gap-2">
-                          <p className="text-sm text-slate-500">
-                            <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
-                            {time ? ` · ${time}` : ''}{getVenue(homeTeam, clubs) ? ` · ${getVenue(homeTeam, clubs)}` : ''}
-                          </p>
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-sm text-slate-500">
+                              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
+                              {time ? ` · ${time}` : ''}
+                            </p>
+                            {/* Where, in full and one tap from the route (#611) —
+                                the same lines as the match screen's. */}
+                            <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} />
+                          </div>
                           <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>
                         {/* Labelled now that the team's own answers sit beside
