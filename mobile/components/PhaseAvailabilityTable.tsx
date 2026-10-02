@@ -19,12 +19,13 @@ import type { Player } from '@shared/types'
 // counts are *frozen*: the journées scroll under them sideways, so whichever
 // journée is on screen, the row still says whose it is.
 //
-// Under the players, two totals per journée: how many said yes, and how many
-// the line-up names — the same pair the journées matrix's Résumé gives.
+// Under the players, two totals per journée: how many of the roster said yes,
+// and how many the line-up names — the pair the journées matrix's Résumé gives.
+// A renfort a line-up names is a row too, with answers but no «Oui» total.
 //
 // A phone held upright fits four or five journées; turned sideways, a phase of
-// seven fits whole — but in ~350pt of height, which is what `dense` is for: a
-// team of six plus both totals has to be on screen without scrolling, or the
+// seven fits whole — but in ~400pt of height, which is what `dense` is for: a
+// team of six plus both totals has to be in view without scrolling, or the
 // totals are the part nobody sees.
 // ---------------------------------------------------------------------------
 
@@ -88,7 +89,9 @@ export function PhaseAvailabilityTable({
   const countWidth = m.count
   const total = columns.length
 
-  const hasTags = (row: PhaseAvailabilityRow) => row.renfort || unlicensed.has(row.player.id)
+  // «Renfort» rides in the Oui column instead (below), so only the licence
+  // badge ever needs a second line.
+  const hasTags = (row: PhaseAvailabilityRow) => unlicensed.has(row.player.id)
   // One height per row, read by both halves of the table — they are two
   // views, and a row of one must stay level with its row in the other.
   const rowHeight = (row: PhaseAvailabilityRow) => (hasTags(row) ? m.rowWithTags : m.row)
@@ -111,23 +114,26 @@ export function PhaseAvailabilityTable({
             accessibilityRole="button"
             accessibilityLabel={
               `${row.player.firstName} ${row.player.lastName}, ` +
-              `disponible ${row.available} sur ${total}, sélectionné ${row.selected} sur ${total}`
+              (row.available === null ? 'renfort' : `disponible ${row.available} sur ${total}`) +
+              `, sélectionné ${row.selected} sur ${total}`
             }
           >
             <View style={[s.nameCell, { width: cols.name }]}>
               <Text style={[s.name, dense && s.nameDense]} numberOfLines={1}>
                 {shortName(row.player, compact)}
               </Text>
-              {hasTags(row) && (
-                <View style={s.nameTags}>
-                  {row.renfort && <Text style={s.renfort}>Renfort</Text>}
-                  {unlicensed.has(row.player.id) && <LicenceTag />}
-                </View>
-              )}
+              {hasTags(row) && <LicenceTag />}
             </View>
-            <Text style={[s.count, dense && s.countDense, { width: countWidth }]}>
-              {row.available}/{total}
-            </Text>
+            {/* A renfort is listed because a line-up names them; how much of
+                this team's phase they could play is nobody's question, so the
+                column says why it has no total instead of giving one. */}
+            {row.available === null ? (
+              <Text style={[s.renfort, { width: countWidth }]}>Renf.</Text>
+            ) : (
+              <Text style={[s.count, dense && s.countDense, { width: countWidth }]}>
+                {row.available}/{total}
+              </Text>
+            )}
             <Text style={[s.count, s.countSecondary, dense && s.countDense, { width: countWidth }]}>
               {row.selected}/{total}
             </Text>
@@ -297,8 +303,7 @@ const s = StyleSheet.create({
   nameCell: { paddingLeft: 12, paddingRight: 4, justifyContent: 'center', gap: 2 },
   name: { fontSize: 14, color: colors.textPrimary },
   nameDense: { fontSize: 13 },
-  nameTags: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  renfort: { fontSize: 10, fontFamily: fonts.medium, color: colors.textSecondary },
+  renfort: { fontSize: 11, fontFamily: fonts.medium, color: colors.textSecondary, textAlign: 'center' },
   count: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary, textAlign: 'center' },
   // Played-for is the second question; the one asked for is availability.
   countSecondary: { color: colors.textSecondary },

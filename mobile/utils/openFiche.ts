@@ -31,3 +31,17 @@ export function useOpenTeam() {
     [router, isTwoPane],
   )
 }
+
+/** La même règle pour un licencié : à côté de la liste Joueurs, ou poussé. */
+export function useOpenPlayer() {
+  const router = useRouter()
+  const { isTwoPane } = useLayout()
+
+  return useCallback(
+    (playerId: string) => {
+      if (isTwoPane) router.push({ pathname: '/joueurs', params: { selected: playerId } })
+      else router.push(`/player/${playerId}`)
+    },
+    [router, isTwoPane],
+  )
+}

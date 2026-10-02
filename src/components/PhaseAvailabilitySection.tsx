@@ -128,15 +128,18 @@ export function PhaseAvailabilitySection({
                       {`${row.player.firstName} ${row.player.lastName}`}
                     </span>
                   </Link>
-                  {(row.renfort || unlicensed.has(row.player.id)) && (
-                    <span className="flex items-center gap-1">
-                      {row.renfort && <span className="text-[11px] text-slate-500">Renfort</span>}
-                      {unlicensed.has(row.player.id) && <LicenceBadge />}
-                    </span>
-                  )}
+                  {unlicensed.has(row.player.id) && <LicenceBadge />}
                 </th>
+                {/* A renfort is listed because a line-up names them; the
+                    column says why it has no «Oui» total instead of giving one. */}
                 <td className="sticky left-32 z-10 bg-white text-center font-semibold text-slate-800 sm:left-48">
-                  {row.available}/{total}
+                  {row.available === null ? (
+                    <abbr title="Renfort" className="text-xs font-medium text-slate-500 no-underline">
+                      Renf.
+                    </abbr>
+                  ) : (
+                    `${row.available}/${total}`
+                  )}
                 </td>
                 {/* Played-for is the second question; the one asked is availability. */}
                 <td className="sticky left-44 z-10 border-r !border-r-slate-200 bg-white text-center font-semibold text-slate-500 sm:left-60">

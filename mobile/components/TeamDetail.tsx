@@ -28,6 +28,7 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
+import { PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -72,6 +73,8 @@ export function TeamDetail({
   const [whatsappDraft, setWhatsappDraft] = useState('')
   const [rosterQuery, setRosterQuery] = useState('')
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  // Toute la phase, joueurs × journées (#623).
+  const [showPhaseAvailability, setShowPhaseAvailability] = useState(false)
 
   const team = teams.find((t) => t.id === id)
   const club = clubs.find((c) => c.id === team?.clubId)
@@ -327,12 +330,7 @@ export function TeamDetail({
           <TouchableOpacity
             testID="team-phase-availability"
             style={styles.gamesBtn}
-            onPress={() =>
-              router.push({
-                pathname: '/team/disponibilites',
-                params: { teamId: team.id },
-              })
-            }
+            onPress={() => setShowPhaseAvailability(true)}
           >
             <View style={styles.gamesBtnLeft}>
               <Ionicons name="grid-outline" size={16} color={colors.textSecondary} />
@@ -343,6 +341,10 @@ export function TeamDetail({
         )}
 
       </ScrollView>
+
+      {showPhaseAvailability && (
+        <PhaseAvailabilitySheet team={team} onClose={() => setShowPhaseAvailability(false)} />
+      )}
 
       {/* Player quick view */}
       {selectedPlayer && (

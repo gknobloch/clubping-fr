@@ -70,7 +70,11 @@ describe('phaseAvailabilityGrid', () => {
     const last = grid.rows[grid.rows.length - 1]
     expect(last.player.id).toBe('x')
     expect(last.renfort).toBe(true)
-    expect(last.available).toBe(1)
+    // Listed, answers and all — but no total, and not counted in the pool.
+    expect(last.cells[2].status).toBe('available')
+    expect(last.available).toBeNull()
+    expect(last.selected).toBe(1)
+    expect(grid.availableByGame).toEqual([0, 0, 0])
     expect(grid.rows.filter((r) => r.renfort)).toHaveLength(1)
   })
 })

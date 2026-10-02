@@ -31,15 +31,22 @@ export interface PhaseAvailabilityRow {
   renfort: boolean
   /** One per match, in the order of `games`. */
   cells: PhaseAvailabilityCell[]
-  /** Matches answered «Oui» — the numerator of «5/7». */
-  available: number
+  /**
+   * Matches answered «Oui» — the numerator of «5/7». Null for a renfort: they
+   * are listed because a line-up names them, and how much of *this* team's
+   * phase they could play is not a question anyone is asking of them.
+   */
+  available: number | null
   /** Matches whose line-up names them — the numerator of the «Sél.» column. */
   selected: number
 }
 
 export interface PhaseAvailabilityGrid {
   rows: PhaseAvailabilityRow[]
-  /** Per match, how many of the rows answered «Oui». */
+  /**
+   * Per match, how many of the roster answered «Oui» — the roster, as in the
+   * journées matrix's Résumé (#580): a renfort's yes is not the team's pool.
+   */
   availableByGame: number[]
   /**
    * Per match, how many the line-up names — the line-up itself, not a count
@@ -94,7 +101,7 @@ export function phaseAvailabilityGrid(
       player,
       renfort,
       cells,
-      available: cells.filter((c) => c.status === 'available').length,
+      available: renfort ? null : cells.filter((c) => c.status === 'available').length,
       selected: cells.filter((c) => c.selected).length,
     }
   }
@@ -106,7 +113,9 @@ export function phaseAvailabilityGrid(
 
   return {
     rows,
-    availableByGame: games.map((_, i) => rows.filter((r) => r.cells[i].status === 'available').length),
+    availableByGame: games.map(
+      (_, i) => rows.filter((r) => !r.renfort && r.cells[i].status === 'available').length,
+    ),
     selectedByGame: games.map((g) => selectedIn.get(g.id)?.size ?? 0),
   }
 }

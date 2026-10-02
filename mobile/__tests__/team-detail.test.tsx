@@ -26,6 +26,7 @@ const mockData = {
   matchDays: [] as MatchDay[],
   games: [] as Game[],
   gameSelections: [],
+  gameAvailabilities: [],
   // Per-season facts about a licensee (#482, #488) — none in these fixtures.
   seasons: [] as { id: string; displayName: string; status: string }[],
   playerSeasonLicences: [] as { seasonId: string; playerId: string }[],
@@ -290,17 +291,15 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
 })
 
 describe('Fiche équipe — les disponibilités de la phase (#623)', () => {
-  it('mène à la grille de toute la phase', () => {
+  it('ouvre la grille de toute la phase dans une feuille, sans quitter la fiche', () => {
     mockData.matchDays = [{ id: 'md1', groupId: 'g1', number: 1, date: '2026-10-08' }]
     mockData.games = [{ id: 'gm1', matchDayId: 'md1', homeTeamId: 't1', awayTeamId: 'opp' }]
     render(<TeamDetailScreen />)
 
     fireEvent.press(screen.getByTestId('team-phase-availability'))
 
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/team/disponibilites',
-      params: { teamId: 't1' },
-    })
+    expect(screen.getByTestId('phase-sheet')).toBeTruthy()
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('ne propose rien à une équipe sans calendrier', () => {

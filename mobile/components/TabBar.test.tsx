@@ -10,7 +10,7 @@ import {
 } from '@/__tests__/support/window'
 import { HEADER_HEIGHT } from './AppHeader'
 import { colors } from '@/constants/colors'
-import { TabBar, hidesTabBar, pathToTab, type TabBarProps } from './TabBar'
+import { TabBar, pathToTab, type TabBarProps } from './TabBar'
 
 jest.mock('expo-router', () => ({
   usePathname: () => '/equipes',
@@ -91,29 +91,6 @@ describe('pathToTab', () => {
 // a full-width row rendered down its side, are both a broken screen — so what
 // is pinned here is the shape, and the rule that decides it.
 // ---------------------------------------------------------------------------
-// The phase grid (#623) takes the bar's height back on a phone turned sideways:
-// six players and both totals fit in ~350pt, not in ~280.
-describe('hidesTabBar', () => {
-  const phone = { isTablet: false, isLandscape: true }
-
-  it('gives the phase grid the whole height of a phone on its side', () => {
-    expect(hidesTabBar('/team/disponibilites', phone)).toBe(true)
-  })
-
-  it('brings the bar back once the phone stands up', () => {
-    expect(hidesTabBar('/team/disponibilites', { ...phone, isLandscape: false })).toBe(false)
-  })
-
-  it('leaves a tablet its rail', () => {
-    expect(hidesTabBar('/team/disponibilites', { isTablet: true, isLandscape: true })).toBe(false)
-  })
-
-  it('leaves every other screen alone', () => {
-    expect(hidesTabBar('/team/phase-games', phone)).toBe(false)
-    expect(hidesTabBar('/equipes', phone)).toBe(false)
-  })
-})
-
 describe('the tab bar on a tablet', () => {
   afterEach(resetWindowSize)
 

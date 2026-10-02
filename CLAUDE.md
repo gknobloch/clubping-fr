@@ -246,33 +246,42 @@ invisible dans le diff comme dans la revue.
   lit toute la phase pour une seule.** Demande d'un capitaine : le planning
   prévisionnel, « 5/7 » par joueur. Mêmes réponses, l'autre axe.
 - `phaseAvailabilityGrid` (`src/lib/phaseAvailability.ts`) est la seule
-  dérivation, avec ses en-têtes (`phaseAvailabilityColumns`) et le seuil du
-  compte « Disponibles » (`playersRequired`). Le ratio est **les « Oui » sur
-  les matchs de la phase** : sans réponse n'est pas un oui.
-- Lignes : l'effectif, puis les renforts qu'une composition de la phase nomme
-  déjà. Une cellule encadrée = dans la composition de **cette** équipe.
+  dérivation, avec ses en-têtes (`phaseAvailabilityColumns`) et le seuil des
+  totaux (`playersRequired`). Le ratio est **les « Oui » sur les matchs de la
+  phase** : sans réponse n'est pas un oui.
 - **Deux comptes par joueur, deux totaux par journée** : « Oui » et « Sél. »
   (`5/7`, `3/7`) ; sous la grille, « Disponibles » et « Sélectionnés ». Une
   composition est un compte exact, comme dans la matrice (#580) — mais une
   composition **vide** n'est pas fausse : sur une phase, la plupart ne sont
   simplement pas encore faites, d'où `selectionVerdict` et son état `empty`,
   gris plutôt que rouge.
-- **Nom et ratio figés, journées qui défilent**, sur le web comme dans l'app.
-  Sur le web, `border-separate` et non `border-collapse` : une bordure
+- Lignes : l'effectif, puis **les renforts qu'une composition de la phase
+  nomme**, avec leurs réponses mais **sans total « Oui »** (`available: null`,
+  « Renf. » dans la colonne) et hors de « Disponibles », qui compte l'effectif
+  comme le Résumé de la matrice. Une cellule encadrée = dans la composition de
+  **cette** équipe.
+- **Nom et comptes figés, journées qui défilent**, sur le web comme dans
+  l'app. Sur le web, `border-separate` et non `border-collapse` : une bordure
   fusionnée laisse un pixel à côté d'une cellule collante, où les journées
   défilées transparaissent.
+- **Dans l'app, une feuille, pas un écran poussé** (`PhaseAvailabilitySheet`,
+  ouverte depuis la fiche équipe). Un téléphone couché fait ~400 pt de haut ;
+  l'en-tête de l'app, la barre d'onglets et un sélecteur de phase en
+  prenaient ~150, et six joueurs + les deux totaux ne tenaient plus. La
+  feuille couvre l'en-tête et la barre ; couchée, elle est `dense` (marges =
+  encoche et indicateur d'accueil, lignes à 32 pt, fermeture par un ✕ dans la
+  ligne de titre, légende sous la grille).
+- **Pas de sélecteur de phase** : la fiche est déjà une équipe dans une
+  phase, et le sous-titre la nomme.
+- **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit
+  rien — une feuille ouverte téléphone couché redressait l'écran sous les
+  mains du membre. Les autres feuilles de l'app ne le déclarent pas encore.
+- **En sortir est une navigation** : un nom ouvre la fiche, une journée le
+  match, et la feuille se ferme d'abord. Une seconde feuille par-dessus
+  (l'aperçu joueur) serait en portrait seul.
 - **On ne verrouille pas l'orientation** : debout, un téléphone tient quatre
-  ou cinq journées et l'écran invite à le tourner ; couché, sept tiennent.
-- **Couché, l'écran reprend la hauteur de la barre d'onglets**
-  (`hidesTabBar`). Un téléphone couché fait ~400 pt de haut : l'en-tête et la
-  barre en prennent ~120, et six joueurs + les deux totaux ne tiennent plus
-  qu'à 26 pt la ligne. Sans la barre, ils tiennent à 32 pt (`dense`), légende
-  sous la grille. L'en-tête et son chevron restent, et la barre revient dès
-  qu'on redresse le téléphone. C'est une liste nommée d'écrans qu'on tourne
-  *pour lire*, pas une règle sur le paysage : ailleurs, la barre vaut ce
-  qu'elle coûte.
-  Dans l'app, un écran poussé depuis la fiche équipe
-  (`(detail)/team/disponibilites`) ; sur le web, une section de la fiche.
+  ou cinq journées et la feuille invite à le tourner ; couché, sept tiennent.
+  Sur le web, une section de la fiche équipe.
 
 ### Lieu d'un match (#611)
 - **Là où l'on regarde un match, on voit où il se joue, en entier** : le nom

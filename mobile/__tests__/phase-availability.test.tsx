@@ -5,20 +5,19 @@ import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support
 import type {
   Club, Division, Game, GameAvailability, Group, MatchDay, Phase, Player, Team, User,
 } from '@shared/types'
-import PhaseAvailabilityScreen from '@/app/(tabs)/(detail)/team/disponibilites'
+import { PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
 
 // ---------------------------------------------------------------------------
 // Disponibilités de la phase (#623)
 //
 // A captain's request: the whole phase on one screen, Oui / PE / Non per
 // journée and «5/7» per player. Seven journées do not fit a phone standing up,
-// so the screen says to turn it — and once turned, they do.
+// so the sheet says to turn it — and once turned, they do, with both totals.
 // ---------------------------------------------------------------------------
 const mockPush = jest.fn()
+const onClose = jest.fn()
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
-  useLocalSearchParams: () => ({ teamId: 't1' }),
-  useNavigation: () => ({ setOptions: jest.fn() }),
 }))
 
 const mockAuth: { user: User | null } = { user: null }
@@ -62,6 +61,7 @@ const JOURNEES = [1, 2, 3, 4, 5, 6, 7]
 
 beforeEach(() => {
   mockPush.mockClear()
+  onClose.mockClear()
   mockAuth.user = { ...mougey, role: 'player', isPlayer: true } as User
   mockData.clubs = [club]
   mockData.teams = [team, opponent]
@@ -87,7 +87,7 @@ afterEach(resetWindowSize)
 
 it('donne le ratio de chaque joueur sur toute la phase', () => {
   setWindowSize(PHONE_WIDTH)
-  render(<PhaseAvailabilityScreen />)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
 
   expect(screen.getByTestId('phase-row-p1').props.accessibilityLabel).toBe(
     'Mathieu Mougey, disponible 5 sur 7, sélectionné 1 sur 7',
@@ -104,37 +104,78 @@ it('donne le ratio de chaque joueur sur toute la phase', () => {
 
 it('abrège le prénom sur un téléphone', () => {
   setWindowSize(PHONE_WIDTH)
-  render(<PhaseAvailabilityScreen />)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
 
   expect(screen.getByText('M. Mougey')).toBeTruthy()
 })
 
 it('invite à tourner un téléphone debout, et plus une fois couché', () => {
   setWindowSize(PHONE_WIDTH)
-  const { unmount } = render(<PhaseAvailabilityScreen />)
+  const { unmount } = render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
   expect(screen.getByTestId('phase-rotate-hint')).toBeTruthy()
   unmount()
 
   setWindowSize({ width: 844, height: 390 })
-  render(<PhaseAvailabilityScreen />, { metrics: PHONE_LANDSCAPE })
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />, { metrics: PHONE_LANDSCAPE })
   expect(screen.queryByTestId('phase-rotate-hint')).toBeNull()
 })
 
-it('ouvre le match d’une journée, sur l’axe de l’équipe', () => {
+it('ouvre le match d’une journée, sur l’axe de l’équipe, en refermant la feuille', () => {
   setWindowSize(PHONE_WIDTH)
-  render(<PhaseAvailabilityScreen />)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
 
   fireEvent.press(screen.getByTestId('phase-col-g4'))
 
+  expect(onClose).toHaveBeenCalled()
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/match/[id]',
     params: { id: 'g4', teamId: 't1', from: 'team' },
   })
 })
 
+it('ouvre la fiche d’un joueur, en refermant la feuille', () => {
+  setWindowSize(PHONE_WIDTH)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+
+  fireEvent.press(screen.getByTestId('phase-row-p1'))
+
+  expect(onClose).toHaveBeenCalled()
+  expect(mockPush).toHaveBeenCalledWith('/player/p1')
+})
+
+it('nomme l’équipe et la phase, sans sélecteur, et se ferme par son bouton', () => {
+  setWindowSize(PHONE_WIDTH)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+
+  expect(screen.getByText(/Rixheim PPA 4 · Saison 2026\/2027 Phase 1/)).toBeTruthy()
+  fireEvent.press(screen.getByTestId('phase-sheet-close'))
+  expect(onClose).toHaveBeenCalled()
+})
+
+it('liste un renfort aligné, sans total de « Oui », hors du compte des disponibles', () => {
+  const renfort: Player = { ...mougey, id: 'p9', firstName: 'Bastien', lastName: 'Dangelser' }
+  mockData.players = [mougey, heurtin, renfort]
+  mockData.gameSelections = [{ teamId: 't1', gameId: 'g1', playerIds: ['p1', 'p9'] }]
+  mockData.gameAvailabilities = [
+    ...mockData.gameAvailabilities,
+    { gameId: 'g1', playerId: 'p9', status: 'available' },
+  ]
+  setWindowSize(PHONE_WIDTH)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+
+  expect(screen.getByTestId('phase-row-p9').props.accessibilityLabel).toBe(
+    'Bastien Dangelser, renfort, sélectionné 1 sur 7',
+  )
+  expect(screen.getByText('Renf.')).toBeTruthy()
+  expect(screen.getByTestId('phase-cell-p9-g1').props.accessibilityLabel).toBe('Oui, dans la composition')
+  // L'effectif seul : Mougey ; le renfort compte dans la composition.
+  expect(screen.getByTestId('phase-available-g1').props.children).toBe(1)
+  expect(screen.getByTestId('phase-selected-g1').props.children).toEqual([2, '/', 4])
+})
+
 it('compte, par journée, les disponibles et la composition', () => {
   setWindowSize(PHONE_WIDTH)
-  render(<PhaseAvailabilityScreen />)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
 
   expect(screen.getByText('Disponibles')).toBeTruthy()
   expect(screen.getByText('Sélectionnés')).toBeTruthy()
@@ -146,12 +187,12 @@ it('compte, par journée, les disponibles et la composition', () => {
 
 it('serre les lignes sur un téléphone couché, pour six joueurs et les deux totaux', () => {
   setWindowSize({ width: 844, height: 390 })
-  render(<PhaseAvailabilityScreen />, { metrics: PHONE_LANDSCAPE })
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />, { metrics: PHONE_LANDSCAPE })
   const couche = StyleSheet.flatten(screen.getByTestId('phase-row-p1').props.style).height
 
   setWindowSize(PHONE_WIDTH)
   screen.unmount()
-  render(<PhaseAvailabilityScreen />)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
   const debout = StyleSheet.flatten(screen.getByTestId('phase-row-p1').props.style).height
 
   expect(couche).toBe(32)

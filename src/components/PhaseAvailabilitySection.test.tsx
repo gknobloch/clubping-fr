@@ -76,6 +76,28 @@ describe('PhaseAvailabilitySection', () => {
     expect(counts[1]).toHaveClass('text-slate-400')
   })
 
+  it('lists a renfort without a «Oui» total, and leaves them out of the pool', () => {
+    const renfort = player('p9', 'Bastien', 'Dangelser')
+    const grid = phaseAvailabilityGrid(
+      { id: 't4', playerIds: ['p1', 'p2'] },
+      games,
+      [mougey, heurtin, renfort],
+      [...availabilities, { gameId: 'g1', playerId: 'p9', status: 'available' }],
+      [{ gameId: 'g1', teamId: 't4', playerIds: ['p1', 'p9'] }],
+    )
+    render(
+      <MemoryRouter>
+        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} />
+      </MemoryRouter>,
+    )
+
+    const row = screen.getByRole('rowheader', { name: /Dangelser/ }).closest('tr')!
+    expect(within(row).getByTitle('Renfort')).toHaveTextContent('Renf.')
+    expect(within(row).getByLabelText('Oui, dans la composition')).toBeInTheDocument()
+    const available = screen.getByRole('rowheader', { name: 'Disponibles' }).closest('tr')!
+    expect(within(available).getAllByRole('cell')[0]).toHaveTextContent('1')
+  })
+
   it('carries the licence badge with the name (#488)', () => {
     renderSection()
 
