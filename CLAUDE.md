@@ -155,6 +155,24 @@ invisible dans le diff comme dans la revue.
   ajoutés depuis, dont un repéré sur une capture de store (#520).
   `mobile/__tests__/text-input-letter-spacing.test.ts` lit les sources et
   casse le build sur le suivant.
+- **Tout `Modal` tourne avec le téléphone (#625).** Sur un iPhone, iOS
+  présente un `Modal` en portrait seul si on ne lui passe pas
+  `supportedOrientations` : ouvrir une feuille téléphone couché redressait
+  l'écran sous les mains du membre. `Sheet` passe `MODAL_ORIENTATIONS`, et tout
+  autre `Modal` aussi — quatre orientations et non trois, parce qu'un iPad
+  les admet toutes par défaut et qu'une liste plus courte lui en retirerait
+  une ; l'Info.plist garde l'iPhone à l'endroit. Invisible à tout test de
+  rendu : `__tests__/modal-orientations.test.ts` lit les sources.
+- **Couchée, une feuille reste une feuille, réglée pour ~400 pt de haut**
+  (`Sheet`) : le panneau tient dans la zone sûre (l'encoche est à un bout ou à
+  l'autre), s'arrête à une colonne de lecture (`SHEET_MAX_WIDTH`, centrée — à
+  874 pt, une ligne étirée est un nom à un bout et sa case à l'autre), et prend
+  la hauteur moins une lisière de fond (`SIDEWAYS_GAP`), **quel que soit le
+  `maxHeight` de l'appelant** : c'est une part d'un téléphone debout, et 60 %
+  de 402 pt ne tient pas trois boutons. Ce qui dépasse défile — d'où la règle
+  du `flexShrink` ci-dessous. `dense` (#623) prend toute la largeur et règle
+  ses marges lui-même. Une page sheet (`presentationStyle="pageSheet"`)
+  devient plein écran couchée : son `SafeAreaView` garde aussi les côtés.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -332,12 +350,10 @@ invisible dans le diff comme dans la revue.
   l'équipe, en tête du planning, y mène. Le retour n'en tient pas lieu — on
   arrive aussi sur « Tous les matchs » depuis l'écran d'un match, donc depuis
   l'accueil sans être passé par la fiche.
-- **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit
-  rien — une feuille ouverte téléphone couché redressait l'écran sous les
-  mains du membre. Les autres feuilles de l'app ne le déclarent pas encore.
+- Elle tourne avec le téléphone, comme toute feuille depuis #625 (voir
+  *Mobile UI*).
 - **En sortir est une navigation** : un nom ouvre la fiche, une journée le
-  match, et la feuille se ferme d'abord. Une seconde feuille par-dessus
-  (l'aperçu joueur) serait en portrait seul.
+  match, et la feuille se ferme d'abord.
 - **On ne verrouille pas l'orientation** : debout, un téléphone tient quatre
   ou cinq journées et la feuille invite à le tourner ; couché, sept tiennent.
   Sur le web, une section de la fiche équipe.

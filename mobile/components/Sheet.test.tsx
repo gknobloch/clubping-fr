@@ -1,15 +1,23 @@
 import { fireEvent, screen } from '@testing-library/react-native'
-import { StyleSheet, Text } from 'react-native'
-import { Modal } from 'react-native'
+import { Modal, StyleSheet, Text } from 'react-native'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import {
   PHONE_WIDTH,
+  TABLET_LANDSCAPE,
   TABLET_LARGE,
   TABLET_SMALL,
   resetWindowSize,
   setWindowSize,
 } from '@/__tests__/support/window'
-import { DIALOG_MAX_WIDTH, Sheet, WIDE_DIALOG_MAX_WIDTH, sheetContentWidth } from './Sheet'
+import {
+  DIALOG_MAX_WIDTH,
+  MODAL_ORIENTATIONS,
+  SHEET_MAX_WIDTH,
+  SIDEWAYS_GAP,
+  Sheet,
+  WIDE_DIALOG_MAX_WIDTH,
+  sheetContentWidth,
+} from './Sheet'
 
 // ---------------------------------------------------------------------------
 // The app's one modal container (#446). Three screens carried the same
@@ -41,7 +49,9 @@ describe('on a phone', () => {
   it('rises from the bottom edge, full width, rounded at the top', () => {
     expect(backdrop().justifyContent).toBe('flex-end')
     expect(panel().borderTopLeftRadius).toBe(20)
-    expect(panel().maxWidth).toBeUndefined()
+    // The reading-column cap is wider than any phone standing up.
+    expect(panel().width).toBe('100%')
+    expect(SHEET_MAX_WIDTH).toBeGreaterThan(PHONE_WIDTH.width)
   })
 
   it('wears the grab handle that says so', () => {
@@ -89,47 +99,133 @@ it('still closes on the backdrop once it is a dialog', () => {
   expect(onClose).toHaveBeenCalled()
 })
 
-// The phase grid (#623): a sheet a phone is turned sideways to read.
-describe('a sheet read sideways', () => {
-  it('turns with the phone, where iOS would otherwise force it upright', () => {
-    setWindowSize({ width: 844, height: 390 })
-    render(
-      <Sheet onClose={onClose} rotates dense>
-        <Text>Grille</Text>
-      </Sheet>,
-      { metrics: PHONE_LANDSCAPE },
-    )
-    expect(screen.UNSAFE_getByType(Modal).props.supportedOrientations).toEqual([
-      'portrait', 'landscape-left', 'landscape-right',
-    ])
-  })
+// ---------------------------------------------------------------------------
+// A phone on its side (#625). iOS presents a `Modal` portrait-only unless told
+// otherwise, so every sheet turned the screen upright under the member's
+// hands; and the panel was laid out for 844pt of height and no notch.
+// ---------------------------------------------------------------------------
+const SIDEWAYS = { width: PHONE_LANDSCAPE.frame.width, height: PHONE_LANDSCAPE.frame.height }
 
-  it('leaves every other sheet as it was', () => {
+function renderSideways(props: Partial<Parameters<typeof Sheet>[0]> = {}) {
+  setWindowSize(SIDEWAYS)
+  render(
+    <Sheet onClose={onClose} {...props}>
+      <Text>Feuille de match</Text>
+    </Sheet>,
+    { metrics: PHONE_LANDSCAPE },
+  )
+}
+
+const orientations = () => screen.UNSAFE_getByType(Modal).props.supportedOrientations
+
+describe('every sheet turns with the device', () => {
+  it('on a phone standing up', () => {
     setWindowSize(PHONE_WIDTH)
     renderSheet()
-    expect(screen.UNSAFE_getByType(Modal).props.supportedOrientations).toBeUndefined()
+    expect(orientations()).toEqual(MODAL_ORIENTATIONS)
   })
 
-  it('gives the notch and the home indicator as its only margins when dense', () => {
-    setWindowSize({ width: 844, height: 390 })
-    render(
-      <Sheet onClose={onClose} dense>
-        <Text>Grille</Text>
-      </Sheet>,
-      { metrics: PHONE_LANDSCAPE },
+  it('on a phone on its side', () => {
+    renderSideways()
+    expect(orientations()).toEqual(MODAL_ORIENTATIONS)
+  })
+
+  it('on a tablet, whichever way up — a shorter list than iOS’s default would take one away', () => {
+    setWindowSize(TABLET_LANDSCAPE)
+    renderSheet()
+    // An iPad allows every orientation by default; naming three would have
+    // pinned an upside-down slab the right way round.
+    expect(orientations()).toEqual(
+      expect.arrayContaining(['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right']),
     )
+  })
+})
+
+describe('a sheet on a phone on its side', () => {
+  it('keeps the panel off the notch at either end', () => {
+    renderSideways()
+    expect(backdrop()).toMatchObject({ paddingLeft: 59, paddingRight: 59 })
+  })
+
+  it('stops at a reading column, centred, rather than spanning 844pt', () => {
+    renderSideways()
+    expect(panel()).toMatchObject({ width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' })
+    expect(sheetContentWidth({ width: SIDEWAYS.width, isTablet: false, insets: PHONE_LANDSCAPE.insets }))
+      .toBe(SHEET_MAX_WIDTH - 48)
+  })
+
+  it('takes the height bar a sliver, whatever share the caller asked for standing up', () => {
+    // 60% of 390 is 234pt: shorter than three answers and their title.
+    renderSideways({ maxHeight: '60%' })
+    expect(panel().maxHeight).toBe(SIDEWAYS.height - SIDEWAYS_GAP)
+  })
+
+  it('pads its foot for a 21pt home indicator, not a 34pt one', () => {
+    renderSideways()
+    expect(panel().paddingBottom).toBe(24)
+  })
+
+  it('still wears the grab handle — it is still a sheet', () => {
+    renderSideways()
+    expect(screen.getByTestId('sheet-handle')).toBeTruthy()
+    expect(backdrop().justifyContent).toBe('flex-end')
+  })
+})
+
+describe('a sheet on a phone standing up is as it was', () => {
+  beforeEach(() => {
+    setWindowSize(PHONE_WIDTH)
+    render(
+      <Sheet onClose={onClose} maxHeight="60%">
+        <Text>Feuille de match</Text>
+      </Sheet>,
+    )
+  })
+
+  it('keeps the share it was given', () => {
+    expect(panel().maxHeight).toBe('60%')
+  })
+
+  it('keeps 40pt above the home indicator, and no side padding on the backdrop', () => {
+    expect(panel().paddingBottom).toBe(40)
+    expect(backdrop()).toMatchObject({ paddingLeft: 0, paddingRight: 0 })
+  })
+})
+
+// The phase grid (#623): a sheet a phone is turned sideways to read.
+describe('a dense sheet', () => {
+  it('gives the notch and the home indicator as its only margins', () => {
+    renderSideways({ dense: true })
     expect(panel()).toMatchObject({ paddingTop: 8, paddingBottom: 21, paddingLeft: 59, paddingRight: 59 })
     expect(sheetContentWidth({ width: 844, isTablet: false, dense: true, insets: { left: 59, right: 59 } }))
       .toBe(844 - 118)
   })
 
-  it('widens a dialog for a grid on a tablet', () => {
-    setWindowSize(TABLET_LARGE)
-    render(
-      <Sheet onClose={onClose} wide>
-        <Text>Grille</Text>
-      </Sheet>,
-    )
-    expect(panel().maxWidth).toBe(WIDE_DIALOG_MAX_WIDTH)
+  it('takes the whole width: neither the column cap nor the backdrop’s safe padding', () => {
+    renderSideways({ dense: true })
+    expect(panel().maxWidth).toBeUndefined()
+    expect(backdrop().paddingLeft).toBeUndefined()
   })
+
+  it('takes the height bar the same sliver', () => {
+    renderSideways({ dense: true })
+    expect(panel().maxHeight).toBe(SIDEWAYS.height - SIDEWAYS_GAP)
+  })
+})
+
+it('widens a dialog for a grid on a tablet', () => {
+  setWindowSize(TABLET_LARGE)
+  render(
+    <Sheet onClose={onClose} wide>
+      <Text>Grille</Text>
+    </Sheet>,
+  )
+  expect(panel().maxWidth).toBe(WIDE_DIALOG_MAX_WIDTH)
+})
+
+it('is not a sideways phone on a tablet on its side: still a dialog, at its own height', () => {
+  setWindowSize(TABLET_LANDSCAPE)
+  renderSheet()
+  expect(backdrop().justifyContent).toBe('center')
+  expect(panel().maxHeight).toBe('85%')
 })

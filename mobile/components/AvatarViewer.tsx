@@ -1,5 +1,6 @@
 import { Modal, Pressable, Image, StyleSheet, useWindowDimensions } from 'react-native'
 import { avatarImageSource } from '@/utils/avatarSource'
+import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 
 // Full-screen lightbox for a player's avatar. Tapping the dimmed backdrop (or
 // the system back gesture) dismisses it. Reuses Avatar's authenticated,
@@ -18,7 +19,14 @@ export function AvatarViewer({
   const size = Math.min(width - 64, 280)
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Image
           source={avatarImageSource(playerId, avatarUpdatedAt)}
