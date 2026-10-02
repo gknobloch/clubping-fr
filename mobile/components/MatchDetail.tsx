@@ -130,6 +130,16 @@ export function MatchDetail({
   )
   const pager = embedded ? null : neighbours
 
+  // A swipe to the right is "previous match" here, and the stack's own
+  // swipe-back answers the same gesture: it popped the screen back to the team
+  // instead of stepping to the previous match. While there is somewhere to
+  // step, the screen owns the gesture; the header's back chevron still leaves.
+  const hasPager = !embedded && neighbours !== null
+  useEffect(() => {
+    if (embedded) return
+    navigation.setOptions({ gestureEnabled: !hasPager, fullScreenGestureEnabled: !hasPager })
+  }, [navigation, embedded, hasPager])
+
   if (!game || !team || !matchDay) {
     return (
       <Screen pane={embedded}>
