@@ -59,23 +59,25 @@ describe('phaseAvailabilityGrid', () => {
     expect(grid.selectedByGame).toEqual([0, 1, 0])
   })
 
-  it('adds a renfort a line-up of the phase names, after the roster', () => {
+  it('gathers the renforts of each line-up apart from the roster', () => {
     const grid = phaseAvailabilityGrid(
       team,
       games,
-      players,
+      [...players, player('y', 'Bertrand')],
       [av('g3', 'x', 'available')],
-      [{ gameId: 'g3', teamId: 't4', playerIds: ['p1', 'x'] }],
+      [
+        { gameId: 'g1', teamId: 't4', playerIds: ['p1'] },
+        { gameId: 'g3', teamId: 't4', playerIds: ['p1', 'x', 'y'] },
+      ],
     )
-    const last = grid.rows[grid.rows.length - 1]
-    expect(last.player.id).toBe('x')
-    expect(last.renfort).toBe(true)
-    // Listed, answers and all — but no total, and not counted in the pool.
-    expect(last.cells[2].status).toBe('available')
-    expect(last.available).toBeNull()
-    expect(last.selected).toBe(1)
+    // The roster only: a renfort is not a row.
+    expect(grid.rows.map((r) => r.player.id)).toEqual(['p2', 'p3', 'p1'])
+    expect(grid.renforts.map((list) => list.map((r) => r.player.id))).toEqual([[], [], ['x', 'y']])
+    expect(grid.renforts[2][0].status).toBe('available')
+    expect(grid.renfortGames).toBe(1)
+    // A renfort's yes is not the pool; their place on the line-up is.
     expect(grid.availableByGame).toEqual([0, 0, 0])
-    expect(grid.rows.filter((r) => r.renfort)).toHaveLength(1)
+    expect(grid.selectedByGame).toEqual([1, 0, 3])
   })
 })
 

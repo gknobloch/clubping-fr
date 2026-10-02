@@ -14,6 +14,7 @@ import { MatchDate } from '@/components/MatchDate'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
 import { PhaseAvailabilitySection } from '@/components/PhaseAvailabilitySection'
 import {
+  EMPTY_PHASE_GRID,
   phaseAvailabilityColumns,
   phaseAvailabilityGrid,
   playersRequired,
@@ -82,7 +83,7 @@ export function TeamDetailPage() {
     () =>
       team
         ? phaseAvailabilityGrid(team, games_, players, gameAvailabilities, gameSelections)
-        : { rows: [], availableByGame: [], selectedByGame: [] },
+        : EMPTY_PHASE_GRID,
     [team, games_, players, gameAvailabilities, gameSelections],
   )
   const phaseColumns = useMemo(() => phaseAvailabilityColumns(games_), [games_])

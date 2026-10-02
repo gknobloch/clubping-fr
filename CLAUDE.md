@@ -255,11 +255,19 @@ invisible dans le diff comme dans la revue.
   composition **vide** n'est pas fausse : sur une phase, la plupart ne sont
   simplement pas encore faites, d'où `selectionVerdict` et son état `empty`,
   gris plutôt que rouge.
-- Lignes : l'effectif, puis **les renforts qu'une composition de la phase
-  nomme**, avec leurs réponses mais **sans total « Oui »** (`available: null`,
-  « Renf. » dans la colonne) et hors de « Disponibles », qui compte l'effectif
-  comme le Résumé de la matrice. Une cellule encadrée = dans la composition de
-  **cette** équipe.
+- Lignes : l'effectif. **Les renforts tiennent sur une seule ligne,
+  « Renforts »**, quel que soit leur nombre : par journée, les visages de ceux
+  que la composition emprunte (deux, puis « +N »), et leurs noms — avec leur
+  réponse — dans un popover au toucher. Une ligne par renfort poussait les
+  totaux de l'effectif hors d'un téléphone couché, pour des lignes portant
+  chacune un seul cadre. Pas de total « Oui » sur cette ligne, et ils sont
+  hors de « Disponibles », qui compte l'effectif comme le Résumé de la
+  matrice ; ils comptent dans « Sélectionnés ». Une cellule encadrée = dans la
+  composition de **cette** équipe.
+- **Le popover de l'app est dessiné dans la feuille**, pas dans un `Modal` :
+  un second `Modal` serait en portrait seul sur iOS. Il s'ouvre **au-dessus**
+  de la cellule (la ligne est posée sur les totaux), et sur le web aussi, où le
+  conteneur qui défile rognerait vers le bas.
 - **Nom et comptes figés, journées qui défilent**, sur le web comme dans
   l'app. Sur le web, `border-separate` et non `border-collapse` : une bordure
   fusionnée laisse un pixel à côté d'une cellule collante, où les journées

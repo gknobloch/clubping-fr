@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Avatar } from '@/components/Avatar'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { LicenceBadge } from '@/components/LicenceBadge'
 import {
   selectionVerdict,
   type PhaseAvailabilityColumn,
   type PhaseAvailabilityGrid,
+  type PhaseRenfort,
 } from '@/lib/phaseAvailability'
 import type { AvailabilityStatus } from '@/types'
 
@@ -13,7 +16,9 @@ import type { AvailabilityStatus } from '@/types'
 //
 // Players down, the team's matches across, and two counts after each name —
 // «5/7» answered yes, «3/7» on a line-up: the planning a captain draws up for
-// the phase. Under them, per journée, how many said yes and how many the
+// the phase. Then one Renforts row, whoever and however many: per journée, the
+// faces of the borrowed players its line-up names, their names a click away.
+// Under them, per journée, how many of the roster said yes and how many the
 // line-up names. Same grid as the app's `team/disponibilites` screen, from the
 // same derivation.
 //
@@ -49,6 +54,8 @@ export function PhaseAvailabilitySection({
   unlicensed: Set<string>
   onGame: (gameId: string) => void
 }) {
+  // One popover at a time, keyed on its match.
+  const [openRenforts, setOpenRenforts] = useState<string | null>(null)
   if (grid.rows.length === 0 || columns.length === 0) return null
   const total = columns.length
 
@@ -130,16 +137,8 @@ export function PhaseAvailabilitySection({
                   </Link>
                   {unlicensed.has(row.player.id) && <LicenceBadge />}
                 </th>
-                {/* A renfort is listed because a line-up names them; the
-                    column says why it has no «Oui» total instead of giving one. */}
                 <td className="sticky left-32 z-10 bg-white text-center font-semibold text-slate-800 sm:left-48">
-                  {row.available === null ? (
-                    <abbr title="Renfort" className="text-xs font-medium text-slate-500 no-underline">
-                      Renf.
-                    </abbr>
-                  ) : (
-                    `${row.available}/${total}`
-                  )}
+                  {row.available}/{total}
                 </td>
                 {/* Played-for is the second question; the one asked is availability. */}
                 <td className="sticky left-44 z-10 border-r !border-r-slate-200 bg-white text-center font-semibold text-slate-500 sm:left-60">
@@ -162,6 +161,36 @@ export function PhaseAvailabilitySection({
                 })}
               </tr>
             ))}
+            {grid.renfortGames > 0 && (
+              <tr className="[&>*]:border-b [&>*]:border-slate-100">
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 bg-white px-3 py-1.5 text-left font-medium text-slate-500 sm:px-5"
+                >
+                  Renforts
+                </th>
+                {/* No «Oui» total: how much of this team's phase a borrowed
+                    player could play is nobody's question. */}
+                <td className="sticky left-32 z-10 bg-white sm:left-48" />
+                <td className="sticky left-44 z-10 border-r !border-r-slate-200 bg-white text-center font-semibold text-slate-500 sm:left-60">
+                  {grid.renfortGames}/{total}
+                </td>
+                {grid.renforts.map((list, i) => (
+                  <td key={columns[i]?.gameId ?? i} className="relative px-1 py-1.5">
+                    {list.length > 0 && (
+                      <RenfortsCell
+                        title={`Renforts · J${columns[i].number}`}
+                        renforts={list}
+                        open={openRenforts === columns[i].gameId}
+                        onToggle={() =>
+                          setOpenRenforts((cur) => (cur === columns[i].gameId ? null : columns[i].gameId))
+                        }
+                      />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="bg-slate-50">
@@ -199,5 +228,100 @@ export function PhaseAvailabilitySection({
         </table>
       </div>
     </section>
+  )
+}
+
+/** Past this many, the stack says «+N» rather than growing past its column. */
+const STACKED_AVATARS = 2
+
+/**
+ * One match's renforts as a stack of faces, and their names in a popover that
+ * opens *upward*: the row sits on the totals, and the scroller clips below.
+ */
+function RenfortsCell({
+  title,
+  renforts,
+  open,
+  onToggle,
+}: {
+  title: string
+  renforts: PhaseRenfort[]
+  open: boolean
+  onToggle: () => void
+}) {
+  const shown = renforts.slice(0, STACKED_AVATARS)
+  const more = renforts.length - shown.length
+  const names = renforts.map((r) => `${r.player.firstName} ${r.player.lastName}`).join(', ')
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={`Renforts : ${names}`}
+        className="flex min-h-11 w-full items-center justify-center rounded-md hover:bg-slate-50 md:min-h-8"
+      >
+        {shown.map((r, i) => (
+          <span key={r.player.id} className={`rounded-full ring-2 ring-white ${i > 0 ? '-ml-2' : ''}`}>
+            <Avatar
+              playerId={r.player.id}
+              avatarUpdatedAt={r.player.avatarUpdatedAt}
+              firstName={r.player.firstName}
+              lastName={r.player.lastName}
+              size={26}
+            />
+          </span>
+        ))}
+        {more > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">+{more}</span>}
+      </button>
+      {open && (
+        <>
+          {/* Anywhere else closes it. Fixed, so the scroller does not clip it. */}
+          <button
+            type="button"
+            aria-label="Fermer"
+            className="fixed inset-0 z-20 cursor-default"
+            onClick={onToggle}
+          />
+          <div
+            role="dialog"
+            aria-label={title}
+            className="absolute bottom-full left-1/2 z-30 mb-1 w-60 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-lg"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+            <ul className="mt-2 space-y-1.5">
+              {renforts.map((r) => {
+                const v = r.status ? CELL[r.status] : undefined
+                return (
+                  <li key={r.player.id} className="flex items-center gap-2">
+                    <Avatar
+                      playerId={r.player.id}
+                      avatarUpdatedAt={r.player.avatarUpdatedAt}
+                      firstName={r.player.firstName}
+                      lastName={r.player.lastName}
+                      size={28}
+                    />
+                    <Link
+                      to={`/joueurs/${r.player.id}`}
+                      className="min-w-0 flex-1 truncate text-sm text-slate-800 hover:text-accent-600"
+                    >
+                      {r.player.firstName} {r.player.lastName}
+                    </Link>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                        v ? v.cls : 'bg-slate-50 text-slate-300'
+                      }`}
+                    >
+                      {v ? v.short : '—'}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </>
+      )}
+    </>
   )
 }

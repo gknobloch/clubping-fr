@@ -27,38 +27,45 @@ export interface PhaseAvailabilityCell {
 
 export interface PhaseAvailabilityRow {
   player: Player
-  /** Fielded by this team without being on its roster. */
-  renfort: boolean
   /** One per match, in the order of `games`. */
   cells: PhaseAvailabilityCell[]
-  /**
-   * Matches answered «Oui» — the numerator of «5/7». Null for a renfort: they
-   * are listed because a line-up names them, and how much of *this* team's
-   * phase they could play is not a question anyone is asking of them.
-   */
-  available: number | null
+  /** Matches answered «Oui» — the numerator of «5/7». */
+  available: number
   /** Matches whose line-up names them — the numerator of the «Sél.» column. */
   selected: number
 }
 
+/** A renfort a line-up names, and what they answered for that match. */
+export interface PhaseRenfort {
+  player: Player
+  status?: AvailabilityStatus
+}
+
 export interface PhaseAvailabilityGrid {
+  /** The roster, by name. */
   rows: PhaseAvailabilityRow[]
+  /**
+   * Per match, the renforts its line-up names — players from outside the
+   * roster, by name. One row for all of them, not a row each: a phase can
+   * borrow five different players once, and five rows of one frame each would
+   * push the roster's own totals off a phone held sideways.
+   */
+  renforts: PhaseRenfort[][]
+  /** Matches that borrowed anyone — the «Sél.» of the Renforts row. */
+  renfortGames: number
   /**
    * Per match, how many of the roster answered «Oui» — the roster, as in the
    * journées matrix's Résumé (#580): a renfort's yes is not the team's pool.
    */
   availableByGame: number[]
-  /**
-   * Per match, how many the line-up names — the line-up itself, not a count
-   * of the rows, though every name on it is a row (a renfort is one).
-   */
+  /** Per match, how many the line-up names — renforts included. */
   selectedByGame: number[]
 }
 
 /**
- * Lignes = the roster, then any renfort a line-up of this phase already names;
- * colonnes = `games`, in the order given (the caller's `teamPhaseEntries`, by
- * date). The denominator of a row's ratio is `games.length`: a match the
+ * Lignes = the roster; colonnes = `games`, in the order given (the caller's
+ * `teamPhaseEntries`, by date); and per match, the renforts its line-up
+ * borrowed. The denominator of a row's ratio is `games.length`: a match the
  * player did not answer is a match they have not said yes to.
  */
 export function phaseAvailabilityGrid(
@@ -83,15 +90,10 @@ export function phaseAvailabilityGrid(
 
   const byId = new Map(players.map((p) => [p.id, p]))
   const rosterIds = new Set(team.playerIds)
-  const renfortIds = new Set<string>()
-  for (const ids of selectedIn.values()) {
-    for (const pid of ids) if (!rosterIds.has(pid)) renfortIds.add(pid)
-  }
-
   const resolve = (ids: Iterable<string>) =>
     sortByName([...ids].map((id) => byId.get(id)).filter((p): p is Player => !!p))
 
-  const rowOf = (player: Player, renfort: boolean): PhaseAvailabilityRow => {
+  const rows = resolve(rosterIds).map((player): PhaseAvailabilityRow => {
     const cells = games.map((g) => ({
       gameId: g.id,
       status: statusOf.get(`${g.id}:${player.id}`),
@@ -99,23 +101,24 @@ export function phaseAvailabilityGrid(
     }))
     return {
       player,
-      renfort,
       cells,
-      available: renfort ? null : cells.filter((c) => c.status === 'available').length,
+      available: cells.filter((c) => c.status === 'available').length,
       selected: cells.filter((c) => c.selected).length,
     }
-  }
+  })
 
-  const rows = [
-    ...resolve(rosterIds).map((p) => rowOf(p, false)),
-    ...resolve(renfortIds).map((p) => rowOf(p, true)),
-  ]
+  const renforts = games.map((g) =>
+    resolve([...(selectedIn.get(g.id) ?? [])].filter((pid) => !rosterIds.has(pid))).map((player) => ({
+      player,
+      status: statusOf.get(`${g.id}:${player.id}`),
+    })),
+  )
 
   return {
     rows,
-    availableByGame: games.map(
-      (_, i) => rows.filter((r) => !r.renfort && r.cells[i].status === 'available').length,
-    ),
+    renforts,
+    renfortGames: renforts.filter((r) => r.length > 0).length,
+    availableByGame: games.map((_, i) => rows.filter((r) => r.cells[i].status === 'available').length),
     selectedByGame: games.map((g) => selectedIn.get(g.id)?.size ?? 0),
   }
 }
@@ -164,4 +167,13 @@ export function playersRequired(
 export function selectionVerdict(selected: number, required: number): 'empty' | 'ok' | 'off' {
   if (selected === 0) return 'empty'
   return selected === required ? 'ok' : 'off'
+}
+
+/** The grid of a team with nothing to show — before a calendar, say. */
+export const EMPTY_PHASE_GRID: PhaseAvailabilityGrid = {
+  rows: [],
+  renforts: [],
+  renfortGames: 0,
+  availableByGame: [],
+  selectedByGame: [],
 }

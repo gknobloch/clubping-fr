@@ -50,6 +50,12 @@ test.describe('Player — Team detail', () => {
     await expect(row.getByText(/^\d+\/8$/)).toHaveCount(2)
     await expect(section.getByRole('rowheader', { name: 'Sélectionnés' })).toBeVisible()
 
+    // Renforts are one row; their names open in a popover.
+    await expect(section.getByRole('rowheader', { name: /Cunin/ })).toHaveCount(0)
+    await section.getByRole('button', { name: 'Renforts : Cédric Cunin' }).first().click()
+    await expect(page.getByRole('dialog', { name: /^Renforts · J/ })).toContainText('Cédric Cunin')
+    await page.getByRole('button', { name: 'Fermer' }).click()
+
     await section.getByRole('button', { name: /^Journée 1,/ }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
   })

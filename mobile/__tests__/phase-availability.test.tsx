@@ -5,7 +5,7 @@ import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support
 import type {
   Club, Division, Game, GameAvailability, Group, MatchDay, Phase, Player, Team, User,
 } from '@shared/types'
-import { PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
+import { PhaseAvailabilitySheet, popoverPlacement } from '@/components/PhaseAvailabilitySheet'
 
 // ---------------------------------------------------------------------------
 // Disponibilités de la phase (#623)
@@ -152,25 +152,66 @@ it('nomme l’équipe et la phase, sans sélecteur, et se ferme par son bouton',
   expect(onClose).toHaveBeenCalled()
 })
 
-it('liste un renfort aligné, sans total de « Oui », hors du compte des disponibles', () => {
-  const renfort: Player = { ...mougey, id: 'p9', firstName: 'Bastien', lastName: 'Dangelser' }
-  mockData.players = [mougey, heurtin, renfort]
-  mockData.gameSelections = [{ teamId: 't1', gameId: 'g1', playerIds: ['p1', 'p9'] }]
-  mockData.gameAvailabilities = [
-    ...mockData.gameAvailabilities,
-    { gameId: 'g1', playerId: 'p9', status: 'available' },
-  ]
-  setWindowSize(PHONE_WIDTH)
-  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+describe('les renforts', () => {
+  const dangelser: Player = { ...mougey, id: 'p9', firstName: 'Bastien', lastName: 'Dangelser' }
+  const coatpont: Player = { ...mougey, id: 'p8', firstName: 'Bertrand', lastName: 'De Coatpont' }
 
-  expect(screen.getByTestId('phase-row-p9').props.accessibilityLabel).toBe(
-    'Bastien Dangelser, renfort, sélectionné 1 sur 7',
-  )
-  expect(screen.getByText('Renf.')).toBeTruthy()
-  expect(screen.getByTestId('phase-cell-p9-g1').props.accessibilityLabel).toBe('Oui, dans la composition')
-  // L'effectif seul : Mougey ; le renfort compte dans la composition.
-  expect(screen.getByTestId('phase-available-g1').props.children).toBe(1)
-  expect(screen.getByTestId('phase-selected-g1').props.children).toEqual([2, '/', 4])
+  beforeEach(() => {
+    mockData.players = [mougey, heurtin, dangelser, coatpont]
+    mockData.gameSelections = [
+      { teamId: 't1', gameId: 'g1', playerIds: ['p1', 'p9', 'p8'] },
+      { teamId: 't1', gameId: 'g3', playerIds: ['p9'] },
+    ]
+    mockData.gameAvailabilities = [
+      ...mockData.gameAvailabilities,
+      { gameId: 'g1', playerId: 'p9', status: 'available' },
+    ]
+    setWindowSize(PHONE_WIDTH)
+    render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+  })
+
+  it('tiennent sur une seule ligne, quel que soit leur nombre', () => {
+    expect(screen.getByTestId('phase-renforts-row')).toBeTruthy()
+    expect(screen.queryByTestId('phase-row-p9')).toBeNull()
+    expect(screen.queryByTestId('phase-row-p8')).toBeNull()
+    // Deux journées sur sept ont emprunté quelqu'un.
+    expect(screen.getByText('2/7')).toBeTruthy()
+    expect(screen.getByTestId('phase-renforts-g1').props.accessibilityLabel).toBe(
+      'Renforts : Bastien Dangelser, Bertrand De Coatpont',
+    )
+    expect(screen.queryByTestId('phase-renforts-g2')).toBeNull()
+  })
+
+  it('comptent dans la composition, pas dans les disponibles', () => {
+    expect(screen.getByTestId('phase-available-g1').props.children).toBe(1)
+    expect(screen.getByTestId('phase-selected-g1').props.children).toEqual([3, '/', 4])
+  })
+
+  it('se nomment dans un popover, avec leur réponse, et le popover se referme', () => {
+    expect(screen.queryByTestId('renforts-popover')).toBeNull()
+
+    fireEvent.press(screen.getByTestId('phase-renforts-g1'))
+
+    expect(screen.getByText('Renforts · J1')).toBeTruthy()
+    expect(screen.getByText('Bastien Dangelser')).toBeTruthy()
+    expect(screen.getByText('Bertrand De Coatpont')).toBeTruthy()
+    // La feuille reste ouverte : le popover est dedans.
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.press(screen.getByTestId('renforts-popover-backdrop'))
+    expect(screen.queryByTestId('renforts-popover')).toBeNull()
+  })
+})
+
+it('place le popover au-dessus de la cellule, sans sortir de la feuille', () => {
+  const frame = { x: 10, y: 100, width: 700, height: 300 }
+  // Centré sur la cellule, posé juste au-dessus d'elle.
+  expect(popoverPlacement({ x: 300, y: 300, width: 80, height: 28 }, frame)).toEqual({
+    bottom: 300 - 200 + 6,
+    left: 300 - 10 + 40 - 120,
+  })
+  // Au bord droit, il rentre dans la feuille plutôt que d'en déborder.
+  expect(popoverPlacement({ x: 690, y: 300, width: 80, height: 28 }, frame).left).toBe(700 - 240)
 })
 
 it('compte, par journée, les disponibles et la composition', () => {

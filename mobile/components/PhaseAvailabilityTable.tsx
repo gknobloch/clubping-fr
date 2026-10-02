@@ -1,13 +1,16 @@
+import { useRef } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
 import { fonts } from '@/constants/typography'
 import { LicenceTag } from '@/components/LicenceTag'
+import { Avatar } from '@/components/Avatar'
 import {
   selectionVerdict,
   type PhaseAvailabilityColumn,
   type PhaseAvailabilityGrid,
   type PhaseAvailabilityRow,
+  type PhaseRenfort,
 } from '@shared/lib/phaseAvailability'
 import type { Player } from '@shared/types'
 
@@ -21,7 +24,8 @@ import type { Player } from '@shared/types'
 //
 // Under the players, two totals per journée: how many of the roster said yes,
 // and how many the line-up names — the pair the journées matrix's Résumé gives.
-// A renfort a line-up names is a row too, with answers but no «Oui» total.
+// Renforts are one row, whoever and however many: per journée, the faces of
+// the borrowed players its line-up names, their names a tap away.
 //
 // A phone held upright fits four or five journées; turned sideways, a phase of
 // seven fits whole — but in ~400pt of height, which is what `dense` is for: a
@@ -70,6 +74,7 @@ export function PhaseAvailabilityTable({
   unlicensed,
   onPlayer,
   onGame,
+  onRenforts,
 }: {
   grid: PhaseAvailabilityGrid
   columns: PhaseAvailabilityColumn[]
@@ -83,10 +88,13 @@ export function PhaseAvailabilityTable({
   unlicensed: Set<string>
   onPlayer: (playerId: string) => void
   onGame: (gameId: string) => void
+  /** A Renforts cell was tapped; `anchor` is where it sits on screen, when known. */
+  onRenforts?: (gameId: string, anchor: RenfortsAnchor | null) => void
 }) {
   const m = phaseTableMetrics(dense)
   const cols = phaseTableColumns(width, columns.length, compact, dense)
   const countWidth = m.count
+  const hasRenforts = grid.renfortGames > 0
   const total = columns.length
 
   // «Renfort» rides in the Oui column instead (below), so only the licence
@@ -114,8 +122,7 @@ export function PhaseAvailabilityTable({
             accessibilityRole="button"
             accessibilityLabel={
               `${row.player.firstName} ${row.player.lastName}, ` +
-              (row.available === null ? 'renfort' : `disponible ${row.available} sur ${total}`) +
-              `, sélectionné ${row.selected} sur ${total}`
+              `disponible ${row.available} sur ${total}, sélectionné ${row.selected} sur ${total}`
             }
           >
             <View style={[s.nameCell, { width: cols.name }]}>
@@ -124,21 +131,27 @@ export function PhaseAvailabilityTable({
               </Text>
               {hasTags(row) && <LicenceTag />}
             </View>
-            {/* A renfort is listed because a line-up names them; how much of
-                this team's phase they could play is nobody's question, so the
-                column says why it has no total instead of giving one. */}
-            {row.available === null ? (
-              <Text style={[s.renfort, { width: countWidth }]}>Renf.</Text>
-            ) : (
-              <Text style={[s.count, dense && s.countDense, { width: countWidth }]}>
-                {row.available}/{total}
-              </Text>
-            )}
+            <Text style={[s.count, dense && s.countDense, { width: countWidth }]}>
+              {row.available}/{total}
+            </Text>
             <Text style={[s.count, s.countSecondary, dense && s.countDense, { width: countWidth }]}>
               {row.selected}/{total}
             </Text>
           </TouchableOpacity>
         ))}
+        {hasRenforts && (
+          <View style={[s.row, { height: m.row }]} testID="phase-renforts-row">
+            <Text style={[s.renfortsLabel, dense && s.nameDense, { width: cols.name }]} numberOfLines={1}>
+              Renforts
+            </Text>
+            {/* No «Oui» total: how much of this team's phase a borrowed player
+                could play is nobody's question. */}
+            <View style={{ width: countWidth }} />
+            <Text style={[s.count, s.countSecondary, dense && s.countDense, { width: countWidth }]}>
+              {grid.renfortGames}/{total}
+            </Text>
+          </View>
+        )}
         <View style={[s.totalRow, { height: m.total }]}>
           <Text style={[s.totalLabel, { width: cols.name + countWidth * 2 }]} numberOfLines={1}>
             Disponibles
@@ -196,6 +209,22 @@ export function PhaseAvailabilityTable({
               })}
             </View>
           ))}
+          {hasRenforts && (
+            <View style={[s.row, { height: m.row }]}>
+              {grid.renforts.map((list, i) => (
+                <View key={columns[i]?.gameId ?? i} style={[s.cellWrap, { width: cols.day }]}>
+                  {list.length > 0 && (
+                    <RenfortsCell
+                      gameId={columns[i].gameId}
+                      renforts={list}
+                      size={m.cell - 2}
+                      onPress={onRenforts}
+                    />
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
           <View style={[s.totalRow, { height: m.total }]}>
             {grid.availableByGame.map((n, i) => (
               <View key={columns[i]?.gameId ?? i} style={[s.cellWrap, { width: cols.day }]}>
@@ -239,6 +268,71 @@ export function PhaseAvailabilityTable({
         </View>
       </ScrollView>
     </View>
+  )
+}
+
+/** Where a Renforts cell sits in the window, for the popover to point at. */
+export interface RenfortsAnchor {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Past this many, the stack says «+N» rather than growing past its column. */
+const STACKED_AVATARS = 2
+
+/**
+ * One match's renforts as a stack of faces — who, at a glance, in the width of
+ * a cell. The names are a tap away (the popover), not printed: a column is
+ * 44pt on a phone held upright.
+ */
+function RenfortsCell({
+  gameId,
+  renforts,
+  size,
+  onPress,
+}: {
+  gameId: string
+  renforts: PhaseRenfort[]
+  size: number
+  onPress?: (gameId: string, anchor: RenfortsAnchor | null) => void
+}) {
+  const ref = useRef<View>(null)
+  const shown = renforts.slice(0, STACKED_AVATARS)
+  const more = renforts.length - shown.length
+  const names = renforts.map((r) => `${r.player.firstName} ${r.player.lastName}`).join(', ')
+
+  return (
+    <TouchableOpacity
+      ref={ref}
+      testID={`phase-renforts-${gameId}`}
+      style={s.renfortsCell}
+      hitSlop={6}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Renforts : ${names}`}
+      onPress={() => {
+        const node = ref.current
+        // Opened at once, placed when the measure lands: a popover that waited
+        // on layout would be a tap that does nothing for a frame.
+        onPress?.(gameId, null)
+        node?.measureInWindow?.((x, y, width, height) => onPress?.(gameId, { x, y, width, height }))
+      }}
+    >
+      {shown.map((r, i) => (
+        <Avatar
+          key={r.player.id}
+          playerId={r.player.id}
+          avatarUpdatedAt={r.player.avatarUpdatedAt}
+          firstName={r.player.firstName}
+          lastName={r.player.lastName}
+          size={size}
+          style={[s.avatarRing, i > 0 && { marginLeft: -size / 3 }]}
+        />
+      ))}
+      {more > 0 && <Text style={s.renfortsMore}>+{more}</Text>}
+    </TouchableOpacity>
   )
 }
 
@@ -303,7 +397,16 @@ const s = StyleSheet.create({
   nameCell: { paddingLeft: 12, paddingRight: 4, justifyContent: 'center', gap: 2 },
   name: { fontSize: 14, color: colors.textPrimary },
   nameDense: { fontSize: 13 },
-  renfort: { fontSize: 11, fontFamily: fonts.medium, color: colors.textSecondary, textAlign: 'center' },
+  renfortsLabel: {
+    paddingLeft: 12,
+    paddingRight: 4,
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+  },
+  renfortsCell: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 28 },
+  avatarRing: { borderWidth: 1.5, borderColor: colors.card },
+  renfortsMore: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary, marginLeft: 3 },
   count: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary, textAlign: 'center' },
   // Played-for is the second question; the one asked for is availability.
   countSecondary: { color: colors.textSecondary },
