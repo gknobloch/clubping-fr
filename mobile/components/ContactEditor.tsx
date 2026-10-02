@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
 import { contentWidth } from '@/components/Screen'
+import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 import type { Player } from '@shared/types'
 
 // ---------------------------------------------------------------------------
@@ -111,12 +112,20 @@ export function ContactEditor({
   }
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        {/* The sides too: on a phone on its side a page sheet is the whole
+            screen, and its header would start under the notch (#625). */}
+        <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} hitSlop={8} testID="contact-edit-cancel">
               <Text style={styles.cancel}>Annuler</Text>

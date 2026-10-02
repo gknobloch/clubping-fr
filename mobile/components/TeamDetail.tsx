@@ -29,6 +29,7 @@ import { ClubLogo } from '@/components/ClubLogo'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
+import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -364,8 +365,11 @@ export function TeamDetail({
           animationType="slide"
           presentationStyle="pageSheet"
           onRequestClose={() => setShowRosterPicker(false)}
+          supportedOrientations={MODAL_ORIENTATIONS}
         >
-          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          {/* The sides too: on a phone on its side a page sheet is the whole
+              screen, and its header would start under the notch (#625). */}
+          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom', 'left', 'right']}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Modifier l'équipe</Text>
             </View>

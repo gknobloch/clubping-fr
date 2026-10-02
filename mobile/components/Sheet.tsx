@@ -1,8 +1,16 @@
 import { useContext, type ReactNode } from 'react'
-import { Modal, Pressable, StyleSheet, View, type DimensionValue } from 'react-native'
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type DimensionValue,
+  type ModalProps,
+} from 'react-native'
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context'
 import { colors } from '@/constants/colors'
-import { useLayout } from '@/constants/layout'
+import { CONTENT_MAX_WIDTH, useLayout } from '@/constants/layout'
 
 // ---------------------------------------------------------------------------
 // The app's one modal container (#446)
@@ -16,13 +24,50 @@ import { useLayout } from '@/constants/layout'
 // there: a dialog, centred, capped, rounded on all four corners. One component
 // so the three are settled at once — the consolidation the web did with
 // `ModalShell` (see CLAUDE.md, *Mobile UI*).
+//
+// A phone on its side (#625) is still a phone, so still a sheet — but one
+// ~400pt tall with a notch at each end. The sheet keeps off the notch, stops at
+// a reading column's width, and takes the height bar a sliver: the caller's
+// `maxHeight` is a share of a phone standing up, and 60% of 402pt is a panel
+// too short for three buttons.
 // ---------------------------------------------------------------------------
+
+/**
+ * Every orientation the app has (app.json `orientation: default`). iOS
+ * presents a `Modal` portrait-only on an iPhone unless told otherwise, so a
+ * sheet opened from a phone on its side turned the screen upright under the
+ * member's hands (#625). Upside-down is listed for the iPad, which allows every
+ * orientation by default and would lose that one to a shorter list; the
+ * Info.plist still keeps it off an iPhone.
+ *
+ * Every `Modal` in the app passes this — `__tests__/modal-orientations.test.ts`
+ * reads the sources.
+ */
+export const MODAL_ORIENTATIONS: NonNullable<ModalProps['supportedOrientations']> = [
+  'portrait',
+  'portrait-upside-down',
+  'landscape-left',
+  'landscape-right',
+]
 
 /** Dialog width above the threshold. Wide enough for a roster row, no wider. */
 export const DIALOG_MAX_WIDTH = 520
 
 /** A `wide` dialog: a grid of seven journées beside a name (#623). */
 export const WIDE_DIALOG_MAX_WIDTH = 960
+
+/**
+ * A phone sheet stops at a reading column, as screens do: a phone on its side
+ * is 874pt wide, and a row stretched across it is a name at one end and its
+ * checkbox at the other. Standing up, no phone reaches it.
+ */
+export const SHEET_MAX_WIDTH = CONTENT_MAX_WIDTH
+
+/**
+ * The backdrop left above a sheet on a phone on its side — what still says
+ * «sheet», and what a tap closes it on. Every other point is the panel's.
+ */
+export const SIDEWAYS_GAP = 12
 
 const PADDING = 24
 const NO_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 }
@@ -54,17 +99,19 @@ export function sheetContentWidth({
   if (dense) {
     return width - Math.max(insets.left, DENSE_PADDING) - Math.max(insets.right, DENSE_PADDING)
   }
-  return width - PADDING * 2
+  return Math.min(SHEET_MAX_WIDTH, width - insets.left - insets.right) - PADDING * 2
 }
 
 export function Sheet({
   onClose,
-  /** Share of the window the panel may grow to. */
+  /**
+   * Share of the window the panel may grow to, standing up. On a phone on its
+   * side the panel takes the height bar `SIDEWAYS_GAP` whatever this says.
+   */
   maxHeight = '85%',
   testID = 'sheet',
   wide = false,
   dense = false,
-  rotates = false,
   children,
 }: {
   onClose: () => void
@@ -74,23 +121,19 @@ export function Sheet({
   wide?: boolean
   /**
    * A phone on its side, where every point of ~400 counts (#623): a third of
-   * the padding, the home indicator and the notch as the only margins.
+   * the padding, the home indicator and the notch as the only margins, and the
+   * whole width.
    */
   dense?: boolean
-  /**
-   * The sheet turns with the phone. iOS presents a `Modal` portrait-only
-   * unless told otherwise — so a sheet opened from a phone on its side
-   * rotated the screen upright under the member's hands.
-   */
-  rotates?: boolean
   children: ReactNode
 }) {
-  const { isTablet } = useLayout()
-  // The context and not `useSafeAreaInsets`, which throws without a provider:
-  // the insets only matter to a dense sheet, and every other sheet in the app
-  // rendered without them before (#623).
+  const { isTablet, isLandscape } = useLayout()
+  const { height } = useWindowDimensions()
+  // The context and not `useSafeAreaInsets`, which throws without a provider —
+  // a sheet rendered outside one simply has no notch to keep off.
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS
   const denseOnPhone = dense && !isTablet
+  const sideways = isLandscape && !isTablet
 
   return (
     // A dialog that slides up from the bottom edge to settle in the middle
@@ -99,11 +142,18 @@ export function Sheet({
       transparent
       animationType={isTablet ? 'fade' : 'slide'}
       onRequestClose={onClose}
-      supportedOrientations={rotates ? ['portrait', 'landscape-left', 'landscape-right'] : undefined}
+      supportedOrientations={MODAL_ORIENTATIONS}
     >
       <Pressable
         testID={`${testID}-backdrop`}
-        style={[s.backdrop, isTablet && s.backdropCentred]}
+        style={[
+          s.backdrop,
+          isTablet && s.backdropCentred,
+          // The panel stays inside the safe area, so the notch never sits over
+          // a row. Zero standing up. A dense sheet takes the whole width and
+          // pads its own content off the notch instead.
+          !isTablet && !denseOnPhone && { paddingLeft: insets.left, paddingRight: insets.right },
+        ]}
         onPress={onClose}
       >
         {/* View + onStartShouldSetResponder stops the backdrop from closing when
@@ -112,7 +162,11 @@ export function Sheet({
           testID={testID}
           style={[
             s.sheet,
-            { maxHeight },
+            { maxHeight: sideways ? height - insets.top - SIDEWAYS_GAP : maxHeight },
+            !isTablet && !denseOnPhone && s.phoneColumn,
+            // Sideways the home indicator is 21pt, not 34: 40 would spend
+            // twice what it clears, out of 400.
+            sideways && !denseOnPhone && { paddingBottom: Math.max(insets.bottom, PADDING) },
             denseOnPhone && {
               paddingTop: 8,
               paddingBottom: Math.max(insets.bottom, DENSE_PADDING),
@@ -148,6 +202,7 @@ const s = StyleSheet.create({
     // Clears the home indicator, which the sheet sits right on top of.
     paddingBottom: 40,
   },
+  phoneColumn: { width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' },
   handle: {
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: colors.border, alignSelf: 'center', marginBottom: 12,

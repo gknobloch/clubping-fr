@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native'
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useMemo } from 'react'
@@ -30,15 +30,16 @@ import type { Team } from '@shared/types'
 // A sheet, not a pushed screen: a pushed screen keeps the app header and the
 // tab bar, ~120pt of a phone on its side that is ~400pt tall, and a team of
 // six with both totals does not fit in what is left. The sheet covers both,
-// and turns with the phone (`rotates`).
+// and turns with the phone, as every sheet does (#625).
 //
 // It shows the phase of the team it was opened from — the fiche is already
 // one team in one phase, so a phase switcher would be a second answer to a
 // question the caller has settled. The subtitle names it.
 //
 // Leaving it is a navigation: a name opens the fiche, a journée the match,
-// and the sheet closes first. A second sheet on top would be portrait-only
-// on iOS, under a member who is holding the phone sideways.
+// and the sheet closes first. (A second sheet on top was ruled out when it
+// would have been portrait-only on iOS; since #625 every sheet turns, but the
+// fiche and the match are still where those taps lead everywhere else.)
 // ---------------------------------------------------------------------------
 
 export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose: () => void }) {
@@ -49,7 +50,6 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
   const router = useRouter()
   const openPlayer = useOpenPlayer()
   const insets = useSafeAreaInsets()
-  const { height } = useWindowDimensions()
   const { width, isTablet, isLandscape } = useLayout()
 
   const entry = useMemo(
@@ -93,10 +93,6 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
       testID="phase-sheet"
       wide
       dense={dense}
-      rotates
-      // Sideways, the whole height bar a sliver of backdrop: that sliver is
-      // what says «sheet», and every other point is a row.
-      maxHeight={dense ? height - 12 : '85%'}
     >
       <View style={[s.titleRow, dense && s.titleRowDense]}>
         {dense ? (
