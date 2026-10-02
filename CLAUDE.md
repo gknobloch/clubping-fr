@@ -257,8 +257,11 @@ invisible dans le diff comme dans la revue.
   gris plutôt que rouge.
 - Lignes : l'effectif. **Les renforts tiennent sur une seule ligne,
   « Renforts »**, quel que soit leur nombre : par journée, les visages de ceux
-  que la composition emprunte (deux, puis « +N »), et leurs noms — avec leur
-  réponse — dans un popover au toucher. Une ligne par renfort poussait les
+  que la composition emprunte (deux, puis « +N »), **encadrés** comme toute
+  cellule de la composition — ils n'y figurent que parce qu'elle les nomme —
+  et leurs noms dans un popover au toucher. **Les noms seuls**, sans OUI / PE
+  / NON : un joueur emprunté répond pour les matchs de son équipe, pas pour
+  ceux-ci. Une ligne par renfort poussait les
   totaux de l'effectif hors d'un téléphone couché, pour des lignes portant
   chacune un seul cadre. Pas de total « Oui » sur cette ligne, et ils sont
   hors de « Disponibles », qui compte l'effectif comme le Résumé de la
@@ -284,7 +287,12 @@ invisible dans le diff comme dans la revue.
   prenaient ~150, et six joueurs + les deux totaux ne tenaient plus. La
   feuille couvre l'en-tête et la barre ; couchée, elle est `dense` (marges =
   encoche et indicateur d'accueil, lignes à 32 pt, fermeture par un ✕ dans la
-  ligne de titre, légende sous la grille).
+  ligne de titre).
+- **Pas de ligne de légende.** OUI / PE / NON sont les réponses de l'app,
+  lues de la même façon sur chaque écran ; seul le cadre est propre à cette
+  grille, et sa clé (« Dans la composition », `CompositionKey`) tient dans la
+  ligne de titre. Le titre est l'équipe et sa phase, sans « Disponibilités » :
+  le bouton qui ouvre la feuille l'a déjà dit.
 - **Pas de sélecteur de phase** : la fiche est déjà une équipe dans une
   phase, et le sous-titre la nomme.
 - **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit

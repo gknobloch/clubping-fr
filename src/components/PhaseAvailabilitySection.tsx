@@ -7,9 +7,8 @@ import {
   selectionVerdict,
   type PhaseAvailabilityColumn,
   type PhaseAvailabilityGrid,
-  type PhaseRenfort,
 } from '@/lib/phaseAvailability'
-import type { AvailabilityStatus } from '@/types'
+import type { AvailabilityStatus, Player } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Les disponibilités de toute la phase, pour une équipe (#623)
@@ -65,18 +64,12 @@ export function PhaseAvailabilitySection({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Disponibilités de la phase
         </h2>
-        <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500" aria-label="Légende">
-          {(Object.keys(CELL) as AvailabilityStatus[]).map((k) => (
-            <li key={k} className="flex items-center gap-1.5">
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${CELL[k].cls}`}>{CELL[k].short}</span>
-              {CELL[k].label}
-            </li>
-          ))}
-          <li className="flex items-center gap-1.5">
-            <span className="h-4 w-6 rounded bg-slate-50 ring-2 ring-inset ring-slate-800" />
-            Dans la composition
-          </li>
-        </ul>
+        {/* OUI / PE / NON need no key — they are the app's own answers,
+            everywhere. The frame is this grid's alone. */}
+        <p className="flex items-center gap-1.5 text-xs text-slate-500">
+          <span className="h-4 w-6 rounded bg-slate-50 ring-2 ring-inset ring-slate-800" aria-hidden="true" />
+          Dans la composition
+        </p>
       </div>
 
       {total > PORTRAIT_FITS && (
@@ -257,13 +250,13 @@ function RenfortsCell({
   onToggle,
 }: {
   title: string
-  renforts: PhaseRenfort[]
+  renforts: Player[]
   open: boolean
   onToggle: () => void
 }) {
   const shown = renforts.slice(0, STACKED_AVATARS)
   const more = renforts.length - shown.length
-  const names = renforts.map((r) => `${r.player.firstName} ${r.player.lastName}`).join(', ')
+  const names = renforts.map((p) => `${p.firstName} ${p.lastName}`).join(', ')
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [rect, setRect] = useState<DOMRect | null>(null)
 
@@ -296,20 +289,24 @@ function RenfortsCell({
         onClick={onToggle}
         aria-expanded={open}
         aria-label={`Renforts : ${names}`}
-        className="flex min-h-11 w-full items-center justify-center rounded-md hover:bg-slate-50 md:min-h-8"
+        className="group flex min-h-11 w-full items-center justify-center md:min-h-8"
       >
-        {shown.map((r, i) => (
-          <span key={r.player.id} className={`rounded-full ring-2 ring-white ${i > 0 ? '-ml-2' : ''}`}>
-            <Avatar
-              playerId={r.player.id}
-              avatarUpdatedAt={r.player.avatarUpdatedAt}
-              firstName={r.player.firstName}
-              lastName={r.player.lastName}
-              size={26}
-            />
-          </span>
-        ))}
-        {more > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">+{more}</span>}
+        {/* Framed like any cell of the line-up: a renfort is only listed
+            because the line-up names them. */}
+        <span className="flex h-8 w-full items-center justify-center rounded-md bg-slate-50 ring-2 ring-inset ring-slate-800 group-hover:bg-slate-100">
+          {shown.map((p, i) => (
+            <span key={p.id} className={`rounded-full ring-2 ring-slate-50 ${i > 0 ? '-ml-2' : ''}`}>
+              <Avatar
+                playerId={p.id}
+                avatarUpdatedAt={p.avatarUpdatedAt}
+                firstName={p.firstName}
+                lastName={p.lastName}
+                size={22}
+              />
+            </span>
+          ))}
+          {more > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">+{more}</span>}
+        </span>
       </button>
       {open && (
         <>
@@ -328,35 +325,25 @@ function RenfortsCell({
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
             <ul className="mt-2 space-y-1.5">
-              {renforts.map((r) => {
-                const v = r.status ? CELL[r.status] : undefined
-                return (
-                  <li key={r.player.id} className="flex items-center gap-2">
-                    <Avatar
-                      playerId={r.player.id}
-                      avatarUpdatedAt={r.player.avatarUpdatedAt}
-                      firstName={r.player.firstName}
-                      lastName={r.player.lastName}
-                      size={28}
-                    />
-                    <Link
-                      to={`/joueurs/${r.player.id}`}
-                      className={`min-w-0 flex-1 text-sm text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
-                    >
-                      <span className="truncate">
-                        {r.player.firstName} {r.player.lastName}
-                      </span>
-                    </Link>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                        v ? v.cls : 'bg-slate-50 text-slate-300'
-                      }`}
-                    >
-                      {v ? v.short : '—'}
+              {renforts.map((p) => (
+                <li key={p.id} className="flex items-center gap-2">
+                  <Avatar
+                    playerId={p.id}
+                    avatarUpdatedAt={p.avatarUpdatedAt}
+                    firstName={p.firstName}
+                    lastName={p.lastName}
+                    size={28}
+                  />
+                  <Link
+                    to={`/joueurs/${p.id}`}
+                    className={`min-w-0 flex-1 text-sm text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
+                  >
+                    <span className="truncate">
+                      {p.firstName} {p.lastName}
                     </span>
-                  </li>
-                )
-              })}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
         </>

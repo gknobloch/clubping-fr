@@ -18,15 +18,13 @@ import { fonts } from '@/constants/typography'
 import { useLayout } from '@/constants/layout'
 import { Sheet, sheetContentWidth } from '@/components/Sheet'
 import {
-  PhaseAvailabilityLegend,
+  CompositionKey,
   PhaseAvailabilityTable,
   phaseTableColumns,
   type RenfortsAnchor,
 } from '@/components/PhaseAvailabilityTable'
 import { Avatar } from '@/components/Avatar'
-import { AVAIL } from '@/constants/availability'
-import type { PhaseRenfort } from '@shared/lib/phaseAvailability'
-import type { Team } from '@shared/types'
+import type { Player, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
 // Disponibilités de la phase (#623) — opened from the fiche équipe.
@@ -86,7 +84,10 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
   const dense = !isTablet && isLandscape
   const tableWidth = sheetContentWidth({ width, isTablet, wide: true, dense, insets })
   const { overflows } = phaseTableColumns(tableWidth, columns.length, compact, dense)
-  const subtitle = [getTeamName(team, clubs), entry?.label].filter(Boolean).join(' · ')
+  // The title is the team and its phase, and nothing else: the button that
+  // opened the sheet already said «Disponibilités».
+  const teamName = getTeamName(team, clubs)
+  const phaseLabel = entry?.label
 
   // The Renforts popover: which match, and where its cell sits. The container
   // is measured at the same moment, so the popover lands relative to it.
@@ -127,14 +128,21 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
       <View ref={containerRef} style={s.container}>
         <View style={[s.titleRow, dense && s.titleRowDense]}>
           {dense ? (
-            <Text style={s.titleLine} numberOfLines={1}>
-              <Text style={s.titleDense}>Disponibilités</Text>
-              <Text style={s.subtitleInline}>{`  ${subtitle}`}</Text>
-            </Text>
+            // One line sideways: team, phase, and the frame's key beside them.
+            <>
+              <Text style={s.titleLine} numberOfLines={1}>
+                <Text style={s.titleDense}>{teamName}</Text>
+                {phaseLabel ? <Text style={s.subtitleInline}>{`  ${phaseLabel}`}</Text> : null}
+              </Text>
+              <CompositionKey />
+            </>
           ) : (
             <View style={s.titleBlock}>
-              <Text style={s.title}>Disponibilités de la phase</Text>
-              <Text style={s.subtitle} numberOfLines={1}>{subtitle}</Text>
+              <Text style={s.title} numberOfLines={1}>{teamName}</Text>
+              {phaseLabel ? <Text style={s.subtitle} numberOfLines={1}>{phaseLabel}</Text> : null}
+              <View style={s.keyLine}>
+                <CompositionKey />
+              </View>
             </View>
           )}
           <TouchableOpacity
@@ -161,30 +169,25 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
             whole content's height and pushes past the sheet (CLAUDE.md). */}
         <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, dense && s.scrollContentDense]}>
           {grid.rows.length > 0 && columns.length > 0 ? (
-            <>
-              <PhaseAvailabilityTable
-                grid={grid}
-                columns={columns}
-                width={tableWidth}
-                compact={compact}
-                dense={dense}
-                required={required}
-                unlicensed={unlicensed}
-                onPlayer={(playerId) => leaveFor(() => openPlayer(playerId))}
-                onRenforts={openRenforts}
-                onGame={(gameId) =>
-                  leaveFor(() =>
-                    router.push({
-                      pathname: '/match/[id]',
-                      params: { id: gameId, teamId: team.id, from: 'team' },
-                    }),
-                  )
-                }
-              />
-              {/* Under the table, not above it: sideways the rows are what has
-                  to fit, and OUI / PE / NON read on their own. */}
-              <PhaseAvailabilityLegend />
-            </>
+            <PhaseAvailabilityTable
+              grid={grid}
+              columns={columns}
+              width={tableWidth}
+              compact={compact}
+              dense={dense}
+              required={required}
+              unlicensed={unlicensed}
+              onPlayer={(playerId) => leaveFor(() => openPlayer(playerId))}
+              onRenforts={openRenforts}
+              onGame={(gameId) =>
+                leaveFor(() =>
+                  router.push({
+                    pathname: '/match/[id]',
+                    params: { id: gameId, teamId: team.id, from: 'team' },
+                  }),
+                )
+              }
+            />
           ) : (
             <Text style={s.empty}>
               {columns.length === 0 ? 'Aucun match sur cette phase.' : 'Aucun joueur dans cette équipe.'}
@@ -211,7 +214,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
   )
 }
 
-const POPOVER_WIDTH = 240
+export const POPOVER_WIDTH = 220
 const POPOVER_GAP = 6
 
 /**
@@ -227,41 +230,37 @@ export function popoverPlacement(anchor: RenfortsAnchor | null, frame: RenfortsA
   return { bottom: frame.height - (anchor.y - frame.y) + POPOVER_GAP, left }
 }
 
-/** The names behind a stack of faces, and what each answered for that match. */
+/**
+ * The names behind a stack of faces. Nothing else: a borrowed player answers
+ * for their own team's matches, not this one's — being on the line-up is the
+ * whole fact, and the frame on the cell already said it.
+ */
 function RenfortsPopover({
   title,
   renforts,
   placement,
 }: {
   title: string
-  renforts: PhaseRenfort[]
+  renforts: Player[]
   placement: ReturnType<typeof popoverPlacement>
 }) {
   return (
     <View testID="renforts-popover" style={[s.popover, placement]}>
       <Text style={s.popoverTitle}>{title}</Text>
-      {renforts.map((r) => {
-        const a = r.status ? AVAIL[r.status] : undefined
-        return (
-          <View key={r.player.id} style={s.popoverRow}>
-            <Avatar
-              playerId={r.player.id}
-              avatarUpdatedAt={r.player.avatarUpdatedAt}
-              firstName={r.player.firstName}
-              lastName={r.player.lastName}
-              size={28}
-            />
-            <Text style={s.popoverName} numberOfLines={1}>
-              {r.player.firstName} {r.player.lastName}
-            </Text>
-            <View style={[s.popoverStatus, a ? { backgroundColor: a.bg } : s.popoverStatusNone]}>
-              <Text style={[s.popoverStatusText, { color: a ? a.color : colors.tabInactive }]}>
-                {a ? a.short : '—'}
-              </Text>
-            </View>
-          </View>
-        )
-      })}
+      {renforts.map((p) => (
+        <View key={p.id} style={s.popoverRow}>
+          <Avatar
+            playerId={p.id}
+            avatarUpdatedAt={p.avatarUpdatedAt}
+            firstName={p.firstName}
+            lastName={p.lastName}
+            size={28}
+          />
+          <Text style={s.popoverName} numberOfLines={1}>
+            {p.firstName} {p.lastName}
+          </Text>
+        </View>
+      ))}
     </View>
   )
 }
@@ -293,12 +292,10 @@ const s = StyleSheet.create({
   },
   popoverRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   popoverName: { flex: 1, fontSize: 14, color: colors.textPrimary },
-  popoverStatus: { minWidth: 36, paddingHorizontal: 4, height: 22, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
-  popoverStatusNone: { backgroundColor: colors.bg },
-  popoverStatusText: { fontSize: 10, fontFamily: fonts.semiBold },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   titleRowDense: { marginBottom: 6 },
   titleBlock: { flex: 1 },
+  keyLine: { marginTop: 8 },
   title: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary },
   subtitle: { fontSize: 15, color: colors.textSecondary, marginTop: 2 },
   titleLine: { flex: 1 },

@@ -10,7 +10,6 @@ import {
   type PhaseAvailabilityColumn,
   type PhaseAvailabilityGrid,
   type PhaseAvailabilityRow,
-  type PhaseRenfort,
 } from '@shared/lib/phaseAvailability'
 import type { Player } from '@shared/types'
 
@@ -217,7 +216,7 @@ export function PhaseAvailabilityTable({
                     <RenfortsCell
                       gameId={columns[i].gameId}
                       renforts={list}
-                      size={m.cell - 2}
+                      height={m.cell}
                       onPress={onRenforts}
                     />
                   )}
@@ -290,24 +289,29 @@ const STACKED_AVATARS = 2
 function RenfortsCell({
   gameId,
   renforts,
-  size,
+  height,
   onPress,
 }: {
   gameId: string
-  renforts: PhaseRenfort[]
-  size: number
+  renforts: Player[]
+  /** The cell's own height: the stack sits inside the same frame as any cell. */
+  height: number
   onPress?: (gameId: string, anchor: RenfortsAnchor | null) => void
 }) {
   const ref = useRef<View>(null)
   const shown = renforts.slice(0, STACKED_AVATARS)
   const more = renforts.length - shown.length
-  const names = renforts.map((r) => `${r.player.firstName} ${r.player.lastName}`).join(', ')
+  const names = renforts.map((p) => `${p.firstName} ${p.lastName}`).join(', ')
+  // Inside the frame, with a point of air above and below.
+  const size = height - 6
 
   return (
     <TouchableOpacity
       ref={ref}
       testID={`phase-renforts-${gameId}`}
-      style={s.renfortsCell}
+      // Framed like any cell of the line-up: a renfort is only listed because
+      // the line-up names them.
+      style={[s.cell, s.cellEmpty, s.cellSelected, s.renfortsCell, { height }]}
       hitSlop={6}
       disabled={!onPress}
       accessibilityRole="button"
@@ -317,16 +321,16 @@ function RenfortsCell({
         // Opened at once, placed when the measure lands: a popover that waited
         // on layout would be a tap that does nothing for a frame.
         onPress?.(gameId, null)
-        node?.measureInWindow?.((x, y, width, height) => onPress?.(gameId, { x, y, width, height }))
+        node?.measureInWindow?.((x, y, w, h) => onPress?.(gameId, { x, y, width: w, height: h }))
       }}
     >
-      {shown.map((r, i) => (
+      {shown.map((p, i) => (
         <Avatar
-          key={r.player.id}
-          playerId={r.player.id}
-          avatarUpdatedAt={r.player.avatarUpdatedAt}
-          firstName={r.player.firstName}
-          lastName={r.player.lastName}
+          key={p.id}
+          playerId={p.id}
+          avatarUpdatedAt={p.avatarUpdatedAt}
+          firstName={p.firstName}
+          lastName={p.lastName}
           size={size}
           style={[s.avatarRing, i > 0 && { marginLeft: -size / 3 }]}
         />
@@ -336,22 +340,16 @@ function RenfortsCell({
   )
 }
 
-/** The three answers, and what a frame means — under the table, once. */
-export function PhaseAvailabilityLegend() {
+/**
+ * What a frame means — the one key this grid needs. OUI / PE / NON are the
+ * app's own answers, read the same way on every screen; the frame is this
+ * grid's alone. It rides in the sheet's title line, not in a legend row.
+ */
+export function CompositionKey() {
   return (
-    <View style={s.legend}>
-      {(['available', 'maybe', 'unavailable'] as const).map((k) => (
-        <View key={k} style={s.legendItem}>
-          <View style={[s.legendSwatch, { backgroundColor: AVAIL[k].bg }]}>
-            <Text style={[s.legendShort, { color: AVAIL[k].color }]}>{AVAIL[k].short}</Text>
-          </View>
-          <Text style={s.legendText}>{AVAIL[k].label}</Text>
-        </View>
-      ))}
-      <View style={s.legendItem}>
-        <View style={[s.legendSwatch, s.cellEmpty, s.cellSelected]} />
-        <Text style={s.legendText}>Dans la composition</Text>
-      </View>
+    <View style={s.key} testID="phase-composition-key">
+      <View style={[s.keySwatch, s.cellEmpty, s.cellSelected]} />
+      <Text style={s.keyText} numberOfLines={1}>Dans la composition</Text>
     </View>
   )
 }
@@ -404,8 +402,9 @@ const s = StyleSheet.create({
     fontFamily: fonts.medium,
     color: colors.textSecondary,
   },
-  renfortsCell: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 28 },
-  avatarRing: { borderWidth: 1.5, borderColor: colors.card },
+  renfortsCell: { flexDirection: 'row' },
+  // The cell's own grey, so overlapping faces read as two.
+  avatarRing: { borderWidth: 1.5, borderColor: colors.bg },
   renfortsMore: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary, marginLeft: 3 },
   count: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary, textAlign: 'center' },
   // Played-for is the second question; the one asked for is availability.
@@ -441,16 +440,7 @@ const s = StyleSheet.create({
   },
   totalCount: { fontSize: 13, fontFamily: fonts.semiBold },
 
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 4 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendSwatch: {
-    minWidth: 34,
-    height: 22,
-    borderRadius: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  legendShort: { fontSize: 10, fontFamily: fonts.semiBold },
-  legendText: { fontSize: 12, color: colors.textSecondary },
+  key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  keySwatch: { width: 22, height: 16, borderRadius: 4 },
+  keyText: { fontSize: 12, color: colors.textSecondary },
 })

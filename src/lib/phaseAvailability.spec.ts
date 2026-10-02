@@ -72,8 +72,7 @@ describe('phaseAvailabilityGrid', () => {
     )
     // The roster only: a renfort is not a row.
     expect(grid.rows.map((r) => r.player.id)).toEqual(['p2', 'p3', 'p1'])
-    expect(grid.renforts.map((list) => list.map((r) => r.player.id))).toEqual([[], [], ['x', 'y']])
-    expect(grid.renforts[2][0].status).toBe('available')
+    expect(grid.renforts.map((list) => list.map((p) => p.id))).toEqual([[], [], ['x', 'y']])
     expect(grid.renfortGames).toBe(1)
     // A renfort's yes is not the pool; their place on the line-up is.
     expect(grid.availableByGame).toEqual([0, 0, 0])

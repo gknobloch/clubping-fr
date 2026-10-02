@@ -104,7 +104,8 @@ describe('PhaseAvailabilitySection', () => {
 
     const popover = screen.getByRole('dialog', { name: 'Renforts · J1' })
     expect(within(popover).getByRole('link', { name: 'Bastien Dangelser' })).toHaveAttribute('href', '/joueurs/p9')
-    expect(within(popover).getByText('OUI')).toBeInTheDocument()
+    // Nothing but who: a borrowed player answers for their own team's matches.
+    expect(within(popover).queryByText('OUI')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
     expect(screen.queryByRole('dialog')).toBeNull()

@@ -1,11 +1,11 @@
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, within } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type {
   Club, Division, Game, GameAvailability, Group, MatchDay, Phase, Player, Team, User,
 } from '@shared/types'
-import { PhaseAvailabilitySheet, popoverPlacement } from '@/components/PhaseAvailabilitySheet'
+import { POPOVER_WIDTH, PhaseAvailabilitySheet, popoverPlacement } from '@/components/PhaseAvailabilitySheet'
 
 // ---------------------------------------------------------------------------
 // Disponibilités de la phase (#623)
@@ -147,7 +147,13 @@ it('nomme l’équipe et la phase, sans sélecteur, et se ferme par son bouton',
   setWindowSize(PHONE_WIDTH)
   render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
 
-  expect(screen.getByText(/Rixheim PPA 4 · Saison 2026\/2027 Phase 1/)).toBeTruthy()
+  // L'équipe et la phase, et la clé du cadre : pas de « Disponibilités »,
+  // pas de légende OUI / PE / NON.
+  expect(screen.getByText('Rixheim PPA 4')).toBeTruthy()
+  expect(screen.getByText('Saison 2026/2027 Phase 1')).toBeTruthy()
+  expect(screen.getByTestId('phase-composition-key')).toBeTruthy()
+  expect(screen.queryByText(/^Disponibilités/)).toBeNull()
+  expect(screen.queryByText('Peut-être')).toBeNull()
   fireEvent.press(screen.getByTestId('phase-sheet-close'))
   expect(onClose).toHaveBeenCalled()
 })
@@ -180,6 +186,10 @@ describe('les renforts', () => {
       'Renforts : Bastien Dangelser, Bertrand De Coatpont',
     )
     expect(screen.queryByTestId('phase-renforts-g2')).toBeNull()
+    // Encadrés comme toute cellule de la composition : ils y sont.
+    expect(StyleSheet.flatten(screen.getByTestId('phase-renforts-g1').props.style)).toMatchObject({
+      borderWidth: 2,
+    })
   })
 
   it('comptent dans la composition, pas dans les disponibles', () => {
@@ -195,6 +205,8 @@ describe('les renforts', () => {
     expect(screen.getByText('Renforts · J1')).toBeTruthy()
     expect(screen.getByText('Bastien Dangelser')).toBeTruthy()
     expect(screen.getByText('Bertrand De Coatpont')).toBeTruthy()
+    // Les noms seuls : un joueur emprunté répond pour les matchs de son équipe.
+    expect(within(screen.getByTestId('renforts-popover')).queryByText('OUI')).toBeNull()
     // La feuille reste ouverte : le popover est dedans.
     expect(onClose).not.toHaveBeenCalled()
 
@@ -208,10 +220,10 @@ it('place le popover au-dessus de la cellule, sans sortir de la feuille', () => 
   // Centré sur la cellule, posé juste au-dessus d'elle.
   expect(popoverPlacement({ x: 300, y: 300, width: 80, height: 28 }, frame)).toEqual({
     bottom: 300 - 200 + 6,
-    left: 300 - 10 + 40 - 120,
+    left: 300 - 10 + 40 - POPOVER_WIDTH / 2,
   })
   // Au bord droit, il rentre dans la feuille plutôt que d'en déborder.
-  expect(popoverPlacement({ x: 690, y: 300, width: 80, height: 28 }, frame).left).toBe(700 - 240)
+  expect(popoverPlacement({ x: 690, y: 300, width: 80, height: 28 }, frame).left).toBe(700 - POPOVER_WIDTH)
 })
 
 it('compte, par journée, les disponibles et la composition', () => {

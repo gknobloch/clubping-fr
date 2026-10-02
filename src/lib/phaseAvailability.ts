@@ -35,12 +35,6 @@ export interface PhaseAvailabilityRow {
   selected: number
 }
 
-/** A renfort a line-up names, and what they answered for that match. */
-export interface PhaseRenfort {
-  player: Player
-  status?: AvailabilityStatus
-}
-
 export interface PhaseAvailabilityGrid {
   /** The roster, by name. */
   rows: PhaseAvailabilityRow[]
@@ -49,8 +43,11 @@ export interface PhaseAvailabilityGrid {
    * roster, by name. One row for all of them, not a row each: a phase can
    * borrow five different players once, and five rows of one frame each would
    * push the roster's own totals off a phone held sideways.
+   *
+   * No answer rides with them: a borrowed player is asked about their own
+   * team's matches, not this one's — being on the line-up is the whole fact.
    */
-  renforts: PhaseRenfort[][]
+  renforts: Player[][]
   /** Matches that borrowed anyone — the «Sél.» of the Renforts row. */
   renfortGames: number
   /**
@@ -108,10 +105,7 @@ export function phaseAvailabilityGrid(
   })
 
   const renforts = games.map((g) =>
-    resolve([...(selectedIn.get(g.id) ?? [])].filter((pid) => !rosterIds.has(pid))).map((player) => ({
-      player,
-      status: statusOf.get(`${g.id}:${player.id}`),
-    })),
+    resolve([...(selectedIn.get(g.id) ?? [])].filter((pid) => !rosterIds.has(pid))),
   )
 
   return {
