@@ -321,6 +321,27 @@ export function TeamDetail({
           </TouchableOpacity>
         )}
 
+        {/* The whole phase at once, a ratio per player (#623) — the planning a
+            captain draws up before the first journée. */}
+        {hasGames && (
+          <TouchableOpacity
+            testID="team-phase-availability"
+            style={styles.gamesBtn}
+            onPress={() =>
+              router.push({
+                pathname: '/team/disponibilites',
+                params: { teamId: team.id },
+              })
+            }
+          >
+            <View style={styles.gamesBtnLeft}>
+              <Ionicons name="grid-outline" size={16} color={colors.textSecondary} />
+              <Text style={styles.gamesBtnText}>Disponibilités de la phase</Text>
+            </View>
+            <Text style={styles.gamesBtnChevron}>›</Text>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
 
       {/* Player quick view */}

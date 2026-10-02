@@ -241,6 +241,25 @@ invisible dans le diff comme dans la revue.
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
 
+### Disponibilités de la phase (#623)
+- **La matrice des Journées lit trois journées pour toutes les équipes ; ceci
+  lit toute la phase pour une seule.** Demande d'un capitaine : le planning
+  prévisionnel, « 5/7 » par joueur. Mêmes réponses, l'autre axe.
+- `phaseAvailabilityGrid` (`src/lib/phaseAvailability.ts`) est la seule
+  dérivation, avec ses en-têtes (`phaseAvailabilityColumns`) et le seuil du
+  compte « Disponibles » (`playersRequired`). Le ratio est **les « Oui » sur
+  les matchs de la phase** : sans réponse n'est pas un oui.
+- Lignes : l'effectif, puis les renforts qu'une composition de la phase nomme
+  déjà. Une cellule encadrée = dans la composition de **cette** équipe.
+- **Nom et ratio figés, journées qui défilent**, sur le web comme dans l'app.
+  Sur le web, `border-separate` et non `border-collapse` : une bordure
+  fusionnée laisse un pixel à côté d'une cellule collante, où les journées
+  défilées transparaissent.
+- **On ne verrouille pas l'orientation** : debout, un téléphone tient quatre
+  ou cinq journées et l'écran invite à le tourner ; couché, sept tiennent.
+  Dans l'app, un écran poussé depuis la fiche équipe
+  (`(detail)/team/disponibilites`) ; sur le web, une section de la fiche.
+
 ### Lieu d'un match (#611)
 - **Là où l'on regarde un match, on voit où il se joue, en entier** : le nom
   de la salle, puis l'adresse, et un toucher ouvre le plan — Plans sur iOS,

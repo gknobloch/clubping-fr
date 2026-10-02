@@ -12,6 +12,14 @@ import { GameQuickView } from '@/components/GameQuickView'
 import { IdentityCard } from '@/components/IdentityCard'
 import { MatchDate } from '@/components/MatchDate'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
+import { PhaseAvailabilitySection } from '@/components/PhaseAvailabilitySection'
+import {
+  phaseAvailabilityColumns,
+  phaseAvailabilityGrid,
+  playersRequired,
+} from '@/lib/phaseAvailability'
+import { unlicensedIds } from '@/lib/seasonLicences'
+import { activeSeasonId } from '@/lib/season'
 
 // Player/captain-facing team detail: identity + a phase switcher paging the
 // phases this team (club + number) has played, each showing the roster with
@@ -19,7 +27,10 @@ import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/ic
 // phase-games screens.
 export function TeamDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
-  const { teams, players, clubs, phases, divisions, matchDays, games, gameSelections } = useAppData()
+  const {
+    teams, players, clubs, phases, divisions, groups, matchDays, games, gameSelections,
+    gameAvailabilities, seasons, playerSeasonLicences,
+  } = useAppData()
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
 
@@ -45,7 +56,7 @@ export function TeamDetailPage() {
   const team = teams.find((t) => t.id === current?.teamId) ?? baseTeam
   const division = divisions.find((d) => d.id === team?.divisionId)
   const club = clubs.find((c) => c.id === team?.clubId)
-  const games_ = current?.games ?? []
+  const games_ = useMemo(() => current?.games ?? [], [current])
   const totalGames = games_.length
 
   // Roster with play-counts + borrowed players (renforts), for the selected phase.
@@ -65,6 +76,27 @@ export function TeamDetailPage() {
     )
     return { roster: rosterPlayers, borrowed: borrowedPlayers, playedCount: counts }
   }, [team, gameSelections, players])
+
+  // The whole phase, a ratio per player (#623).
+  const phaseGrid = useMemo(
+    () =>
+      team
+        ? phaseAvailabilityGrid(team, games_, players, gameAvailabilities, gameSelections)
+        : { rows: [], availableByGame: [] },
+    [team, games_, players, gameAvailabilities, gameSelections],
+  )
+  const phaseColumns = useMemo(() => phaseAvailabilityColumns(games_), [games_])
+  // Members the federation has not listed a licence for this season (#488):
+  // the fact rides with the name, here as on the matrix.
+  const unlicensed = useMemo(
+    () =>
+      unlicensedIds(
+        playerSeasonLicences,
+        activeSeasonId(seasons),
+        players.filter((p) => p.clubId === team?.clubId),
+      ),
+    [playerSeasonLicences, seasons, players, team?.clubId],
+  )
 
   if (!baseTeam || !team) {
     return (
@@ -119,6 +151,14 @@ export function TeamDetailPage() {
           />
         </div>
       )}
+
+      <PhaseAvailabilitySection
+        grid={phaseGrid}
+        columns={phaseColumns}
+        required={playersRequired(team, groups, divisions)}
+        unlicensed={unlicensed}
+        onGame={(gameId) => setQuickGame({ gameId, teamId: team.id })}
+      />
 
       {/* Players (left) / Games (right) — stacked on narrow viewports */}
       <div className="grid gap-5 lg:grid-cols-2">
