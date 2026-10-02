@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '@/components/Avatar'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
@@ -102,7 +102,9 @@ export function PhaseAvailabilitySection({
                 <abbr title="Sélectionné" className="no-underline">Sél.</abbr>
               </th>
               {columns.map((c) => (
-                <th key={c.gameId} className="min-w-12 px-1 py-1 font-normal">
+                // 2px a side, not 4: a column is 48px below `sm:`, and the
+                // button inside has to keep the 44 a finger needs (#372).
+                <th key={c.gameId} className="min-w-12 px-0.5 py-1 font-normal">
                   <button
                     type="button"
                     onClick={() => onGame(c.gameId)}
@@ -123,15 +125,17 @@ export function PhaseAvailabilitySection({
                   scope="row"
                   className="sticky left-0 z-10 w-32 min-w-32 max-w-32 bg-white px-3 py-1.5 text-left font-normal sm:w-48 sm:min-w-48 sm:max-w-48 sm:px-5"
                 >
+                  {/* The whole cell is the link: «E. Lotz» alone is 41px, and
+                      a target is 44 (#372). */}
                   <Link
                     to={`/joueurs/${row.player.id}`}
-                    className={`block truncate text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
+                    className={`w-full min-w-0 text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
                   >
                     {/* The initial on a phone: the surname is what tells two apart. */}
-                    <span className="sm:hidden">
+                    <span className="truncate sm:hidden">
                       {`${row.player.firstName.charAt(0)}. ${row.player.lastName}`}
                     </span>
-                    <span className="hidden sm:inline">
+                    <span className="hidden truncate sm:inline">
                       {`${row.player.firstName} ${row.player.lastName}`}
                     </span>
                   </Link>
@@ -176,7 +180,7 @@ export function PhaseAvailabilitySection({
                   {grid.renfortGames}/{total}
                 </td>
                 {grid.renforts.map((list, i) => (
-                  <td key={columns[i]?.gameId ?? i} className="relative px-1 py-1.5">
+                  <td key={columns[i]?.gameId ?? i} className="px-0.5 py-1.5">
                     {list.length > 0 && (
                       <RenfortsCell
                         title={`Renforts · J${columns[i].number}`}
@@ -234,9 +238,17 @@ export function PhaseAvailabilitySection({
 /** Past this many, the stack says «+N» rather than growing past its column. */
 const STACKED_AVATARS = 2
 
+const POPOVER_WIDTH = 240
+const POPOVER_MARGIN = 8
+
 /**
  * One match's renforts as a stack of faces, and their names in a popover that
- * opens *upward*: the row sits on the totals, and the scroller clips below.
+ * opens *upward* — the row sits on the totals.
+ *
+ * The popover is `fixed`, placed from the cell's own rectangle and kept inside
+ * the viewport: positioned within the cell it was clipped by the scroller as
+ * soon as the cell sat near its right edge, which on a phone is most of them.
+ * Fixed, it would drift off its cell on a scroll, so a scroll closes it.
  */
 function RenfortsCell({
   title,
@@ -252,10 +264,34 @@ function RenfortsCell({
   const shown = renforts.slice(0, STACKED_AVATARS)
   const more = renforts.length - shown.length
   const names = renforts.map((r) => `${r.player.firstName} ${r.player.lastName}`).join(', ')
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+
+  // The caller's toggle is a fresh function each render; the effect below is
+  // about opening, not about that, so it reads the latest through a ref.
+  const toggleRef = useRef(onToggle)
+  toggleRef.current = onToggle
+
+  useEffect(() => {
+    if (!open) return
+    setRect(buttonRef.current?.getBoundingClientRect() ?? null)
+    const close = () => toggleRef.current()
+    // Capture: the table's own scroller does not bubble its scroll to window.
+    window.addEventListener('scroll', close, { capture: true, once: true })
+    return () => window.removeEventListener('scroll', close, { capture: true })
+  }, [open])
+
+  const left = rect
+    ? Math.max(
+        POPOVER_MARGIN,
+        Math.min(window.innerWidth - POPOVER_WIDTH - POPOVER_MARGIN, rect.left + rect.width / 2 - POPOVER_WIDTH / 2),
+      )
+    : undefined
 
   return (
     <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={onToggle}
         aria-expanded={open}
@@ -287,7 +323,8 @@ function RenfortsCell({
           <div
             role="dialog"
             aria-label={title}
-            className="absolute bottom-full left-1/2 z-30 mb-1 w-60 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-lg"
+            className="fixed z-30 -translate-y-full rounded-xl border border-slate-200 bg-white p-3 text-left shadow-lg"
+            style={{ width: POPOVER_WIDTH, left, top: rect ? rect.top - 4 : undefined }}
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
             <ul className="mt-2 space-y-1.5">
@@ -304,9 +341,11 @@ function RenfortsCell({
                     />
                     <Link
                       to={`/joueurs/${r.player.id}`}
-                      className="min-w-0 flex-1 truncate text-sm text-slate-800 hover:text-accent-600"
+                      className={`min-w-0 flex-1 text-sm text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
                     >
-                      {r.player.firstName} {r.player.lastName}
+                      <span className="truncate">
+                        {r.player.firstName} {r.player.lastName}
+                      </span>
                     </Link>
                     <span
                       className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${

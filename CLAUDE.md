@@ -266,8 +266,14 @@ invisible dans le diff comme dans la revue.
   composition de **cette** équipe.
 - **Le popover de l'app est dessiné dans la feuille**, pas dans un `Modal` :
   un second `Modal` serait en portrait seul sur iOS. Il s'ouvre **au-dessus**
-  de la cellule (la ligne est posée sur les totaux), et sur le web aussi, où le
-  conteneur qui défile rognerait vers le bas.
+  de la cellule (la ligne est posée sur les totaux). Sur le web il est
+  `fixed`, placé d'après le rectangle de la cellule et gardé dans la fenêtre :
+  positionné dans la cellule, le conteneur qui défile le rognait dès qu'elle
+  était près de son bord. Un défilement le referme, plutôt que de le laisser
+  dériver loin de sa cellule.
+- **44 px même dans la grille** (#372) : une colonne de journée fait 48 px
+  sous `sm:`, donc son bouton n'a que 2 px de marge de chaque côté, et le nom
+  est un lien sur toute la cellule — « E. Lotz » seul en fait 41.
 - **Nom et comptes figés, journées qui défilent**, sur le web comme dans
   l'app. Sur le web, `border-separate` et non `border-collapse` : une bordure
   fusionnée laisse un pixel à côté d'une cellule collante, où les journées
