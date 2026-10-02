@@ -251,12 +251,26 @@ invisible dans le diff comme dans la revue.
   les matchs de la phase** : sans réponse n'est pas un oui.
 - Lignes : l'effectif, puis les renforts qu'une composition de la phase nomme
   déjà. Une cellule encadrée = dans la composition de **cette** équipe.
+- **Deux comptes par joueur, deux totaux par journée** : « Oui » et « Sél. »
+  (`5/7`, `3/7`) ; sous la grille, « Disponibles » et « Sélectionnés ». Une
+  composition est un compte exact, comme dans la matrice (#580) — mais une
+  composition **vide** n'est pas fausse : sur une phase, la plupart ne sont
+  simplement pas encore faites, d'où `selectionVerdict` et son état `empty`,
+  gris plutôt que rouge.
 - **Nom et ratio figés, journées qui défilent**, sur le web comme dans l'app.
   Sur le web, `border-separate` et non `border-collapse` : une bordure
   fusionnée laisse un pixel à côté d'une cellule collante, où les journées
   défilées transparaissent.
 - **On ne verrouille pas l'orientation** : debout, un téléphone tient quatre
   ou cinq journées et l'écran invite à le tourner ; couché, sept tiennent.
+- **Couché, l'écran reprend la hauteur de la barre d'onglets**
+  (`hidesTabBar`). Un téléphone couché fait ~400 pt de haut : l'en-tête et la
+  barre en prennent ~120, et six joueurs + les deux totaux ne tiennent plus
+  qu'à 26 pt la ligne. Sans la barre, ils tiennent à 32 pt (`dense`), légende
+  sous la grille. L'en-tête et son chevron restent, et la barre revient dès
+  qu'on redresse le téléphone. C'est une liste nommée d'écrans qu'on tourne
+  *pour lire*, pas une règle sur le paysage : ailleurs, la barre vaut ce
+  qu'elle coûte.
   Dans l'app, un écran poussé depuis la fiche équipe
   (`(detail)/team/disponibilites`) ; sur le web, une section de la fiche.
 

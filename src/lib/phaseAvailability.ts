@@ -33,12 +33,19 @@ export interface PhaseAvailabilityRow {
   cells: PhaseAvailabilityCell[]
   /** Matches answered «Oui» — the numerator of «5/7». */
   available: number
+  /** Matches whose line-up names them — the numerator of the «Sél.» column. */
+  selected: number
 }
 
 export interface PhaseAvailabilityGrid {
   rows: PhaseAvailabilityRow[]
   /** Per match, how many of the rows answered «Oui». */
   availableByGame: number[]
+  /**
+   * Per match, how many the line-up names — the line-up itself, not a count
+   * of the rows, though every name on it is a row (a renfort is one).
+   */
+  selectedByGame: number[]
 }
 
 /**
@@ -88,6 +95,7 @@ export function phaseAvailabilityGrid(
       renfort,
       cells,
       available: cells.filter((c) => c.status === 'available').length,
+      selected: cells.filter((c) => c.selected).length,
     }
   }
 
@@ -99,6 +107,7 @@ export function phaseAvailabilityGrid(
   return {
     rows,
     availableByGame: games.map((_, i) => rows.filter((r) => r.cells[i].status === 'available').length),
+    selectedByGame: games.map((g) => selectedIn.get(g.id)?.size ?? 0),
   }
 }
 
@@ -133,4 +142,17 @@ export function playersRequired(
 ): number {
   const group = groups.find((g) => g.id === team?.groupId)
   return (group ? divisions.find((d) => d.id === group.divisionId)?.playersPerGame : undefined) ?? 4
+}
+
+/**
+ * The «Sélectionnés» total for one match, read against the division's count.
+ *
+ * A line-up is an exact count, as in the journées matrix (#580): 3/4 and 5/4
+ * are both wrong. But an empty one is not — across a whole phase, the matches
+ * nobody has composed yet are most of them, and seven red zeros would say
+ * «error» about a captain who has simply not got there.
+ */
+export function selectionVerdict(selected: number, required: number): 'empty' | 'ok' | 'off' {
+  if (selected === 0) return 'empty'
+  return selected === required ? 'ok' : 'off'
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { phaseAvailabilityColumns, phaseAvailabilityGrid, playersRequired } from './phaseAvailability'
+import {
+  phaseAvailabilityColumns,
+  phaseAvailabilityGrid,
+  playersRequired,
+  selectionVerdict,
+} from './phaseAvailability'
 import type { Division, GameAvailability, GameSelection, Group, Player } from '@/types'
 
 const player = (id: string, lastName: string, firstName = 'A'): Player =>
@@ -48,6 +53,10 @@ describe('phaseAvailabilityGrid', () => {
     const byId = Object.fromEntries(grid.rows.map((r) => [r.player.id, r]))
     expect(byId.p1.cells.map((c) => c.selected)).toEqual([false, true, false])
     expect(byId.p2.cells.some((c) => c.selected)).toBe(false)
+    expect(byId.p1.selected).toBe(1)
+    expect(byId.p2.selected).toBe(0)
+    // The line-up's own size, per match — the opponent's does not count.
+    expect(grid.selectedByGame).toEqual([0, 1, 0])
   })
 
   it('adds a renfort a line-up of the phase names, after the roster', () => {
@@ -90,5 +99,17 @@ describe('playersRequired', () => {
 
   it('falls back to four, as the matrix does', () => {
     expect(playersRequired({ groupId: 'nowhere' }, groups, divisions)).toBe(4)
+  })
+})
+
+describe('selectionVerdict', () => {
+  it('wants the exact count', () => {
+    expect(selectionVerdict(4, 4)).toBe('ok')
+    expect(selectionVerdict(3, 4)).toBe('off')
+    expect(selectionVerdict(5, 4)).toBe('off')
+  })
+
+  it('does not call a line-up nobody has started wrong', () => {
+    expect(selectionVerdict(0, 4)).toBe('empty')
   })
 })

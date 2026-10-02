@@ -82,7 +82,7 @@ export function TeamDetailPage() {
     () =>
       team
         ? phaseAvailabilityGrid(team, games_, players, gameAvailabilities, gameSelections)
-        : { rows: [], availableByGame: [] },
+        : { rows: [], availableByGame: [], selectedByGame: [] },
     [team, games_, players, gameAvailabilities, gameSelections],
   )
   const phaseColumns = useMemo(() => phaseAvailabilityColumns(games_), [games_])

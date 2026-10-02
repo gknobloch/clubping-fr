@@ -1,17 +1,23 @@
 import { Link } from 'react-router-dom'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { LicenceBadge } from '@/components/LicenceBadge'
-import type { PhaseAvailabilityColumn, PhaseAvailabilityGrid } from '@/lib/phaseAvailability'
+import {
+  selectionVerdict,
+  type PhaseAvailabilityColumn,
+  type PhaseAvailabilityGrid,
+} from '@/lib/phaseAvailability'
 import type { AvailabilityStatus } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Les disponibilités de toute la phase, pour une équipe (#623)
 //
-// Players down, the team's matches across, and «5/7» after each name — the
-// planning a captain draws up for the phase. Same grid as the app's
-// `team/disponibilites` screen, from the same derivation.
+// Players down, the team's matches across, and two counts after each name —
+// «5/7» answered yes, «3/7» on a line-up: the planning a captain draws up for
+// the phase. Under them, per journée, how many said yes and how many the
+// line-up names. Same grid as the app's `team/disponibilites` screen, from the
+// same derivation.
 //
-// Name and ratio are sticky: on a phone the journées scroll sideways under
+// Name and counts are sticky: on a phone the journées scroll sideways under
 // them, so a row never loses whose it is. Turned sideways, a phase of seven
 // fits, which is what the hint below `sm:` says.
 // ---------------------------------------------------------------------------
@@ -22,6 +28,9 @@ const CELL: Record<AvailabilityStatus, { short: string; label: string; cls: stri
   maybe: { short: 'PE', label: 'Peut-être', cls: 'bg-amber-50 text-amber-700' },
   unavailable: { short: 'NON', label: 'Non', cls: 'bg-accent-50 text-accent-600' },
 }
+
+const TOTAL_LABEL_CLASS =
+  'sticky left-0 z-10 border-r !border-r-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-5'
 
 /** Past this many journées, a phone standing up scrolls. */
 const PORTRAIT_FITS = 4
@@ -35,7 +44,7 @@ export function PhaseAvailabilitySection({
 }: {
   grid: PhaseAvailabilityGrid
   columns: PhaseAvailabilityColumn[]
-  /** Players the division fields per match — what the «Disponibles» count is read against. */
+  /** Players the division fields per match — what both totals are read against. */
   required: number
   unlicensed: Set<string>
   onGame: (gameId: string) => void
@@ -79,8 +88,11 @@ export function PhaseAvailabilitySection({
               <th className="sticky left-0 z-10 w-32 min-w-32 bg-slate-50 px-3 py-2 text-left font-semibold uppercase tracking-wide sm:w-48 sm:min-w-48 sm:px-5">
                 Joueur
               </th>
-              <th className="sticky left-32 z-10 w-12 min-w-12 border-r bg-slate-50 py-2 text-center font-semibold uppercase tracking-wide sm:left-48">
+              <th className="sticky left-32 z-10 w-12 min-w-12 bg-slate-50 py-2 text-center font-semibold uppercase tracking-wide sm:left-48">
                 Oui
+              </th>
+              <th className="sticky left-44 z-10 w-12 min-w-12 border-r bg-slate-50 py-2 text-center font-semibold uppercase tracking-wide sm:left-60">
+                <abbr title="Sélectionné" className="no-underline">Sél.</abbr>
               </th>
               {columns.map((c) => (
                 <th key={c.gameId} className="min-w-12 px-1 py-1 font-normal">
@@ -123,8 +135,12 @@ export function PhaseAvailabilitySection({
                     </span>
                   )}
                 </th>
-                <td className="sticky left-32 z-10 border-r !border-r-slate-200 bg-white text-center font-semibold text-slate-800 sm:left-48">
+                <td className="sticky left-32 z-10 bg-white text-center font-semibold text-slate-800 sm:left-48">
                   {row.available}/{total}
+                </td>
+                {/* Played-for is the second question; the one asked is availability. */}
+                <td className="sticky left-44 z-10 border-r !border-r-slate-200 bg-white text-center font-semibold text-slate-500 sm:left-60">
+                  {row.selected}/{total}
                 </td>
                 {row.cells.map((cell) => {
                   const v = cell.status ? CELL[cell.status] : undefined
@@ -146,11 +162,7 @@ export function PhaseAvailabilitySection({
           </tbody>
           <tfoot>
             <tr className="bg-slate-50">
-              <th
-                colSpan={2}
-                scope="row"
-                className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-5"
-              >
+              <th colSpan={3} scope="row" className={TOTAL_LABEL_CLASS}>
                 Disponibles
               </th>
               {grid.availableByGame.map((n, i) => (
@@ -161,6 +173,24 @@ export function PhaseAvailabilitySection({
                   {n}
                 </td>
               ))}
+            </tr>
+            <tr className="bg-slate-50 [&>*]:border-t [&>*]:border-slate-100">
+              <th colSpan={3} scope="row" className={TOTAL_LABEL_CLASS}>
+                Sélectionnés
+              </th>
+              {grid.selectedByGame.map((n, i) => {
+                const verdict = selectionVerdict(n, required)
+                return (
+                  <td
+                    key={columns[i]?.gameId ?? i}
+                    className={`py-2 text-center font-semibold ${
+                      verdict === 'ok' ? 'text-green-700' : verdict === 'off' ? 'text-accent-600' : 'text-slate-400'
+                    }`}
+                  >
+                    {n}/{required}
+                  </td>
+                )
+              })}
             </tr>
           </tfoot>
         </table>

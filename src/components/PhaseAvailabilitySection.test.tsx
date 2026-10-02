@@ -52,9 +52,28 @@ describe('PhaseAvailabilitySection', () => {
     expect(within(row).getByLabelText('Oui, dans la composition')).toBeInTheDocument()
     expect(within(row).getAllByLabelText('Peut-être')).toHaveLength(2)
 
+    // Oui, then Sél.: Mougey is on one line-up of seven.
+    expect(within(row).getByText('1/7')).toBeInTheDocument()
+
     const silent = screen.getByRole('rowheader', { name: /Heurtin/ }).closest('tr')!
-    expect(within(silent).getByText('0/7')).toBeInTheDocument()
+    expect(within(silent).getAllByText('0/7')).toHaveLength(2)
     expect(within(silent).getAllByLabelText('Sans réponse')).toHaveLength(7)
+  })
+
+  it('totals each journée: who said yes, and who the line-up names', () => {
+    renderSection()
+
+    const available = screen.getByRole('rowheader', { name: 'Disponibles' }).closest('tr')!
+    expect(within(available).getAllByRole('cell').map((c) => c.textContent)).toEqual(
+      ['1', '1', '0', '1', '1', '0', '1'],
+    )
+    const selected = screen.getByRole('rowheader', { name: 'Sélectionnés' }).closest('tr')!
+    const counts = within(selected).getAllByRole('cell')
+    expect(counts[0]).toHaveTextContent('1/4')
+    // One out of four is a line-up started and wrong; none is one not started.
+    expect(counts[0]).toHaveClass('text-accent-600')
+    expect(counts[1]).toHaveTextContent('0/4')
+    expect(counts[1]).toHaveClass('text-slate-400')
   })
 
   it('carries the licence badge with the name (#488)', () => {
@@ -76,7 +95,7 @@ describe('PhaseAvailabilitySection', () => {
     const { container } = render(
       <MemoryRouter>
         <PhaseAvailabilitySection
-          grid={{ rows: [], availableByGame: [] }}
+          grid={{ rows: [], availableByGame: [], selectedByGame: [] }}
           columns={[]}
           required={4}
           unlicensed={new Set()}

@@ -70,6 +70,25 @@ export function pathToTab(
 }
 
 /**
+ * Screens a phone turns sideways *to read*, where the bar gives its height
+ * back (#623).
+ *
+ * A phone on its side is ~400pt tall, and the bar takes ~70 of it. Everywhere
+ * else that is a fair price; on the phase grid it is the difference between a
+ * team and its totals on one screen and a grid whose totals are below the
+ * fold. The header stays, back chevron included, so nothing is a dead end —
+ * and turning the phone upright brings the bar straight back.
+ */
+const READ_SIDEWAYS = ['/team/disponibilites']
+
+export function hidesTabBar(
+  path: string,
+  { isTablet, isLandscape }: { isTablet: boolean; isLandscape: boolean },
+): boolean {
+  return !isTablet && isLandscape && READ_SIDEWAYS.some((p) => path.startsWith(p))
+}
+
+/**
  * Widest the row of five tabs gets (#446). Spread over a whole slab, each tab
  * is a 10pt label centred in 200pt of nothing; capped, it stays a row of tabs.
  * The bar's background still runs edge to edge.
@@ -85,9 +104,10 @@ const RAIL_WIDTH = 88
 
 export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets()
-  const { isTablet, hasSideRail } = useLayout()
+  const { isTablet, isLandscape, hasSideRail } = useLayout()
   const params = useGlobalSearchParams<{ playerId?: string; from?: string }>()
-  const activeName = pathToTab(usePathname(), params)
+  const pathname = usePathname()
+  const activeName = pathToTab(pathname, params)
 
   const items = state.routes.map((route, index) => {
     const { options } = descriptors[route.key]
@@ -140,6 +160,8 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
       </TouchableOpacity>
     )
   })
+
+  if (hidesTabBar(pathname, { isTablet, isLandscape })) return null
 
   // A slab held sideways: the five destinations run down the left edge and the
   // screen's whole height goes to the content instead of to a horizontal bar

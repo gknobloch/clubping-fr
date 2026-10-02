@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react-native'
+import { StyleSheet } from 'react-native'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type {
@@ -88,9 +89,13 @@ it('donne le ratio de chaque joueur sur toute la phase', () => {
   setWindowSize(PHONE_WIDTH)
   render(<PhaseAvailabilityScreen />)
 
-  expect(screen.getByText('5/7')).toBeTruthy()
+  expect(screen.getByTestId('phase-row-p1').props.accessibilityLabel).toBe(
+    'Mathieu Mougey, disponible 5 sur 7, sélectionné 1 sur 7',
+  )
   // Heurtin n'a rien répondu : sans réponse n'est pas un oui.
-  expect(screen.getByText('0/7')).toBeTruthy()
+  expect(screen.getByTestId('phase-row-p2').props.accessibilityLabel).toBe(
+    'Christophe Heurtin, disponible 0 sur 7, sélectionné 0 sur 7',
+  )
   expect(screen.getByText('J7')).toBeTruthy()
   expect(screen.getByTestId('phase-cell-p1-g3').props.accessibilityLabel).toBe('Peut-être')
   expect(screen.getByTestId('phase-cell-p1-g1').props.accessibilityLabel).toBe('Oui, dans la composition')
@@ -125,4 +130,30 @@ it('ouvre le match d’une journée, sur l’axe de l’équipe', () => {
     pathname: '/match/[id]',
     params: { id: 'g4', teamId: 't1', from: 'team' },
   })
+})
+
+it('compte, par journée, les disponibles et la composition', () => {
+  setWindowSize(PHONE_WIDTH)
+  render(<PhaseAvailabilityScreen />)
+
+  expect(screen.getByText('Disponibles')).toBeTruthy()
+  expect(screen.getByText('Sélectionnés')).toBeTruthy()
+  // J1 : Mougey seul a dit oui, et seul est aligné sur une division à quatre.
+  expect(screen.getByTestId('phase-available-g1').props.children).toBe(1)
+  expect(screen.getByTestId('phase-selected-g1').props.children).toEqual([1, '/', 4])
+  expect(screen.getByTestId('phase-selected-g2').props.children).toEqual([0, '/', 4])
+})
+
+it('serre les lignes sur un téléphone couché, pour six joueurs et les deux totaux', () => {
+  setWindowSize({ width: 844, height: 390 })
+  render(<PhaseAvailabilityScreen />, { metrics: PHONE_LANDSCAPE })
+  const couche = StyleSheet.flatten(screen.getByTestId('phase-row-p1').props.style).height
+
+  setWindowSize(PHONE_WIDTH)
+  screen.unmount()
+  render(<PhaseAvailabilityScreen />)
+  const debout = StyleSheet.flatten(screen.getByTestId('phase-row-p1').props.style).height
+
+  expect(couche).toBe(32)
+  expect(debout).toBe(48)
 })

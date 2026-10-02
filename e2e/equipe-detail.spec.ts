@@ -46,7 +46,9 @@ test.describe('Player — Team detail', () => {
     })
     await expect(section).toBeVisible()
     const row = section.getByRole('row').filter({ has: page.getByRole('rowheader', { name: /Szulc/ }) })
-    await expect(row.getByText(/^\d+\/8$/)).toBeVisible()
+    // «Oui» then «Sél.», each out of the phase's eight matches.
+    await expect(row.getByText(/^\d+\/8$/)).toHaveCount(2)
+    await expect(section.getByRole('rowheader', { name: 'Sélectionnés' })).toBeVisible()
 
     await section.getByRole('button', { name: /^Journée 1,/ }).click()
     await expect(page.getByRole('dialog')).toBeVisible()

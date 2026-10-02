@@ -3,26 +3,39 @@ import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
 import { fonts } from '@/constants/typography'
 import { LicenceTag } from '@/components/LicenceTag'
-import type { PhaseAvailabilityColumn, PhaseAvailabilityGrid } from '@shared/lib/phaseAvailability'
+import {
+  selectionVerdict,
+  type PhaseAvailabilityColumn,
+  type PhaseAvailabilityGrid,
+  type PhaseAvailabilityRow,
+} from '@shared/lib/phaseAvailability'
 import type { Player } from '@shared/types'
 
 // ---------------------------------------------------------------------------
 // Les disponibilités de toute la phase, pour une équipe (#623)
 //
-// Players down, the team's matches across, and the ratio a captain asked for
-// («5/7») right after the name. Name and ratio are *frozen*: the journées
-// scroll under them sideways, so whichever journée is on screen, the row still
-// says whose it is and how much of the phase they can play.
+// Players down, the team's matches across, and two counts a captain asked for
+// right after the name: «5/7» answered yes, «3/7» on a line-up. Name and
+// counts are *frozen*: the journées scroll under them sideways, so whichever
+// journée is on screen, the row still says whose it is.
+//
+// Under the players, two totals per journée: how many said yes, and how many
+// the line-up names — the same pair the journées matrix's Résumé gives.
 //
 // A phone held upright fits four or five journées; turned sideways, a phase of
-// seven fits whole. The screen says so rather than locking an orientation — the
-// rest of the app reads standing up, and the grid is only one screen of it.
+// seven fits whole — but in ~350pt of height, which is what `dense` is for: a
+// team of six plus both totals has to be on screen without scrolling, or the
+// totals are the part nobody sees.
 // ---------------------------------------------------------------------------
 
-export const ROW_HEIGHT = 48
-const HEADER_HEIGHT = 48
-const RATIO_WIDTH = 52
-/** A cell is a tap target in nothing, but 44 keeps «OUI» from crowding. */
+/** Every height the table has, at its two densities. */
+export function phaseTableMetrics(dense: boolean) {
+  return dense
+    ? { header: 32, row: 32, rowWithTags: 44, total: 28, cell: 24, count: 40 }
+    : { header: 48, row: 48, rowWithTags: 48, total: 40, cell: 32, count: 48 }
+}
+
+/** «OUI» needs this much, and it is what a portrait phone scrolls at. */
 export const MIN_DAY_WIDTH = 44
 
 /**
@@ -31,11 +44,12 @@ export const MIN_DAY_WIDTH = 44
  * where the horizontal scroll takes over. `overflows` is what the screen reads
  * to suggest turning the phone.
  */
-export function phaseTableColumns(available: number, count: number, compact: boolean) {
-  const name = compact ? 116 : 200
-  const room = available - name - RATIO_WIDTH
+export function phaseTableColumns(available: number, count: number, compact: boolean, dense = false) {
+  const name = compact ? 108 : 200
+  const counts = phaseTableMetrics(dense).count * 2
+  const room = available - name - counts
   const day = count > 0 ? Math.max(MIN_DAY_WIDTH, Math.floor(room / count)) : MIN_DAY_WIDTH
-  return { name, day, overflows: day * count > room }
+  return { name, counts, day, overflows: day * count > room }
 }
 
 /** «B. Dangelser» where the column is narrow — the surname is the one that tells two apart. */
@@ -50,6 +64,7 @@ export function PhaseAvailabilityTable({
   columns,
   width,
   compact,
+  dense = false,
   required,
   unlicensed,
   onPlayer,
@@ -60,47 +75,72 @@ export function PhaseAvailabilityTable({
   /** The width the table may take. */
   width: number
   compact: boolean
-  /** Players the division fields per match — the bar the «Oui» count is read against. */
+  /** A phone on its side: every row as short as it reads (see above). */
+  dense?: boolean
+  /** Players the division fields per match — the bar both totals are read against. */
   required: number
   unlicensed: Set<string>
   onPlayer: (playerId: string) => void
   onGame: (gameId: string) => void
 }) {
-  const cols = phaseTableColumns(width, columns.length, compact)
+  const m = phaseTableMetrics(dense)
+  const cols = phaseTableColumns(width, columns.length, compact, dense)
+  const countWidth = m.count
   const total = columns.length
+
+  const hasTags = (row: PhaseAvailabilityRow) => row.renfort || unlicensed.has(row.player.id)
+  // One height per row, read by both halves of the table — they are two
+  // views, and a row of one must stay level with its row in the other.
+  const rowHeight = (row: PhaseAvailabilityRow) => (hasTags(row) ? m.rowWithTags : m.row)
 
   return (
     <View style={s.table} testID="phase-availability-table">
-      {/* Frozen: name and ratio. */}
+      {/* Frozen: the name and the two counts. */}
       <View style={s.frozen}>
-        <View style={[s.headerRow, { height: HEADER_HEIGHT }]}>
+        <View style={[s.headerRow, { height: m.header }]}>
           <Text style={[s.headerText, { width: cols.name, paddingLeft: 12 }]}>Joueur</Text>
-          <Text style={[s.headerText, s.center, { width: RATIO_WIDTH }]}>Oui</Text>
+          <Text style={[s.headerText, s.center, { width: countWidth }]}>Oui</Text>
+          <Text style={[s.headerText, s.center, { width: countWidth }]}>Sél.</Text>
         </View>
         {grid.rows.map((row) => (
           <TouchableOpacity
             key={row.player.id}
             testID={`phase-row-${row.player.id}`}
-            style={s.row}
+            style={[s.row, { height: rowHeight(row) }]}
             onPress={() => onPlayer(row.player.id)}
             accessibilityRole="button"
-            accessibilityLabel={`${row.player.firstName} ${row.player.lastName}, disponible ${row.available} sur ${total}`}
+            accessibilityLabel={
+              `${row.player.firstName} ${row.player.lastName}, ` +
+              `disponible ${row.available} sur ${total}, sélectionné ${row.selected} sur ${total}`
+            }
           >
             <View style={[s.nameCell, { width: cols.name }]}>
-              <Text style={s.name} numberOfLines={1}>{shortName(row.player, compact)}</Text>
-              {(row.renfort || unlicensed.has(row.player.id)) && (
+              <Text style={[s.name, dense && s.nameDense]} numberOfLines={1}>
+                {shortName(row.player, compact)}
+              </Text>
+              {hasTags(row) && (
                 <View style={s.nameTags}>
                   {row.renfort && <Text style={s.renfort}>Renfort</Text>}
                   {unlicensed.has(row.player.id) && <LicenceTag />}
                 </View>
               )}
             </View>
-            <Text style={[s.ratio, { width: RATIO_WIDTH }]}>{row.available}/{total}</Text>
+            <Text style={[s.count, dense && s.countDense, { width: countWidth }]}>
+              {row.available}/{total}
+            </Text>
+            <Text style={[s.count, s.countSecondary, dense && s.countDense, { width: countWidth }]}>
+              {row.selected}/{total}
+            </Text>
           </TouchableOpacity>
         ))}
-        <View style={[s.footerRow]}>
-          <Text style={[s.footerLabel, { width: cols.name + RATIO_WIDTH }]} numberOfLines={1}>
+        <View style={[s.totalRow, { height: m.total }]}>
+          <Text style={[s.totalLabel, { width: cols.name + countWidth * 2 }]} numberOfLines={1}>
             Disponibles
+          </Text>
+        </View>
+        <View style={[s.totalRow, { height: m.total }]}>
+          <Text style={[s.totalLabel, { width: cols.name + countWidth * 2 }]} numberOfLines={1}>
+            Sélectionnés
           </Text>
         </View>
       </View>
@@ -108,23 +148,23 @@ export function PhaseAvailabilityTable({
       {/* Scrolling: the journées. */}
       <ScrollView horizontal showsHorizontalScrollIndicator={cols.overflows} bounces={false}>
         <View>
-          <View style={[s.headerRow, { height: HEADER_HEIGHT }]}>
+          <View style={[s.headerRow, { height: m.header }]}>
             {columns.map((c) => (
               <TouchableOpacity
                 key={c.gameId}
                 testID={`phase-col-${c.gameId}`}
-                style={[s.dayHeader, { width: cols.day }]}
+                style={[s.dayHeader, { width: cols.day, height: m.header }]}
                 onPress={() => onGame(c.gameId)}
                 accessibilityRole="button"
                 accessibilityLabel={`Journée ${c.number}, le ${c.date}`}
               >
-                <Text style={s.dayNumber}>J{c.number}</Text>
-                <Text style={s.dayDate}>{c.date}</Text>
+                <Text style={[s.dayNumber, dense && s.dayNumberDense]}>J{c.number}</Text>
+                <Text style={[s.dayDate, dense && s.dayDateDense]}>{c.date}</Text>
               </TouchableOpacity>
             ))}
           </View>
           {grid.rows.map((row) => (
-            <View key={row.player.id} style={s.row}>
+            <View key={row.player.id} style={[s.row, { height: rowHeight(row) }]}>
               {row.cells.map((cell) => {
                 const a = cell.status ? AVAIL[cell.status] : undefined
                 return (
@@ -133,6 +173,7 @@ export function PhaseAvailabilityTable({
                       testID={`phase-cell-${row.player.id}-${cell.gameId}`}
                       style={[
                         s.cell,
+                        { height: m.cell },
                         a ? { backgroundColor: a.bg } : s.cellEmpty,
                         cell.selected && s.cellSelected,
                       ]}
@@ -149,18 +190,41 @@ export function PhaseAvailabilityTable({
               })}
             </View>
           ))}
-          <View style={s.footerRow}>
-            {grid.availableByGame.map((n, i) => {
-              const ok = n >= required
+          <View style={[s.totalRow, { height: m.total }]}>
+            {grid.availableByGame.map((n, i) => (
+              <View key={columns[i]?.gameId ?? i} style={[s.cellWrap, { width: cols.day }]}>
+                <Text
+                  testID={`phase-available-${columns[i]?.gameId}`}
+                  style={[
+                    s.totalCount,
+                    { color: n >= required ? AVAIL.available.color : AVAIL.unavailable.color },
+                  ]}
+                >
+                  {n}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <View style={[s.totalRow, { height: m.total }]}>
+            {grid.selectedByGame.map((n, i) => {
+              const verdict = selectionVerdict(n, required)
               return (
                 <View key={columns[i]?.gameId ?? i} style={[s.cellWrap, { width: cols.day }]}>
                   <Text
+                    testID={`phase-selected-${columns[i]?.gameId}`}
                     style={[
-                      s.footerCount,
-                      { color: ok ? AVAIL.available.color : AVAIL.unavailable.color },
+                      s.totalCount,
+                      {
+                        color:
+                          verdict === 'ok'
+                            ? AVAIL.available.color
+                            : verdict === 'off'
+                              ? AVAIL.unavailable.color
+                              : colors.tabInactive,
+                      },
                     ]}
                   >
-                    {n}
+                    {n}/{required}
                   </Text>
                 </View>
               )
@@ -172,7 +236,7 @@ export function PhaseAvailabilityTable({
   )
 }
 
-/** The three answers, and what a frame means — above the table, once. */
+/** The three answers, and what a frame means — under the table, once. */
 export function PhaseAvailabilityLegend() {
   return (
     <View style={s.legend}>
@@ -201,7 +265,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  // The rule the web draws after the ratio: what is left of it scrolls.
+  // The rule the web draws after the counts: what is right of it scrolls.
   frozen: { borderRightWidth: 1, borderRightColor: colors.border },
   headerRow: {
     flexDirection: 'row',
@@ -218,27 +282,31 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
   center: { textAlign: 'center' },
-  dayHeader: { height: HEADER_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  dayHeader: { alignItems: 'center', justifyContent: 'center' },
   dayNumber: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.textPrimary },
+  dayNumberDense: { fontSize: 12, lineHeight: 14 },
   dayDate: { fontSize: 11, color: colors.textSecondary },
+  dayDateDense: { fontSize: 10, lineHeight: 12 },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: ROW_HEIGHT,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   nameCell: { paddingLeft: 12, paddingRight: 4, justifyContent: 'center', gap: 2 },
   name: { fontSize: 14, color: colors.textPrimary },
+  nameDense: { fontSize: 13 },
   nameTags: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   renfort: { fontSize: 10, fontFamily: fonts.medium, color: colors.textSecondary },
-  ratio: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary, textAlign: 'center' },
+  count: { fontSize: 14, fontFamily: fonts.semiBold, color: colors.textPrimary, textAlign: 'center' },
+  // Played-for is the second question; the one asked for is availability.
+  countSecondary: { color: colors.textSecondary },
+  countDense: { fontSize: 13 },
 
   cellWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   cell: {
     alignSelf: 'stretch',
-    height: 32,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
@@ -248,8 +316,14 @@ const s = StyleSheet.create({
   cellSelected: { borderWidth: 2, borderColor: colors.textPrimary },
   cellText: { fontSize: 11, fontFamily: fonts.semiBold },
 
-  footerRow: { flexDirection: 'row', alignItems: 'center', height: 40, backgroundColor: colors.bg },
-  footerLabel: {
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  totalLabel: {
     paddingLeft: 12,
     fontSize: 11,
     fontFamily: fonts.semiBold,
@@ -257,7 +331,7 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  footerCount: { fontSize: 14, fontFamily: fonts.semiBold },
+  totalCount: { fontSize: 13, fontFamily: fonts.semiBold },
 
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

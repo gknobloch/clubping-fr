@@ -35,6 +35,7 @@ import {
 /** Wider than this and a row of seven cells is seven islands. */
 const TABLE_MAX_WIDTH = 960
 const PADDING = 16
+const DENSE_PADDING = 8
 
 export default function PhaseAvailabilityScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>()
@@ -80,7 +81,7 @@ export default function PhaseAvailabilityScreen() {
     () =>
       team
         ? phaseAvailabilityGrid(team, phaseGames, players, gameAvailabilities, gameSelections)
-        : { rows: [], availableByGame: [] },
+        : { rows: [], availableByGame: [], selectedByGame: [] },
     [team, phaseGames, players, gameAvailabilities, gameSelections],
   )
 
@@ -106,12 +107,23 @@ export default function PhaseAvailabilityScreen() {
   }
 
   const compact = !isTablet
-  const tableWidth = Math.min(TABLE_MAX_WIDTH, width - insets.left - insets.right - PADDING * 2)
-  const { overflows } = phaseTableColumns(tableWidth, columns.length, compact)
+  // A phone on its side has ~350pt under the header, the tab bar gone (see
+  // `hidesTabBar`): six players and both totals fit only at this density.
+  const dense = !isTablet && isLandscape
+  const padding = dense ? DENSE_PADDING : PADDING
+  const tableWidth = Math.min(TABLE_MAX_WIDTH, width - insets.left - insets.right - padding * 2)
+  const { overflows } = phaseTableColumns(tableWidth, columns.length, compact, dense)
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={[styles.scroll, { maxWidth: TABLE_MAX_WIDTH + PADDING * 2 }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { maxWidth: TABLE_MAX_WIDTH + padding * 2, padding },
+          // No tab bar under a dense table: the home indicator is the edge.
+          dense && { gap: 8, paddingBottom: insets.bottom + padding },
+        ]}
+      >
         {current && (
           <Switcher
             title={current.label}
@@ -130,12 +142,12 @@ export default function PhaseAvailabilityScreen() {
 
         {grid.rows.length > 0 && columns.length > 0 ? (
           <>
-            <PhaseAvailabilityLegend />
             <PhaseAvailabilityTable
               grid={grid}
               columns={columns}
               width={tableWidth}
               compact={compact}
+              dense={dense}
               required={required}
               unlicensed={unlicensed}
               onPlayer={setPlayerId}
@@ -147,6 +159,9 @@ export default function PhaseAvailabilityScreen() {
                 })
               }
             />
+            {/* Under the table, not above it: on a phone on its side the
+                rows are what has to fit, and OUI / PE / NON read on their own. */}
+            <PhaseAvailabilityLegend />
           </>
         ) : (
           <Text style={styles.empty}>
