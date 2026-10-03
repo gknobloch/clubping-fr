@@ -27,6 +27,33 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.7.0 — 4 octobre 2026
+
+Le planning de toute la phase pour un capitaine, et des feuilles qui tiennent
+le téléphone couché.
+
+- **Le planning de la phase.** Depuis « Tous les matchs » d'une équipe, une
+  grille joueurs × journées montre la réponse de chacun à chaque match de la
+  phase, encadrée quand il figure dans la composition, avec « 5/7 » de oui et
+  de sélections par joueur et, par journée, les disponibles et les
+  sélectionnés. Un joueur prêté à une autre équipe du club est hachuré, avec
+  son badge ; les renforts empruntés tiennent sur une ligne. Couché, toute la
+  phase tient ; sur une tablette, la grille s'affiche à côté de la liste.
+- **Les feuilles tournent avec le téléphone** et tiennent couchées : elles
+  défilent d'où part le doigt, et montent au-dessus du clavier.
+- **Balayer vers la droite sur un match** ouvre le match précédent au lieu de
+  quitter l'écran.
+
+### Play
+
+Le planning de toute la phase pour un capitaine, et des feuilles qui tiennent
+le téléphone couché.
+
+- Le planning de la phase : dispos et sélections de chaque joueur, journée par
+  journée, depuis « Tous les matchs ».
+- Les feuilles tournent avec le téléphone et montent au-dessus du clavier.
+- Balayer vers la droite ouvre le match précédent.
+
 ## 1.6.0 — 1er octobre 2026
 
 Les entraînements du club dans l'application, et le lieu de chaque match en un
