@@ -21,18 +21,10 @@ INSERT INTO phases (id, season_id, name, display_name, status) VALUES
 -- The identifier alone is not unique — org 15 lists "TO" twice in one season
 -- (see migration 0048) — which is why the name is stored beside it, apart from
 -- display_name so a rename cannot break the match.
-INSERT INTO competitions (id, display_name, categories, is_category_locked, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name) VALUES
-  ('comp-seniors', 'Championnat par équipes', '[]', 0, 1, 0, '1', 'FED_Championnat de France par Equipes Masculin'),
-  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 1, 2, 0, '4', 'FED_Championnat par Equipes Jeunes'),
-  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 0, 3, 0, NULL, NULL);
-
--- club_competition_eligibility — one of each amendment, so both halves of the
--- club screen have a row: a V45 the club fields with its veterans anyway, and
--- one its default admits who does not play that championship.
--- (club_id, competition_id, player_id) is the primary key.
-INSERT INTO club_competition_eligibility (club_id, competition_id, player_id, effect) VALUES
-  ('club-fftt-06680011', 'comp-veterans', 'p2-player-16', 'included'),
-  ('club-fftt-06680011', 'comp-veterans', 'p2-player-30', 'excluded');
+INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name) VALUES
+  ('comp-seniors', 'Championnat par équipes', '[]', 1, 0, '1', 'FED_Championnat de France par Equipes Masculin'),
+  ('comp-jeunes', 'Championnat jeunes', '["P","B","M","C","J"]', 2, 0, '4', 'FED_Championnat par Equipes Jeunes'),
+  ('comp-veterans', 'Championnat vétérans', '["V50","V55","V60","V65","V70","V75","V80","V85","V90"]', 3, 0, NULL, NULL);
 
 -- divisions
 -- Ids, identifiers and names are the real FFTT ones for 2025/2026 Phase 1

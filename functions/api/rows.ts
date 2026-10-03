@@ -27,7 +27,6 @@ import type {
   AvailabilityOverriddenBy,
   AvailabilityStatus,
   ClubChannelType,
-  EligibilityEffect,
   Game,
   LifecycleStatus,
   PlayerStatus,
@@ -122,21 +121,12 @@ export interface CompetitionRow {
   display_name: string
   /** JSON array of category codes; '[]' admits every category (#482). */
   categories: string
-  is_category_locked: number
   sort_order: number
   is_archived: number
   /** FFTT contest identifier (#482); NULL for a competition created by hand. */
   fftt_contest_identifier: string | null
   /** FFTT's own name for it — the identifier alone is not unique (0048). */
   fftt_contest_name: string | null
-}
-
-export interface CompetitionEligibilityRow {
-  club_id: string
-  competition_id: string
-  player_id: string
-  /** included | excluded. */
-  effect: EligibilityEffect
 }
 
 export interface ClubRow {

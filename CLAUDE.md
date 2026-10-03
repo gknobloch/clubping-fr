@@ -625,13 +625,19 @@ invisible dans le diff comme dans la revue.
   pour tout ce à quoi le club s'en sert.
 - **Un groupe ne peut que restreindre** : il ne fait jamais entrer une catégorie
   que la compétition refuse. Le « verrou » (`isCategoryLocked`) n'empêchait rien
-  d'autre qu'un club élargisse une compétition ; il n'a plus d'objet et a
-  disparu du code. Rien ne doit plus nommer la colonne : elle tombe à l'étape 2.
+  d'autre qu'un club élargisse une compétition ; il n'a plus d'objet, et sa
+  colonne est tombée avec la table des dérogations (0059).
 - **Trois déploiements, pas un** (#410). (1) Additif : `club_competition_groups`,
   `users.last_client_version` ; le code cesse de lire et d'écrire
   `club_competition_eligibility` et `is_category_locked`, qui restent en base.
-  (2) Une fois (1) **déployé** : les supprimer. (3) Bien plus tard : retirer les
-  lignes de compatibilité ci-dessous. Tout est suivi dans #604.
+  (2) Une fois (1) **déployé** : les supprimer — c'est 0059. (3) Bien plus
+  tard : retirer les lignes de compatibilité ci-dessous. Tout est suivi dans
+  #604.
+- **0059 est un `DROP COLUMN`, jamais la reconstruction de 0038 / 0054.**
+  `club_competition_groups` référence `competitions(id)` en `ON DELETE
+  CASCADE`, et D1 applique les clés étrangères : supprimer `competitions` pour
+  renommer une copie à sa place vide les liens de groupe de tous les clubs, en
+  silence. Vrai pour toute table qu'une autre référence en cascade.
 - **Les apps ≤ 1.5 ne sont pas forcées à se mettre à jour.** Elles lisent
   `competitionEligibilities`, et dans leur copie de la règle une ligne
   `excluded` l'emporte sur tout : `/data` réexprime donc le groupe en une ligne
