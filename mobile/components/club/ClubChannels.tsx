@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Sheet } from '@/components/Sheet'
 import { SelectionActions, selection } from '@/components/Selection'
@@ -144,42 +144,47 @@ function ChannelEditor({
   return (
     <Sheet onClose={onClose} testID="channel-edit">
       <Text style={selection.title}>{channel ? 'Modifier le canal' : 'Nouveau canal'}</Text>
-      <View style={s.types}>
-        {TYPES.map((t) => (
-          <TouchableOpacity
-            key={t}
-            testID={`channel-type-${t}`}
-            style={[s.type, type === t && s.typeOn]}
-            onPress={() => setType(t)}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: type === t }}
-          >
-            <Ionicons name={CHANNEL_ICONS[t]} size={16} color={type === t ? colors.accent : colors.textSecondary} />
-            <Text style={[s.typeText, type === t && s.typeTextOn]}>{CHANNEL_LABELS[t]}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TextInput
-        testID="channel-edit-link"
-        style={s.input}
-        value={link}
-        onChangeText={setLink}
-        placeholder="Lien — https://…"
-        placeholderTextColor={colors.textSecondary}
-        keyboardType="url"
-        autoCapitalize="none"
-        autoCorrect={false}
-        accessibilityLabel="Lien"
-      />
-      <TextInput
-        testID="channel-edit-name"
-        style={s.input}
-        value={name}
-        onChangeText={setName}
-        placeholder={`Nom (facultatif) — ${CHANNEL_LABELS[type]}`}
-        placeholderTextColor={colors.textSecondary}
-        accessibilityLabel="Nom"
-      />
+      {/* The fields scroll, the buttons stay: above the keyboard of a phone on
+          its side (#628) there is room for the title and a field, not for the
+          whole form. */}
+      <ScrollView style={s.fields} keyboardShouldPersistTaps="handled">
+        <View style={s.types}>
+          {TYPES.map((t) => (
+            <TouchableOpacity
+              key={t}
+              testID={`channel-type-${t}`}
+              style={[s.type, type === t && s.typeOn]}
+              onPress={() => setType(t)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: type === t }}
+            >
+              <Ionicons name={CHANNEL_ICONS[t]} size={16} color={type === t ? colors.accent : colors.textSecondary} />
+              <Text style={[s.typeText, type === t && s.typeTextOn]}>{CHANNEL_LABELS[t]}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TextInput
+          testID="channel-edit-link"
+          style={s.input}
+          value={link}
+          onChangeText={setLink}
+          placeholder="Lien — https://…"
+          placeholderTextColor={colors.textSecondary}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Lien"
+        />
+        <TextInput
+          testID="channel-edit-name"
+          style={s.input}
+          value={name}
+          onChangeText={setName}
+          placeholder={`Nom (facultatif) — ${CHANNEL_LABELS[type]}`}
+          placeholderTextColor={colors.textSecondary}
+          accessibilityLabel="Nom"
+        />
+      </ScrollView>
       <View style={s.actions}>
         <SelectionActions
           cancelTestID="channel-edit-cancel"
@@ -209,5 +214,6 @@ const s = StyleSheet.create({
     // letterSpacing pinned to 0 so iOS placeholders track normally (#118).
     letterSpacing: 0,
   },
+  fields: { flexShrink: 1 },
   actions: { marginTop: 6 },
 })

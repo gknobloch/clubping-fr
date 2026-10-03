@@ -1,5 +1,5 @@
-import { fireEvent, screen, within } from '@testing-library/react-native'
-import { Modal, StyleSheet, Text } from 'react-native'
+import { act, fireEvent, screen, within } from '@testing-library/react-native'
+import { Keyboard, Modal, Platform, StyleSheet, Text, type KeyboardEvent } from 'react-native'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import {
   PHONE_WIDTH,
@@ -265,4 +265,102 @@ it('is not a sideways phone on a tablet on its side: still a dialog, at its own 
   renderSheet()
   expect(frame().justifyContent).toBe('center')
   expect(panel().maxHeight).toBe('85%')
+})
+
+// ---------------------------------------------------------------------------
+// The keyboard (#628). Each sheet with a field used to handle it itself, and
+// four of six did not: sideways, a channel's link field was typed blind under
+// it. The panel now rises above the keyboard, capped to what it leaves.
+// ---------------------------------------------------------------------------
+describe('a sheet over the keyboard', () => {
+  type Listener = (e: KeyboardEvent) => void
+  let listeners: Record<string, Listener[]>
+
+  beforeEach(() => {
+    listeners = {}
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((name: string, fn: Listener) => {
+      ;(listeners[name] ??= []).push(fn)
+      return { remove: () => { listeners[name] = listeners[name].filter((l) => l !== fn) } }
+    }) as unknown as typeof Keyboard.addListener)
+  })
+  afterEach(() => jest.restoreAllMocks())
+
+  /** The keyboard's top edge lands at `screenY`, as iOS reports it. */
+  const keyboardTo = (screenY: number, height = 336) =>
+    act(() => {
+      for (const fn of listeners.keyboardWillChangeFrame ?? []) {
+        fn({ endCoordinates: { screenX: 0, screenY, width: 390, height } } as KeyboardEvent)
+      }
+    })
+  const keyboardAway = () =>
+    act(() => {
+      for (const fn of listeners.keyboardWillHide ?? []) fn({} as KeyboardEvent)
+    })
+
+  it('sits a phone’s panel on the keyboard’s top edge, capped to what it leaves', () => {
+    setWindowSize(PHONE_WIDTH)
+    renderSheet()
+    keyboardTo(PHONE_WIDTH.height - 336)
+
+    expect(frame().paddingBottom).toBe(336)
+    // Under the status bar (47 on this phone) and a sliver of backdrop.
+    expect(panel().maxHeight).toBe(PHONE_WIDTH.height - 336 - 47 - SIDEWAYS_GAP)
+    // The home indicator is under the keyboard now, not under the panel.
+    expect(panel().paddingBottom).toBe(24)
+  })
+
+  it('does the same sideways, where it matters most: ~200 of 390pt', () => {
+    setWindowSize(SIDEWAYS)
+    render(
+      <Sheet onClose={onClose}>
+        <Text>Canal</Text>
+      </Sheet>,
+      { metrics: PHONE_LANDSCAPE },
+    )
+    keyboardTo(SIDEWAYS.height - 200)
+
+    expect(frame().paddingBottom).toBe(200)
+    expect(panel().maxHeight).toBe(SIDEWAYS.height - 200 - SIDEWAYS_GAP)
+  })
+
+  it('centres a dialog in what the keyboard leaves', () => {
+    setWindowSize(TABLET_LARGE)
+    renderSheet()
+    keyboardTo(TABLET_LARGE.height - 400)
+
+    expect(frame().paddingBottom).toBe(400 + 24)
+    expect(panel().maxHeight).toBe(TABLET_LARGE.height - 400 - 47 - 48)
+  })
+
+  it('goes back down with the keyboard', () => {
+    setWindowSize(PHONE_WIDTH)
+    renderSheet()
+    keyboardTo(PHONE_WIDTH.height - 336)
+    keyboardAway()
+
+    expect(frame().paddingBottom).toBeUndefined()
+    expect(panel().maxHeight).toBe('85%')
+    expect(panel().paddingBottom).toBe(40)
+  })
+
+  it('lifts nothing for a keyboard that covers no bottom edge — an iPad’s floating one', () => {
+    setWindowSize(TABLET_LARGE)
+    renderSheet()
+    keyboardTo(TABLET_LARGE.height + 10, 0)
+
+    expect(frame()).toMatchObject({ padding: 24 })
+    expect(frame().paddingBottom).toBeUndefined()
+  })
+
+  it('leaves it to Android, whose modal window already resizes for the keyboard', () => {
+    const os = Platform.OS
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true })
+    try {
+      setWindowSize(PHONE_WIDTH)
+      renderSheet()
+      expect(listeners.keyboardWillChangeFrame).toBeUndefined()
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: os, configurable: true })
+    }
+  })
 })

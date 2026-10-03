@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Alert, View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform,
+  Alert, View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
@@ -191,7 +191,9 @@ export function CancelTrainingSheet({
   const [note, setNote] = useState('')
   return (
     <Sheet onClose={onClose} testID="training-cancel-sheet">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetBody}>
+      {/* `Sheet` lifts the panel above the keyboard (#628); what no longer
+          fits under it — sideways, everything below the field — scrolls. */}
+      <ScrollView style={s.sheetScroll} contentContainerStyle={s.sheetBody} keyboardShouldPersistTaps="handled">
         <Text style={s.sheetTitle}>{title}</Text>
         <Text style={s.fieldLabel}>Motif (facultatif)</Text>
         <TextInput
@@ -220,7 +222,7 @@ export function CancelTrainingSheet({
             <Text style={s.buttonDangerText}>Annuler la séance</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </ScrollView>
     </Sheet>
   )
 }
@@ -252,6 +254,7 @@ const s = StyleSheet.create({
   person: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingVertical: 4 },
   personName: { flex: 1, fontSize: 14, color: colors.textPrimary },
   personStatus: { fontSize: 13, fontFamily: fonts.medium, color: colors.textSecondary },
+  sheetScroll: { flexShrink: 1 },
   sheetBody: { padding: 20, gap: 10 },
   sheetTitle: { fontSize: 17, fontFamily: fonts.semiBold, color: colors.textPrimary },
   fieldLabel: { fontSize: 13, fontFamily: fonts.medium, color: colors.textSecondary },

@@ -191,6 +191,16 @@ invisible dans le diff comme dans la revue.
   ne s'atteignait seule. Derrière le panneau, chaque ligne est la sienne, et
   le fond est un bouton « Fermer » : VoiceOver n'a pas de tap à côté, et
   plusieurs feuilles n'ont pas d'autre sortie.
+- **Le clavier est l'affaire de `Sheet`** (#628), pas de chaque feuille.
+  Chacune décidait seule, et quatre sur six ne faisaient rien : couché, le
+  clavier prend ~200 pt sur 402, et le lien d'un canal se tapait à l'aveugle
+  dessous. Le panneau monte au-dessus du clavier, plafonné à ce qu'il laisse,
+  et ce qui ne tient plus défile — d'où, là aussi, le `flexShrink`. **Plus de
+  `KeyboardAvoidingView` dans une feuille** : il ajouterait la hauteur du
+  clavier une seconde fois. Sur iOS seulement : Android ouvre un `Modal` en
+  `SOFT_INPUT_ADJUST_RESIZE`, sa fenêtre rétrécit déjà. Mesuré au bord haut
+  du clavier et non à sa hauteur, pour qu'un clavier flottant d'iPad ne
+  soulève rien.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).

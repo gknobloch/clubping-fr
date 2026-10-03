@@ -1,6 +1,8 @@
-import { useContext, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import {
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -30,6 +32,12 @@ import { CONTENT_MAX_WIDTH, useLayout } from '@/constants/layout'
 // a reading column's width, and takes the height bar a sliver: the caller's
 // `maxHeight` is a share of a phone standing up, and 60% of 402pt is a panel
 // too short for three buttons.
+//
+// The keyboard is the sheet's business too (#628). Each sheet with a field
+// used to decide for itself, and four of six did nothing: on a phone on its
+// side the keyboard takes ~200 of 402pt, and a channel's link field was typed
+// blind under it. The panel now rises above the keyboard, capped to what is
+// left, and what no longer fits scrolls — the same rule as sideways.
 // ---------------------------------------------------------------------------
 
 /**
@@ -102,6 +110,34 @@ export function sheetContentWidth({
   return Math.min(SHEET_MAX_WIDTH, width - insets.left - insets.right) - PADDING * 2
 }
 
+/**
+ * How much of the window the keyboard covers, from the bottom edge up.
+ *
+ * iOS only: on Android a `Modal` is a dialog window React Native opens with
+ * `SOFT_INPUT_ADJUST_RESIZE`, so the window itself already shrinks above the
+ * keyboard — lifting the panel as well would lift it twice. Measured from the
+ * keyboard's top edge rather than its height, so an iPad's floating or
+ * undocked keyboard, which covers no bottom edge, lifts nothing.
+ */
+export function useKeyboardOverlap(): number {
+  const { height } = useWindowDimensions()
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return
+    // `WillChangeFrame` and not `WillShow`: it also fires when the keyboard
+    // changes height (suggestions bar, emoji) and when it turns with the phone.
+    const change = Keyboard.addListener('keyboardWillChangeFrame', (e) => setKeyboardTop(e.endCoordinates.screenY))
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardTop(null))
+    return () => {
+      change.remove()
+      hide.remove()
+    }
+  }, [])
+
+  return keyboardTop === null ? 0 : Math.max(0, height - keyboardTop)
+}
+
 export function Sheet({
   onClose,
   /**
@@ -134,6 +170,18 @@ export function Sheet({
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS
   const denseOnPhone = dense && !isTablet
   const sideways = isLandscape && !isTablet
+  const keyboard = useKeyboardOverlap()
+  const typing = keyboard > 0
+
+  // The panel's ceiling. Typing, it is whatever the keyboard leaves under the
+  // status bar — a sheet whose cap ran past the keyboard's top edge would put
+  // its own foot, and the field, under it. A dialog keeps its margin above and
+  // below; a sheet keeps the sliver of backdrop that says «sheet».
+  const panelMaxHeight: DimensionValue = typing
+    ? height - keyboard - insets.top - (isTablet ? BACKDROP_PADDING * 2 : SIDEWAYS_GAP)
+    : sideways
+      ? height - insets.top - SIDEWAYS_GAP
+      : maxHeight
 
   return (
     // A dialog that slides up from the bottom edge to settle in the middle
@@ -153,6 +201,9 @@ export function Sheet({
           // a row. Zero standing up. A dense sheet takes the whole width and
           // pads its own content off the notch instead.
           !isTablet && !denseOnPhone && { paddingLeft: insets.left, paddingRight: insets.right },
+          // Above the keyboard: a sheet sits on its top edge, a dialog centres
+          // in what is left.
+          typing && { paddingBottom: keyboard + (isTablet ? BACKDROP_PADDING : 0) },
         ]}
       >
         {/* The backdrop is the panel's sibling, behind it, and not its parent
@@ -180,11 +231,13 @@ export function Sheet({
           testID={testID}
           style={[
             s.sheet,
-            { maxHeight: sideways ? height - insets.top - SIDEWAYS_GAP : maxHeight },
+            { maxHeight: panelMaxHeight },
             !isTablet && !denseOnPhone && s.phoneColumn,
             // Sideways the home indicator is 21pt, not 34: 40 would spend
-            // twice what it clears, out of 400.
+            // twice what it clears, out of 400. Typing, there is no home
+            // indicator under the panel at all, only the keyboard.
             sideways && !denseOnPhone && { paddingBottom: Math.max(insets.bottom, PADDING) },
+            typing && !isTablet && !denseOnPhone && { paddingBottom: PADDING },
             denseOnPhone && {
               paddingTop: 8,
               paddingBottom: Math.max(insets.bottom, DENSE_PADDING),
