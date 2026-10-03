@@ -14,8 +14,8 @@ import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
-import { useOpenTeam } from '@/utils/openFiche'
-import { PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
+import { useOpenPlayer, useOpenTeam } from '@/utils/openFiche'
+import { PhaseAvailabilityPanel, PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
 import type { Player } from '@shared/types'
 import { LIST_PANE_WIDTH, useLayout } from '@/constants/layout'
 import { usePaneSelection } from '@/utils/paneSelection'
@@ -34,8 +34,8 @@ import { fonts } from '@/constants/typography'
 // équipe because it is about the matches — and «Tous les matchs» is where the
 // accueil leads a captain with a phase to plan.
 // ---------------------------------------------------------------------------
-/** Ce que le rail sélectionne quand ce n'est pas un match. */
-const RESUME = 'resume'
+/** Ce que le rail sélectionne quand ce n'est pas un match : le planning. */
+const PLANNING = 'planning'
 
 /** «sam. 5 sept.» — tout ce qu'une entrée de rail a la place de dire. */
 function shortDate(iso: string): string {
@@ -52,6 +52,7 @@ export default function PhaseGamesScreen() {
   const navigation = useNavigation()
   const router = useRouter()
   const openTeam = useOpenTeam()
+  const openPlayer = useOpenPlayer()
   const { isTwoPane } = useLayout()
   const { selectedId, select } = usePaneSelection()
 
@@ -102,7 +103,7 @@ export default function PhaseGamesScreen() {
 
   // Lu sur la liste plutôt que gardé à part : le commutateur change de phase,
   // où le match sélectionné n'existe pas — le volet retombe alors sur
-  // « Résumé » tout seul, et retrouve le match au retour.
+  // planning tout seul, et retrouve le match au retour.
   const selectedGame = teamGames.find((g) => g.id === selectedId)
 
   const teamSelections = useMemo(
@@ -164,8 +165,14 @@ export default function PhaseGamesScreen() {
   //
   // Le rail *est* la liste des matchs, donc le volet droit porte le match lui-
   // même — disponibilités, composition, feuille — plutôt qu'une carte qu'il
-  // faudrait encore ouvrir. « Résumé » garde ce que l'écran montrait en haut :
-  // l'effectif et ce que chacun a joué.
+  // faudrait encore ouvrir. Sa première entrée est le planning de la phase
+  // (#623), dessiné dans le volet même : la place qu'il demande sur un
+  // téléphone, une tablette l'a, et une feuille par-dessus un volet qui n'a
+  // rien d'autre à montrer serait une porte vers une pièce vide.
+  //
+  // Pas de rangée « Voir la fiche équipe » : le nom de l'équipe, en tête du
+  // planning, y mène. On n'arrive pas toujours ici depuis la fiche — l'écran
+  // d'un match y mène aussi —, donc le retour n'en tient pas lieu.
   // -------------------------------------------------------------------------
   if (isTwoPane) {
     return (
@@ -174,13 +181,13 @@ export default function PhaseGamesScreen() {
           <ScrollView contentContainerStyle={styles.railList}>
             {switcher}
             <TouchableOpacity
-              testID="rail-resume"
+              testID="rail-planning"
               style={[styles.railRow, !selectedGame && styles.railRowSelected]}
               accessibilityState={!selectedGame ? { selected: true } : {}}
-              onPress={() => select(RESUME)}
+              onPress={() => select(PLANNING)}
             >
               <Text style={[styles.railResume, !selectedGame && styles.railTextSelected]}>
-                Résumé
+                Planning de la phase
               </Text>
             </TouchableOpacity>
 
@@ -227,15 +234,22 @@ export default function PhaseGamesScreen() {
         <View style={styles.detailPane}>
           {selectedGame && team ? (
             <MatchDetail gameId={selectedGame.id} teamId={team.id} embedded />
+          ) : team && totalGames > 0 ? (
+            <PhaseAvailabilityPanel
+              // Keyed on the phase's team: the switcher swaps the team record,
+              // and the panel's measured width and popover belong to the old one.
+              key={team.id}
+              team={team}
+              inline
+              // A journée opens beside the rail, as its rail entry does.
+              onGame={select}
+              onPlayer={openPlayer}
+              onTeam={() => openTeam(team.id)}
+            />
           ) : (
-            <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
-              {planningLink}
-              {teamLink}
-            </ScrollView>
+            <Text style={styles.empty}>Aucun match trouvé.</Text>
           )}
         </View>
-
-        {planning}
       </Screen>
     )
   }

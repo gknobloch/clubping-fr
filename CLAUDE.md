@@ -323,6 +323,15 @@ invisible dans le diff comme dans la revue.
   le bouton qui ouvre la feuille l'a déjà dit.
 - **Pas de sélecteur de phase dans la feuille** : l'écran qui l'ouvre en a
   déjà un, et le titre nomme la phase choisie.
+- **Sur une tablette, pas de feuille** : « Planning de la phase » est la
+  première entrée du rail de « Tous les matchs », et la grille est dessinée
+  dans le volet (`PhaseAvailabilityPanel`, `inline`, largeur mesurée). Une
+  journée s'y ouvre à côté du rail, comme son entrée ; un nom ouvre la fiche
+  du licencié (`useOpenPlayer`).
+- **Pas de rangée « Voir la fiche équipe » dans ce volet** : le nom de
+  l'équipe, en tête du planning, y mène. Le retour n'en tient pas lieu — on
+  arrive aussi sur « Tous les matchs » depuis l'écran d'un match, donc depuis
+  l'accueil sans être passé par la fiche.
 - **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit
   rien — une feuille ouverte téléphone couché redressait l'écran sous les
   mains du membre. Les autres feuilles de l'app ne le déclarent pas encore.

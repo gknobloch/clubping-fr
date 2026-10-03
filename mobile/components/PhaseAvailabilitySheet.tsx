@@ -17,7 +17,7 @@ import { unlicensedIds } from '@shared/lib/seasonLicences'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
 import { useLayout } from '@/constants/layout'
-import { Sheet, sheetContentWidth } from '@/components/Sheet'
+import { Sheet, WIDE_DIALOG_MAX_WIDTH, sheetContentWidth } from '@/components/Sheet'
 import {
   CompositionKey,
   LentKey,
@@ -41,23 +41,90 @@ import type { Player, Team } from '@shared/types'
 // already chosen one with its own switcher, so a second switcher here would
 // be a second answer to a question settled underneath. The title names it.
 //
-// Leaving it is a navigation: a name opens the fiche, a journée the match,
-// and the sheet closes first. A second sheet on top would be portrait-only
+// The content is `PhaseAvailabilityPanel`, which a tablet draws straight into
+// the pane beside «Tous les matchs» instead (`inline`): there is room for the
+// whole grid there, and a sheet over a pane that has nothing else to show
+// would be a door to an empty room.
+//
+// Leaving the sheet is a navigation: a name opens the fiche, a journée the
+// match, and the sheet closes first. A second sheet on top would be portrait-only
 // on iOS, under a member who is holding the phone sideways — which is also
 // why the renforts' names open in a popover drawn *inside* this sheet rather
 // than in a Modal of its own.
 // ---------------------------------------------------------------------------
 
 export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose: () => void }) {
+  const router = useRouter()
+  const openPlayer = useOpenPlayer()
+  const { height } = useWindowDimensions()
+  const { isTablet, isLandscape } = useLayout()
+  const dense = !isTablet && isLandscape
+
+  const leaveFor = (go: () => void) => {
+    onClose()
+    go()
+  }
+
+  return (
+    <Sheet
+      onClose={onClose}
+      testID="phase-sheet"
+      wide
+      dense={dense}
+      rotates
+      // Sideways, the whole height bar a sliver of backdrop: that sliver is
+      // what says «sheet», and every other point is a row.
+      maxHeight={dense ? height - 12 : '85%'}
+    >
+      <PhaseAvailabilityPanel
+        team={team}
+        onClose={onClose}
+        onPlayer={(playerId) => leaveFor(() => openPlayer(playerId))}
+        onGame={(gameId) =>
+          leaveFor(() =>
+            router.push({
+              pathname: '/match/[id]',
+              params: { id: gameId, teamId: team.id, from: 'team' },
+            }),
+          )
+        }
+      />
+    </Sheet>
+  )
+}
+
+/**
+ * The planning itself — title, keys, grid and its popovers — for a sheet or
+ * for a pane (`inline`). What a tap on a name or a journée does belongs to the
+ * host: a sheet closes and navigates, a pane selects beside itself.
+ */
+export function PhaseAvailabilityPanel({
+  team,
+  inline = false,
+  onClose,
+  onPlayer,
+  onGame,
+  onTeam,
+}: {
+  team: Team
+  /** Drawn in a pane rather than a sheet: sized to its own width, no ✕. */
+  inline?: boolean
+  /** The sheet's ✕; absent inline. */
+  onClose?: () => void
+  onPlayer: (playerId: string) => void
+  onGame: (gameId: string) => void
+  /** Makes the team's name a way to its fiche. */
+  onTeam?: () => void
+}) {
   const {
     teams, players, clubs, phases, groups, divisions, matchDays, games,
     gameAvailabilities, gameSelections, seasons, playerSeasonLicences,
   } = useAppData()
-  const router = useRouter()
-  const openPlayer = useOpenPlayer()
   const insets = useSafeAreaInsets()
-  const { height } = useWindowDimensions()
   const { width, isTablet, isLandscape } = useLayout()
+  // Inline, the pane's own width — measured, since a pane is the window less
+  // a rail and a list, and only layout knows what that leaves.
+  const [paneWidth, setPaneWidth] = useState(0)
 
   const entry = useMemo(
     () => teamPhaseEntries(team, teams, phases, matchDays, games).find((e) => e.teamId === team.id),
@@ -91,8 +158,10 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
 
   const compact = !isTablet
   // A phone on its side: six players and both totals in what the sheet has.
-  const dense = !isTablet && isLandscape
-  const tableWidth = sheetContentWidth({ width, isTablet, wide: true, dense, insets })
+  const dense = !inline && !isTablet && isLandscape
+  const tableWidth = inline
+    ? Math.min(WIDE_DIALOG_MAX_WIDTH, paneWidth - INLINE_PADDING * 2)
+    : sheetContentWidth({ width, isTablet, wide: true, dense, insets })
   const { overflows } = phaseTableColumns(tableWidth, columns.length, compact, dense)
   // The title is the team and its phase, and nothing else: the button that
   // opened the sheet already said «Disponibilités».
@@ -128,44 +197,50 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
   // The key only when someone was lent: no loan, nothing to explain.
   const keyTeam = lentKeyTeam(grid)
 
-  const leaveFor = (go: () => void) => {
-    onClose()
-    go()
-  }
+  const title = onTeam ? (
+    <TouchableOpacity
+      testID="phase-panel-team"
+      onPress={onTeam}
+      accessibilityRole="link"
+      accessibilityLabel={`Fiche de ${teamName}`}
+      style={s.teamLink}
+    >
+      <Text style={s.title} numberOfLines={1}>{teamName}</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </TouchableOpacity>
+  ) : (
+    <Text style={s.title} numberOfLines={1}>{teamName}</Text>
+  )
 
   return (
-    <Sheet
-      onClose={onClose}
-      testID="phase-sheet"
-      wide
-      dense={dense}
-      rotates
-      // Sideways, the whole height bar a sliver of backdrop: that sliver is
-      // what says «sheet», and every other point is a row.
-      maxHeight={dense ? height - 12 : '85%'}
+    <View
+      ref={containerRef}
+      testID={inline ? 'phase-panel' : undefined}
+      style={inline ? s.inline : s.container}
+      onLayout={inline ? (e) => setPaneWidth(e.nativeEvent.layout.width) : undefined}
     >
-      <View ref={containerRef} style={s.container}>
-        <View style={[s.titleRow, dense && s.titleRowDense]}>
-          {dense ? (
-            // One line sideways: team, phase, and the frame's key beside them.
-            <>
-              <Text style={s.titleLine} numberOfLines={1}>
-                <Text style={s.titleDense}>{teamName}</Text>
-                {phaseLabel ? <Text style={s.subtitleInline}>{`  ${phaseLabel}`}</Text> : null}
-              </Text>
+      <View style={[s.titleRow, dense && s.titleRowDense]}>
+        {dense ? (
+          // One line sideways: team, phase, and the frame's key beside them.
+          <>
+            <Text style={s.titleLine} numberOfLines={1}>
+              <Text style={s.titleDense}>{teamName}</Text>
+              {phaseLabel ? <Text style={s.subtitleInline}>{`  ${phaseLabel}`}</Text> : null}
+            </Text>
+            <CompositionKey />
+            {keyTeam && <LentKey team={keyTeam} />}
+          </>
+        ) : (
+          <View style={s.titleBlock}>
+            {title}
+            {phaseLabel ? <Text style={s.subtitle} numberOfLines={1}>{phaseLabel}</Text> : null}
+            <View style={s.keyLine}>
               <CompositionKey />
               {keyTeam && <LentKey team={keyTeam} />}
-            </>
-          ) : (
-            <View style={s.titleBlock}>
-              <Text style={s.title} numberOfLines={1}>{teamName}</Text>
-              {phaseLabel ? <Text style={s.subtitle} numberOfLines={1}>{phaseLabel}</Text> : null}
-              <View style={s.keyLine}>
-                <CompositionKey />
-                {keyTeam && <LentKey team={keyTeam} />}
-              </View>
             </View>
-          )}
+          </View>
+        )}
+        {onClose && (
           <TouchableOpacity
             testID="phase-sheet-close"
             onPress={onClose}
@@ -176,76 +251,72 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
           >
             <Ionicons name="close" size={dense ? 20 : 22} color={colors.textSecondary} />
           </TouchableOpacity>
-        </View>
-
-        {/* Une phase entière ne tient pas debout sur un téléphone ; couchée, si. */}
-        {overflows && !isLandscape && !isTablet && (
-          <View style={s.hint} testID="phase-rotate-hint">
-            <Ionicons name="phone-landscape-outline" size={18} color={colors.textSecondary} />
-            <Text style={s.hintText}>Tournez le téléphone pour voir toute la phase.</Text>
-          </View>
-        )}
-
-        {/* flexShrink: under the capped panel a ScrollView otherwise claims its
-            whole content's height and pushes past the sheet (CLAUDE.md). */}
-        <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, dense && s.scrollContentDense]}>
-          {grid.rows.length > 0 && columns.length > 0 ? (
-            <PhaseAvailabilityTable
-              grid={grid}
-              columns={columns}
-              width={tableWidth}
-              compact={compact}
-              dense={dense}
-              required={required}
-              unlicensed={unlicensed}
-              onPlayer={(playerId) => leaveFor(() => openPlayer(playerId))}
-              onRenforts={(gameId, anchor) => openPopover(gameId, undefined, anchor)}
-              onLent={(playerId, gameId, anchor) => openPopover(gameId, playerId, anchor)}
-              onGame={(gameId) =>
-                leaveFor(() =>
-                  router.push({
-                    pathname: '/match/[id]',
-                    params: { id: gameId, teamId: team.id, from: 'team' },
-                  }),
-                )
-              }
-            />
-          ) : (
-            <Text style={s.empty}>
-              {columns.length === 0 ? 'Aucun match sur cette phase.' : 'Aucun joueur dans cette équipe.'}
-            </Text>
-          )}
-        </ScrollView>
-
-        {popover && popoverIndex >= 0 && (
-          <>
-            <Pressable
-              testID="phase-popover-backdrop"
-              style={StyleSheet.absoluteFill}
-              onPress={() => setPopover(null)}
-            />
-            {popover.playerId ? (
-              lentTeam && (
-                <LentPopover
-                  title={`En renfort · J${columns[popoverIndex].number}`}
-                  team={lentTeam}
-                  teamName={getTeamName(lentTeam, clubs)}
-                  placement={popoverPlacement(popover.anchor, popover.frame)}
-                />
-              )
-            ) : (
-              <RenfortsPopover
-                title={`Renforts · J${columns[popoverIndex].number}`}
-                renforts={grid.renforts[popoverIndex]}
-                placement={popoverPlacement(popover.anchor, popover.frame)}
-              />
-            )}
-          </>
         )}
       </View>
-    </Sheet>
+
+      {/* Une phase entière ne tient pas debout sur un téléphone ; couchée, si. */}
+      {overflows && !isLandscape && !isTablet && (
+        <View style={s.hint} testID="phase-rotate-hint">
+          <Ionicons name="phone-landscape-outline" size={18} color={colors.textSecondary} />
+          <Text style={s.hintText}>Tournez le téléphone pour voir toute la phase.</Text>
+        </View>
+      )}
+
+      {/* flexShrink: under the capped panel a ScrollView otherwise claims its
+          whole content's height and pushes past the sheet (CLAUDE.md). */}
+      <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, dense && s.scrollContentDense]}>
+        {inline && paneWidth === 0 ? null : grid.rows.length > 0 && columns.length > 0 ? (
+          <PhaseAvailabilityTable
+            grid={grid}
+            columns={columns}
+            width={tableWidth}
+            compact={compact}
+            dense={dense}
+            required={required}
+            unlicensed={unlicensed}
+            onPlayer={onPlayer}
+            onRenforts={(gameId, anchor) => openPopover(gameId, undefined, anchor)}
+            onLent={(playerId, gameId, anchor) => openPopover(gameId, playerId, anchor)}
+            onGame={onGame}
+          />
+        ) : (
+          <Text style={s.empty}>
+            {columns.length === 0 ? 'Aucun match sur cette phase.' : 'Aucun joueur dans cette équipe.'}
+          </Text>
+        )}
+      </ScrollView>
+
+      {popover && popoverIndex >= 0 && (
+        <>
+          <Pressable
+            testID="phase-popover-backdrop"
+            style={StyleSheet.absoluteFill}
+            onPress={() => setPopover(null)}
+          />
+          {popover.playerId ? (
+            lentTeam && (
+              <LentPopover
+                title={`En renfort · J${columns[popoverIndex].number}`}
+                team={lentTeam}
+                teamName={getTeamName(lentTeam, clubs)}
+                placement={popoverPlacement(popover.anchor, popover.frame)}
+              />
+            )
+          ) : (
+            <RenfortsPopover
+              title={`Renforts · J${columns[popoverIndex].number}`}
+              renforts={grid.renforts[popoverIndex]}
+              placement={popoverPlacement(popover.anchor, popover.frame)}
+            />
+          )}
+        </>
+      )}
+    </View>
   )
 }
+
+/** A pane's margin around the planning — the reading screens' 16. */
+const INLINE_PADDING = 16
 
 export const POPOVER_WIDTH = 220
 const POPOVER_GAP = 6
@@ -323,6 +394,8 @@ function LentPopover({
 
 const s = StyleSheet.create({
   container: { flexShrink: 1 },
+  inline: { flex: 1, padding: INLINE_PADDING },
+  teamLink: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   popover: {
     position: 'absolute',
     width: POPOVER_WIDTH,
