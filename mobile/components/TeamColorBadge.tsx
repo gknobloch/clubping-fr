@@ -21,10 +21,13 @@ export function TeamColorBadge({
   color,
   number,
   size = 48,
+  fontSize,
 }: {
   color?: string
   number: number
   size?: number
+  /** Defaults to 42% of `size`; a badge squeezed into a grid cell wants more. */
+  fontSize?: number
 }) {
   return (
     <View
@@ -33,7 +36,7 @@ export function TeamColorBadge({
         { width: size, height: size, borderRadius: size / 2, backgroundColor: color ?? colors.accent },
       ]}
     >
-      <Text style={[styles.num, { color: readableTextOn(color), fontSize: Math.round(size * 0.42) }]}>
+      <Text style={[styles.num, { color: readableTextOn(color), fontSize: fontSize ?? Math.round(size * 0.42) }]}>
         {number}
       </Text>
     </View>

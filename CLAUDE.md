@@ -272,9 +272,15 @@ invisible dans le diff comme dans la revue.
   dans sa couleur, comme partout dans l'app) — quelle équipe se lit sans
   toucher ; un toucher la nomme. **La teinte de sa réponse reste sous les
   hachures** : un « oui » prêté reste un oui. La clé « En renfort » rejoint
-  « Dans la composition » dans la ligne de titre, **toujours**, avec un vrai
-  badge (`lentKeyTeam`) : une équipe où ses joueurs sont partis, sinon une
-  autre équipe du club dans la phase, sinon « 1 ».
+  « Dans la composition » dans la ligne de titre, **seulement s'il y a un
+  prêt**, avec le badge d'une équipe où ses joueurs sont partis
+  (`lentKeyTeam`). Même règle pour la ligne Renforts : rien à expliquer, rien
+  d'affiché.
+- **Les hachures de l'app sont de vraies lignes**, pas un `Pattern` SVG : une
+  tuile de 6 pt tournée à 45° sortait sur l'appareil en semis de points que
+  personne ne voyait. Des lignes en coordonnées utilisateur, rognées par la
+  boîte du `Svg`, sont les mêmes rayures à toute taille. Gris translucide,
+  lisible sur les quatre fonds.
 - **Une cellule sans réponse est une boîte vide** : le tiret n'ajoutait rien.
 - La règle est `playersCommittedElsewhere`, celle que suit déjà le choix de la
   composition — jamais une seconde dérivation : les équipes du club **de la

@@ -268,11 +268,11 @@ describe('un joueur prêté à une autre équipe du club', () => {
   })
 })
 
-it('montre toujours la clé des prêts, avec un badge du club', () => {
+it('sans prêt ni renfort, ni clé « En renfort », ni ligne Renforts', () => {
   setWindowSize(PHONE_WIDTH)
   render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
-  // Aucun prêt ici, et aucune autre équipe du club dans la phase : « 1 ».
-  expect(within(screen.getByTestId('phase-lent-key')).getByText('1')).toBeTruthy()
+  expect(screen.queryByTestId('phase-lent-key')).toBeNull()
+  expect(screen.queryByTestId('phase-renforts-row')).toBeNull()
 })
 
 it('place le popover au-dessus de la cellule, sans sortir de la feuille', () => {

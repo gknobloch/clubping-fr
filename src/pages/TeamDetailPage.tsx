@@ -165,7 +165,7 @@ export function TeamDetailPage() {
         unlicensed={unlicensed}
         onGame={(gameId) => setQuickGame({ gameId, teamId: team.id })}
         teamLabel={(t) => getTeamName(t, clubs)}
-        keyTeam={lentKeyTeam(phaseGrid, team, teams)}
+        keyTeam={lentKeyTeam(phaseGrid)}
       />
 
       {/* Players (left) / Games (right) — stacked on narrow viewports */}

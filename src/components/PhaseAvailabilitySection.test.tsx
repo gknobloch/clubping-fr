@@ -5,7 +5,7 @@ import { PhaseAvailabilitySection } from './PhaseAvailabilitySection'
 
 // Avatar reads the auth token to fetch an image; nothing here needs a session.
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: null, token: null }) }))
-import { EMPTY_PHASE_GRID, phaseAvailabilityGrid } from '@/lib/phaseAvailability'
+import { EMPTY_PHASE_GRID, lentKeyTeam, phaseAvailabilityGrid } from '@/lib/phaseAvailability'
 import type { Game, GameAvailability, MatchDay, Player, Team } from '@/types'
 
 // Les disponibilités de toute la phase sur la fiche équipe (#623).
@@ -43,7 +43,6 @@ function renderSection(onGame = vi.fn()) {
         unlicensed={new Set(['p2'])}
         onGame={onGame}
         teamLabel={teamLabel}
-          keyTeam={{ number: 1 }}
       />
     </MemoryRouter>,
   )
@@ -95,8 +94,7 @@ describe('PhaseAvailabilitySection', () => {
     )
     render(
       <MemoryRouter>
-        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} teamLabel={teamLabel}
-          keyTeam={{ number: 1 }} />
+        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} teamLabel={teamLabel} />
       </MemoryRouter>,
     )
 
@@ -148,14 +146,14 @@ describe('PhaseAvailabilitySection', () => {
           unlicensed={new Set()}
           onGame={vi.fn()}
           teamLabel={teamLabel}
-          keyTeam={{ number: 1 }}
+          keyTeam={lentKeyTeam(grid)}
         />
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('En renfort')).toBeInTheDocument()
+    // The key, with the badge of the team the player went to.
+    expect(screen.getByText('En renfort')).toHaveTextContent('3')
     const row = screen.getByRole('rowheader', { name: /Heurtin/ }).closest('tr')!
-    // Oui, then Sél.: the loan counts as a journée played for the club.
     // Oui 1/1 (their answer), Sél. 1/1 (the loan).
     expect(within(row).getAllByText('1/1')).toHaveLength(2)
 
@@ -166,9 +164,9 @@ describe('PhaseAvailabilitySection', () => {
     expect(screen.getByRole('dialog', { name: 'En renfort · J3' })).toHaveTextContent('Rixheim PPA 3')
   })
 
-  it('always shows the hatching key, with the badge it is given', () => {
+  it('shows no hatching key when nobody was lent', () => {
     renderSection()
-    expect(screen.getByText('En renfort')).toHaveTextContent('1')
+    expect(screen.queryByText('En renfort')).toBeNull()
   })
 
   it('leaves an unanswered cell empty: a dash said nothing more', () => {
@@ -202,7 +200,6 @@ describe('PhaseAvailabilitySection', () => {
           unlicensed={new Set()}
           onGame={vi.fn()}
           teamLabel={teamLabel}
-          keyTeam={{ number: 1 }}
         />
       </MemoryRouter>,
     )

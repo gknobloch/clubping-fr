@@ -56,8 +56,8 @@ export function PhaseAvailabilitySection({
   onGame: (gameId: string) => void
   /** How a team of the club is named — «Rixheim PPA 3». */
   teamLabel: (team: Team) => string
-  /** The badge the «En renfort» key wears — `lentKeyTeam`. */
-  keyTeam: Pick<Team, 'number' | 'color'>
+  /** The badge the «En renfort» key wears — `lentKeyTeam`; no key without one. */
+  keyTeam?: Pick<Team, 'number' | 'color'>
 }) {
   // One popover at a time, keyed on its match.
   // One popover at a time: `renforts:<game>` or `lent:<player>:<game>`.
@@ -79,18 +79,19 @@ export function PhaseAvailabilitySection({
             <span className="h-4 w-6 rounded bg-slate-50 ring-2 ring-inset ring-slate-800" aria-hidden="true" />
             Dans la composition
           </p>
-          {/* Always shown, with a real badge (`lentKeyTeam`): a team the
-              players went to, or another of the club. */}
-          <p className="flex items-center gap-1.5">
-            <span
-              className="flex h-4 w-6 items-center justify-center rounded bg-slate-50"
-              style={HATCH_STYLE}
-              aria-hidden="true"
-            >
-              <TeamDot team={keyTeam} size={12} />
-            </span>
-            En renfort
-          </p>
+          {/* Only when someone was lent, with the badge of a team they went to. */}
+          {keyTeam && (
+            <p className="flex items-center gap-1.5">
+              <span
+                className="flex h-4 w-6 items-center justify-center rounded bg-slate-50"
+                style={HATCH_STYLE}
+                aria-hidden="true"
+              >
+                <TeamDot team={keyTeam} size={14} fontScale={0.65} />
+              </span>
+              En renfort
+            </p>
+          )}
         </div>
       </div>
 
@@ -276,15 +277,24 @@ const POPOVER_MARGIN = 8
  * lie over the grey of no answer and over the tint of one alike.
  */
 const HATCH_STYLE = {
-  backgroundImage: 'repeating-linear-gradient(45deg, rgba(15, 23, 42, 0.18) 0 2px, transparent 2px 6px)',
+  backgroundImage: 'repeating-linear-gradient(45deg, rgba(15, 23, 42, 0.32) 0 2px, transparent 2px 7px)',
 }
 
 /** A team as the app shows one everywhere: its number, in its colour. */
-function TeamDot({ team, size }: { team: Pick<Team, 'number' | 'color'>; size: number }) {
+function TeamDot({
+  team,
+  size,
+  fontScale = 0.45,
+}: {
+  team: Pick<Team, 'number' | 'color'>
+  size: number
+  /** Share of `size` the number takes; a badge in a grid cell wants more. */
+  fontScale?: number
+}) {
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white"
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.45), backgroundColor: team.color ?? '#e23b3b' }}
+      style={{ width: size, height: size, fontSize: Math.round(size * fontScale), backgroundColor: team.color ?? '#e23b3b' }}
       aria-hidden="true"
     >
       {team.number}
@@ -484,7 +494,7 @@ function LentCell({
           } ${selected ? 'ring-2 ring-inset ring-slate-800' : ''}`}
           style={HATCH_STYLE}
         >
-          <TeamDot team={team} size={22} />
+          <TeamDot team={team} size={28} fontScale={0.6} />
         </span>
       }
     >

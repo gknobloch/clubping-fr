@@ -125,7 +125,8 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
     popover?.playerId && popoverIndex >= 0
       ? grid.rows.find((r) => r.player.id === popover.playerId)?.cells[popoverIndex].lentTo
       : undefined
-  const keyTeam = lentKeyTeam(grid, team, teams)
+  // The key only when someone was lent: no loan, nothing to explain.
+  const keyTeam = lentKeyTeam(grid)
 
   const leaveFor = (go: () => void) => {
     onClose()
@@ -153,7 +154,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
                 {phaseLabel ? <Text style={s.subtitleInline}>{`  ${phaseLabel}`}</Text> : null}
               </Text>
               <CompositionKey />
-              <LentKey team={keyTeam} />
+              {keyTeam && <LentKey team={keyTeam} />}
             </>
           ) : (
             <View style={s.titleBlock}>
@@ -161,7 +162,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
               {phaseLabel ? <Text style={s.subtitle} numberOfLines={1}>{phaseLabel}</Text> : null}
               <View style={s.keyLine}>
                 <CompositionKey />
-                <LentKey team={keyTeam} />
+                {keyTeam && <LentKey team={keyTeam} />}
               </View>
             </View>
           )}

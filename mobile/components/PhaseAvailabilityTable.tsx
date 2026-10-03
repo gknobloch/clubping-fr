@@ -6,7 +6,7 @@ import { fonts } from '@/constants/typography'
 import { LicenceTag } from '@/components/LicenceTag'
 import { Avatar } from '@/components/Avatar'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
-import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg'
+import Svg, { Line } from 'react-native-svg'
 import {
   selectionVerdict,
   type PhaseAvailabilityColumn,
@@ -300,7 +300,7 @@ export interface RenfortsAnchor {
  * Translucent slate: it has to read over the grey of no answer *and* over the
  * green, amber and red of one, since a lent player keeps their answer's tint.
  */
-const HATCH_COLOR = 'rgba(15, 23, 42, 0.18)'
+const HATCH_COLOR = 'rgba(15, 23, 42, 0.32)'
 
 /** Past this many, the stack says «+N» rather than growing past its column. */
 const STACKED_AVATARS = 2
@@ -367,16 +367,36 @@ function pressWithAnchor(ref: RefObject<View | null>, open: (anchor: RenfortsAnc
   ref.current?.measureInWindow?.((x, y, w, h) => open({ x, y, width: w, height: h }))
 }
 
-/** Diagonal stripes across whatever box holds it — «not here, elsewhere». */
-function Hatch({ id }: { id: string }) {
+/** Stripe spacing and reach, in points: wider than any cell, taller than any. */
+const HATCH_STEP = 7
+const HATCH_SPAN = 240
+const HATCH_RISE = 48
+const HATCH_LINES = Array.from(
+  { length: Math.ceil((HATCH_SPAN + HATCH_RISE) / HATCH_STEP) },
+  (_, i) => i * HATCH_STEP - HATCH_RISE,
+)
+
+/**
+ * Diagonal stripes across whatever box holds it — «not here, elsewhere».
+ *
+ * Real lines, not an SVG `Pattern`: a 6pt tile turned 45° came out on a
+ * device as a sparse field of dots, the hatching nobody could see. Lines in
+ * user space, clipped by the Svg's own box, are the same stripes at any size.
+ */
+function Hatch() {
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs>
-        <Pattern id={id} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <Line x1={0} y1={0} x2={0} y2={6} stroke={HATCH_COLOR} strokeWidth={2.5} />
-        </Pattern>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
+      {HATCH_LINES.map((x) => (
+        <Line
+          key={x}
+          x1={x}
+          y1={HATCH_RISE}
+          x2={x + HATCH_RISE}
+          y2={0}
+          stroke={HATCH_COLOR}
+          strokeWidth={2}
+        />
+      ))}
     </Svg>
   )
 }
@@ -428,23 +448,30 @@ function LentCell({
       }
       onPress={() => onPress && pressWithAnchor(ref, onPress)}
     >
-      <Hatch id={`hatch-${testID}`} />
-      <TeamColorBadge color={team.color} number={team.number} size={height - 8} />
+      <Hatch />
+      {/* Two points of air, and a number as big as the badge allows: it is
+          the one thing in the cell to read. */}
+      <TeamColorBadge
+        color={team.color}
+        number={team.number}
+        size={height - 4}
+        fontSize={Math.round((height - 4) * 0.6)}
+      />
     </TouchableOpacity>
   )
 }
 
 /**
- * The hatching's key, beside the frame's — always shown, and wearing a real
- * badge (`lentKeyTeam`): a team the players went to, or another of the club,
- * so the key looks like the cells it explains.
+ * The hatching's key, beside the frame's — only when someone was lent, and
+ * wearing the badge of a team they went to (`lentKeyTeam`), so the key looks
+ * like the cells it explains.
  */
 export function LentKey({ team }: { team: Pick<Team, 'number' | 'color'> }) {
   return (
     <View style={s.key} testID="phase-lent-key">
       <View style={[s.keySwatch, s.cellEmpty, s.lentCell, s.keySwatchCentred]}>
-        <Hatch id="hatch-key" />
-        <TeamColorBadge color={team.color} number={team.number} size={12} />
+        <Hatch />
+        <TeamColorBadge color={team.color} number={team.number} size={14} fontSize={9} />
       </View>
       <Text style={s.keyText} numberOfLines={1}>En renfort</Text>
     </View>

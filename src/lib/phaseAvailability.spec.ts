@@ -131,13 +131,11 @@ describe('phaseAvailabilityGrid — lent to another team of the club', () => {
     const grid = phaseAvailabilityGrid(four, ourGames, players, [], [
       { gameId: 'h2', teamId: 't3', playerIds: ['p2'] },
     ], club)
-    expect(lentKeyTeam(grid, four, club.teams)).toMatchObject({ id: 't3', number: 3 })
+    expect(lentKeyTeam(grid)).toMatchObject({ id: 't3', number: 3 })
   })
 
-  it('falls back on another team of the club in the phase, then on «1»', () => {
-    const grid = phaseAvailabilityGrid(four, ourGames, players, [], [], club)
-    expect(lentKeyTeam(grid, four, club.teams)).toMatchObject({ id: 't3' })
-    expect(lentKeyTeam(grid, four, [four])).toEqual({ number: 1 })
+  it('gives no key when nobody was lent', () => {
+    expect(lentKeyTeam(phaseAvailabilityGrid(four, ourGames, players, [], [], club))).toBeUndefined()
   })
 
   it('says nothing without the club, as the grid of one team', () => {
