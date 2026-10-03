@@ -270,8 +270,12 @@ invisible dans le diff comme dans la revue.
 - **Un joueur de l'effectif prêté à une autre équipe du club** sur une
   journée a sa cellule **hachurée**, avec le badge de cette équipe (son numéro
   dans sa couleur, comme partout dans l'app) — quelle équipe se lit sans
-  toucher ; un toucher la nomme. La clé « En renfort » rejoint « Dans la
-  composition » dans la ligne de titre, **seulement s'il y a un prêt**.
+  toucher ; un toucher la nomme. **La teinte de sa réponse reste sous les
+  hachures** : un « oui » prêté reste un oui. La clé « En renfort » rejoint
+  « Dans la composition » dans la ligne de titre, **toujours**, avec un vrai
+  badge (`lentKeyTeam`) : une équipe où ses joueurs sont partis, sinon une
+  autre équipe du club dans la phase, sinon « 1 ».
+- **Une cellule sans réponse est une boîte vide** : le tiret n'ajoutait rien.
 - La règle est `playersCommittedElsewhere`, celle que suit déjà le choix de la
   composition — jamais une seconde dérivation : les équipes du club **de la
   même phase** (un numéro de journée recommence à 1 à chaque phase).

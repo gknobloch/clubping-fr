@@ -43,6 +43,7 @@ function renderSection(onGame = vi.fn()) {
         unlicensed={new Set(['p2'])}
         onGame={onGame}
         teamLabel={teamLabel}
+          keyTeam={{ number: 1 }}
       />
     </MemoryRouter>,
   )
@@ -94,7 +95,8 @@ describe('PhaseAvailabilitySection', () => {
     )
     render(
       <MemoryRouter>
-        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} teamLabel={teamLabel} />
+        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} teamLabel={teamLabel}
+          keyTeam={{ number: 1 }} />
       </MemoryRouter>,
     )
 
@@ -132,7 +134,9 @@ describe('PhaseAvailabilitySection', () => {
       { id: 'g3', matchDayId: 'a3', homeTeamId: 't4', awayTeamId: 'o' },
       { id: 'h3', matchDayId: 'b3', homeTeamId: 't3', awayTeamId: 'o' },
     ] as Game[]
-    const grid = phaseAvailabilityGrid(team, ourGames, [mougey, heurtin], [], [
+    const grid = phaseAvailabilityGrid(team, ourGames, [mougey, heurtin], [
+      { gameId: 'g3', playerId: 'p2', status: 'available' },
+    ], [
       { gameId: 'h3', teamId: 't3', playerIds: ['p2'] },
     ], { teams: [team, three], games: clubGames, matchDays })
     render(
@@ -144,6 +148,7 @@ describe('PhaseAvailabilitySection', () => {
           unlicensed={new Set()}
           onGame={vi.fn()}
           teamLabel={teamLabel}
+          keyTeam={{ number: 1 }}
         />
       </MemoryRouter>,
     )
@@ -151,16 +156,25 @@ describe('PhaseAvailabilitySection', () => {
     expect(screen.getByText('En renfort')).toBeInTheDocument()
     const row = screen.getByRole('rowheader', { name: /Heurtin/ }).closest('tr')!
     // Oui, then Sél.: the loan counts as a journée played for the club.
-    expect(within(row).getAllByText('0/1')).toHaveLength(1)
-    expect(within(row).getByText('1/1')).toBeInTheDocument()
+    // Oui 1/1 (their answer), Sél. 1/1 (the loan).
+    expect(within(row).getAllByText('1/1')).toHaveLength(2)
 
-    fireEvent.click(within(row).getByRole('button', { name: 'En renfort en équipe 3' }))
+    // Their «oui» keeps its green under the hatching.
+    const lent = within(row).getByRole('button', { name: 'En renfort en équipe 3, Oui' })
+    expect(lent.firstElementChild).toHaveClass('bg-green-50')
+    fireEvent.click(lent)
     expect(screen.getByRole('dialog', { name: 'En renfort · J3' })).toHaveTextContent('Rixheim PPA 3')
   })
 
-  it('shows the hatching key only when someone is lent', () => {
+  it('always shows the hatching key, with the badge it is given', () => {
     renderSection()
-    expect(screen.queryByText('En renfort')).toBeNull()
+    expect(screen.getByText('En renfort')).toHaveTextContent('1')
+  })
+
+  it('leaves an unanswered cell empty: a dash said nothing more', () => {
+    renderSection()
+    const silent = screen.getByRole('rowheader', { name: /Heurtin/ }).closest('tr')!
+    expect(within(silent).getAllByLabelText('Sans réponse')[0]).toBeEmptyDOMElement()
   })
 
   it('carries the licence badge with the name (#488)', () => {
@@ -188,6 +202,7 @@ describe('PhaseAvailabilitySection', () => {
           unlicensed={new Set()}
           onGame={vi.fn()}
           teamLabel={teamLabel}
+          keyTeam={{ number: 1 }}
         />
       </MemoryRouter>,
     )

@@ -210,3 +210,25 @@ export const EMPTY_PHASE_GRID: PhaseAvailabilityGrid = {
   availableByGame: [],
   selectedByGame: [],
 }
+
+/**
+ * The team whose badge the «En renfort» key wears: one this team's players
+ * were actually lent to, so the key reads like the cells it explains — failing
+ * that, another team of the club in the phase, the lowest number. The key is
+ * always shown, and a badge from the club itself teaches what one looks like
+ * before any loan has happened.
+ */
+export function lentKeyTeam(
+  grid: PhaseAvailabilityGrid,
+  team: Pick<Team, 'id' | 'clubId' | 'phaseId'>,
+  teams: Team[],
+): Pick<Team, 'number' | 'color'> {
+  for (const row of grid.rows) {
+    const lent = row.cells.find((c) => c.lentTo)?.lentTo
+    if (lent) return lent
+  }
+  const other = teams
+    .filter((t) => t.clubId === team.clubId && t.phaseId === team.phaseId && t.id !== team.id)
+    .sort((a, b) => a.number - b.number)[0]
+  return other ?? { number: 1 }
+}

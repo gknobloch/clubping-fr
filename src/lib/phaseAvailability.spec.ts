@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  lentKeyTeam,
   phaseAvailabilityColumns,
   phaseAvailabilityGrid,
   playersRequired,
@@ -124,6 +125,19 @@ describe('phaseAvailabilityGrid — lent to another team of the club', () => {
     expect(grid.availableByGame).toEqual([0, 1])
     // Their answer is still theirs: the ratio is about them, not the pool.
     expect(grid.rows.find((r) => r.player.id === 'p1')!.available).toBe(1)
+  })
+
+  it('gives the key the badge of a team the players were lent to', () => {
+    const grid = phaseAvailabilityGrid(four, ourGames, players, [], [
+      { gameId: 'h2', teamId: 't3', playerIds: ['p2'] },
+    ], club)
+    expect(lentKeyTeam(grid, four, club.teams)).toMatchObject({ id: 't3', number: 3 })
+  })
+
+  it('falls back on another team of the club in the phase, then on «1»', () => {
+    const grid = phaseAvailabilityGrid(four, ourGames, players, [], [], club)
+    expect(lentKeyTeam(grid, four, club.teams)).toMatchObject({ id: 't3' })
+    expect(lentKeyTeam(grid, four, [four])).toEqual({ number: 1 })
   })
 
   it('says nothing without the club, as the grid of one team', () => {

@@ -27,10 +27,10 @@ import type { AvailabilityStatus, Player, Team } from '@/types'
 // ---------------------------------------------------------------------------
 
 // The OUI / PE / NON palette of `Availability.tsx`, as a filled cell.
-const CELL: Record<AvailabilityStatus, { short: string; label: string; cls: string }> = {
-  available: { short: 'OUI', label: 'Oui', cls: 'bg-green-50 text-green-700' },
-  maybe: { short: 'PE', label: 'Peut-être', cls: 'bg-amber-50 text-amber-700' },
-  unavailable: { short: 'NON', label: 'Non', cls: 'bg-accent-50 text-accent-600' },
+const CELL: Record<AvailabilityStatus, { short: string; label: string; bg: string; cls: string }> = {
+  available: { short: 'OUI', label: 'Oui', bg: 'bg-green-50', cls: 'bg-green-50 text-green-700' },
+  maybe: { short: 'PE', label: 'Peut-être', bg: 'bg-amber-50', cls: 'bg-amber-50 text-amber-700' },
+  unavailable: { short: 'NON', label: 'Non', bg: 'bg-accent-50', cls: 'bg-accent-50 text-accent-600' },
 }
 
 const TOTAL_LABEL_CLASS =
@@ -46,6 +46,7 @@ export function PhaseAvailabilitySection({
   unlicensed,
   onGame,
   teamLabel,
+  keyTeam,
 }: {
   grid: PhaseAvailabilityGrid
   columns: PhaseAvailabilityColumn[]
@@ -55,12 +56,13 @@ export function PhaseAvailabilitySection({
   onGame: (gameId: string) => void
   /** How a team of the club is named — «Rixheim PPA 3». */
   teamLabel: (team: Team) => string
+  /** The badge the «En renfort» key wears — `lentKeyTeam`. */
+  keyTeam: Pick<Team, 'number' | 'color'>
 }) {
   // One popover at a time, keyed on its match.
   // One popover at a time: `renforts:<game>` or `lent:<player>:<game>`.
   const [openPopover, setOpenPopover] = useState<string | null>(null)
   const toggle = (key: string) => setOpenPopover((cur) => (cur === key ? null : key))
-  const hasLoans = grid.rows.some((r) => r.cells.some((c) => c.lentTo))
   if (grid.rows.length === 0 || columns.length === 0) return null
   const total = columns.length
 
@@ -77,12 +79,18 @@ export function PhaseAvailabilitySection({
             <span className="h-4 w-6 rounded bg-slate-50 ring-2 ring-inset ring-slate-800" aria-hidden="true" />
             Dans la composition
           </p>
-          {hasLoans && (
-            <p className="flex items-center gap-1.5">
-              <span className="h-4 w-6 rounded bg-slate-50" style={HATCH_STYLE} aria-hidden="true" />
-              En renfort
-            </p>
-          )}
+          {/* Always shown, with a real badge (`lentKeyTeam`): a team the
+              players went to, or another of the club. */}
+          <p className="flex items-center gap-1.5">
+            <span
+              className="flex h-4 w-6 items-center justify-center rounded bg-slate-50"
+              style={HATCH_STYLE}
+              aria-hidden="true"
+            >
+              <TeamDot team={keyTeam} size={12} />
+            </span>
+            En renfort
+          </p>
         </div>
       </div>
 
@@ -165,6 +173,7 @@ export function PhaseAvailabilitySection({
                           title={`En renfort · J${columns[i].number}`}
                           team={cell.lentTo}
                           teamName={teamLabel(cell.lentTo)}
+                          status={cell.status}
                           selected={cell.selected}
                           open={openPopover === key}
                           onToggle={() => toggle(key)}
@@ -180,7 +189,8 @@ export function PhaseAvailabilitySection({
                         } ${cell.selected ? 'ring-2 ring-inset ring-slate-800' : ''}`}
                         aria-label={(v ? v.label : 'Sans réponse') + (cell.selected ? ', dans la composition' : '')}
                       >
-                        {v ? v.short : '—'}
+                        {/* No answer is an empty box: a dash said nothing more. */}
+                        {v?.short}
                       </span>
                     </td>
                   )
@@ -261,13 +271,16 @@ const STACKED_AVATARS = 2
 const POPOVER_WIDTH = 240
 const POPOVER_MARGIN = 8
 
-/** Diagonal stripes — «not here, elsewhere». slate-300 on the cell's grey. */
+/**
+ * Diagonal stripes — «not here, elsewhere». Translucent slate, because they
+ * lie over the grey of no answer and over the tint of one alike.
+ */
 const HATCH_STYLE = {
-  backgroundImage: 'repeating-linear-gradient(45deg, #cbd5e1 0 2px, transparent 2px 6px)',
+  backgroundImage: 'repeating-linear-gradient(45deg, rgba(15, 23, 42, 0.18) 0 2px, transparent 2px 6px)',
 }
 
 /** A team as the app shows one everywhere: its number, in its colour. */
-function TeamDot({ team, size }: { team: Team; size: number }) {
+function TeamDot({ team, size }: { team: Pick<Team, 'number' | 'color'>; size: number }) {
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white"
@@ -439,6 +452,7 @@ function LentCell({
   title,
   team,
   teamName,
+  status,
   selected,
   open,
   onToggle,
@@ -446,6 +460,8 @@ function LentCell({
   title: string
   team: Team
   teamName: string
+  /** Their answer keeps its tint under the hatching: a «oui» lent away is a yes. */
+  status?: AvailabilityStatus
   /** Also on this line-up — a contradiction, and the frame keeps saying so. */
   selected: boolean
   open: boolean
@@ -453,15 +469,19 @@ function LentCell({
 }) {
   return (
     <PopoverCell
-      label={`En renfort en équipe ${team.number}` + (selected ? ', dans la composition' : '')}
+      label={
+        `En renfort en équipe ${team.number}` +
+        (status ? `, ${CELL[status].label}` : '') +
+        (selected ? ', dans la composition' : '')
+      }
       title={title}
       open={open}
       onToggle={onToggle}
       trigger={
         <span
-          className={`flex h-8 w-full items-center justify-center rounded-md bg-slate-50 ${
-            selected ? 'ring-2 ring-inset ring-slate-800' : ''
-          }`}
+          className={`flex h-8 w-full items-center justify-center rounded-md ${
+            status ? CELL[status].bg : 'bg-slate-50'
+          } ${selected ? 'ring-2 ring-inset ring-slate-800' : ''}`}
           style={HATCH_STYLE}
         >
           <TeamDot team={team} size={22} />

@@ -1,5 +1,6 @@
 import { fireEvent, screen, within } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
+import { AVAIL } from '@/constants/availability'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import { PHONE_WIDTH, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type {
@@ -100,6 +101,8 @@ it('donne le ratio de chaque joueur sur toute la phase', () => {
   expect(screen.getByTestId('phase-cell-p1-g3').props.accessibilityLabel).toBe('Peut-être')
   expect(screen.getByTestId('phase-cell-p1-g1').props.accessibilityLabel).toBe('Oui, dans la composition')
   expect(screen.getByTestId('phase-cell-p2-g1').props.accessibilityLabel).toBe('Sans réponse')
+  // Une boîte vide : le tiret ne disait rien de plus.
+  expect(within(screen.getByTestId('phase-cell-p2-g1')).queryByText('—')).toBeNull()
 })
 
 it('abrège le prénom sur un téléphone', () => {
@@ -236,8 +239,13 @@ describe('un joueur prêté à une autre équipe du club', () => {
   })
 
   it('hachure sa cellule, avec le badge de l’équipe qui l’aligne', () => {
-    expect(screen.getByTestId('phase-cell-p2-g4').props.accessibilityLabel).toBe('En renfort en équipe 3')
-    expect(screen.getByTestId('phase-lent-key')).toBeTruthy()
+    // Sa réponse garde sa couleur sous les hachures : il avait dit oui.
+    expect(screen.getByTestId('phase-cell-p2-g4').props.accessibilityLabel).toBe('En renfort en équipe 3, Oui')
+    expect(StyleSheet.flatten(screen.getByTestId('phase-cell-p2-g4').props.style).backgroundColor).toBe(
+      AVAIL.available.bg,
+    )
+    // La clé porte le badge de l'équipe où il est parti.
+    expect(within(screen.getByTestId('phase-lent-key')).getByText('3')).toBeTruthy()
   })
 
   it('compte le prêt dans sa colonne « Sél. », pas dans les disponibles', () => {
@@ -260,10 +268,11 @@ describe('un joueur prêté à une autre équipe du club', () => {
   })
 })
 
-it('ne montre la clé des prêts que s’il y en a', () => {
+it('montre toujours la clé des prêts, avec un badge du club', () => {
   setWindowSize(PHONE_WIDTH)
   render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
-  expect(screen.queryByTestId('phase-lent-key')).toBeNull()
+  // Aucun prêt ici, et aucune autre équipe du club dans la phase : « 1 ».
+  expect(within(screen.getByTestId('phase-lent-key')).getByText('1')).toBeTruthy()
 })
 
 it('place le popover au-dessus de la cellule, sans sortir de la feuille', () => {

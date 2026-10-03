@@ -8,6 +8,7 @@ import { getTeamName } from '@/utils/roles'
 import { useOpenPlayer } from '@/utils/openFiche'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import {
+  lentKeyTeam,
   phaseAvailabilityColumns,
   phaseAvailabilityGrid,
   playersRequired,
@@ -124,7 +125,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
     popover?.playerId && popoverIndex >= 0
       ? grid.rows.find((r) => r.player.id === popover.playerId)?.cells[popoverIndex].lentTo
       : undefined
-  const hasLoans = grid.rows.some((r) => r.cells.some((c) => c.lentTo))
+  const keyTeam = lentKeyTeam(grid, team, teams)
 
   const leaveFor = (go: () => void) => {
     onClose()
@@ -152,7 +153,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
                 {phaseLabel ? <Text style={s.subtitleInline}>{`  ${phaseLabel}`}</Text> : null}
               </Text>
               <CompositionKey />
-              {hasLoans && <LentKey />}
+              <LentKey team={keyTeam} />
             </>
           ) : (
             <View style={s.titleBlock}>
@@ -160,7 +161,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
               {phaseLabel ? <Text style={s.subtitle} numberOfLines={1}>{phaseLabel}</Text> : null}
               <View style={s.keyLine}>
                 <CompositionKey />
-                {hasLoans && <LentKey />}
+                <LentKey team={keyTeam} />
               </View>
             </View>
           )}

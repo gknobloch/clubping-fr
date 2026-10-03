@@ -13,7 +13,7 @@ import {
   type PhaseAvailabilityGrid,
   type PhaseAvailabilityRow,
 } from '@shared/lib/phaseAvailability'
-import type { Player, Team } from '@shared/types'
+import type { AvailabilityStatus, Player, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
 // Les disponibilités de toute la phase, pour une équipe (#623)
@@ -196,6 +196,7 @@ export function PhaseAvailabilityTable({
                       <LentCell
                         testID={`phase-cell-${row.player.id}-${cell.gameId}`}
                         team={cell.lentTo}
+                        status={cell.status}
                         selected={cell.selected}
                         height={m.cell}
                         onPress={onLent && ((anchor) => onLent(row.player.id, cell.gameId, anchor))}
@@ -217,9 +218,8 @@ export function PhaseAvailabilityTable({
                         (a ? a.label : 'Sans réponse') + (cell.selected ? ', dans la composition' : '')
                       }
                     >
-                      <Text style={[s.cellText, { color: a ? a.color : colors.tabInactive }]}>
-                        {a ? a.short : '—'}
-                      </Text>
+                      {/* No answer is an empty box: a dash said nothing more. */}
+                      {a && <Text style={[s.cellText, { color: a.color }]}>{a.short}</Text>}
                     </View>
                   </View>
                 )
@@ -296,8 +296,11 @@ export interface RenfortsAnchor {
   height: number
 }
 
-/** slate-300: visible on the cell's grey, quieter than any answer's colour. */
-const HATCH_COLOR = '#cbd5e1'
+/**
+ * Translucent slate: it has to read over the grey of no answer *and* over the
+ * green, amber and red of one, since a lent player keeps their answer's tint.
+ */
+const HATCH_COLOR = 'rgba(15, 23, 42, 0.18)'
 
 /** Past this many, the stack says «+N» rather than growing past its column. */
 const STACKED_AVATARS = 2
@@ -383,32 +386,46 @@ function Hatch({ id }: { id: string }) {
  * hatched, because they are not available to this team whatever they
  * answered, with that team's badge — its number in its colour, the way the
  * app shows a team everywhere — so which team reads without a tap. The tap
- * names it.
+ * names it. The answer's tint stays under the hatching: a «oui» lent away is
+ * still the player having said yes.
  */
 function LentCell({
   testID,
   team,
+  status,
   selected,
   height,
   onPress,
 }: {
   testID: string
   team: Team
+  status?: AvailabilityStatus
   /** Also on this line-up — a contradiction, and the frame keeps saying so. */
   selected: boolean
   height: number
   onPress?: (anchor: RenfortsAnchor | null) => void
 }) {
   const ref = useRef<View>(null)
+  const a = status ? AVAIL[status] : undefined
   return (
     <TouchableOpacity
       ref={ref}
       testID={testID}
-      style={[s.cell, s.cellEmpty, s.lentCell, { height }, selected && s.cellSelected]}
+      style={[
+        s.cell,
+        a ? { backgroundColor: a.bg } : s.cellEmpty,
+        s.lentCell,
+        { height },
+        selected && s.cellSelected,
+      ]}
       hitSlop={6}
       disabled={!onPress}
       accessibilityRole="button"
-      accessibilityLabel={`En renfort en équipe ${team.number}` + (selected ? ', dans la composition' : '')}
+      accessibilityLabel={
+        `En renfort en équipe ${team.number}` +
+        (a ? `, ${a.label}` : '') +
+        (selected ? ', dans la composition' : '')
+      }
       onPress={() => onPress && pressWithAnchor(ref, onPress)}
     >
       <Hatch id={`hatch-${testID}`} />
@@ -417,12 +434,17 @@ function LentCell({
   )
 }
 
-/** The hatching's key, beside the frame's — shown only when someone is lent. */
-export function LentKey() {
+/**
+ * The hatching's key, beside the frame's — always shown, and wearing a real
+ * badge (`lentKeyTeam`): a team the players went to, or another of the club,
+ * so the key looks like the cells it explains.
+ */
+export function LentKey({ team }: { team: Pick<Team, 'number' | 'color'> }) {
   return (
     <View style={s.key} testID="phase-lent-key">
-      <View style={[s.keySwatch, s.cellEmpty, s.lentCell]}>
+      <View style={[s.keySwatch, s.cellEmpty, s.lentCell, s.keySwatchCentred]}>
         <Hatch id="hatch-key" />
+        <TeamColorBadge color={team.color} number={team.number} size={12} />
       </View>
       <Text style={s.keyText} numberOfLines={1}>En renfort</Text>
     </View>
@@ -532,5 +554,6 @@ const s = StyleSheet.create({
 
   key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   keySwatch: { width: 22, height: 16, borderRadius: 4 },
+  keySwatchCentred: { alignItems: 'center', justifyContent: 'center' },
   keyText: { fontSize: 12, color: colors.textSecondary },
 })

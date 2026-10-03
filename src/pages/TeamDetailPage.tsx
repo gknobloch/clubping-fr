@@ -15,6 +15,7 @@ import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/ic
 import { PhaseAvailabilitySection } from '@/components/PhaseAvailabilitySection'
 import {
   EMPTY_PHASE_GRID,
+  lentKeyTeam,
   phaseAvailabilityColumns,
   phaseAvailabilityGrid,
   playersRequired,
@@ -164,6 +165,7 @@ export function TeamDetailPage() {
         unlicensed={unlicensed}
         onGame={(gameId) => setQuickGame({ gameId, teamId: team.id })}
         teamLabel={(t) => getTeamName(t, clubs)}
+        keyTeam={lentKeyTeam(phaseGrid, team, teams)}
       />
 
       {/* Players (left) / Games (right) — stacked on narrow viewports */}
