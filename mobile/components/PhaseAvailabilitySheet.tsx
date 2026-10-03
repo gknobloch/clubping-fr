@@ -27,16 +27,16 @@ import { Avatar } from '@/components/Avatar'
 import type { Player, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
-// Disponibilités de la phase (#623) — opened from the fiche équipe.
+// Le planning de la phase (#623) — opened from «Tous les matchs».
 //
 // A sheet, not a pushed screen: a pushed screen keeps the app header and the
 // tab bar, ~120pt of a phone on its side that is ~400pt tall, and a team of
 // six with both totals does not fit in what is left. The sheet covers both,
 // and turns with the phone (`rotates`).
 //
-// It shows the phase of the team it was opened from — the fiche is already
-// one team in one phase, so a phase switcher would be a second answer to a
-// question the caller has settled. The subtitle names it.
+// It shows the phase of the team it is given — the screen that opens it has
+// already chosen one with its own switcher, so a second switcher here would
+// be a second answer to a question settled underneath. The title names it.
 //
 // Leaving it is a navigation: a name opens the fiche, a journée the match,
 // and the sheet closes first. A second sheet on top would be portrait-only

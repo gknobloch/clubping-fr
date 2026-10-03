@@ -8,7 +8,7 @@ import type {
 import { POPOVER_WIDTH, PhaseAvailabilitySheet, popoverPlacement } from '@/components/PhaseAvailabilitySheet'
 
 // ---------------------------------------------------------------------------
-// Disponibilités de la phase (#623)
+// Planning de la phase (#623)
 //
 // A captain's request: the whole phase on one screen, Oui / PE / Non per
 // journée and «5/7» per player. Seven journées do not fit a phone standing up,

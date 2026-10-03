@@ -62,7 +62,7 @@ export function PhaseAvailabilitySection({
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4 pb-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Disponibilités de la phase
+          Planning de la phase
         </h2>
         {/* OUI / PE / NON need no key — they are the app's own answers,
             everywhere. The frame is this grid's alone. */}

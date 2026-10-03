@@ -1,9 +1,7 @@
 import { Linking } from 'react-native'
 import { fireEvent, screen } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
-import type {
-  Club, Competition, Division, Game, Group, MatchDay, Phase, Player, Team, User,
-} from '@shared/types'
+import type { Club, Competition, Division, Group, Phase, Player, Team, User } from '@shared/types'
 import TeamDetailScreen from '@/app/(tabs)/(detail)/team/[id]'
 
 // ---------------------------------------------------------------------------
@@ -23,10 +21,9 @@ const mockData = {
   phases: [] as Phase[],
   divisions: [] as Division[],
   groups: [] as Group[],
-  matchDays: [] as MatchDay[],
-  games: [] as Game[],
+  matchDays: [],
+  games: [],
   gameSelections: [],
-  gameAvailabilities: [],
   // Per-season facts about a licensee (#482, #488) — none in these fixtures.
   seasons: [] as { id: string; displayName: string; status: string }[],
   playerSeasonLicences: [] as { seasonId: string; playerId: string }[],
@@ -41,11 +38,10 @@ const mockData = {
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
-const mockPush = jest.fn()
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: 't1' }),
   useNavigation: () => ({ setOptions: jest.fn() }),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: jest.fn() }),
 }))
 // The logo is fetched over the network; the screen under test is the layout
 // around it, not the image.
@@ -94,9 +90,6 @@ let openURL: jest.SpiedFunction<typeof Linking.openURL>
 
 beforeEach(() => {
   updateTeam.mockClear()
-  mockPush.mockClear()
-  mockData.matchDays = []
-  mockData.games = []
   mockAuth.user = asUser(teammate)
   mockData.teams = [team]
   mockData.players = [captain, teammate]
@@ -287,24 +280,5 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
     openPicker()
 
     expect(screen.getByText('Hugo Bernard')).toBeTruthy()
-  })
-})
-
-describe('Fiche équipe — les disponibilités de la phase (#623)', () => {
-  it('ouvre la grille de toute la phase dans une feuille, sans quitter la fiche', () => {
-    mockData.matchDays = [{ id: 'md1', groupId: 'g1', number: 1, date: '2026-10-08' }]
-    mockData.games = [{ id: 'gm1', matchDayId: 'md1', homeTeamId: 't1', awayTeamId: 'opp' }]
-    render(<TeamDetailScreen />)
-
-    fireEvent.press(screen.getByTestId('team-phase-availability'))
-
-    expect(screen.getByTestId('phase-sheet')).toBeTruthy()
-    expect(mockPush).not.toHaveBeenCalled()
-  })
-
-  it('ne propose rien à une équipe sans calendrier', () => {
-    render(<TeamDetailScreen />)
-
-    expect(screen.queryByTestId('team-phase-availability')).toBeNull()
   })
 })

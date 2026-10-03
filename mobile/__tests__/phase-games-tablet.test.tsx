@@ -116,13 +116,36 @@ beforeEach(() => {
 afterEach(resetWindowSize)
 
 describe('sur un téléphone', () => {
-  it('reste la colonne qu’il a toujours été', () => {
+  it('reste une colonne : deux portes, puis les matchs', () => {
     setWindowSize(PHONE_WIDTH)
 
     render(<PhaseGamesScreen />)
 
+    expect(screen.getByText('Planning de la phase')).toBeTruthy()
+    expect(screen.getByText('Voir la fiche équipe')).toBeTruthy()
     expect(screen.getByText('Matchs (2)')).toBeTruthy()
     expect(screen.queryByTestId('rail-resume')).toBeNull()
+  })
+
+  // #623 : le planning dit déjà « 3/7 » dans sa colonne « Sél. », à côté des
+  // réponses qui l'expliquent — l'effectif avec ses comptes en était une copie.
+  it('ne liste plus l’effectif, que le planning montre', () => {
+    setWindowSize(PHONE_WIDTH)
+
+    render(<PhaseGamesScreen />)
+
+    expect(screen.queryByText('Joueurs (2)')).toBeNull()
+  })
+
+  it('ouvre le planning de la phase dans une feuille, sur place', () => {
+    setWindowSize(PHONE_WIDTH)
+    render(<PhaseGamesScreen />)
+
+    fireEvent.press(screen.getByTestId('team-phase-planning'))
+
+    expect(screen.getByTestId('phase-sheet')).toBeTruthy()
+    expect(screen.getByTestId('phase-row-p1')).toBeTruthy()
+    expect(mockPush).not.toHaveBeenCalled()
   })
 })
 
@@ -132,14 +155,15 @@ describe('sur une tablette', () => {
     render(<PhaseGamesScreen />, { metrics: TABLET })
   }
 
-  it('ouvre sur le Résumé, l’effectif à côté', () => {
+  it('ouvre sur le Résumé : le planning et la fiche équipe', () => {
     renderTablet()
 
     expect(screen.getByTestId('rail-resume').props.accessibilityState).toEqual({
       selected: true,
     })
     // Ce que l'écran montrait en haut : qui est là, et ce que chacun a joué.
-    expect(screen.getByText('Joueurs (2)')).toBeTruthy()
+    expect(screen.getByTestId('team-phase-planning')).toBeTruthy()
+    expect(screen.getByText('Voir la fiche équipe')).toBeTruthy()
   })
 
   it('donne une entrée par journée, l’adversaire et la date', () => {
@@ -158,7 +182,7 @@ describe('sur une tablette', () => {
 
     // Le détail du match, là où était le Résumé.
     expect(screen.getByText('Disponibilités')).toBeTruthy()
-    expect(screen.queryByText('Joueurs (2)')).toBeNull()
+    expect(screen.queryByTestId('team-phase-planning')).toBeNull()
     expect(mockPush).not.toHaveBeenCalled()
   })
 

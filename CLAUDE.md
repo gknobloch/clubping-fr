@@ -241,7 +241,7 @@ invisible dans le diff comme dans la revue.
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
 
-### Disponibilités de la phase (#623)
+### Planning de la phase (#623)
 - **La matrice des Journées lit trois journées pour toutes les équipes ; ceci
   lit toute la phase pour une seule.** Demande d'un capitaine : le planning
   prévisionnel, « 5/7 » par joueur. Mêmes réponses, l'autre axe.
@@ -281,8 +281,13 @@ invisible dans le diff comme dans la revue.
   l'app. Sur le web, `border-separate` et non `border-collapse` : une bordure
   fusionnée laisse un pixel à côté d'une cellule collante, où les journées
   défilées transparaissent.
-- **Dans l'app, une feuille, pas un écran poussé** (`PhaseAvailabilitySheet`,
-  ouverte depuis la fiche équipe). Un téléphone couché fait ~400 pt de haut ;
+- **Dans l'app, une feuille, pas un écran poussé** (`PhaseAvailabilitySheet`),
+  ouverte par « Planning de la phase » depuis **« Tous les matchs »**
+  (`team/phase-games`), pas depuis la fiche équipe : le planning parle des
+  matchs, et c'est là que l'accueil mène un capitaine. L'écran n'y liste plus
+  l'effectif avec ses comptes — la colonne « Sél. » du planning en était la
+  même chose ; il garde deux entrées, le planning et « Voir la fiche équipe »,
+  puis les matchs. Un téléphone couché fait ~400 pt de haut ;
   l'en-tête de l'app, la barre d'onglets et un sélecteur de phase en
   prenaient ~150, et six joueurs + les deux totaux ne tenaient plus. La
   feuille couvre l'en-tête et la barre ; couchée, elle est `dense` (marges =
@@ -293,8 +298,8 @@ invisible dans le diff comme dans la revue.
   grille, et sa clé (« Dans la composition », `CompositionKey`) tient dans la
   ligne de titre. Le titre est l'équipe et sa phase, sans « Disponibilités » :
   le bouton qui ouvre la feuille l'a déjà dit.
-- **Pas de sélecteur de phase** : la fiche est déjà une équipe dans une
-  phase, et le sous-titre la nomme.
+- **Pas de sélecteur de phase dans la feuille** : l'écran qui l'ouvre en a
+  déjà un, et le titre nomme la phase choisie.
 - **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit
   rien — une feuille ouverte téléphone couché redressait l'écran sous les
   mains du membre. Les autres feuilles de l'app ne le déclarent pas encore.
