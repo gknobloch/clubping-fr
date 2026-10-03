@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
@@ -108,7 +108,8 @@ export function TrainingEditorSheet({
 
   return (
     <Sheet onClose={onClose} testID="training-editor" maxHeight="92%">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.frame}>
+      {/* The keyboard is `Sheet`'s to handle (#628): the panel rises above it. */}
+      <View style={s.frame}>
         <Text style={selection.title}>{isNew ? 'Nouvel entraînement' : "Modifier l'entraînement"}</Text>
         <ScrollView style={s.body} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
           {isNew && (
@@ -267,7 +268,7 @@ export function TrainingEditorSheet({
           cancelTestID="training-editor-cancel"
           saveTestID="training-editor-save"
         />
-      </KeyboardAvoidingView>
+      </View>
     </Sheet>
   )
 }

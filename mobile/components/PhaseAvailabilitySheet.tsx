@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native'
+import { Pressable, ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useMemo, useRef, useState } from 'react'
@@ -35,7 +35,7 @@ import type { Player, Team } from '@shared/types'
 // A sheet, not a pushed screen: a pushed screen keeps the app header and the
 // tab bar, ~120pt of a phone on its side that is ~400pt tall, and a team of
 // six with both totals does not fit in what is left. The sheet covers both,
-// and turns with the phone (`rotates`).
+// and turns with the phone, as every sheet does (#625).
 //
 // It shows the phase of the team it is given — the screen that opens it has
 // already chosen one with its own switcher, so a second switcher here would
@@ -47,16 +47,15 @@ import type { Player, Team } from '@shared/types'
 // would be a door to an empty room.
 //
 // Leaving the sheet is a navigation: a name opens the fiche, a journée the
-// match, and the sheet closes first. A second sheet on top would be portrait-only
-// on iOS, under a member who is holding the phone sideways — which is also
-// why the renforts' names open in a popover drawn *inside* this sheet rather
-// than in a Modal of its own.
+// match, and the sheet closes first. The renforts' names open in a popover
+// drawn *inside* this sheet rather than in a Modal of its own — chosen when a
+// second sheet would have been portrait-only on iOS. Every sheet turns since
+// #625; the popover stays, anchored to the cell it explains.
 // ---------------------------------------------------------------------------
 
 export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose: () => void }) {
   const router = useRouter()
   const openPlayer = useOpenPlayer()
-  const { height } = useWindowDimensions()
   const { isTablet, isLandscape } = useLayout()
   const dense = !isTablet && isLandscape
 
@@ -71,10 +70,6 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
       testID="phase-sheet"
       wide
       dense={dense}
-      rotates
-      // Sideways, the whole height bar a sliver of backdrop: that sliver is
-      // what says «sheet», and every other point is a row.
-      maxHeight={dense ? height - 12 : '85%'}
     >
       <PhaseAvailabilityPanel
         team={team}

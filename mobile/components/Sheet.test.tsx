@@ -1,15 +1,23 @@
-import { fireEvent, screen } from '@testing-library/react-native'
-import { StyleSheet, Text } from 'react-native'
-import { Modal } from 'react-native'
+import { act, fireEvent, screen, within } from '@testing-library/react-native'
+import { Keyboard, Modal, Platform, StyleSheet, Text, type KeyboardEvent } from 'react-native'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import {
   PHONE_WIDTH,
+  TABLET_LANDSCAPE,
   TABLET_LARGE,
   TABLET_SMALL,
   resetWindowSize,
   setWindowSize,
 } from '@/__tests__/support/window'
-import { DIALOG_MAX_WIDTH, Sheet, WIDE_DIALOG_MAX_WIDTH, sheetContentWidth } from './Sheet'
+import {
+  DIALOG_MAX_WIDTH,
+  MODAL_ORIENTATIONS,
+  SHEET_MAX_WIDTH,
+  SIDEWAYS_GAP,
+  Sheet,
+  WIDE_DIALOG_MAX_WIDTH,
+  sheetContentWidth,
+} from './Sheet'
 
 // ---------------------------------------------------------------------------
 // The app's one modal container (#446). Three screens carried the same
@@ -30,7 +38,8 @@ function renderSheet() {
 }
 
 const panel = () => StyleSheet.flatten(screen.getByTestId('sheet').props.style)
-const backdrop = () => StyleSheet.flatten(screen.getByTestId('sheet-backdrop').props.style)
+/** What lays the panel out: the dimmed screen, its padding, where the panel sits. */
+const frame = () => StyleSheet.flatten(screen.getByTestId('sheet-frame').props.style)
 
 describe('on a phone', () => {
   beforeEach(() => {
@@ -39,9 +48,11 @@ describe('on a phone', () => {
   })
 
   it('rises from the bottom edge, full width, rounded at the top', () => {
-    expect(backdrop().justifyContent).toBe('flex-end')
+    expect(frame().justifyContent).toBe('flex-end')
     expect(panel().borderTopLeftRadius).toBe(20)
-    expect(panel().maxWidth).toBeUndefined()
+    // The reading-column cap is wider than any phone standing up.
+    expect(panel().width).toBe('100%')
+    expect(SHEET_MAX_WIDTH).toBeGreaterThan(PHONE_WIDTH.width)
   })
 
   it('wears the grab handle that says so', () => {
@@ -56,8 +67,8 @@ describe('on a tablet', () => {
   })
 
   it('becomes a dialog, centred and capped', () => {
-    expect(backdrop().justifyContent).toBe('center')
-    expect(backdrop().alignItems).toBe('center')
+    expect(frame().justifyContent).toBe('center')
+    expect(frame().alignItems).toBe('center')
     expect(panel().maxWidth).toBe(DIALOG_MAX_WIDTH)
   })
 
@@ -74,13 +85,10 @@ it('is a dialog at the narrow end of the tablet range too', () => {
   setWindowSize(TABLET_SMALL)
   renderSheet()
 
-  expect(backdrop().justifyContent).toBe('center')
+  expect(frame().justifyContent).toBe('center')
 })
 
 it('still closes on the backdrop once it is a dialog', () => {
-  // Tapping the panel itself is held back by `onStartShouldSetResponder`, which
-  // is a responder-system answer the test renderer has no way to give — the
-  // simulator is the check for that half.
   setWindowSize(TABLET_LARGE)
   renderSheet()
 
@@ -89,47 +97,270 @@ it('still closes on the backdrop once it is a dialog', () => {
   expect(onClose).toHaveBeenCalled()
 })
 
-// The phase grid (#623): a sheet a phone is turned sideways to read.
-describe('a sheet read sideways', () => {
-  it('turns with the phone, where iOS would otherwise force it upright', () => {
-    setWindowSize({ width: 844, height: 390 })
-    render(
-      <Sheet onClose={onClose} rotates dense>
-        <Text>Grille</Text>
-      </Sheet>,
-      { metrics: PHONE_LANDSCAPE },
-    )
-    expect(screen.UNSAFE_getByType(Modal).props.supportedOrientations).toEqual([
-      'portrait', 'landscape-left', 'landscape-right',
-    ])
-  })
-
-  it('leaves every other sheet as it was', () => {
+// ---------------------------------------------------------------------------
+// A sheet scrolls from wherever the finger lands (#625). The backdrop used to
+// wrap the panel, so the panel claimed every touch to keep a tap on it from
+// closing the sheet — and the view holding the responder kept the drag from
+// the scroll view under it. A sheet scrolled only from a button. The simulator
+// is what showed it; here the structure that makes it impossible is pinned.
+// ---------------------------------------------------------------------------
+describe('the backdrop sits behind the panel, not around it', () => {
+  beforeEach(() => {
     setWindowSize(PHONE_WIDTH)
     renderSheet()
-    expect(screen.UNSAFE_getByType(Modal).props.supportedOrientations).toBeUndefined()
   })
 
-  it('gives the notch and the home indicator as its only margins when dense', () => {
-    setWindowSize({ width: 844, height: 390 })
-    render(
-      <Sheet onClose={onClose} dense>
-        <Text>Grille</Text>
-      </Sheet>,
-      { metrics: PHONE_LANDSCAPE },
+  it('holds nothing: the panel is its sibling', () => {
+    expect(within(screen.getByTestId('sheet-backdrop')).queryByTestId('sheet')).toBeNull()
+    expect(within(screen.getByTestId('sheet-frame')).getByTestId('sheet')).toBeTruthy()
+  })
+
+  it('leaves the touch to whatever is in the panel', () => {
+    expect(screen.getByTestId('sheet').props.onStartShouldSetResponder).toBeUndefined()
+  })
+
+  it('so a tap on the panel no longer reaches it', () => {
+    fireEvent.press(screen.getByText('Feuille de match'))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('and a tap on it still closes the sheet', () => {
+    fireEvent.press(screen.getByTestId('sheet-backdrop'))
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('is a button VoiceOver can name, rather than a label made of every line', () => {
+    // Wrapping the panel, it was one element whose label ran the whole sheet
+    // together. Behind it, it is the way out — the only one some sheets have.
+    expect(screen.getByRole('button', { name: 'Fermer' })).toBe(screen.getByTestId('sheet-backdrop'))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A phone on its side (#625). iOS presents a `Modal` portrait-only unless told
+// otherwise, so every sheet turned the screen upright under the member's
+// hands; and the panel was laid out for 844pt of height and no notch.
+// ---------------------------------------------------------------------------
+const SIDEWAYS = { width: PHONE_LANDSCAPE.frame.width, height: PHONE_LANDSCAPE.frame.height }
+
+function renderSideways(props: Partial<Parameters<typeof Sheet>[0]> = {}) {
+  setWindowSize(SIDEWAYS)
+  render(
+    <Sheet onClose={onClose} {...props}>
+      <Text>Feuille de match</Text>
+    </Sheet>,
+    { metrics: PHONE_LANDSCAPE },
+  )
+}
+
+const orientations = () => screen.UNSAFE_getByType(Modal).props.supportedOrientations
+
+describe('every sheet turns with the device', () => {
+  it('on a phone standing up', () => {
+    setWindowSize(PHONE_WIDTH)
+    renderSheet()
+    expect(orientations()).toEqual(MODAL_ORIENTATIONS)
+  })
+
+  it('on a phone on its side', () => {
+    renderSideways()
+    expect(orientations()).toEqual(MODAL_ORIENTATIONS)
+  })
+
+  it('on a tablet, whichever way up — a shorter list than iOS’s default would take one away', () => {
+    setWindowSize(TABLET_LANDSCAPE)
+    renderSheet()
+    // An iPad allows every orientation by default; naming three would have
+    // pinned an upside-down slab the right way round.
+    expect(orientations()).toEqual(
+      expect.arrayContaining(['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right']),
     )
+  })
+})
+
+describe('a sheet on a phone on its side', () => {
+  it('keeps the panel off the notch at either end', () => {
+    renderSideways()
+    expect(frame()).toMatchObject({ paddingLeft: 59, paddingRight: 59 })
+  })
+
+  it('stops at a reading column, centred, rather than spanning 844pt', () => {
+    renderSideways()
+    expect(panel()).toMatchObject({ width: '100%', maxWidth: SHEET_MAX_WIDTH, alignSelf: 'center' })
+    expect(sheetContentWidth({ width: SIDEWAYS.width, isTablet: false, insets: PHONE_LANDSCAPE.insets }))
+      .toBe(SHEET_MAX_WIDTH - 48)
+  })
+
+  it('takes the height bar a sliver, whatever share the caller asked for standing up', () => {
+    // 60% of 390 is 234pt: shorter than three answers and their title.
+    renderSideways({ maxHeight: '60%' })
+    expect(panel().maxHeight).toBe(SIDEWAYS.height - SIDEWAYS_GAP)
+  })
+
+  it('pads its foot for a 21pt home indicator, not a 34pt one', () => {
+    renderSideways()
+    expect(panel().paddingBottom).toBe(24)
+  })
+
+  it('still wears the grab handle — it is still a sheet', () => {
+    renderSideways()
+    expect(screen.getByTestId('sheet-handle')).toBeTruthy()
+    expect(frame().justifyContent).toBe('flex-end')
+  })
+})
+
+describe('a sheet on a phone standing up is as it was', () => {
+  beforeEach(() => {
+    setWindowSize(PHONE_WIDTH)
+    render(
+      <Sheet onClose={onClose} maxHeight="60%">
+        <Text>Feuille de match</Text>
+      </Sheet>,
+    )
+  })
+
+  it('keeps the share it was given', () => {
+    expect(panel().maxHeight).toBe('60%')
+  })
+
+  it('keeps 40pt above the home indicator, and no side padding on the backdrop', () => {
+    expect(panel().paddingBottom).toBe(40)
+    expect(frame()).toMatchObject({ paddingLeft: 0, paddingRight: 0 })
+  })
+})
+
+// The phase grid (#623): a sheet a phone is turned sideways to read.
+describe('a dense sheet', () => {
+  it('gives the notch and the home indicator as its only margins', () => {
+    renderSideways({ dense: true })
     expect(panel()).toMatchObject({ paddingTop: 8, paddingBottom: 21, paddingLeft: 59, paddingRight: 59 })
     expect(sheetContentWidth({ width: 844, isTablet: false, dense: true, insets: { left: 59, right: 59 } }))
       .toBe(844 - 118)
   })
 
-  it('widens a dialog for a grid on a tablet', () => {
-    setWindowSize(TABLET_LARGE)
+  it('takes the whole width: neither the column cap nor the backdrop’s safe padding', () => {
+    renderSideways({ dense: true })
+    expect(panel().maxWidth).toBeUndefined()
+    expect(frame().paddingLeft).toBeUndefined()
+  })
+
+  it('takes the height bar the same sliver', () => {
+    renderSideways({ dense: true })
+    expect(panel().maxHeight).toBe(SIDEWAYS.height - SIDEWAYS_GAP)
+  })
+})
+
+it('widens a dialog for a grid on a tablet', () => {
+  setWindowSize(TABLET_LARGE)
+  render(
+    <Sheet onClose={onClose} wide>
+      <Text>Grille</Text>
+    </Sheet>,
+  )
+  expect(panel().maxWidth).toBe(WIDE_DIALOG_MAX_WIDTH)
+})
+
+it('is not a sideways phone on a tablet on its side: still a dialog, at its own height', () => {
+  setWindowSize(TABLET_LANDSCAPE)
+  renderSheet()
+  expect(frame().justifyContent).toBe('center')
+  expect(panel().maxHeight).toBe('85%')
+})
+
+// ---------------------------------------------------------------------------
+// The keyboard (#628). Each sheet with a field used to handle it itself, and
+// four of six did not: sideways, a channel's link field was typed blind under
+// it. The panel now rises above the keyboard, capped to what it leaves.
+// ---------------------------------------------------------------------------
+describe('a sheet over the keyboard', () => {
+  type Listener = (e: KeyboardEvent) => void
+  let listeners: Record<string, Listener[]>
+
+  beforeEach(() => {
+    listeners = {}
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((name: string, fn: Listener) => {
+      ;(listeners[name] ??= []).push(fn)
+      return { remove: () => { listeners[name] = listeners[name].filter((l) => l !== fn) } }
+    }) as unknown as typeof Keyboard.addListener)
+  })
+  afterEach(() => jest.restoreAllMocks())
+
+  /** The keyboard's top edge lands at `screenY`, as iOS reports it. */
+  const keyboardTo = (screenY: number, height = 336) =>
+    act(() => {
+      for (const fn of listeners.keyboardWillChangeFrame ?? []) {
+        fn({ endCoordinates: { screenX: 0, screenY, width: 390, height } } as KeyboardEvent)
+      }
+    })
+  const keyboardAway = () =>
+    act(() => {
+      for (const fn of listeners.keyboardWillHide ?? []) fn({} as KeyboardEvent)
+    })
+
+  it('sits a phone’s panel on the keyboard’s top edge, capped to what it leaves', () => {
+    setWindowSize(PHONE_WIDTH)
+    renderSheet()
+    keyboardTo(PHONE_WIDTH.height - 336)
+
+    expect(frame().paddingBottom).toBe(336)
+    // Under the status bar (47 on this phone) and a sliver of backdrop.
+    expect(panel().maxHeight).toBe(PHONE_WIDTH.height - 336 - 47 - SIDEWAYS_GAP)
+    // The home indicator is under the keyboard now, not under the panel.
+    expect(panel().paddingBottom).toBe(24)
+  })
+
+  it('does the same sideways, where it matters most: ~200 of 390pt', () => {
+    setWindowSize(SIDEWAYS)
     render(
-      <Sheet onClose={onClose} wide>
-        <Text>Grille</Text>
+      <Sheet onClose={onClose}>
+        <Text>Canal</Text>
       </Sheet>,
+      { metrics: PHONE_LANDSCAPE },
     )
-    expect(panel().maxWidth).toBe(WIDE_DIALOG_MAX_WIDTH)
+    keyboardTo(SIDEWAYS.height - 200)
+
+    expect(frame().paddingBottom).toBe(200)
+    expect(panel().maxHeight).toBe(SIDEWAYS.height - 200 - SIDEWAYS_GAP)
+  })
+
+  it('centres a dialog in what the keyboard leaves', () => {
+    setWindowSize(TABLET_LARGE)
+    renderSheet()
+    keyboardTo(TABLET_LARGE.height - 400)
+
+    expect(frame().paddingBottom).toBe(400 + 24)
+    expect(panel().maxHeight).toBe(TABLET_LARGE.height - 400 - 47 - 48)
+  })
+
+  it('goes back down with the keyboard', () => {
+    setWindowSize(PHONE_WIDTH)
+    renderSheet()
+    keyboardTo(PHONE_WIDTH.height - 336)
+    keyboardAway()
+
+    expect(frame().paddingBottom).toBeUndefined()
+    expect(panel().maxHeight).toBe('85%')
+    expect(panel().paddingBottom).toBe(40)
+  })
+
+  it('lifts nothing for a keyboard that covers no bottom edge — an iPad’s floating one', () => {
+    setWindowSize(TABLET_LARGE)
+    renderSheet()
+    keyboardTo(TABLET_LARGE.height + 10, 0)
+
+    expect(frame()).toMatchObject({ padding: 24 })
+    expect(frame().paddingBottom).toBeUndefined()
+  })
+
+  it('leaves it to Android, whose modal window already resizes for the keyboard', () => {
+    const os = Platform.OS
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true })
+    try {
+      setWindowSize(PHONE_WIDTH)
+      renderSheet()
+      expect(listeners.keyboardWillChangeFrame).toBeUndefined()
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: os, configurable: true })
+    }
   })
 })

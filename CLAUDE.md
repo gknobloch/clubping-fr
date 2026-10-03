@@ -155,6 +155,52 @@ invisible dans le diff comme dans la revue.
   ajoutés depuis, dont un repéré sur une capture de store (#520).
   `mobile/__tests__/text-input-letter-spacing.test.ts` lit les sources et
   casse le build sur le suivant.
+- **Tout `Modal` tourne avec le téléphone (#625).** Sur un iPhone, iOS
+  présente un `Modal` en portrait seul si on ne lui passe pas
+  `supportedOrientations` : ouvrir une feuille téléphone couché redressait
+  l'écran sous les mains du membre. `Sheet` passe `MODAL_ORIENTATIONS`, et tout
+  autre `Modal` aussi — quatre orientations et non trois, parce qu'un iPad
+  les admet toutes par défaut et qu'une liste plus courte lui en retirerait
+  une ; l'Info.plist garde l'iPhone à l'endroit. Invisible à tout test de
+  rendu : `__tests__/modal-orientations.test.ts` lit les sources.
+- **Couchée, une feuille reste une feuille, réglée pour ~400 pt de haut**
+  (`Sheet`) : le panneau tient dans la zone sûre (l'encoche est à un bout ou à
+  l'autre), s'arrête à une colonne de lecture (`SHEET_MAX_WIDTH`, centrée — à
+  874 pt, une ligne étirée est un nom à un bout et sa case à l'autre), et prend
+  la hauteur moins une lisière de fond (`SIDEWAYS_GAP`), **quel que soit le
+  `maxHeight` de l'appelant** : c'est une part d'un téléphone debout, et 60 %
+  de 402 pt ne tient pas trois boutons. Ce qui dépasse défile — d'où la règle
+  du `flexShrink` ci-dessous. `dense` (#623) prend toute la largeur et règle
+  ses marges lui-même. Une page sheet (`presentationStyle="pageSheet"`)
+  devient plein écran couchée : son `SafeAreaView` garde aussi les côtés, ce
+  qui éloigne son en-tête et son pied du bord et des coins arrondis.
+- **Le fond d'une feuille est derrière le panneau, pas autour** (#625). Quand
+  le `Pressable` du fond enveloppait le panneau, le panneau devait réclamer
+  chaque toucher (`onStartShouldSetResponder`) pour qu'un tap sur lui ne
+  ferme pas la feuille — et une vue qui tient le *responder* prive de son
+  geste la `ScrollView` native en dessous. Une feuille ne défilait donc que
+  si le doigt partait d'un bouton : glisser sur un libellé, un texte ou un
+  vide ne faisait rien. Debout, presque tout tient et ça ne se voyait pas ;
+  couché, toutes les feuilles défilent, et l'éditeur d'entraînement ne
+  laissait plus atteindre ses dates. Le fond est maintenant le frère du
+  panneau, en `absoluteFill` sous lui : rien n'a plus à avaler un toucher.
+- **Et VoiceOver lisait la feuille d'un bloc.** Un `Pressable` est *un*
+  élément d'accessibilité : en enveloppant le panneau, il en faisait un seul,
+  dont le libellé était toutes les lignes mises bout à bout (« Désigner un
+  administrateur, Rechercher un joueur, Camille Bernard… »), et aucune ligne
+  ne s'atteignait seule. Derrière le panneau, chaque ligne est la sienne, et
+  le fond est un bouton « Fermer » : VoiceOver n'a pas de tap à côté, et
+  plusieurs feuilles n'ont pas d'autre sortie.
+- **Le clavier est l'affaire de `Sheet`** (#628), pas de chaque feuille.
+  Chacune décidait seule, et quatre sur six ne faisaient rien : couché, le
+  clavier prend ~200 pt sur 402, et le lien d'un canal se tapait à l'aveugle
+  dessous. Le panneau monte au-dessus du clavier, plafonné à ce qu'il laisse,
+  et ce qui ne tient plus défile — d'où, là aussi, le `flexShrink`. **Plus de
+  `KeyboardAvoidingView` dans une feuille** : il ajouterait la hauteur du
+  clavier une seconde fois. Sur iOS seulement : Android ouvre un `Modal` en
+  `SOFT_INPUT_ADJUST_RESIZE`, sa fenêtre rétrécit déjà. Mesuré au bord haut
+  du clavier et non à sa hauteur, pour qu'un clavier flottant d'iPad ne
+  soulève rien.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -332,12 +378,10 @@ invisible dans le diff comme dans la revue.
   l'équipe, en tête du planning, y mène. Le retour n'en tient pas lieu — on
   arrive aussi sur « Tous les matchs » depuis l'écran d'un match, donc depuis
   l'accueil sans être passé par la fiche.
-- **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit
-  rien — une feuille ouverte téléphone couché redressait l'écran sous les
-  mains du membre. Les autres feuilles de l'app ne le déclarent pas encore.
+- Elle tourne avec le téléphone, comme toute feuille depuis #625 (voir
+  *Mobile UI*).
 - **En sortir est une navigation** : un nom ouvre la fiche, une journée le
-  match, et la feuille se ferme d'abord. Une seconde feuille par-dessus
-  (l'aperçu joueur) serait en portrait seul.
+  match, et la feuille se ferme d'abord.
 - **On ne verrouille pas l'orientation** : debout, un téléphone tient quatre
   ou cinq journées et la feuille invite à le tourner ; couché, sept tiennent.
   Sur le web, une section de la fiche équipe.
@@ -1401,10 +1445,15 @@ invisible dans le diff comme dans la revue.
   redresse (`sips -r -90`) — une rotation exacte et non un bricolage : les
   pixels sont déjà un rendu paysage, seul le cadre est de travers ; et
   l'arbre d'accessibilité continue d'annoncer des **coordonnées portrait**.
-  Les taps *dans l'app* atterrissent quand même (vérifié), mais **les alertes
-  de SpringBoard cessent de les recevoir** : le même `tapOn` qui ne fait rien
-  en paysage referme la demande de notifications en portrait. On se connecte
-  donc à l'endroit, et on ne tourne l'appareil qu'ensuite.
+  Les taps *dans l'app* atterrissaient quand même lors des captures, mais
+  **les alertes de SpringBoard cessent de les recevoir** : le même `tapOn` qui
+  ne fait rien en paysage referme la demande de notifications en portrait. On
+  se connecte donc à l'endroit, et on ne tourne l'appareil qu'ensuite.
+  **Sur un iPhone 17 en iOS 27, ils n'atterrissent plus** (#625) : un flow
+  couché enchaînant `tapOn: id:` a rapporté chaque tap « COMPLETED » et fini
+  sur l'onglet Équipes, loin de l'écran visé. Le flow iPad, lui, n'a pas été
+  rejoué sous iOS 27 : avant une session de captures sur ce runtime, vérifier
+  qu'un tap couché atteint bien sa cible.
 - **L'appareil de capture se voit refuser les notifications**
   (`permissions` sur `launchApp`). Pas par hygiène : le compte de revue est
   capitaine d'un match à six jours, donc le balayage nocturne (#495) poserait
@@ -1463,9 +1512,9 @@ invisible dans le diff comme dans la revue.
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
 - **Une feuille se ferme par son propre bouton, jamais par son fond.** Le
-  `Pressable` du fond *enveloppe* le panneau : son centre — ce que vise
-  `tapOn: id:` — tombe dans le panneau, où `onStartShouldSetResponder` avale
-  délibérément le toucher. Et viser un point ne marche que sur un téléphone :
+  `Pressable` du fond couvre tout l'écran, *sous* le panneau (#625) : son
+  centre — ce que vise `tapOn: id:` — tombe sur le panneau, qui reçoit le
+  toucher à sa place. Et viser un point ne marche que sur un téléphone :
   au-dessus du seuil tablette, `Sheet` devient un dialogue de 520 pt centré
   dans une fenêtre de 1032, donc le point qui est du fond sur l'un est le
   panneau sur l'autre. `match-sheet-close` et `selection-cancel` répondent aux
