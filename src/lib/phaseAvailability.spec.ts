@@ -5,7 +5,7 @@ import {
   playersRequired,
   selectionVerdict,
 } from './phaseAvailability'
-import type { Division, GameAvailability, GameSelection, Group, Player } from '@/types'
+import type { Division, Game, GameAvailability, GameSelection, Group, MatchDay, Player, Team } from '@/types'
 
 const player = (id: string, lastName: string, firstName = 'A'): Player =>
   ({ id, firstName, lastName, licenseNumber: '', phone: '', status: 'active', clubId: 'c1' }) as Player
@@ -77,6 +77,60 @@ describe('phaseAvailabilityGrid', () => {
     // A renfort's yes is not the pool; their place on the line-up is.
     expect(grid.availableByGame).toEqual([0, 0, 0])
     expect(grid.selectedByGame).toEqual([1, 0, 3])
+  })
+})
+
+describe('phaseAvailabilityGrid — lent to another team of the club', () => {
+  const md = (id: string, groupId: string, number: number) => ({ id, groupId, number, date: '2026-10-0' + number })
+  const t = (id: string, number: number, extra: Partial<Team> = {}) =>
+    ({ id, clubId: 'c1', phaseId: 'ph1', number, groupId: `grp-${id}`, playerIds: [], ...extra }) as Team
+  const four = t('t4', 4, { playerIds: ['p1', 'p2', 'p3'] })
+  const three = t('t3', 3)
+  const otherPhase = t('t3-old', 3, { phaseId: 'ph0' })
+  const otherClub = t('x3', 3, { clubId: 'c2' })
+  const matchDays = [md('a1', 'grp-t4', 1), md('a2', 'grp-t4', 2), md('b1', 'grp-t3', 1), md('b2', 'grp-t3', 2)]
+  const ourGames = [
+    { id: 'g1', matchDay: matchDays[0] },
+    { id: 'g2', matchDay: matchDays[1] },
+  ]
+  const allGames = [
+    { id: 'g1', matchDayId: 'a1', homeTeamId: 't4', awayTeamId: 'o' },
+    { id: 'g2', matchDayId: 'a2', homeTeamId: 't4', awayTeamId: 'o' },
+    { id: 'h2', matchDayId: 'b2', homeTeamId: 't3', awayTeamId: 'o' },
+  ] as Game[]
+  const club = { teams: [four, three, otherPhase, otherClub], games: allGames, matchDays: matchDays as MatchDay[] }
+
+  it('marks a roster player another team fields on the same journée, and counts it', () => {
+    const grid = phaseAvailabilityGrid(four, ourGames, players, [], [
+      { gameId: 'g1', teamId: 't4', playerIds: ['p1'] },
+      { gameId: 'h2', teamId: 't3', playerIds: ['p1', 'p2'] },
+    ], club)
+    const byId = Object.fromEntries(grid.rows.map((r) => [r.player.id, r]))
+    expect(byId.p1.cells.map((c) => c.lentTo?.id)).toEqual([undefined, 't3'])
+    // Here on J1, lent on J2: two journées played for the club.
+    expect(byId.p1.selected).toBe(2)
+    expect(byId.p2.selected).toBe(1)
+    // The line-up totals stay this team's own.
+    expect(grid.selectedByGame).toEqual([1, 0])
+  })
+
+  it('leaves a lent player out of the pool, whatever they answered', () => {
+    const grid = phaseAvailabilityGrid(
+      four, ourGames, players,
+      [av('g2', 'p1', 'available'), av('g2', 'p2', 'available')],
+      [{ gameId: 'h2', teamId: 't3', playerIds: ['p1'] }],
+      club,
+    )
+    expect(grid.availableByGame).toEqual([0, 1])
+    // Their answer is still theirs: the ratio is about them, not the pool.
+    expect(grid.rows.find((r) => r.player.id === 'p1')!.available).toBe(1)
+  })
+
+  it('says nothing without the club, as the grid of one team', () => {
+    const grid = phaseAvailabilityGrid(four, ourGames, players, [], [
+      { gameId: 'h2', teamId: 't3', playerIds: ['p1'] },
+    ])
+    expect(grid.rows.every((r) => r.cells.every((c) => !c.lentTo))).toBe(true)
   })
 })
 

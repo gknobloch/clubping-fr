@@ -6,7 +6,7 @@ import { PhaseAvailabilitySection } from './PhaseAvailabilitySection'
 // Avatar reads the auth token to fetch an image; nothing here needs a session.
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: null, token: null }) }))
 import { EMPTY_PHASE_GRID, phaseAvailabilityGrid } from '@/lib/phaseAvailability'
-import type { GameAvailability, Player } from '@/types'
+import type { Game, GameAvailability, MatchDay, Player, Team } from '@/types'
 
 // Les disponibilités de toute la phase sur la fiche équipe (#623).
 
@@ -24,6 +24,8 @@ const availabilities: GameAvailability[] = answers.map((status, i) => ({
   status,
 }))
 
+const teamLabel = (t: Team) => `Rixheim PPA ${t.number}`
+
 function renderSection(onGame = vi.fn()) {
   const grid = phaseAvailabilityGrid(
     { id: 't4', playerIds: ['p1', 'p2'] },
@@ -40,6 +42,7 @@ function renderSection(onGame = vi.fn()) {
         required={4}
         unlicensed={new Set(['p2'])}
         onGame={onGame}
+        teamLabel={teamLabel}
       />
     </MemoryRouter>,
   )
@@ -91,7 +94,7 @@ describe('PhaseAvailabilitySection', () => {
     )
     render(
       <MemoryRouter>
-        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} />
+        <PhaseAvailabilitySection grid={grid} columns={columns} required={4} unlicensed={new Set()} onGame={vi.fn()} teamLabel={teamLabel} />
       </MemoryRouter>,
     )
 
@@ -115,6 +118,49 @@ describe('PhaseAvailabilitySection', () => {
     expect(within(available).getAllByRole('cell')[0]).toHaveTextContent('1')
     const selected = screen.getByRole('rowheader', { name: 'Sélectionnés' }).closest('tr')!
     expect(within(selected).getAllByRole('cell')[0]).toHaveTextContent('3/4')
+  })
+
+  it('hatches a cell where another team of the club fields the player, and names it', () => {
+    const team = { id: 't4', clubId: 'c1', phaseId: 'ph', number: 4, groupId: 'g4', playerIds: ['p1', 'p2'] } as Team
+    const three = { ...team, id: 't3', number: 3, groupId: 'g3', color: '#2563eb', playerIds: [] } as Team
+    const matchDays = [
+      { id: 'a3', groupId: 'g4', number: 3, date: '2026-10-03' },
+      { id: 'b3', groupId: 'g3', number: 3, date: '2026-10-04' },
+    ] as MatchDay[]
+    const ourGames = [{ id: 'g3', matchDay: matchDays[0] }]
+    const clubGames = [
+      { id: 'g3', matchDayId: 'a3', homeTeamId: 't4', awayTeamId: 'o' },
+      { id: 'h3', matchDayId: 'b3', homeTeamId: 't3', awayTeamId: 'o' },
+    ] as Game[]
+    const grid = phaseAvailabilityGrid(team, ourGames, [mougey, heurtin], [], [
+      { gameId: 'h3', teamId: 't3', playerIds: ['p2'] },
+    ], { teams: [team, three], games: clubGames, matchDays })
+    render(
+      <MemoryRouter>
+        <PhaseAvailabilitySection
+          grid={grid}
+          columns={[{ gameId: 'g3', number: 3, date: '3/10' }]}
+          required={4}
+          unlicensed={new Set()}
+          onGame={vi.fn()}
+          teamLabel={teamLabel}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('En renfort')).toBeInTheDocument()
+    const row = screen.getByRole('rowheader', { name: /Heurtin/ }).closest('tr')!
+    // Oui, then Sél.: the loan counts as a journée played for the club.
+    expect(within(row).getAllByText('0/1')).toHaveLength(1)
+    expect(within(row).getByText('1/1')).toBeInTheDocument()
+
+    fireEvent.click(within(row).getByRole('button', { name: 'En renfort en équipe 3' }))
+    expect(screen.getByRole('dialog', { name: 'En renfort · J3' })).toHaveTextContent('Rixheim PPA 3')
+  })
+
+  it('shows the hatching key only when someone is lent', () => {
+    renderSection()
+    expect(screen.queryByText('En renfort')).toBeNull()
   })
 
   it('carries the licence badge with the name (#488)', () => {
@@ -141,6 +187,7 @@ describe('PhaseAvailabilitySection', () => {
           required={4}
           unlicensed={new Set()}
           onGame={vi.fn()}
+          teamLabel={teamLabel}
         />
       </MemoryRouter>,
     )

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar } from '@/components/Avatar'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
@@ -8,7 +8,7 @@ import {
   type PhaseAvailabilityColumn,
   type PhaseAvailabilityGrid,
 } from '@/lib/phaseAvailability'
-import type { AvailabilityStatus, Player } from '@/types'
+import type { AvailabilityStatus, Player, Team } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Les disponibilités de toute la phase, pour une équipe (#623)
@@ -45,6 +45,7 @@ export function PhaseAvailabilitySection({
   required,
   unlicensed,
   onGame,
+  teamLabel,
 }: {
   grid: PhaseAvailabilityGrid
   columns: PhaseAvailabilityColumn[]
@@ -52,9 +53,14 @@ export function PhaseAvailabilitySection({
   required: number
   unlicensed: Set<string>
   onGame: (gameId: string) => void
+  /** How a team of the club is named — «Rixheim PPA 3». */
+  teamLabel: (team: Team) => string
 }) {
   // One popover at a time, keyed on its match.
-  const [openRenforts, setOpenRenforts] = useState<string | null>(null)
+  // One popover at a time: `renforts:<game>` or `lent:<player>:<game>`.
+  const [openPopover, setOpenPopover] = useState<string | null>(null)
+  const toggle = (key: string) => setOpenPopover((cur) => (cur === key ? null : key))
+  const hasLoans = grid.rows.some((r) => r.cells.some((c) => c.lentTo))
   if (grid.rows.length === 0 || columns.length === 0) return null
   const total = columns.length
 
@@ -66,10 +72,18 @@ export function PhaseAvailabilitySection({
         </h2>
         {/* OUI / PE / NON need no key — they are the app's own answers,
             everywhere. The frame is this grid's alone. */}
-        <p className="flex items-center gap-1.5 text-xs text-slate-500">
-          <span className="h-4 w-6 rounded bg-slate-50 ring-2 ring-inset ring-slate-800" aria-hidden="true" />
-          Dans la composition
-        </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+          <p className="flex items-center gap-1.5">
+            <span className="h-4 w-6 rounded bg-slate-50 ring-2 ring-inset ring-slate-800" aria-hidden="true" />
+            Dans la composition
+          </p>
+          {hasLoans && (
+            <p className="flex items-center gap-1.5">
+              <span className="h-4 w-6 rounded bg-slate-50" style={HATCH_STYLE} aria-hidden="true" />
+              En renfort
+            </p>
+          )}
+        </div>
       </div>
 
       {total > PORTRAIT_FITS && (
@@ -141,8 +155,23 @@ export function PhaseAvailabilitySection({
                 <td className="sticky left-44 z-10 border-r !border-r-slate-200 bg-white text-center font-semibold text-slate-500 sm:left-60">
                   {row.selected}/{total}
                 </td>
-                {row.cells.map((cell) => {
+                {row.cells.map((cell, i) => {
                   const v = cell.status ? CELL[cell.status] : undefined
+                  if (cell.lentTo) {
+                    const key = `lent:${row.player.id}:${cell.gameId}`
+                    return (
+                      <td key={cell.gameId} className="px-0.5 py-1.5">
+                        <LentCell
+                          title={`En renfort · J${columns[i].number}`}
+                          team={cell.lentTo}
+                          teamName={teamLabel(cell.lentTo)}
+                          selected={cell.selected}
+                          open={openPopover === key}
+                          onToggle={() => toggle(key)}
+                        />
+                      </td>
+                    )
+                  }
                   return (
                     <td key={cell.gameId} className="px-1 py-1.5">
                       <span
@@ -178,10 +207,8 @@ export function PhaseAvailabilitySection({
                       <RenfortsCell
                         title={`Renforts · J${columns[i].number}`}
                         renforts={list}
-                        open={openRenforts === columns[i].gameId}
-                        onToggle={() =>
-                          setOpenRenforts((cur) => (cur === columns[i].gameId ? null : columns[i].gameId))
-                        }
+                        open={openPopover === `renforts:${columns[i].gameId}`}
+                        onToggle={() => toggle(`renforts:${columns[i].gameId}`)}
                       />
                     )}
                   </td>
@@ -234,29 +261,49 @@ const STACKED_AVATARS = 2
 const POPOVER_WIDTH = 240
 const POPOVER_MARGIN = 8
 
+/** Diagonal stripes — «not here, elsewhere». slate-300 on the cell's grey. */
+const HATCH_STYLE = {
+  backgroundImage: 'repeating-linear-gradient(45deg, #cbd5e1 0 2px, transparent 2px 6px)',
+}
+
+/** A team as the app shows one everywhere: its number, in its colour. */
+function TeamDot({ team, size }: { team: Team; size: number }) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.45), backgroundColor: team.color ?? '#e23b3b' }}
+      aria-hidden="true"
+    >
+      {team.number}
+    </span>
+  )
+}
+
 /**
- * One match's renforts as a stack of faces, and their names in a popover that
- * opens *upward* — the row sits on the totals.
+ * A cell that opens a popover *upward* — the Renforts row sits on the totals,
+ * and a lent player's cell is read in its row.
  *
  * The popover is `fixed`, placed from the cell's own rectangle and kept inside
  * the viewport: positioned within the cell it was clipped by the scroller as
  * soon as the cell sat near its right edge, which on a phone is most of them.
  * Fixed, it would drift off its cell on a scroll, so a scroll closes it.
  */
-function RenfortsCell({
+function PopoverCell({
+  label,
   title,
-  renforts,
   open,
   onToggle,
+  trigger,
+  children,
 }: {
+  label: string
   title: string
-  renforts: Player[]
   open: boolean
   onToggle: () => void
+  /** What the cell shows, inside its 32px box. */
+  trigger: ReactNode
+  children: ReactNode
 }) {
-  const shown = renforts.slice(0, STACKED_AVATARS)
-  const more = renforts.length - shown.length
-  const names = renforts.map((p) => `${p.firstName} ${p.lastName}`).join(', ')
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [rect, setRect] = useState<DOMRect | null>(null)
 
@@ -288,25 +335,10 @@ function RenfortsCell({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        aria-label={`Renforts : ${names}`}
+        aria-label={label}
         className="group flex min-h-11 w-full items-center justify-center md:min-h-8"
       >
-        {/* Framed like any cell of the line-up: a renfort is only listed
-            because the line-up names them. */}
-        <span className="flex h-8 w-full items-center justify-center rounded-md bg-slate-50 ring-2 ring-inset ring-slate-800 group-hover:bg-slate-100">
-          {shown.map((p, i) => (
-            <span key={p.id} className={`rounded-full ring-2 ring-slate-50 ${i > 0 ? '-ml-2' : ''}`}>
-              <Avatar
-                playerId={p.id}
-                avatarUpdatedAt={p.avatarUpdatedAt}
-                firstName={p.firstName}
-                lastName={p.lastName}
-                size={22}
-              />
-            </span>
-          ))}
-          {more > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">+{more}</span>}
-        </span>
+        {trigger}
       </button>
       {open && (
         <>
@@ -324,30 +356,122 @@ function RenfortsCell({
             style={{ width: POPOVER_WIDTH, left, top: rect ? rect.top - 4 : undefined }}
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-            <ul className="mt-2 space-y-1.5">
-              {renforts.map((p) => (
-                <li key={p.id} className="flex items-center gap-2">
-                  <Avatar
-                    playerId={p.id}
-                    avatarUpdatedAt={p.avatarUpdatedAt}
-                    firstName={p.firstName}
-                    lastName={p.lastName}
-                    size={28}
-                  />
-                  <Link
-                    to={`/joueurs/${p.id}`}
-                    className={`min-w-0 flex-1 text-sm text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
-                  >
-                    <span className="truncate">
-                      {p.firstName} {p.lastName}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-2">{children}</div>
           </div>
         </>
       )}
     </>
+  )
+}
+
+/** One match's renforts as a stack of faces; their names in the popover. */
+function RenfortsCell({
+  title,
+  renforts,
+  open,
+  onToggle,
+}: {
+  title: string
+  renforts: Player[]
+  open: boolean
+  onToggle: () => void
+}) {
+  const shown = renforts.slice(0, STACKED_AVATARS)
+  const more = renforts.length - shown.length
+  const names = renforts.map((p) => `${p.firstName} ${p.lastName}`).join(', ')
+
+  return (
+    <PopoverCell
+      label={`Renforts : ${names}`}
+      title={title}
+      open={open}
+      onToggle={onToggle}
+      trigger={
+        // Framed like any cell of the line-up: a renfort is only listed
+        // because the line-up names them.
+        <span className="flex h-8 w-full items-center justify-center rounded-md bg-slate-50 ring-2 ring-inset ring-slate-800 group-hover:bg-slate-100">
+          {shown.map((p, i) => (
+            <span key={p.id} className={`rounded-full ring-2 ring-slate-50 ${i > 0 ? '-ml-2' : ''}`}>
+              <Avatar
+                playerId={p.id}
+                avatarUpdatedAt={p.avatarUpdatedAt}
+                firstName={p.firstName}
+                lastName={p.lastName}
+                size={22}
+              />
+            </span>
+          ))}
+          {more > 0 && <span className="ml-1 text-xs font-semibold text-slate-500">+{more}</span>}
+        </span>
+      }
+    >
+      <ul className="space-y-1.5">
+        {renforts.map((p) => (
+          <li key={p.id} className="flex items-center gap-2">
+            <Avatar
+              playerId={p.id}
+              avatarUpdatedAt={p.avatarUpdatedAt}
+              firstName={p.firstName}
+              lastName={p.lastName}
+              size={28}
+            />
+            <Link
+              to={`/joueurs/${p.id}`}
+              className={`min-w-0 flex-1 text-sm text-slate-800 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}
+            >
+              <span className="truncate">
+                {p.firstName} {p.lastName}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </PopoverCell>
+  )
+}
+
+/**
+ * A roster player another team of the club fields on this journée: hatched,
+ * with that team's badge so which team reads without a click; the popover
+ * names it.
+ */
+function LentCell({
+  title,
+  team,
+  teamName,
+  selected,
+  open,
+  onToggle,
+}: {
+  title: string
+  team: Team
+  teamName: string
+  /** Also on this line-up — a contradiction, and the frame keeps saying so. */
+  selected: boolean
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <PopoverCell
+      label={`En renfort en équipe ${team.number}` + (selected ? ', dans la composition' : '')}
+      title={title}
+      open={open}
+      onToggle={onToggle}
+      trigger={
+        <span
+          className={`flex h-8 w-full items-center justify-center rounded-md bg-slate-50 ${
+            selected ? 'ring-2 ring-inset ring-slate-800' : ''
+          }`}
+          style={HATCH_STYLE}
+        >
+          <TeamDot team={team} size={22} />
+        </span>
+      }
+    >
+      <p className="flex items-center gap-2 text-sm text-slate-800">
+        <TeamDot team={team} size={28} />
+        <span className="truncate">{teamName}</span>
+      </p>
+    </PopoverCell>
   )
 }

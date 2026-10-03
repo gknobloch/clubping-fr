@@ -19,11 +19,13 @@ import { useLayout } from '@/constants/layout'
 import { Sheet, sheetContentWidth } from '@/components/Sheet'
 import {
   CompositionKey,
+  LentKey,
   PhaseAvailabilityTable,
   phaseTableColumns,
   type RenfortsAnchor,
 } from '@/components/PhaseAvailabilityTable'
 import { Avatar } from '@/components/Avatar'
+import { TeamColorBadge } from '@/components/TeamColorBadge'
 import type { Player, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
@@ -63,8 +65,15 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
   const phaseGames = useMemo(() => entry?.games ?? [], [entry])
 
   const grid = useMemo(
-    () => phaseAvailabilityGrid(team, phaseGames, players, gameAvailabilities, gameSelections),
-    [team, phaseGames, players, gameAvailabilities, gameSelections],
+    // The club's calendar too: who another team fields on a journée shows here
+    // as lent, and counts in «Sél.».
+    () =>
+      phaseAvailabilityGrid(team, phaseGames, players, gameAvailabilities, gameSelections, {
+        teams,
+        games,
+        matchDays,
+      }),
+    [team, phaseGames, players, gameAvailabilities, gameSelections, teams, games, matchDays],
   )
   const columns = useMemo(() => phaseAvailabilityColumns(phaseGames), [phaseGames])
   const required = playersRequired(team, groups, divisions)
@@ -89,25 +98,33 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
   const teamName = getTeamName(team, clubs)
   const phaseLabel = entry?.label
 
-  // The Renforts popover: which match, and where its cell sits. The container
-  // is measured at the same moment, so the popover lands relative to it.
+  // The popover: which cell — the Renforts row's for a match, or a lent
+  // player's — and where it sits. The container is measured at the same
+  // moment, so the popover lands relative to it.
   const containerRef = useRef<View>(null)
   const [popover, setPopover] = useState<{
     gameId: string
+    /** Set for a lent player's cell; absent for the Renforts row. */
+    playerId?: string
     anchor: RenfortsAnchor | null
     frame: RenfortsAnchor | null
   } | null>(null)
-  const openRenforts = (gameId: string, anchor: RenfortsAnchor | null) => {
-    setPopover((prev) => ({ gameId, anchor, frame: prev?.gameId === gameId ? prev.frame : null }))
+  const openPopover = (gameId: string, playerId: string | undefined, anchor: RenfortsAnchor | null) => {
+    const same = (p: { gameId: string; playerId?: string } | null) =>
+      p?.gameId === gameId && p.playerId === playerId
+    setPopover((prev) => ({ gameId, playerId, anchor, frame: same(prev) ? prev!.frame : null }))
     if (anchor) {
       containerRef.current?.measureInWindow?.((x, y, w, h) =>
-        setPopover((prev) =>
-          prev?.gameId === gameId ? { ...prev, frame: { x, y, width: w, height: h } } : prev,
-        ),
+        setPopover((prev) => (same(prev) ? { ...prev!, frame: { x, y, width: w, height: h } } : prev)),
       )
     }
   }
   const popoverIndex = popover ? columns.findIndex((c) => c.gameId === popover.gameId) : -1
+  const lentTeam =
+    popover?.playerId && popoverIndex >= 0
+      ? grid.rows.find((r) => r.player.id === popover.playerId)?.cells[popoverIndex].lentTo
+      : undefined
+  const hasLoans = grid.rows.some((r) => r.cells.some((c) => c.lentTo))
 
   const leaveFor = (go: () => void) => {
     onClose()
@@ -135,6 +152,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
                 {phaseLabel ? <Text style={s.subtitleInline}>{`  ${phaseLabel}`}</Text> : null}
               </Text>
               <CompositionKey />
+              {hasLoans && <LentKey />}
             </>
           ) : (
             <View style={s.titleBlock}>
@@ -142,6 +160,7 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
               {phaseLabel ? <Text style={s.subtitle} numberOfLines={1}>{phaseLabel}</Text> : null}
               <View style={s.keyLine}>
                 <CompositionKey />
+                {hasLoans && <LentKey />}
               </View>
             </View>
           )}
@@ -178,7 +197,8 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
               required={required}
               unlicensed={unlicensed}
               onPlayer={(playerId) => leaveFor(() => openPlayer(playerId))}
-              onRenforts={openRenforts}
+              onRenforts={(gameId, anchor) => openPopover(gameId, undefined, anchor)}
+              onLent={(playerId, gameId, anchor) => openPopover(gameId, playerId, anchor)}
               onGame={(gameId) =>
                 leaveFor(() =>
                   router.push({
@@ -198,15 +218,26 @@ export function PhaseAvailabilitySheet({ team, onClose }: { team: Team; onClose:
         {popover && popoverIndex >= 0 && (
           <>
             <Pressable
-              testID="renforts-popover-backdrop"
+              testID="phase-popover-backdrop"
               style={StyleSheet.absoluteFill}
               onPress={() => setPopover(null)}
             />
-            <RenfortsPopover
-              title={`Renforts · J${columns[popoverIndex].number}`}
-              renforts={grid.renforts[popoverIndex]}
-              placement={popoverPlacement(popover.anchor, popover.frame)}
-            />
+            {popover.playerId ? (
+              lentTeam && (
+                <LentPopover
+                  title={`En renfort · J${columns[popoverIndex].number}`}
+                  team={lentTeam}
+                  teamName={getTeamName(lentTeam, clubs)}
+                  placement={popoverPlacement(popover.anchor, popover.frame)}
+                />
+              )
+            ) : (
+              <RenfortsPopover
+                title={`Renforts · J${columns[popoverIndex].number}`}
+                renforts={grid.renforts[popoverIndex]}
+                placement={popoverPlacement(popover.anchor, popover.frame)}
+              />
+            )}
           </>
         )}
       </View>
@@ -265,6 +296,29 @@ function RenfortsPopover({
   )
 }
 
+/** Which team of the club fields this player on that journée. */
+function LentPopover({
+  title,
+  team,
+  teamName,
+  placement,
+}: {
+  title: string
+  team: Team
+  teamName: string
+  placement: ReturnType<typeof popoverPlacement>
+}) {
+  return (
+    <View testID="lent-popover" style={[s.popover, placement]}>
+      <Text style={s.popoverTitle}>{title}</Text>
+      <View style={s.popoverRow}>
+        <TeamColorBadge color={team.color} number={team.number} size={28} />
+        <Text style={s.popoverName} numberOfLines={1}>{teamName}</Text>
+      </View>
+    </View>
+  )
+}
+
 const s = StyleSheet.create({
   container: { flexShrink: 1 },
   popover: {
@@ -295,7 +349,7 @@ const s = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   titleRowDense: { marginBottom: 6 },
   titleBlock: { flex: 1 },
-  keyLine: { marginTop: 8 },
+  keyLine: { marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },
   title: { fontSize: 20, fontFamily: fonts.bold, color: colors.textPrimary },
   subtitle: { fontSize: 15, color: colors.textSecondary, marginTop: 2 },
   titleLine: { flex: 1 },

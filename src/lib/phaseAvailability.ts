@@ -1,8 +1,8 @@
-import { gameDate } from './matchdays'
+import { gameDate, playersCommittedElsewhere } from './matchdays'
 import { sortByName } from './sortByName'
 import type { GameWithMatchDay } from './teamPhases'
 import type {
-  AvailabilityStatus, Division, Game, GameAvailability, GameSelection, Group, Player, Team,
+  AvailabilityStatus, Division, Game, GameAvailability, GameSelection, Group, MatchDay, Player, Team,
 } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -23,6 +23,12 @@ export interface PhaseAvailabilityCell {
   /** Absent = no answer — the absence of a row, as everywhere else (#495). */
   status?: AvailabilityStatus
   selected: boolean
+  /**
+   * Another team of the club fields them on this journée — lent as a renfort.
+   * Answered from `playersCommittedElsewhere`, the rule the line-up picker
+   * already follows, so the grid and the picker cannot disagree about it.
+   */
+  lentTo?: Team
 }
 
 export interface PhaseAvailabilityRow {
@@ -31,7 +37,11 @@ export interface PhaseAvailabilityRow {
   cells: PhaseAvailabilityCell[]
   /** Matches answered «Oui» — the numerator of «5/7». */
   available: number
-  /** Matches whose line-up names them — the numerator of the «Sél.» column. */
+  /**
+   * Journées they play for the club — on this line-up, or lent to another
+   * team's: the numerator of the «Sél.» column. A captain counting who has
+   * played how much counts both, and so does brûlage.
+   */
   selected: number
 }
 
@@ -51,8 +61,9 @@ export interface PhaseAvailabilityGrid {
   /** Matches that borrowed anyone — the «Sél.» of the Renforts row. */
   renfortGames: number
   /**
-   * Per match, how many of the roster answered «Oui» — the roster, as in the
-   * journées matrix's Résumé (#580): a renfort's yes is not the team's pool.
+   * Per match, how many of the roster answered «Oui» and are not lent to
+   * another team that journée — the roster, as in the journées matrix's
+   * Résumé (#580): a renfort's yes is not the team's pool.
    */
   availableByGame: number[]
   /** Per match, how many the line-up names — renforts included. */
@@ -66,11 +77,16 @@ export interface PhaseAvailabilityGrid {
  * player did not answer is a match they have not said yes to.
  */
 export function phaseAvailabilityGrid(
-  team: { id: string; playerIds: string[] },
-  games: Pick<Game, 'id'>[],
+  team: Pick<Team, 'id' | 'playerIds'> & Partial<Pick<Team, 'clubId' | 'phaseId'>>,
+  games: Pick<GameWithMatchDay, 'id' | 'matchDay'>[],
   players: Player[],
   gameAvailabilities: GameAvailability[],
   gameSelections: GameSelection[],
+  /**
+   * The rest of the club's calendar, to see who is lent elsewhere. Without
+   * it, nobody is — the grid of one team, as before.
+   */
+  club?: { teams: Team[]; games: Game[]; matchDays: MatchDay[] },
 ): PhaseAvailabilityGrid {
   const gameIds = new Set(games.map((g) => g.id))
 
@@ -90,17 +106,36 @@ export function phaseAvailabilityGrid(
   const resolve = (ids: Iterable<string>) =>
     sortByName([...ids].map((id) => byId.get(id)).filter((p): p is Player => !!p))
 
+  // Per match, who another team of the club fields on that journée. The
+  // club's teams *of this phase*: a journée number restarts at 1 each phase.
+  const clubTeams = club
+    ? club.teams.filter((t) => t.clubId === team.clubId && t.phaseId === team.phaseId)
+    : []
+  const lentByGame = games.map((g) => {
+    if (!club || !g.matchDay) return new Map<string, Team>()
+    const byNumber = playersCommittedElsewhere(
+      team.id, g.matchDay.number, clubTeams, club.games, club.matchDays, gameSelections,
+    )
+    return new Map(
+      [...byNumber].flatMap(([pid, n]) => {
+        const lent = clubTeams.find((t) => t.number === n)
+        return lent ? [[pid, lent] as const] : []
+      }),
+    )
+  })
+
   const rows = resolve(rosterIds).map((player): PhaseAvailabilityRow => {
-    const cells = games.map((g) => ({
+    const cells = games.map((g, i) => ({
       gameId: g.id,
       status: statusOf.get(`${g.id}:${player.id}`),
       selected: selectedIn.get(g.id)?.has(player.id) ?? false,
+      lentTo: lentByGame[i].get(player.id),
     }))
     return {
       player,
       cells,
       available: cells.filter((c) => c.status === 'available').length,
-      selected: cells.filter((c) => c.selected).length,
+      selected: cells.filter((c) => c.selected || c.lentTo).length,
     }
   })
 
@@ -112,7 +147,11 @@ export function phaseAvailabilityGrid(
     rows,
     renforts,
     renfortGames: renforts.filter((r) => r.length > 0).length,
-    availableByGame: games.map((_, i) => rows.filter((r) => r.cells[i].status === 'available').length),
+    // A yes from someone another team fields that journée is not one this
+    // team can field: they answered, then the club placed them elsewhere.
+    availableByGame: games.map(
+      (_, i) => rows.filter((r) => r.cells[i].status === 'available' && !r.cells[i].lentTo).length,
+    ),
     selectedByGame: games.map((g) => selectedIn.get(g.id)?.size ?? 0),
   }
 }

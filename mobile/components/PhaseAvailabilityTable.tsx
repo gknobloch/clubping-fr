@@ -1,17 +1,19 @@
-import { useRef } from 'react'
+import { useRef, type RefObject } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
 import { fonts } from '@/constants/typography'
 import { LicenceTag } from '@/components/LicenceTag'
 import { Avatar } from '@/components/Avatar'
+import { TeamColorBadge } from '@/components/TeamColorBadge'
+import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg'
 import {
   selectionVerdict,
   type PhaseAvailabilityColumn,
   type PhaseAvailabilityGrid,
   type PhaseAvailabilityRow,
 } from '@shared/lib/phaseAvailability'
-import type { Player } from '@shared/types'
+import type { Player, Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
 // Les disponibilités de toute la phase, pour une équipe (#623)
@@ -74,6 +76,7 @@ export function PhaseAvailabilityTable({
   onPlayer,
   onGame,
   onRenforts,
+  onLent,
 }: {
   grid: PhaseAvailabilityGrid
   columns: PhaseAvailabilityColumn[]
@@ -89,6 +92,8 @@ export function PhaseAvailabilityTable({
   onGame: (gameId: string) => void
   /** A Renforts cell was tapped; `anchor` is where it sits on screen, when known. */
   onRenforts?: (gameId: string, anchor: RenfortsAnchor | null) => void
+  /** A cell of a player lent to another team was tapped. */
+  onLent?: (playerId: string, gameId: string, anchor: RenfortsAnchor | null) => void
 }) {
   const m = phaseTableMetrics(dense)
   const cols = phaseTableColumns(width, columns.length, compact, dense)
@@ -185,6 +190,19 @@ export function PhaseAvailabilityTable({
             <View key={row.player.id} style={[s.row, { height: rowHeight(row) }]}>
               {row.cells.map((cell) => {
                 const a = cell.status ? AVAIL[cell.status] : undefined
+                if (cell.lentTo) {
+                  return (
+                    <View key={cell.gameId} style={[s.cellWrap, { width: cols.day }]}>
+                      <LentCell
+                        testID={`phase-cell-${row.player.id}-${cell.gameId}`}
+                        team={cell.lentTo}
+                        selected={cell.selected}
+                        height={m.cell}
+                        onPress={onLent && ((anchor) => onLent(row.player.id, cell.gameId, anchor))}
+                      />
+                    </View>
+                  )
+                }
                 return (
                   <View key={cell.gameId} style={[s.cellWrap, { width: cols.day }]}>
                     <View
@@ -278,6 +296,9 @@ export interface RenfortsAnchor {
   height: number
 }
 
+/** slate-300: visible on the cell's grey, quieter than any answer's colour. */
+const HATCH_COLOR = '#cbd5e1'
+
 /** Past this many, the stack says «+N» rather than growing past its column. */
 const STACKED_AVATARS = 2
 
@@ -316,13 +337,7 @@ function RenfortsCell({
       disabled={!onPress}
       accessibilityRole="button"
       accessibilityLabel={`Renforts : ${names}`}
-      onPress={() => {
-        const node = ref.current
-        // Opened at once, placed when the measure lands: a popover that waited
-        // on layout would be a tap that does nothing for a frame.
-        onPress?.(gameId, null)
-        node?.measureInWindow?.((x, y, w, h) => onPress?.(gameId, { x, y, width: w, height: h }))
-      }}
+      onPress={() => onPress && pressWithAnchor(ref, (anchor) => onPress(gameId, anchor))}
     >
       {shown.map((p, i) => (
         <Avatar
@@ -337,6 +352,80 @@ function RenfortsCell({
       ))}
       {more > 0 && <Text style={s.renfortsMore}>+{more}</Text>}
     </TouchableOpacity>
+  )
+}
+
+/**
+ * Opened at once, placed when the measure lands: a popover that waited on
+ * layout would be a tap that does nothing for a frame.
+ */
+function pressWithAnchor(ref: RefObject<View | null>, open: (anchor: RenfortsAnchor | null) => void) {
+  open(null)
+  ref.current?.measureInWindow?.((x, y, w, h) => open({ x, y, width: w, height: h }))
+}
+
+/** Diagonal stripes across whatever box holds it — «not here, elsewhere». */
+function Hatch({ id }: { id: string }) {
+  return (
+    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <Pattern id={id} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <Line x1={0} y1={0} x2={0} y2={6} stroke={HATCH_COLOR} strokeWidth={2.5} />
+        </Pattern>
+      </Defs>
+      <Rect width="100%" height="100%" fill={`url(#${id})`} />
+    </Svg>
+  )
+}
+
+/**
+ * A roster player another team of the club fields on this journée (#623):
+ * hatched, because they are not available to this team whatever they
+ * answered, with that team's badge — its number in its colour, the way the
+ * app shows a team everywhere — so which team reads without a tap. The tap
+ * names it.
+ */
+function LentCell({
+  testID,
+  team,
+  selected,
+  height,
+  onPress,
+}: {
+  testID: string
+  team: Team
+  /** Also on this line-up — a contradiction, and the frame keeps saying so. */
+  selected: boolean
+  height: number
+  onPress?: (anchor: RenfortsAnchor | null) => void
+}) {
+  const ref = useRef<View>(null)
+  return (
+    <TouchableOpacity
+      ref={ref}
+      testID={testID}
+      style={[s.cell, s.cellEmpty, s.lentCell, { height }, selected && s.cellSelected]}
+      hitSlop={6}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`En renfort en équipe ${team.number}` + (selected ? ', dans la composition' : '')}
+      onPress={() => onPress && pressWithAnchor(ref, onPress)}
+    >
+      <Hatch id={`hatch-${testID}`} />
+      <TeamColorBadge color={team.color} number={team.number} size={height - 8} />
+    </TouchableOpacity>
+  )
+}
+
+/** The hatching's key, beside the frame's — shown only when someone is lent. */
+export function LentKey() {
+  return (
+    <View style={s.key} testID="phase-lent-key">
+      <View style={[s.keySwatch, s.cellEmpty, s.lentCell]}>
+        <Hatch id="hatch-key" />
+      </View>
+      <Text style={s.keyText} numberOfLines={1}>En renfort</Text>
+    </View>
   )
 }
 
@@ -403,6 +492,7 @@ const s = StyleSheet.create({
     color: colors.textSecondary,
   },
   renfortsCell: { flexDirection: 'row' },
+  lentCell: { overflow: 'hidden' },
   // The cell's own grey, so overlapping faces read as two.
   avatarRing: { borderWidth: 1.5, borderColor: colors.bg },
   renfortsMore: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.textSecondary, marginLeft: 3 },

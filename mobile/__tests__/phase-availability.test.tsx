@@ -210,9 +210,60 @@ describe('les renforts', () => {
     // La feuille reste ouverte : le popover est dedans.
     expect(onClose).not.toHaveBeenCalled()
 
-    fireEvent.press(screen.getByTestId('renforts-popover-backdrop'))
+    fireEvent.press(screen.getByTestId('phase-popover-backdrop'))
     expect(screen.queryByTestId('renforts-popover')).toBeNull()
   })
+})
+
+describe('un joueur prêté à une autre équipe du club', () => {
+  const team3: Team = { ...team, id: 't3', number: 3, groupId: 'grp3', color: '#2563eb', playerIds: [] }
+
+  beforeEach(() => {
+    mockData.teams = [team, opponent, team3]
+    // Journée 4 de l'équipe 3, dans sa propre poule.
+    mockData.matchDays = [...mockData.matchDays, { id: 'x4', groupId: 'grp3', number: 4, date: '2026-10-08' }]
+    mockData.games = [...mockData.games, { id: 'h4', matchDayId: 'x4', homeTeamId: 't3', awayTeamId: 'opp', time: '20h' }]
+    mockData.gameSelections = [
+      ...mockData.gameSelections,
+      { teamId: 't3', gameId: 'h4', playerIds: ['p2'] },
+    ]
+    mockData.gameAvailabilities = [
+      ...mockData.gameAvailabilities,
+      { gameId: 'g4', playerId: 'p2', status: 'available' },
+    ]
+    setWindowSize(PHONE_WIDTH)
+    render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+  })
+
+  it('hachure sa cellule, avec le badge de l’équipe qui l’aligne', () => {
+    expect(screen.getByTestId('phase-cell-p2-g4').props.accessibilityLabel).toBe('En renfort en équipe 3')
+    expect(screen.getByTestId('phase-lent-key')).toBeTruthy()
+  })
+
+  it('compte le prêt dans sa colonne « Sél. », pas dans les disponibles', () => {
+    expect(screen.getByTestId('phase-row-p2').props.accessibilityLabel).toBe(
+      'Christophe Heurtin, disponible 1 sur 7, sélectionné 1 sur 7',
+    )
+    // Mougey a dit oui pour J4 ; Heurtin aussi, mais l'équipe 3 l'aligne.
+    expect(screen.getByTestId('phase-available-g4').props.children).toBe(1)
+  })
+
+  it('nomme l’équipe dans un popover', () => {
+    fireEvent.press(screen.getByTestId('phase-cell-p2-g4'))
+
+    const popover = screen.getByTestId('lent-popover')
+    expect(within(popover).getByText('En renfort · J4')).toBeTruthy()
+    expect(within(popover).getByText('Rixheim PPA 3')).toBeTruthy()
+
+    fireEvent.press(screen.getByTestId('phase-popover-backdrop'))
+    expect(screen.queryByTestId('lent-popover')).toBeNull()
+  })
+})
+
+it('ne montre la clé des prêts que s’il y en a', () => {
+  setWindowSize(PHONE_WIDTH)
+  render(<PhaseAvailabilitySheet team={team} onClose={onClose} />)
+  expect(screen.queryByTestId('phase-lent-key')).toBeNull()
 })
 
 it('place le popover au-dessus de la cellule, sans sortir de la feuille', () => {

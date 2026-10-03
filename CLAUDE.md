@@ -267,6 +267,19 @@ invisible dans le diff comme dans la revue.
   hors de « Disponibles », qui compte l'effectif comme le Résumé de la
   matrice ; ils comptent dans « Sélectionnés ». Une cellule encadrée = dans la
   composition de **cette** équipe.
+- **Un joueur de l'effectif prêté à une autre équipe du club** sur une
+  journée a sa cellule **hachurée**, avec le badge de cette équipe (son numéro
+  dans sa couleur, comme partout dans l'app) — quelle équipe se lit sans
+  toucher ; un toucher la nomme. La clé « En renfort » rejoint « Dans la
+  composition » dans la ligne de titre, **seulement s'il y a un prêt**.
+- La règle est `playersCommittedElsewhere`, celle que suit déjà le choix de la
+  composition — jamais une seconde dérivation : les équipes du club **de la
+  même phase** (un numéro de journée recommence à 1 à chaque phase).
+- **Le prêt compte dans « Sél. »** : c'est une journée jouée pour le club, et
+  un capitaine qui compte qui a joué combien compte les deux. Il **sort de
+  « Disponibles »**, quoi que le joueur ait répondu : un oui qu'une autre
+  équipe aligne n'est pas un oui que celle-ci peut aligner. Son propre ratio
+  « Oui » garde sa réponse, qui est à lui.
 - **Le popover de l'app est dessiné dans la feuille**, pas dans un `Modal` :
   un second `Modal` serait en portrait seul sur iOS. Il s'ouvre **au-dessus**
   de la cellule (la ligne est posée sur les totaux). Sur le web il est

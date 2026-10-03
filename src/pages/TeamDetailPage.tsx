@@ -82,9 +82,13 @@ export function TeamDetailPage() {
   const phaseGrid = useMemo(
     () =>
       team
-        ? phaseAvailabilityGrid(team, games_, players, gameAvailabilities, gameSelections)
+        ? phaseAvailabilityGrid(team, games_, players, gameAvailabilities, gameSelections, {
+            teams,
+            games,
+            matchDays,
+          })
         : EMPTY_PHASE_GRID,
-    [team, games_, players, gameAvailabilities, gameSelections],
+    [team, games_, players, gameAvailabilities, gameSelections, teams, games, matchDays],
   )
   const phaseColumns = useMemo(() => phaseAvailabilityColumns(games_), [games_])
   // Members the federation has not listed a licence for this season (#488):
@@ -159,6 +163,7 @@ export function TeamDetailPage() {
         required={playersRequired(team, groups, divisions)}
         unlicensed={unlicensed}
         onGame={(gameId) => setQuickGame({ gameId, teamId: team.id })}
+        teamLabel={(t) => getTeamName(t, clubs)}
       />
 
       {/* Players (left) / Games (right) — stacked on narrow viewports */}
