@@ -128,6 +128,12 @@ describe('the backdrop sits behind the panel, not around it', () => {
     fireEvent.press(screen.getByTestId('sheet-backdrop'))
     expect(onClose).toHaveBeenCalled()
   })
+
+  it('is a button VoiceOver can name, rather than a label made of every line', () => {
+    // Wrapping the panel, it was one element whose label ran the whole sheet
+    // together. Behind it, it is the way out — the only one some sheets have.
+    expect(screen.getByRole('button', { name: 'Fermer' })).toBe(screen.getByTestId('sheet-backdrop'))
+  })
 })
 
 // ---------------------------------------------------------------------------

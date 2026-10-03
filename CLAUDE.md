@@ -184,6 +184,13 @@ invisible dans le diff comme dans la revue.
   couché, toutes les feuilles défilent, et l'éditeur d'entraînement ne
   laissait plus atteindre ses dates. Le fond est maintenant le frère du
   panneau, en `absoluteFill` sous lui : rien n'a plus à avaler un toucher.
+- **Et VoiceOver lisait la feuille d'un bloc.** Un `Pressable` est *un*
+  élément d'accessibilité : en enveloppant le panneau, il en faisait un seul,
+  dont le libellé était toutes les lignes mises bout à bout (« Désigner un
+  administrateur, Rechercher un joueur, Camille Bernard… »), et aucune ligne
+  ne s'atteignait seule. Derrière le panneau, chaque ligne est la sienne, et
+  le fond est un bouton « Fermer » : VoiceOver n'a pas de tap à côté, et
+  plusieurs feuilles n'ont pas d'autre sortie.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -1428,10 +1435,15 @@ invisible dans le diff comme dans la revue.
   redresse (`sips -r -90`) — une rotation exacte et non un bricolage : les
   pixels sont déjà un rendu paysage, seul le cadre est de travers ; et
   l'arbre d'accessibilité continue d'annoncer des **coordonnées portrait**.
-  Les taps *dans l'app* atterrissent quand même (vérifié), mais **les alertes
-  de SpringBoard cessent de les recevoir** : le même `tapOn` qui ne fait rien
-  en paysage referme la demande de notifications en portrait. On se connecte
-  donc à l'endroit, et on ne tourne l'appareil qu'ensuite.
+  Les taps *dans l'app* atterrissaient quand même lors des captures, mais
+  **les alertes de SpringBoard cessent de les recevoir** : le même `tapOn` qui
+  ne fait rien en paysage referme la demande de notifications en portrait. On
+  se connecte donc à l'endroit, et on ne tourne l'appareil qu'ensuite.
+  **Sur un iPhone 17 en iOS 27, ils n'atterrissent plus** (#625) : un flow
+  couché enchaînant `tapOn: id:` a rapporté chaque tap « COMPLETED » et fini
+  sur l'onglet Équipes, loin de l'écran visé. Le flow iPad, lui, n'a pas été
+  rejoué sous iOS 27 : avant une session de captures sur ce runtime, vérifier
+  qu'un tap couché atteint bien sa cible.
 - **L'appareil de capture se voit refuser les notifications**
   (`permissions` sur `launchApp`). Pas par hygiène : le compte de revue est
   capitaine d'un match à six jours, donc le balayage nocturne (#495) poserait

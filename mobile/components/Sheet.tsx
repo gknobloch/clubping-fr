@@ -161,11 +161,20 @@ export function Sheet({
             `onStartShouldSetResponder` — and a view holding the responder
             keeps the touch from the native scroll view under it. A sheet then
             scrolled only from a button: dragging on text, a label or a gap did
-            nothing, which sideways, where every sheet scrolls, is most of it. */}
+            nothing, which sideways, where every sheet scrolls, is most of it.
+
+            It did the same to VoiceOver: a `Pressable` is one accessibility
+            element, so wrapping the panel made the whole sheet a single
+            element whose label was every line run together, and no row could
+            be reached on its own. Behind the panel it is an element of its own
+            — so it says what it does: VoiceOver has no tap outside a sheet,
+            and several sheets have no close button. */}
         <Pressable
           testID={`${testID}-backdrop`}
           style={StyleSheet.absoluteFill}
           onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fermer"
         />
         <View
           testID={testID}
