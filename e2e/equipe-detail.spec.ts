@@ -38,4 +38,37 @@ test.describe('Player — Team detail', () => {
     await expect(page).toHaveURL('/joueurs/p2-player-5')
     await expect(page.getByRole('dialog')).not.toBeVisible()
   })
+
+  // #623: the whole phase, a ratio per player.
+  test('shows every journée of the phase with a ratio per player', async ({ page }) => {
+    const section = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Planning de la phase' }),
+    })
+    await expect(section).toBeVisible()
+    const row = section.getByRole('row').filter({ has: page.getByRole('rowheader', { name: /Szulc/ }) })
+    // «Oui» then «Sél.», each out of the phase's eight matches.
+    await expect(row.getByText(/^\d+\/8$/)).toHaveCount(2)
+    await expect(section.getByRole('rowheader', { name: 'Sélectionnés' })).toBeVisible()
+
+    // Renforts are one row; their names open in a popover.
+    await expect(section.getByRole('rowheader', { name: /Cunin/ })).toHaveCount(0)
+    await section.getByRole('button', { name: 'Renforts : Cédric Cunin' }).first().click()
+    await expect(page.getByRole('dialog', { name: /^Renforts · J/ })).toContainText('Cédric Cunin')
+    await page.getByRole('button', { name: 'Fermer' }).click()
+
+    await section.getByRole('button', { name: /^Journée 1,/ }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+  })
+
+  test('keeps the name in view while the journées scroll on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    const section = page.locator('section').filter({
+      has: page.getByRole('heading', { name: 'Planning de la phase' }),
+    })
+    await expect(section.getByText('Tournez le téléphone pour voir toute la phase.')).toBeVisible()
+    const name = section.getByRole('rowheader', { name: /Szulc/ })
+    const before = await name.boundingBox()
+    await section.locator('div.overflow-x-auto').evaluate((el) => el.scrollBy({ left: 300 }))
+    await expect.poll(async () => (await name.boundingBox())?.x).toBe(before?.x)
+  })
 })

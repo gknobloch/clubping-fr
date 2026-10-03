@@ -241,6 +241,107 @@ invisible dans le diff comme dans la revue.
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
 
+### Planning de la phase (#623)
+- **La matrice des Journées lit trois journées pour toutes les équipes ; ceci
+  lit toute la phase pour une seule.** Demande d'un capitaine : le planning
+  prévisionnel, « 5/7 » par joueur. Mêmes réponses, l'autre axe.
+- `phaseAvailabilityGrid` (`src/lib/phaseAvailability.ts`) est la seule
+  dérivation, avec ses en-têtes (`phaseAvailabilityColumns`) et le seuil des
+  totaux (`playersRequired`). Le ratio est **les « Oui » sur les matchs de la
+  phase** : sans réponse n'est pas un oui.
+- **Deux comptes par joueur, deux totaux par journée** : « Oui » et « Sél. »
+  (`5/7`, `3/7`) ; sous la grille, « Disponibles » et « Sélectionnés ». Une
+  composition est un compte exact, comme dans la matrice (#580) — mais une
+  composition **vide** n'est pas fausse : sur une phase, la plupart ne sont
+  simplement pas encore faites, d'où `selectionVerdict` et son état `empty`,
+  gris plutôt que rouge.
+- Lignes : l'effectif. **Les renforts tiennent sur une seule ligne,
+  « Renforts »**, quel que soit leur nombre : par journée, les visages de ceux
+  que la composition emprunte (deux, puis « +N »), **encadrés** comme toute
+  cellule de la composition — ils n'y figurent que parce qu'elle les nomme —
+  et leurs noms dans un popover au toucher. **Les noms seuls**, sans OUI / PE
+  / NON : un joueur emprunté répond pour les matchs de son équipe, pas pour
+  ceux-ci. Une ligne par renfort poussait les
+  totaux de l'effectif hors d'un téléphone couché, pour des lignes portant
+  chacune un seul cadre. Pas de total « Oui » sur cette ligne, et ils sont
+  hors de « Disponibles », qui compte l'effectif comme le Résumé de la
+  matrice ; ils comptent dans « Sélectionnés ». Une cellule encadrée = dans la
+  composition de **cette** équipe.
+- **Un joueur de l'effectif prêté à une autre équipe du club** sur une
+  journée a sa cellule **hachurée**, avec le badge de cette équipe (son numéro
+  dans sa couleur, comme partout dans l'app) — quelle équipe se lit sans
+  toucher ; un toucher la nomme. **La teinte de sa réponse reste sous les
+  hachures** : un « oui » prêté reste un oui. La clé « En renfort » rejoint
+  « Dans la composition » dans la ligne de titre, **seulement s'il y a un
+  prêt**, avec le badge d'une équipe où ses joueurs sont partis
+  (`lentKeyTeam`). Même règle pour la ligne Renforts : rien à expliquer, rien
+  d'affiché.
+- **Les hachures de l'app sont de vraies lignes**, pas un `Pattern` SVG : une
+  tuile de 6 pt tournée à 45° sortait sur l'appareil en semis de points que
+  personne ne voyait. Des lignes en coordonnées utilisateur, rognées par la
+  boîte du `Svg`, sont les mêmes rayures à toute taille. Gris translucide,
+  lisible sur les quatre fonds.
+- **Une cellule sans réponse est une boîte vide** : le tiret n'ajoutait rien.
+- La règle est `playersCommittedElsewhere`, celle que suit déjà le choix de la
+  composition — jamais une seconde dérivation : les équipes du club **de la
+  même phase** (un numéro de journée recommence à 1 à chaque phase).
+- **Le prêt compte dans « Sél. »** : c'est une journée jouée pour le club, et
+  un capitaine qui compte qui a joué combien compte les deux. Il **sort de
+  « Disponibles »**, quoi que le joueur ait répondu : un oui qu'une autre
+  équipe aligne n'est pas un oui que celle-ci peut aligner. Son propre ratio
+  « Oui » garde sa réponse, qui est à lui.
+- **Le popover de l'app est dessiné dans la feuille**, pas dans un `Modal` :
+  un second `Modal` serait en portrait seul sur iOS. Il s'ouvre **au-dessus**
+  de la cellule (la ligne est posée sur les totaux). Sur le web il est
+  `fixed`, placé d'après le rectangle de la cellule et gardé dans la fenêtre :
+  positionné dans la cellule, le conteneur qui défile le rognait dès qu'elle
+  était près de son bord. Un défilement le referme, plutôt que de le laisser
+  dériver loin de sa cellule.
+- **44 px même dans la grille** (#372) : une colonne de journée fait 48 px
+  sous `sm:`, donc son bouton n'a que 2 px de marge de chaque côté, et le nom
+  est un lien sur toute la cellule — « E. Lotz » seul en fait 41.
+- **Nom et comptes figés, journées qui défilent**, sur le web comme dans
+  l'app. Sur le web, `border-separate` et non `border-collapse` : une bordure
+  fusionnée laisse un pixel à côté d'une cellule collante, où les journées
+  défilées transparaissent.
+- **Dans l'app, une feuille, pas un écran poussé** (`PhaseAvailabilitySheet`),
+  ouverte par « Planning de la phase » depuis **« Tous les matchs »**
+  (`team/phase-games`), pas depuis la fiche équipe : le planning parle des
+  matchs, et c'est là que l'accueil mène un capitaine. L'écran n'y liste plus
+  l'effectif avec ses comptes — la colonne « Sél. » du planning en était la
+  même chose ; il garde deux entrées, le planning et « Voir la fiche équipe »,
+  puis les matchs. Un téléphone couché fait ~400 pt de haut ;
+  l'en-tête de l'app, la barre d'onglets et un sélecteur de phase en
+  prenaient ~150, et six joueurs + les deux totaux ne tenaient plus. La
+  feuille couvre l'en-tête et la barre ; couchée, elle est `dense` (marges =
+  encoche et indicateur d'accueil, lignes à 32 pt, fermeture par un ✕ dans la
+  ligne de titre).
+- **Pas de ligne de légende.** OUI / PE / NON sont les réponses de l'app,
+  lues de la même façon sur chaque écran ; seul le cadre est propre à cette
+  grille, et sa clé (« Dans la composition », `CompositionKey`) tient dans la
+  ligne de titre. Le titre est l'équipe et sa phase, sans « Disponibilités » :
+  le bouton qui ouvre la feuille l'a déjà dit.
+- **Pas de sélecteur de phase dans la feuille** : l'écran qui l'ouvre en a
+  déjà un, et le titre nomme la phase choisie.
+- **Sur une tablette, pas de feuille** : « Planning de la phase » est la
+  première entrée du rail de « Tous les matchs », et la grille est dessinée
+  dans le volet (`PhaseAvailabilityPanel`, `inline`, largeur mesurée). Une
+  journée s'y ouvre à côté du rail, comme son entrée ; un nom ouvre la fiche
+  du licencié (`useOpenPlayer`).
+- **Pas de rangée « Voir la fiche équipe » dans ce volet** : le nom de
+  l'équipe, en tête du planning, y mène. Le retour n'en tient pas lieu — on
+  arrive aussi sur « Tous les matchs » depuis l'écran d'un match, donc depuis
+  l'accueil sans être passé par la fiche.
+- **`rotates`** : iOS présente un `Modal` en portrait seul si on ne lui dit
+  rien — une feuille ouverte téléphone couché redressait l'écran sous les
+  mains du membre. Les autres feuilles de l'app ne le déclarent pas encore.
+- **En sortir est une navigation** : un nom ouvre la fiche, une journée le
+  match, et la feuille se ferme d'abord. Une seconde feuille par-dessus
+  (l'aperçu joueur) serait en portrait seul.
+- **On ne verrouille pas l'orientation** : debout, un téléphone tient quatre
+  ou cinq journées et la feuille invite à le tourner ; couché, sept tiennent.
+  Sur le web, une section de la fiche équipe.
+
 ### Lieu d'un match (#611)
 - **Là où l'on regarde un match, on voit où il se joue, en entier** : le nom
   de la salle, puis l'adresse, et un toucher ouvre le plan — Plans sur iOS,

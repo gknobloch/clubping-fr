@@ -8,15 +8,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
 import { poolLabel } from '@shared/lib/poolLabel'
-import { sortByName } from '@shared/lib/sortByName'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
-import { useOpenTeam } from '@/utils/openFiche'
-import { PlayerQuickView } from '@/components/PlayerQuickView'
+import { useOpenPlayer, useOpenTeam } from '@/utils/openFiche'
+import { PhaseAvailabilityPanel, PhaseAvailabilitySheet } from '@/components/PhaseAvailabilitySheet'
 import type { Player } from '@shared/types'
 import { LIST_PANE_WIDTH, useLayout } from '@/constants/layout'
 import { usePaneSelection } from '@/utils/paneSelection'
@@ -24,14 +23,19 @@ import { MatchDetail } from '@/components/MatchDetail'
 import { fonts } from '@/constants/typography'
 
 // ---------------------------------------------------------------------------
-// A team's full phase view: roster (with play-counts) + every match of the
-// phase. A < > switcher pages through the phases this team (club + number) has
-// played, in place — aligned with the Équipes / Mes matchs screens. The nav
-// title shows the team name; a footer row links to the team's own page so the
-// screen is never a dead-end when reached from a match.
+// A team's full phase view: every match of the phase, under two doors — the
+// phase planning (#623) and the team's own page. A < > switcher pages through
+// the phases this team (club + number) has played, in place — aligned with the
+// Équipes / Mes matchs screens. The nav title shows the team name.
+//
+// It listed the roster with play-counts too, until the planning made that a
+// second copy of one of its columns: «Sél.» says the same «3/7», beside the
+// answers that explain it. The planning opens from here and not from the fiche
+// équipe because it is about the matches — and «Tous les matchs» is where the
+// accueil leads a captain with a phase to plan.
 // ---------------------------------------------------------------------------
-/** Ce que le rail sélectionne quand ce n'est pas un match. */
-const RESUME = 'resume'
+/** Ce que le rail sélectionne quand ce n'est pas un match : le planning. */
+const PLANNING = 'planning'
 
 /** «sam. 5 sept.» — tout ce qu'une entrée de rail a la place de dire. */
 function shortDate(iso: string): string {
@@ -48,10 +52,11 @@ export default function PhaseGamesScreen() {
   const navigation = useNavigation()
   const router = useRouter()
   const openTeam = useOpenTeam()
+  const openPlayer = useOpenPlayer()
   const { isTwoPane } = useLayout()
   const { selectedId, select } = usePaneSelection()
 
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [showPlanning, setShowPlanning] = useState(false)
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
 
   // The tapped team identifies the logical team (club + number); its name and
@@ -98,33 +103,13 @@ export default function PhaseGamesScreen() {
 
   // Lu sur la liste plutôt que gardé à part : le commutateur change de phase,
   // où le match sélectionné n'existe pas — le volet retombe alors sur
-  // « Résumé » tout seul, et retrouve le match au retour.
+  // planning tout seul, et retrouve le match au retour.
   const selectedGame = teamGames.find((g) => g.id === selectedId)
 
   const teamSelections = useMemo(
     () => (team ? gameSelections.filter((s) => s.teamId === team.id) : []),
     [gameSelections, team],
   )
-
-  const { rosterPlayers, borrowedPlayers, playedCount } = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const sel of teamSelections) {
-      for (const pid of sel.playerIds) {
-        counts.set(pid, (counts.get(pid) ?? 0) + 1)
-      }
-    }
-    const rosterIds = new Set(team?.playerIds ?? [])
-    const borrowedIds = [...counts.keys()].filter((pid) => !rosterIds.has(pid))
-    const roster = sortByName(
-      (team?.playerIds ?? [])
-        .map((pid) => players.find((p) => p.id === pid))
-        .filter(Boolean) as Player[],
-    )
-    const borrowed = sortByName(
-      borrowedIds.map((pid) => players.find((p) => p.id === pid)).filter(Boolean) as Player[],
-    )
-    return { rosterPlayers: roster, borrowedPlayers: borrowed, playedCount: counts }
-  }, [team, teamSelections, players])
 
   // Club teams in the same phase (for brûlage computation)
   const totalGames = teamGames.length
@@ -145,37 +130,20 @@ export default function PhaseGamesScreen() {
     />
   ) : null
 
-  /** L'effectif et ce qu'il a joué — le « Résumé » du rail sur tablette. */
-  const members =
-    (rosterPlayers.length > 0 || borrowedPlayers.length > 0) && team ? (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Joueurs ({rosterPlayers.length + borrowedPlayers.length})
-        </Text>
-        {rosterPlayers.map((p) => (
-          <TouchableOpacity
-            key={p.id}
-            style={styles.memberRow}
-            onPress={() => setSelectedPlayer(p)}
-          >
-            <Text style={styles.memberName}>{p.firstName} {p.lastName}</Text>
-            {p.id === team.captainId && <Text style={styles.capBadge}>Cap.</Text>}
-            <Text style={styles.gamesCount}>{playedCount.get(p.id) ?? 0}/{totalGames}</Text>
-          </TouchableOpacity>
-        ))}
-        {borrowedPlayers.map((p) => (
-          <TouchableOpacity
-            key={p.id}
-            style={styles.memberRow}
-            onPress={() => setSelectedPlayer(p)}
-          >
-            <Text style={styles.memberName}>{p.firstName} {p.lastName}</Text>
-            <Text style={styles.renforceBadge}>Renfort</Text>
-            <Text style={styles.gamesCount}>{playedCount.get(p.id) ?? 0}/{totalGames}</Text>
-          </TouchableOpacity>
-        ))}
+  /** Toute la phase, joueurs × journées (#623) — dispos et compositions. */
+  const planningLink = team && totalGames > 0 ? (
+    <TouchableOpacity
+      testID="team-phase-planning"
+      style={styles.linkRow}
+      onPress={() => setShowPlanning(true)}
+    >
+      <View style={styles.linkLeft}>
+        <Ionicons name="grid-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.linkText}>Planning de la phase</Text>
       </View>
-    ) : null
+      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+    </TouchableOpacity>
+  ) : null
 
   /** Jamais un cul-de-sac : la fiche de l'équipe est à un geste. */
   const teamLink = team ? (
@@ -188,13 +156,8 @@ export default function PhaseGamesScreen() {
     </TouchableOpacity>
   ) : null
 
-  const quickView = selectedPlayer && team && (
-    <PlayerQuickView
-      playerId={selectedPlayer.id}
-      team={team}
-      phaseLabel={currentEntry?.label}
-      onClose={() => setSelectedPlayer(null)}
-    />
+  const planning = showPlanning && team && (
+    <PhaseAvailabilitySheet team={team} onClose={() => setShowPlanning(false)} />
   )
 
   // -------------------------------------------------------------------------
@@ -202,8 +165,14 @@ export default function PhaseGamesScreen() {
   //
   // Le rail *est* la liste des matchs, donc le volet droit porte le match lui-
   // même — disponibilités, composition, feuille — plutôt qu'une carte qu'il
-  // faudrait encore ouvrir. « Résumé » garde ce que l'écran montrait en haut :
-  // l'effectif et ce que chacun a joué.
+  // faudrait encore ouvrir. Sa première entrée est le planning de la phase
+  // (#623), dessiné dans le volet même : la place qu'il demande sur un
+  // téléphone, une tablette l'a, et une feuille par-dessus un volet qui n'a
+  // rien d'autre à montrer serait une porte vers une pièce vide.
+  //
+  // Pas de rangée « Voir la fiche équipe » : le nom de l'équipe, en tête du
+  // planning, y mène. On n'arrive pas toujours ici depuis la fiche — l'écran
+  // d'un match y mène aussi —, donc le retour n'en tient pas lieu.
   // -------------------------------------------------------------------------
   if (isTwoPane) {
     return (
@@ -212,13 +181,13 @@ export default function PhaseGamesScreen() {
           <ScrollView contentContainerStyle={styles.railList}>
             {switcher}
             <TouchableOpacity
-              testID="rail-resume"
+              testID="rail-planning"
               style={[styles.railRow, !selectedGame && styles.railRowSelected]}
               accessibilityState={!selectedGame ? { selected: true } : {}}
-              onPress={() => select(RESUME)}
+              onPress={() => select(PLANNING)}
             >
               <Text style={[styles.railResume, !selectedGame && styles.railTextSelected]}>
-                Résumé
+                Planning de la phase
               </Text>
             </TouchableOpacity>
 
@@ -265,15 +234,22 @@ export default function PhaseGamesScreen() {
         <View style={styles.detailPane}>
           {selectedGame && team ? (
             <MatchDetail gameId={selectedGame.id} teamId={team.id} embedded />
+          ) : team && totalGames > 0 ? (
+            <PhaseAvailabilityPanel
+              // Keyed on the phase's team: the switcher swaps the team record,
+              // and the panel's measured width and popover belong to the old one.
+              key={team.id}
+              team={team}
+              inline
+              // A journée opens beside the rail, as its rail entry does.
+              onGame={select}
+              onPlayer={openPlayer}
+              onTeam={() => openTeam(team.id)}
+            />
           ) : (
-            <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
-              {members}
-              {teamLink}
-            </ScrollView>
+            <Text style={styles.empty}>Aucun match trouvé.</Text>
           )}
         </View>
-
-        {quickView}
       </Screen>
     )
   }
@@ -282,7 +258,7 @@ export default function PhaseGamesScreen() {
     <Screen>
       <ScrollView contentContainerStyle={[styles.scroll, contentWidth()]}>
         {switcher}
-        {members}
+        {planningLink}
         {teamLink}
 
         {/* Games list — tappable cards aligned with Journées / Mes matchs. */}
@@ -343,7 +319,7 @@ export default function PhaseGamesScreen() {
 
       </ScrollView>
 
-      {quickView}
+      {planning}
     </Screen>
   )
 }
@@ -383,49 +359,7 @@ const styles = StyleSheet.create({
   railMeta: { fontSize: 12, color: colors.textSecondary },
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', padding: 24 },
 
-  section: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: fonts.semiBold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
-  },
-
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 8,
-  },
-  memberName: { flex: 1, fontSize: 14, color: colors.textPrimary },
-  capBadge: {
-    fontSize: 11, fontFamily: fonts.semiBold, color: colors.accent,
-    backgroundColor: colors.accentSoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
-  },
-  renforceBadge: {
-    fontSize: 11, fontFamily: fonts.medium, color: colors.textSecondary,
-    backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border,
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
-  },
-  gamesCount: {
-    fontSize: 13, fontFamily: fonts.semiBold, color: colors.textSecondary,
-    minWidth: 36, textAlign: 'right',
-  },
-
-  // Standalone label above the match-card list (parallels the Joueurs title).
+  // Standalone label above the match-card list.
   listLabel: {
     fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary,
     textTransform: 'uppercase', letterSpacing: 0.5,

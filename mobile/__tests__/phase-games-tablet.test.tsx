@@ -24,7 +24,7 @@ import PhaseGamesScreen from '@/app/(tabs)/(detail)/team/phase-games'
 // per match, each one a push away from the match itself. On a slab that is a
 // list of doors in a room twice as wide as it needs.
 //
-// It becomes a rail — « Résumé » and one entry per journée — and the match
+// It becomes a rail — « Planning de la phase » and one entry per journée — and the match
 // itself in the pane beside it. Below the threshold nothing moves.
 // ---------------------------------------------------------------------------
 const mockPush = jest.fn()
@@ -116,13 +116,36 @@ beforeEach(() => {
 afterEach(resetWindowSize)
 
 describe('sur un téléphone', () => {
-  it('reste la colonne qu’il a toujours été', () => {
+  it('reste une colonne : deux portes, puis les matchs', () => {
     setWindowSize(PHONE_WIDTH)
 
     render(<PhaseGamesScreen />)
 
+    expect(screen.getByText('Planning de la phase')).toBeTruthy()
+    expect(screen.getByText('Voir la fiche équipe')).toBeTruthy()
     expect(screen.getByText('Matchs (2)')).toBeTruthy()
-    expect(screen.queryByTestId('rail-resume')).toBeNull()
+    expect(screen.queryByTestId('rail-planning')).toBeNull()
+  })
+
+  // #623 : le planning dit déjà « 3/7 » dans sa colonne « Sél. », à côté des
+  // réponses qui l'expliquent — l'effectif avec ses comptes en était une copie.
+  it('ne liste plus l’effectif, que le planning montre', () => {
+    setWindowSize(PHONE_WIDTH)
+
+    render(<PhaseGamesScreen />)
+
+    expect(screen.queryByText('Joueurs (2)')).toBeNull()
+  })
+
+  it('ouvre le planning de la phase dans une feuille, sur place', () => {
+    setWindowSize(PHONE_WIDTH)
+    render(<PhaseGamesScreen />)
+
+    fireEvent.press(screen.getByTestId('team-phase-planning'))
+
+    expect(screen.getByTestId('phase-sheet')).toBeTruthy()
+    expect(screen.getByTestId('phase-row-p1')).toBeTruthy()
+    expect(mockPush).not.toHaveBeenCalled()
   })
 })
 
@@ -132,14 +155,42 @@ describe('sur une tablette', () => {
     render(<PhaseGamesScreen />, { metrics: TABLET })
   }
 
-  it('ouvre sur le Résumé, l’effectif à côté', () => {
+  /** Jest has no layout engine: the pane says how wide it is, as a device would. */
+  const layOutPanel = () =>
+    fireEvent(screen.getByTestId('phase-panel'), 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 760, height: 700 } },
+    })
+
+  it('ouvre sur le planning de la phase, dessiné dans le volet', () => {
     renderTablet()
 
-    expect(screen.getByTestId('rail-resume').props.accessibilityState).toEqual({
+    expect(screen.getByTestId('rail-planning').props.accessibilityState).toEqual({
       selected: true,
     })
-    // Ce que l'écran montrait en haut : qui est là, et ce que chacun a joué.
-    expect(screen.getByText('Joueurs (2)')).toBeTruthy()
+    expect(screen.getByText('Planning de la phase')).toBeTruthy()
+    layOutPanel()
+    // La grille elle-même, pas un bouton vers une feuille.
+    expect(screen.getByTestId('phase-availability-table')).toBeTruthy()
+    expect(screen.queryByTestId('team-phase-planning')).toBeNull()
+    expect(screen.queryByTestId('phase-sheet')).toBeNull()
+  })
+
+  it('mène à la fiche par le nom de l’équipe, sans rangée « Voir la fiche équipe »', () => {
+    renderTablet()
+
+    expect(screen.queryByText('Voir la fiche équipe')).toBeNull()
+    fireEvent.press(screen.getByTestId('phase-panel-team'))
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/equipes', params: { selected: 't1' } })
+  })
+
+  it('ouvre une journée à côté du rail, comme son entrée', () => {
+    renderTablet()
+    layOutPanel()
+
+    fireEvent.press(screen.getByTestId('phase-col-g1'))
+
+    expect(screen.getByText('Disponibilités')).toBeTruthy()
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('donne une entrée par journée, l’adversaire et la date', () => {
@@ -156,9 +207,9 @@ describe('sur une tablette', () => {
 
     fireEvent.press(screen.getByTestId('rail-game-g1'))
 
-    // Le détail du match, là où était le Résumé.
+    // Le détail du match, là où était le planning.
     expect(screen.getByText('Disponibilités')).toBeTruthy()
-    expect(screen.queryByText('Joueurs (2)')).toBeNull()
+    expect(screen.queryByTestId('phase-panel')).toBeNull()
     expect(mockPush).not.toHaveBeenCalled()
   })
 
