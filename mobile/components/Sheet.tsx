@@ -144,20 +144,29 @@ export function Sheet({
       onRequestClose={onClose}
       supportedOrientations={MODAL_ORIENTATIONS}
     >
-      <Pressable
-        testID={`${testID}-backdrop`}
+      <View
+        testID={`${testID}-frame`}
         style={[
-          s.backdrop,
-          isTablet && s.backdropCentred,
+          s.frame,
+          isTablet && s.frameCentred,
           // The panel stays inside the safe area, so the notch never sits over
           // a row. Zero standing up. A dense sheet takes the whole width and
           // pads its own content off the notch instead.
           !isTablet && !denseOnPhone && { paddingLeft: insets.left, paddingRight: insets.right },
         ]}
-        onPress={onClose}
       >
-        {/* View + onStartShouldSetResponder stops the backdrop from closing when
-            tapping the panel, without competing with nested TouchableOpacity rows */}
+        {/* The backdrop is the panel's sibling, behind it, and not its parent
+            (#625). As the parent it closed the sheet on any tap the panel did
+            not catch, so the panel caught them all with
+            `onStartShouldSetResponder` — and a view holding the responder
+            keeps the touch from the native scroll view under it. A sheet then
+            scrolled only from a button: dragging on text, a label or a gap did
+            nothing, which sideways, where every sheet scrolls, is most of it. */}
+        <Pressable
+          testID={`${testID}-backdrop`}
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+        />
         <View
           testID={testID}
           style={[
@@ -176,7 +185,6 @@ export function Sheet({
             isTablet && s.dialog,
             isTablet && wide && s.dialogWide,
           ]}
-          onStartShouldSetResponder={() => true}
         >
           {/* The grab handle is a phone affordance: it says "this came up from
               the bottom edge and goes back down". A centred dialog has no such
@@ -186,14 +194,14 @@ export function Sheet({
           )}
           {children}
         </View>
-      </Pressable>
+      </View>
     </Modal>
   )
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  backdropCentred: { justifyContent: 'center', alignItems: 'center', padding: BACKDROP_PADDING },
+  frame: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  frameCentred: { justifyContent: 'center', alignItems: 'center', padding: BACKDROP_PADDING },
   sheet: {
     backgroundColor: colors.card,
     borderTopLeftRadius: 20,

@@ -172,7 +172,18 @@ invisible dans le diff comme dans la revue.
   de 402 pt ne tient pas trois boutons. Ce qui dépasse défile — d'où la règle
   du `flexShrink` ci-dessous. `dense` (#623) prend toute la largeur et règle
   ses marges lui-même. Une page sheet (`presentationStyle="pageSheet"`)
-  devient plein écran couchée : son `SafeAreaView` garde aussi les côtés.
+  devient plein écran couchée : son `SafeAreaView` garde aussi les côtés, ce
+  qui éloigne son en-tête et son pied du bord et des coins arrondis.
+- **Le fond d'une feuille est derrière le panneau, pas autour** (#625). Quand
+  le `Pressable` du fond enveloppait le panneau, le panneau devait réclamer
+  chaque toucher (`onStartShouldSetResponder`) pour qu'un tap sur lui ne
+  ferme pas la feuille — et une vue qui tient le *responder* prive de son
+  geste la `ScrollView` native en dessous. Une feuille ne défilait donc que
+  si le doigt partait d'un bouton : glisser sur un libellé, un texte ou un
+  vide ne faisait rien. Debout, presque tout tient et ça ne se voyait pas ;
+  couché, toutes les feuilles défilent, et l'éditeur d'entraînement ne
+  laissait plus atteindre ses dates. Le fond est maintenant le frère du
+  panneau, en `absoluteFill` sous lui : rien n'a plus à avaler un toucher.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -1479,9 +1490,9 @@ invisible dans le diff comme dans la revue.
   erreur Ruby qui ne parle pas de locale. Même correctif que pour
   `store:fastlane`.
 - **Une feuille se ferme par son propre bouton, jamais par son fond.** Le
-  `Pressable` du fond *enveloppe* le panneau : son centre — ce que vise
-  `tapOn: id:` — tombe dans le panneau, où `onStartShouldSetResponder` avale
-  délibérément le toucher. Et viser un point ne marche que sur un téléphone :
+  `Pressable` du fond couvre tout l'écran, *sous* le panneau (#625) : son
+  centre — ce que vise `tapOn: id:` — tombe sur le panneau, qui reçoit le
+  toucher à sa place. Et viser un point ne marche que sur un téléphone :
   au-dessus du seuil tablette, `Sheet` devient un dialogue de 520 pt centré
   dans une fenêtre de 1032, donc le point qui est du fond sur l'un est le
   panneau sur l'autre. `match-sheet-close` et `selection-cancel` répondent aux

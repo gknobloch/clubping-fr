@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, within } from '@testing-library/react-native'
 import { Modal, StyleSheet, Text } from 'react-native'
 import { render, PHONE_LANDSCAPE } from '@/__tests__/support/render'
 import {
@@ -38,7 +38,8 @@ function renderSheet() {
 }
 
 const panel = () => StyleSheet.flatten(screen.getByTestId('sheet').props.style)
-const backdrop = () => StyleSheet.flatten(screen.getByTestId('sheet-backdrop').props.style)
+/** What lays the panel out: the dimmed screen, its padding, where the panel sits. */
+const frame = () => StyleSheet.flatten(screen.getByTestId('sheet-frame').props.style)
 
 describe('on a phone', () => {
   beforeEach(() => {
@@ -47,7 +48,7 @@ describe('on a phone', () => {
   })
 
   it('rises from the bottom edge, full width, rounded at the top', () => {
-    expect(backdrop().justifyContent).toBe('flex-end')
+    expect(frame().justifyContent).toBe('flex-end')
     expect(panel().borderTopLeftRadius).toBe(20)
     // The reading-column cap is wider than any phone standing up.
     expect(panel().width).toBe('100%')
@@ -66,8 +67,8 @@ describe('on a tablet', () => {
   })
 
   it('becomes a dialog, centred and capped', () => {
-    expect(backdrop().justifyContent).toBe('center')
-    expect(backdrop().alignItems).toBe('center')
+    expect(frame().justifyContent).toBe('center')
+    expect(frame().alignItems).toBe('center')
     expect(panel().maxWidth).toBe(DIALOG_MAX_WIDTH)
   })
 
@@ -84,19 +85,49 @@ it('is a dialog at the narrow end of the tablet range too', () => {
   setWindowSize(TABLET_SMALL)
   renderSheet()
 
-  expect(backdrop().justifyContent).toBe('center')
+  expect(frame().justifyContent).toBe('center')
 })
 
 it('still closes on the backdrop once it is a dialog', () => {
-  // Tapping the panel itself is held back by `onStartShouldSetResponder`, which
-  // is a responder-system answer the test renderer has no way to give — the
-  // simulator is the check for that half.
   setWindowSize(TABLET_LARGE)
   renderSheet()
 
   fireEvent.press(screen.getByTestId('sheet-backdrop'))
 
   expect(onClose).toHaveBeenCalled()
+})
+
+// ---------------------------------------------------------------------------
+// A sheet scrolls from wherever the finger lands (#625). The backdrop used to
+// wrap the panel, so the panel claimed every touch to keep a tap on it from
+// closing the sheet — and the view holding the responder kept the drag from
+// the scroll view under it. A sheet scrolled only from a button. The simulator
+// is what showed it; here the structure that makes it impossible is pinned.
+// ---------------------------------------------------------------------------
+describe('the backdrop sits behind the panel, not around it', () => {
+  beforeEach(() => {
+    setWindowSize(PHONE_WIDTH)
+    renderSheet()
+  })
+
+  it('holds nothing: the panel is its sibling', () => {
+    expect(within(screen.getByTestId('sheet-backdrop')).queryByTestId('sheet')).toBeNull()
+    expect(within(screen.getByTestId('sheet-frame')).getByTestId('sheet')).toBeTruthy()
+  })
+
+  it('leaves the touch to whatever is in the panel', () => {
+    expect(screen.getByTestId('sheet').props.onStartShouldSetResponder).toBeUndefined()
+  })
+
+  it('so a tap on the panel no longer reaches it', () => {
+    fireEvent.press(screen.getByText('Feuille de match'))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('and a tap on it still closes the sheet', () => {
+    fireEvent.press(screen.getByTestId('sheet-backdrop'))
+    expect(onClose).toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -144,7 +175,7 @@ describe('every sheet turns with the device', () => {
 describe('a sheet on a phone on its side', () => {
   it('keeps the panel off the notch at either end', () => {
     renderSideways()
-    expect(backdrop()).toMatchObject({ paddingLeft: 59, paddingRight: 59 })
+    expect(frame()).toMatchObject({ paddingLeft: 59, paddingRight: 59 })
   })
 
   it('stops at a reading column, centred, rather than spanning 844pt', () => {
@@ -168,7 +199,7 @@ describe('a sheet on a phone on its side', () => {
   it('still wears the grab handle — it is still a sheet', () => {
     renderSideways()
     expect(screen.getByTestId('sheet-handle')).toBeTruthy()
-    expect(backdrop().justifyContent).toBe('flex-end')
+    expect(frame().justifyContent).toBe('flex-end')
   })
 })
 
@@ -188,7 +219,7 @@ describe('a sheet on a phone standing up is as it was', () => {
 
   it('keeps 40pt above the home indicator, and no side padding on the backdrop', () => {
     expect(panel().paddingBottom).toBe(40)
-    expect(backdrop()).toMatchObject({ paddingLeft: 0, paddingRight: 0 })
+    expect(frame()).toMatchObject({ paddingLeft: 0, paddingRight: 0 })
   })
 })
 
@@ -204,7 +235,7 @@ describe('a dense sheet', () => {
   it('takes the whole width: neither the column cap nor the backdrop’s safe padding', () => {
     renderSideways({ dense: true })
     expect(panel().maxWidth).toBeUndefined()
-    expect(backdrop().paddingLeft).toBeUndefined()
+    expect(frame().paddingLeft).toBeUndefined()
   })
 
   it('takes the height bar the same sliver', () => {
@@ -226,6 +257,6 @@ it('widens a dialog for a grid on a tablet', () => {
 it('is not a sideways phone on a tablet on its side: still a dialog, at its own height', () => {
   setWindowSize(TABLET_LANDSCAPE)
   renderSheet()
-  expect(backdrop().justifyContent).toBe('center')
+  expect(frame().justifyContent).toBe('center')
   expect(panel().maxHeight).toBe('85%')
 })
