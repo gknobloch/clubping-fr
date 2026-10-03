@@ -348,8 +348,6 @@ app.get('/data', async (c) => {
     db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
     db.prepare('SELECT * FROM competitions ORDER BY sort_order').all<CompetitionRow>(),
-    // Not club_competition_eligibility any more (#604): the group rule replaced
-    // it, and the table is dropped in a later release.
     db.prepare('SELECT * FROM club_competition_groups').all<CompetitionGroupRow>(),
     db.prepare('SELECT * FROM member_groups').all<MemberGroupRow>(),
     db.prepare('SELECT * FROM member_group_members').all<MemberGroupMemberRow>(),

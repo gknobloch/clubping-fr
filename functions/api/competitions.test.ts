@@ -153,8 +153,8 @@ describe('competitions are a general admin\'s to create (#482)', () => {
     expect(write.params).toEqual(['comp-1', 'Championnat jeunes', '["B","M","C"]', 2, 0])
   })
 
-  // The lock is gone (#604), and its column is dropped by a later release:
-  // nothing may name it any more, or that release breaks the write.
+  // The lock is gone (#604) and its column dropped (0059): a write naming it
+  // would fail with `no such column`.
   it('never names the lock column, whatever the caller sends', async () => {
     const { db, writes } = fakeDb([generalAdmin], [youth], 'ga')
     await send(db, '/competitions', 'POST', { id: 'c', displayName: 'X', isCategoryLocked: true })
@@ -162,6 +162,8 @@ describe('competitions are a general admin\'s to create (#482)', () => {
     expect(writes.some((w) => /is_category_locked/.test(w.sql))).toBe(false)
   })
 
+  // The old amendments table is dropped (0059): a statement naming it would
+  // fail and take the whole delete batch with it.
   it('takes the clubs\' group links with a deleted competition, not the old amendments', async () => {
     const { db, writes } = fakeDb([generalAdmin], [youth], 'ga')
     await send(db, '/competitions/comp-jeunes', 'DELETE')
@@ -301,7 +303,7 @@ function competitionsDb(rows: HeldRow[]) {
       if (/MAX\(sort_order\)/.test(sql)) return { next: rows.length + 1 }
       if (/FROM competitions WHERE id = \?/.test(sql)) {
         const found = rows.find((r) => r.id === params[0])
-        return found ? { ...found, categories: '[]', is_category_locked: 0, sort_order: 1, is_archived: 0 } : null
+        return found ? { ...found, categories: '[]', sort_order: 1, is_archived: 0 } : null
       }
       return null
     },
