@@ -7,14 +7,12 @@ test.describe('Player — Team detail', () => {
     await page.goto('/equipes/team-1')
   })
 
-  test('shows identity, roster with play-counts, and a renfort tag', async ({ page }) => {
+  test('shows identity, and no roster list under the planning (#630)', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'PPA Rixheim 1' })).toBeVisible()
     await expect(page.getByText('GE 1')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Joueurs' })).toBeVisible()
-
-    const renfortRow = page.locator('li').filter({ hasText: 'Cédric Cunin' })
-    await expect(renfortRow.getByText('Renfort')).toBeVisible()
-    await expect(renfortRow.getByText('1/8')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Planning de la phase' })).toBeVisible()
+    // The grid's rows, «Sél.» and Renforts row said it all already.
+    await expect(page.getByRole('heading', { name: 'Joueurs', exact: true })).toHaveCount(0)
   })
 
   test('phase switcher is disabled with a single phase', async ({ page }) => {

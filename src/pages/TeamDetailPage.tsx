@@ -4,9 +4,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { teamPhaseEntries } from '@/lib/teamPhases'
 import { gameDate, gameSchedule, isSlotConfirmed } from '@/lib/matchdays'
-import { sortByName } from '@/lib/sortByName'
 import { getTeamName } from '@/lib/teamName'
-import { Avatar } from '@/components/Avatar'
 import { ClubLogo } from '@/components/ClubLogo'
 import { GameQuickView } from '@/components/GameQuickView'
 import { IdentityCard } from '@/components/IdentityCard'
@@ -24,8 +22,8 @@ import { unlicensedIds } from '@/lib/seasonLicences'
 import { activeSeasonId } from '@/lib/season'
 
 // Player/captain-facing team detail: identity + a phase switcher paging the
-// phases this team (club + number) has played, each showing the roster with
-// per-player play-counts and the games. Mirrors the mobile team detail +
+// phases this team (club + number) has played, each showing the phase
+// planning (#623) and the games. Mirrors the mobile team detail +
 // phase-games screens.
 export function TeamDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -60,24 +58,6 @@ export function TeamDetailPage() {
   const club = clubs.find((c) => c.id === team?.clubId)
   const games_ = useMemo(() => current?.games ?? [], [current])
   const totalGames = games_.length
-
-  // Roster with play-counts + borrowed players (renforts), for the selected phase.
-  const { roster, borrowed, playedCount } = useMemo(() => {
-    const counts = new Map<string, number>()
-    const sels = team ? gameSelections.filter((s) => s.teamId === team.id) : []
-    for (const sel of sels) for (const pid of sel.playerIds) counts.set(pid, (counts.get(pid) ?? 0) + 1)
-    const rosterIds = new Set(team?.playerIds ?? [])
-    const rosterPlayers = sortByName(
-      (team?.playerIds ?? []).map((pid) => players.find((p) => p.id === pid)).filter(Boolean) as typeof players,
-    )
-    const borrowedPlayers = sortByName(
-      [...counts.keys()]
-        .filter((pid) => !rosterIds.has(pid))
-        .map((pid) => players.find((p) => p.id === pid))
-        .filter(Boolean) as typeof players,
-    )
-    return { roster: rosterPlayers, borrowed: borrowedPlayers, playedCount: counts }
-  }, [team, gameSelections, players])
 
   // The whole phase, a ratio per player (#623).
   const phaseGrid = useMemo(
@@ -116,8 +96,6 @@ export function TeamDetailPage() {
       </div>
     )
   }
-
-  const memberCount = roster.length + borrowed.length
 
   return (
     <div className="space-y-5">
@@ -168,105 +146,77 @@ export function TeamDetailPage() {
         keyTeam={lentKeyTeam(phaseGrid)}
       />
 
-      {/* Players (left) / Games (right) — stacked on narrow viewports */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        {memberCount > 0 && (
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <h2 className="px-5 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Joueurs
-            </h2>
-            <ul>
-              {roster.map((p) => (
-                <RosterRow
-                  key={p.id}
-                  player={p}
-                  captain={p.id === team.captainId}
-                  played={playedCount.get(p.id) ?? 0}
-                  total={totalGames}
-                />
-              ))}
-              {borrowed.map((p) => (
-                <RosterRow
-                  key={p.id}
-                  player={p}
-                  renfort
-                  played={playedCount.get(p.id) ?? 0}
-                  total={totalGames}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <h2 className="px-5 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Matchs
-          </h2>
-          {totalGames === 0 ? (
-            <p className="px-5 pb-4 text-sm text-slate-400">Aucun match.</p>
-          ) : (
-            <ul className="px-5 pb-2">
-              {games_.map((g) => {
-                const md = g.matchDay
-                const isHome = g.homeTeamId === team.id
-                const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
-                const date = md ? gameDate(g, md) : null
-                const isPast = date ? date < today : false
-                const dateLabel = date
-                  ? new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-                  : ''
-                // Always the HOME club's time (#287): the game's own when it
-                // has one, else the receiving team's default. Empty for a
-                // fixture at an opponent whose playing day we don't know —
-                // the viewing team's time says nothing about an away game.
-                const time = md ? gameSchedule(g, md, isHome ? team : opp).time : ''
-                // The FFTT's nominal date until the receiving club's playing
-                // day is known (#429) — shown, but marked.
-                const confirmed = md ? isSlotConfirmed(g, md, isHome ? team : opp) : true
-                return (
-                  <li key={g.id} className="flex items-center justify-between gap-3 border-t border-slate-100 py-2.5">
-                    <div className="flex h-7 min-w-0 items-center gap-2">
-                      {md && (
-                        <span className={`w-6 text-xs font-bold ${isPast ? 'text-slate-500' : 'text-accent-600'}`}>
-                          J{md.number}
+      {/* No «Joueurs» list under the planning (#630): its rows were the
+          grid's rows, its count the grid's «Sél.», its renforts the grid's
+          Renforts row. */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <h2 className="px-5 pt-4 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Matchs
+        </h2>
+        {totalGames === 0 ? (
+          <p className="px-5 pb-4 text-sm text-slate-400">Aucun match.</p>
+        ) : (
+          <ul className="px-5 pb-2">
+            {games_.map((g) => {
+              const md = g.matchDay
+              const isHome = g.homeTeamId === team.id
+              const opp = teams.find((t) => t.id === (isHome ? g.awayTeamId : g.homeTeamId))
+              const date = md ? gameDate(g, md) : null
+              const isPast = date ? date < today : false
+              const dateLabel = date
+                ? new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+                : ''
+              // Always the HOME club's time (#287): the game's own when it
+              // has one, else the receiving team's default. Empty for a
+              // fixture at an opponent whose playing day we don't know —
+              // the viewing team's time says nothing about an away game.
+              const time = md ? gameSchedule(g, md, isHome ? team : opp).time : ''
+              // The FFTT's nominal date until the receiving club's playing
+              // day is known (#429) — shown, but marked.
+              const confirmed = md ? isSlotConfirmed(g, md, isHome ? team : opp) : true
+              return (
+                <li key={g.id} className="flex items-center justify-between gap-3 border-t border-slate-100 py-2.5">
+                  <div className="flex h-7 min-w-0 items-center gap-2">
+                    {md && (
+                      <span className={`w-6 text-xs font-bold ${isPast ? 'text-slate-500' : 'text-accent-600'}`}>
+                        J{md.number}
+                      </span>
+                    )}
+                    <span className="text-slate-500" title={isHome ? 'Domicile' : 'Extérieur'}>
+                      {isHome ? <HomeIcon /> : <AwayIcon />}
+                    </span>
+                    <span className="truncate text-sm text-slate-800">
+                      {opp ? getTeamName(opp, clubs) : '—'}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {/* One line where the row has the width for it, two on a
+                        phone: "19 sept. 16h00" is 110px, and set beside a
+                        truncating opponent name it eats the name instead. */}
+                    <span className="text-right text-sm text-slate-500">
+                      <MatchDate label={dateLabel} confirmed={confirmed} />
+                      {time && (
+                        <span className="block text-xs text-slate-400 md:ml-1 md:inline md:text-sm md:text-slate-500">
+                          {time}
                         </span>
                       )}
-                      <span className="text-slate-500" title={isHome ? 'Domicile' : 'Extérieur'}>
-                        {isHome ? <HomeIcon /> : <AwayIcon />}
-                      </span>
-                      <span className="truncate text-sm text-slate-800">
-                        {opp ? getTeamName(opp, clubs) : '—'}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {/* One line where the row has the width for it, two on a
-                          phone: "19 sept. 16h00" is 110px, and set beside a
-                          truncating opponent name it eats the name instead. */}
-                      <span className="text-right text-sm text-slate-500">
-                        <MatchDate label={dateLabel} confirmed={confirmed} />
-                        {time && (
-                          <span className="block text-xs text-slate-400 md:ml-1 md:inline md:text-sm md:text-slate-500">
-                            {time}
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setQuickGame({ gameId: g.id, teamId: team.id })}
-                        className={`text-slate-300 hover:text-accent-600 ${ICON_TARGET_CLASS}`}
-                        title="Détails du match"
-                        aria-label="Détails du match"
-                      >
-                        <InfoIcon />
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-      </div>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setQuickGame({ gameId: g.id, teamId: team.id })}
+                      className={`text-slate-300 hover:text-accent-600 ${ICON_TARGET_CLASS}`}
+                      title="Détails du match"
+                      aria-label="Détails du match"
+                    >
+                      <InfoIcon />
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
       {quickGame && (
         <GameQuickView
@@ -276,47 +226,5 @@ export function TeamDetailPage() {
         />
       )}
     </div>
-  )
-}
-
-function RosterRow({
-  player,
-  captain,
-  renfort,
-  played,
-  total,
-}: {
-  player: { id: string; firstName: string; lastName: string; avatarUpdatedAt?: string }
-  captain?: boolean
-  renfort?: boolean
-  played: number
-  total: number
-}) {
-  return (
-    <li className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5">
-      <Link to={`/joueurs/${player.id}`} className={`flex min-w-0 flex-1 items-center gap-3 hover:text-accent-600 ${TEXT_TARGET_CLASS}`}>
-        <Avatar
-          playerId={player.id}
-          avatarUpdatedAt={player.avatarUpdatedAt}
-          firstName={player.firstName}
-          lastName={player.lastName}
-          size={28}
-        />
-        <span className="truncate text-sm text-slate-800">
-          {player.firstName} {player.lastName}
-        </span>
-      </Link>
-      {captain && (
-        <span className="rounded-md bg-accent-50 px-1.5 py-0.5 text-xs font-semibold text-accent-600">Cap.</span>
-      )}
-      {renfort && (
-        <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-xs font-medium text-slate-500">
-          Renfort
-        </span>
-      )}
-      <span className="w-10 text-right text-sm font-semibold text-slate-500">
-        {played}/{total}
-      </span>
-    </li>
   )
 }
