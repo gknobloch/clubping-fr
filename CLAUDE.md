@@ -1637,6 +1637,15 @@ invisible dans le diff comme dans la revue.
   le fichier, et pas l'inverse : une variable passée à la main est quelqu'un
   qui surcharge délibérément (un code qu'on vient de faire tourner), et un
   fichier prioritaire l'ignorerait en silence.
+- **L'émulateur garde le DNS de son démarrage.** Que le réseau du Mac change
+  ensuite — un VPN qui monte suffit — et il affiche un Wi-Fi connecté qui ne
+  résout plus rien : l'app imprime « Une erreur est survenue » sur la demande
+  de code, et Maestro échoue sur « login-code-input not found », un message
+  de sélecteur pour une panne de réseau. Le script fait pinger `clubping.fr`
+  **depuis l'émulateur** avant le flow (`connectivityComplaint`), comme il en
+  lit l'horloge, et dit quoi faire : le redémarrer. Lu sur la sortie et non
+  sur le code de retour, avec un délai à lui : le `ping` d'un émulateur
+  imprime des temps absurdes, et `-c 2` a été vu ne jamais rendre la main.
 - **Un seul chemin de SDK Android, pas deux.** Une machine qui a Android Studio
   *et* le `android-commandlinetools` de Homebrew exporte `ANDROID_HOME` et
   `ANDROID_SDK_ROOT` vers deux dossiers différents, et AGP refuse de trancher.

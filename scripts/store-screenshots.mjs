@@ -25,7 +25,7 @@
 // other piece of this app's native surface has been.
 // ---------------------------------------------------------------------------
 
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import {
   mkdirSync, readFileSync, readdirSync, copyFileSync, rmSync, existsSync, writeFileSync,
 } from 'node:fs'
@@ -537,6 +537,63 @@ function assertAndroidClock(env) {
   if (problem) throw new Error(problem)
 }
 
+/**
+ * The host the review account signs in against: production, where
+ * `demo:refresh` writes the demo club. A release build talks to it unless
+ * `mobile/.env` says otherwise (see .env.example), and a capture session has
+ * no reason to.
+ */
+export const API_HOST = 'clubping.fr'
+
+/**
+ * `null` when the device reached the API host, otherwise what is wrong and
+ * what to do about it — read off the output of one `ping` run ON the device.
+ *
+ * An emulator takes the host's DNS servers when it boots and keeps them. When
+ * the Mac changes network afterwards — a VPN coming up is enough — the
+ * emulator still shows its Wi-Fi as connected, and resolves nothing. The flow
+ * then fails at the login screen on « login-code-input not found », the app
+ * having printed « Une erreur est survenue » over a code request that never
+ * left the device: a message about a selector, for a problem with the network.
+ * Said here instead, before Maestro starts.
+ *
+ * Read on the output rather than the exit status: an emulator's `ping` prints
+ * nonsense round-trip times and cannot be trusted to exit cleanly. What
+ * matters is whether the name resolved and whether anything answered.
+ */
+export function connectivityComplaint(pingOutput, host = API_HOST) {
+  const out = pingOutput ?? ''
+  if (/bytes from/i.test(out)) return null
+  if (/unknown host|bad address|name or service not known/i.test(out)) {
+    return (
+      `L'émulateur ne résout pas ${host} : il a gardé les serveurs DNS qu'il avait au ` +
+      `démarrage, et le réseau de cette machine a changé depuis (un VPN suffit). La ` +
+      `connexion échouerait au premier écran, sur « Une erreur est survenue ».\n` +
+      `  Redémarrez-le — \`adb emu kill\`, puis relancez ce script, qui le redémarre ` +
+      `et réinstalle l'app ; ou, si l'app est déjà dessus, démarrez l'AVD à la main et ` +
+      `ajoutez --skip-build.`
+    )
+  }
+  return (
+    `L'émulateur résout ${host} mais rien ne répond (\`adb shell ping ${host}\`). ` +
+    `Vérifiez le réseau de cette machine, puis redémarrez l'émulateur.`
+  )
+}
+
+/** Stops the run rather than failing at the login screen for a network reason. */
+function assertAndroidOnline(env) {
+  // spawnSync rather than sh(): ping exits non-zero on a lost packet, and the
+  // output is the answer either way. One packet and a hard timeout of our own:
+  // the emulator's ping keeps time as badly as it reports it, and `-c 2` has
+  // been seen never to return. Whatever it printed before being cut off is
+  // still read — a reply that arrived is a reply.
+  const res = spawnSync(adbPath(), ['shell', 'ping', '-c', '1', '-W', '5', API_HOST], {
+    env, encoding: 'utf8', timeout: 15_000,
+  })
+  const problem = connectivityComplaint(`${res.stdout ?? ''}${res.stderr ?? ''}`)
+  if (problem) throw new Error(problem)
+}
+
 /** `adb devices` reports a device the moment it starts booting, long before
  *  it can install an app — this is the check that actually means "ready". */
 function androidFullyBooted(serial) {
@@ -907,9 +964,10 @@ function main(argv) {
   for (const target of androidTargets) {
     if (!skipBuild) installAndLaunchAndroid(target.avdNamePrefix)
     const serial = runningAndroidSerial()
-    // After the install, so --skip-build is covered too: the clock is a
-    // property of the device, not of the build sitting on it.
+    // After the install, so --skip-build is covered too: the clock and the
+    // network are properties of the device, not of the build sitting on it.
     assertAndroidClock(androidEnv(androidHome()))
+    assertAndroidOnline(androidEnv(androidHome()))
     const captured = runFlow(target, { email, code, deviceArg: serial })
     validateAndInstall(target, captured)
   }
