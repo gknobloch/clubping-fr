@@ -1607,7 +1607,13 @@ invisible dans le diff comme dans la revue.
   que mettre à jour ne peut pas grandir. Les réponses s'éclaircissent avec la
   distance, comme celles d'une vraie équipe ; un joueur de l'équipe 1 est
   prêté à l'équipe 2 (la case hachurée), et jamais Camille Durand, dont le
-  brûlage doit rester le seul.
+  brûlage doit rester le seul. Prêté **pour une raison** : Hugo Girard, de
+  l'équipe 2, a dit non ce jour-là, et la composition ne le nomme pas (#636).
+- **L'équipe 2 aussi a sa journée jouée déclarée** (#636), à quatre : non
+  déclarée, la production en tenait trois, et la matrice des journées — la
+  capture 08 sur tablette — l'imprimait en rouge, « Compo 3/4 ». L'erreur de
+  #598, corrigée pour l'équipe 1 et restée chez sa voisine : ce que le script
+  n'énonce pas dérive, y compris d'une équipe à l'autre.
 - **Le script décrit tous les entraînements du club de démo**, et supprime
   ceux qu'il ne nomme pas — deux séries créées à la main pour essayer #608,
   aux dates figées, y traînaient. Un créneau libre le mardi, une série
