@@ -253,11 +253,88 @@ function serializeUser(r: UserRow) {
   }
 }
 
+/**
+ * The profile an address signs in as (#640).
+ *
+ * An address may belong to several members since 0060 — a parent and a child
+ * sharing the parent's. Signing in opens the one used most recently, so a
+ * parent who lives on their own profile lands there, and a phone the child
+ * last held reopens on the child's. Decided here rather than on the device,
+ * so it holds from one device to the next: `last_seen_at` is written by every
+ * session, whatever opened it.
+ *
+ * Never seen at all breaks ties by id, which is arbitrary but stable — the
+ * same address always opens on the same profile until one of them is used.
+ */
 async function userByEmail(db: D1Database, email: string): Promise<UserRow | null> {
   return db
-    .prepare('SELECT * FROM users WHERE lower(email) = lower(?)')
+    .prepare(
+      `SELECT * FROM users WHERE lower(email) = lower(?)
+        ORDER BY COALESCE(last_seen_at, 0) DESC, id
+        LIMIT 1`,
+    )
     .bind(email)
     .first<UserRow>()
+}
+
+type ProfileRow = Pick<UserRow, 'id' | 'first_name' | 'last_name' | 'role' | 'club_id' | 'status'> & {
+  club_name: string | null
+}
+
+function serializeProfile(r: ProfileRow) {
+  return {
+    id: r.id,
+    role: r.role,
+    ...(r.first_name ? { firstName: r.first_name } : {}),
+    ...(r.last_name ? { lastName: r.last_name } : {}),
+    ...(r.club_id ? { clubId: r.club_id } : {}),
+    ...(r.club_name ? { clubName: r.club_name } : {}),
+    ...(r.status ? { status: r.status } : {}),
+  }
+}
+
+/**
+ * Every profile the member's address signs in as, the member included (#640).
+ *
+ * A member with no address has only themselves: an empty address is not
+ * shared with the others that have none. And the member is in the answer
+ * whatever the query says — the switcher must always be able to name who is
+ * signed in.
+ */
+async function profilesOf(db: D1Database, user: UserRow) {
+  const email = user.email?.trim() ?? ''
+  let found: ProfileRow[] = []
+  // A supplement to the session, never a condition of it: a list that cannot
+  // be read leaves a switcher with nothing to offer, not a member signed out.
+  try {
+    const rows = await db
+      .prepare(
+        `SELECT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
+                c.display_name AS club_name
+           FROM users u
+           LEFT JOIN clubs c ON c.id = u.club_id
+          WHERE u.id = ? OR (? != '' AND lower(u.email) = lower(?))`,
+      )
+      .bind(user.id, email, email)
+      .all<ProfileRow>()
+    found = rows?.results ?? []
+  } catch (e) {
+    console.error('[auth] profils non lus', e)
+  }
+  const self: ProfileRow = found.find((r) => r.id === user.id) ?? { ...user, club_name: null }
+  return [self, ...found.filter((r) => r.id !== user.id)].map(serializeProfile)
+}
+
+/**
+ * Whether two members sign in with the same address — which is what lets one
+ * switch to the other without a second code (#640). Case aside, as at sign-in;
+ * and no address shares nothing, or every member without one would reach
+ * every other.
+ */
+export function sameAddress(a: Pick<UserRow, 'email'>, b: Pick<UserRow, 'email'>): boolean {
+  const x = a.email?.trim().toLowerCase()
+  const y = b.email?.trim().toLowerCase()
+  return !!x && x === y
 }
 
 /**
@@ -479,9 +556,9 @@ export const authApp = new Hono<Env>()
  * Routing them both through here is what stops a new sign-in path from minting
  * a session and forgetting the cookie.
  */
-function sessionResponse(c: Context<Env>, token: string, user: UserRow) {
+async function sessionResponse(c: Context<Env>, token: string, user: UserRow) {
   c.header('Set-Cookie', sessionCookieHeader(token, c.req.url))
-  return c.json({ token, user: serializeUser(user) })
+  return c.json({ token, user: serializeUser(user), profiles: await profilesOf(c.env.DB, user) })
 }
 
 // The store-review account, if configured (see the Env type). Both the email
@@ -613,7 +690,45 @@ authApp.get('/me', async (c) => {
   if (!token) return c.json({ error: 'unauthorized' }, 401)
   const user = await userFromToken(c.env.DB, token, c.req.header('X-Client-Version'))
   if (!user) return c.json({ error: 'unauthorized' }, 401)
-  return c.json({ user: serializeUser(user) })
+  // The profiles too (#640): a boot that restores a session has signed in
+  // without the sign-in response, and the switcher needs the list either way.
+  return c.json({ user: serializeUser(user), profiles: await profilesOf(c.env.DB, user) })
+})
+
+/**
+ * Become another profile of the same address (#640): a parent signed in as
+ * themselves opens their child's, without a second code.
+ *
+ * A session stays one member's. Every rule the API asks — `administers`,
+ * `mayAnswerFor`, `mayManageTeam` — is a question about one member, and a
+ * session standing for a family would have to answer it for several at once.
+ * So switching is signing in again: a fresh session for the target, and the
+ * one presented is revoked, so a device never holds two.
+ *
+ * The address is read now, not when the session was opened: an administrator
+ * who gives the child an address of their own has taken the child out of the
+ * parent's reach, and that has to hold from that moment.
+ *
+ * The refusal is the same for a member who does not exist and one who exists
+ * elsewhere — 403 either way — so the route cannot be used to learn who has an
+ * account.
+ */
+authApp.post('/switch', async (c) => {
+  const token = requestToken(c.req)
+  if (!token) return c.json({ error: 'unauthorized' }, 401)
+  const current = await userFromToken(c.env.DB, token, c.req.header('X-Client-Version'))
+  if (!current) return c.json({ error: 'unauthorized' }, 401)
+
+  const { userId } = await c.req.json<{ userId?: unknown }>().catch(() => ({ userId: undefined }))
+  if (typeof userId !== 'string' || !userId) return c.json({ error: 'invalid_request' }, 400)
+  if (userId === current.id) return sessionResponse(c, token, current)
+
+  const target = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first<UserRow>()
+  if (!target || !sameAddress(current, target)) return c.json({ error: 'not_allowed' }, 403)
+
+  const fresh = await createSession(c.env.DB, target.id)
+  await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(await sessionKey(token)).run()
+  return sessionResponse(c, fresh, target)
 })
 
 // Revoke the current session: the row goes, and so does the cookie — leaving

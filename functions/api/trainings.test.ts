@@ -403,7 +403,7 @@ describe('the daily sweep', () => {
     expect(report.trainings.reminders).toBe(1)
     expect(sent.map((m) => m.to)).toEqual(['ExponentPushToken[alice]'])
     expect(sent[0].body).toBe('mardi 29 septembre à 18h30 à Gymnase Jean-Moulin, dans 3 jours. Indique si tu viens.')
-    expect(sent[0].data).toEqual({ kind: 'training_reminder', trainingId: 't-dirige', date: '2026-09-29' })
+    expect(sent[0].data).toEqual({ kind: 'training_reminder', trainingId: 't-dirige', date: '2026-09-29', userId: 'alice' })
     const ledger = writesTo(writes, /INSERT INTO notifications_sent/)
     expect(ledger.map((w) => w.params.slice(0, 3))).toEqual([['training_reminder', 'alice', 't-dirige@2026-09-29']])
   })

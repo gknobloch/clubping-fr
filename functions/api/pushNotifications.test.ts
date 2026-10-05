@@ -73,6 +73,13 @@ function fakeDb(f: DbFixture) {
   const users = f.users ?? []
   const writes: { sql: string; params: unknown[] }[] = []
   const notifiable = new Set(users.filter((u) => u.notifications_enabled !== 0).map((u) => u.id))
+  const addressOf = (id: string) => users.find((u) => u.id === id)?.email?.trim().toLowerCase() || ''
+  // The member and whoever shares their address; an empty address shares nothing.
+  const householdOf = (id: string) => {
+    const address = addressOf(id)
+    return users.filter((u) => u.id === id || (!!address && addressOf(u.id) === address))
+  }
+  const householdSize = (id: string) => (addressOf(id) ? householdOf(id).length : 0)
 
   const db = {
     prepare(sql: string) {
@@ -114,17 +121,24 @@ function fakeDb(f: DbFixture) {
             }
           }
           if (sql.includes('FROM push_tokens')) {
-            const scoped = params.length
-              ? (f.tokens ?? []).filter((t) => params.includes(t.user_id))
-              : (f.tokens ?? [])
-            // With the member's own preferences, which the query joins in
-            // so the category can be filtered on (#608).
-            return {
-              results: scoped.filter((t) => notifiable.has(t.user_id)).map((t) => ({
-                ...t,
-                notification_preferences: users.find((u) => u.id === t.user_id)?.notification_preferences ?? null,
-              })),
-            }
+            // A device rings for every profile of the address it was
+            // registered under (#640), each with its own preferences — which
+            // the query joins in so the category can be filtered on (#608).
+            const rows = (f.tokens ?? []).flatMap((t) => {
+              const household = householdOf(t.user_id)
+              return household.map((u) => ({
+                token: t.token,
+                user_id: u.id,
+                first_name: u.first_name,
+                notification_preferences: u.notification_preferences ?? null,
+                profiles: householdSize(t.user_id),
+              }))
+            })
+            const scoped = params.length ? rows.filter((r) => params.includes(r.user_id)) : rows
+            return { results: scoped.filter((r) => notifiable.has(r.user_id)) }
+          }
+          if (sql.includes('JOIN users s')) {
+            return { results: householdOf(String(params[0])).map((u) => ({ id: u.id })) }
           }
           if (sql.includes('FROM push_receipts')) {
             return {
@@ -182,7 +196,7 @@ function stubExpoWithReceipts(
   receipts: Record<string, unknown>,
   tickets?: (to: string) => unknown,
 ) {
-  const batches: Array<Array<{ to: string; title: string; body: string }>> = []
+  const batches: Array<Array<{ to: string; title: string; body: string; data: Record<string, unknown> }>> = []
   const asked: string[][] = []
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body))
@@ -206,7 +220,7 @@ function stubExpoWithReceipts(
 
 /** Capture what would have gone to Expo, and answer as Expo does. */
 function stubExpo(tickets?: (to: string) => unknown) {
-  const batches: Array<Array<{ to: string; title: string; body: string }>> = []
+  const batches: Array<Array<{ to: string; title: string; body: string; data: Record<string, unknown> }>> = []
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
     expect(url).toBe(EXPO)
     const messages = JSON.parse(String(init.body))
@@ -339,6 +353,57 @@ describe('the daily sweep', () => {
     const ledger = writesTo(writes, /notifications_sent/)
     expect(ledger).toHaveLength(2)
     expect(ledger[0].params.slice(0, 3)).toEqual(['availability_request', 'alice', 'g1'])
+  })
+
+  // #640 — a parent and a child sharing the parent's address: one phone,
+  // registered while the parent was signed in, rings for both.
+  describe('a phone shared by two profiles (#640)', () => {
+    const benjamin = member({ id: 'benjamin', first_name: 'Benjamin', last_name: 'Henaut', email: 'Henaut@example.fr' })
+    const sacha = member({ id: 'sacha', first_name: 'Sacha', last_name: 'Henaut', email: 'henaut@example.fr' })
+    const phone = [{ token: 'ExponentPushToken[famille]', user_id: 'benjamin' }]
+    const sachasSquad = [fixture({ team_id: 't-home', player_ids: JSON.stringify(['sacha']) })]
+
+    it('rings for the child, and says whose match it is', async () => {
+      const expo = stubExpo()
+      const { db, writes } = fakeDb({ users: [benjamin, sacha], fixtures: sachasSquad, tokens: phone })
+      const res = await dispatch(db, { NOTIFY_SECRET: 's3cret' })
+      expect(await res.json()).toMatchObject({ due: 1, sent: 1 })
+      const [message] = expo.sent()
+      expect(message.to).toBe('ExponentPushToken[famille]')
+      expect(message.title).toBe('Sacha, ta dispo ?')
+      expect(message.body).toContain('PPA Rixheim 3 reçoit Mulhouse ASPTT 2')
+      // What a tap switches to.
+      expect(message.data.userId).toBe('sacha')
+      expect(writesTo(writes, /notifications_sent/)[0].params.slice(0, 3))
+        .toEqual(['availability_request', 'sacha', 'g1'])
+    })
+
+    it('follows the child’s own switch, not the parent’s', async () => {
+      const expo = stubExpo()
+      const { db } = fakeDb({
+        users: [benjamin, { ...sacha, notifications_enabled: 0 }], fixtures: sachasSquad, tokens: phone,
+      })
+      await dispatch(db, { NOTIFY_SECRET: 's3cret' })
+      expect(expo.sent()).toEqual([])
+    })
+
+    it('stops the moment the child has an address of their own', async () => {
+      const expo = stubExpo()
+      const { db } = fakeDb({
+        users: [benjamin, { ...sacha, email: 'sacha@example.fr' }], fixtures: sachasSquad, tokens: phone,
+      })
+      await dispatch(db, { NOTIFY_SECRET: 's3cret' })
+      expect(expo.sent()).toEqual([])
+    })
+
+    it('leaves a phone with one profile reading as it always did', async () => {
+      const expo = stubExpo()
+      const { db } = fakeDb({ users: [alice], fixtures: [fixture({ team_id: 't-home' })], tokens: [tokens[0]] })
+      await dispatch(db, { NOTIFY_SECRET: 's3cret' })
+      const [message] = expo.sent()
+      expect(message.title).toBe('PPA Rixheim 3 — ta dispo ?')
+      expect(message.data.userId).toBe('alice')
+    })
   })
 
   it('says nothing twice', async () => {
@@ -676,6 +741,34 @@ describe('a change of mind reaches the captain', () => {
     await setAvailability(db, 'unavailable')
     vi.useRealTimers()
     expect(expo.sent()).toEqual([])
+  })
+
+  it('does not tell a parent who captains about the change made from the child’s profile (#640)', async () => {
+    // Same address: the parent changed it, on the phone they hold.
+    const expo = stubExpo()
+    const { db } = fakeDb({
+      users: [{ ...alice, email: 'roy@example.fr' }, { ...cap, email: 'Roy@example.fr' }], viewerId: 'alice',
+      fixtures: both, tokens, previousStatus: 'available',
+    })
+    vi.setSystemTime(new Date(`${TODAY}T09:00:00Z`))
+    await setAvailability(db, 'unavailable')
+    vi.useRealTimers()
+    expect(expo.sent()).toEqual([])
+  })
+
+  it('names the captain on a phone shared with another profile (#640)', async () => {
+    const expo = stubExpo()
+    const leo = member({ id: 'leo', first_name: 'Léo', last_name: 'Roy', email: 'roy@example.fr' })
+    const { db } = fakeDb({
+      users: [alice, { ...cap, email: 'roy@example.fr' }, leo], viewerId: 'alice',
+      fixtures: both, tokens, previousStatus: 'available',
+    })
+    vi.setSystemTime(new Date(`${TODAY}T09:00:00Z`))
+    await setAvailability(db, 'unavailable')
+    vi.useRealTimers()
+    const [message] = expo.sent()
+    expect(message.title).toBe('Camille · Alice Martin — indisponible')
+    expect(message.data.userId).toBe('cap')
   })
 
   it('stays quiet about a match beyond the window', async () => {

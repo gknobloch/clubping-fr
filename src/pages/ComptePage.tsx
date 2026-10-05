@@ -5,13 +5,15 @@ import { useAppData } from '@/contexts/DataContext'
 import { useConfirm } from '@/components/useConfirm'
 import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
+import { ProfileList } from '@/components/ProfileSwitcher'
+import { hasOtherProfiles } from '@/lib/profiles'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
 import { pointsFor } from '@/lib/phasePoints'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 export function ComptePage() {
-  const { user, displayName, roleLabel, logout } = useAuth()
+  const { user, displayName, roleLabel, logout, profiles } = useAuth()
   const { players, clubs, teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -182,6 +184,19 @@ export function ComptePage() {
               </div>
             ))}
           </dl>
+        </section>
+      )}
+
+      {/* Profils — a parent and a child on one address (#640) */}
+      {hasOtherProfiles(profiles, user?.id) && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mes profils</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Votre adresse e-mail donne accès à plusieurs profils. Touchez-en un pour l’ouvrir.
+          </p>
+          <div className="mt-3">
+            <ProfileList />
+          </div>
         </section>
       )}
 

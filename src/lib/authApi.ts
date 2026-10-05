@@ -1,4 +1,4 @@
-import type { DevUser, User } from '@/types'
+import type { DevUser, Profile, User } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Low-level helpers (web — same-origin /api)
@@ -43,6 +43,17 @@ function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
 export interface AuthSession {
   token: string
   user: User
+  /**
+   * Every profile the address signs in as, the signed-in one included (#640).
+   * Optional for a server older than the feature, which sends none.
+   */
+  profiles?: Profile[]
+}
+
+/** Who is signed in, and the other profiles of their address (#640). */
+export interface Me {
+  user: User
+  profiles: Profile[]
 }
 
 /** Request an email OTP. `devCode` is only returned in local dev (no email provider). */
@@ -63,12 +74,21 @@ export function oauthLogin(provider: 'google' | 'apple', idToken: string): Promi
  * session cookie authenticates the call, which is how a browser that has lost
  * its localStorage entry — Safari drops it after 7 days — gets its session back.
  */
-export async function fetchMe(token?: string): Promise<User> {
+export async function fetchMe(token?: string): Promise<Me> {
   const res = await fetch('/api/auth/me', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
-  const { user } = await parse<{ user: User }>(res)
-  return user
+  const { user, profiles } = await parse<{ user: User; profiles?: Profile[] }>(res)
+  return { user, profiles: profiles ?? [] }
+}
+
+/**
+ * Become another profile of the same address (#640). A new session comes
+ * back — cookie and token both — and the one presented is revoked. Same
+ * optional token as fetchMe: a cookie session has none to send.
+ */
+export function switchProfile(userId: string, token?: string): Promise<AuthSession> {
+  return postJson('/auth/switch', { userId }, token)
 }
 
 // --- Dev login (preview deployments only, #313) -----------------------------

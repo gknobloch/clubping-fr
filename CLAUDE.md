@@ -750,6 +750,71 @@ invisible dans le diff comme dans la revue.
   Un coéquipier qui lit la fiche voit les coordonnées et pas le déclencheur —
   **la lecture n'a pas bougé**.
 
+### Plusieurs profils derrière une adresse (#640)
+- **Une adresse peut ouvrir plusieurs profils** : un parent et son enfant
+  licenciés, une seule adresse — celle du parent. `users.email` était `UNIQUE`,
+  donc l'un des deux restait dehors, le code arrivant par e-mail. Pour en
+  rattacher un, rien de nouveau : un administrateur saisit l'adresse du parent
+  sur la fiche de l'enfant (#600).
+- **0060 renomme la colonne, elle ne reconstruit pas `users`.** La contrainte
+  fait partie de la définition de la colonne, et sept tables référencent
+  `users(id)` en `ON DELETE CASCADE` : un `DROP TABLE users` les viderait toutes
+  en silence (le piège de 0036 et de #604). La colonne contrainte devient
+  `email_pre_0060`, vidée et laissée là — SQLite ne supprime pas une colonne
+  `UNIQUE` —, et une colonne `email` simple prend son nom. Tout le code dit
+  déjà `email` : c'est ce qui en fait **un seul déploiement**, l'ancien worker
+  lisant la nouvelle colonne avec les mêmes valeurs entre la migration et la
+  bascule (#410).
+- **Une session reste à un membre.** Toutes les règles de l'API
+  (`administers`, `mayAnswerFor`, `mayManageTeam`…) sont des questions sur
+  *un* membre. Se connecter ouvre **le profil vu le plus récemment**
+  (`last_seen_at`), décidé côté serveur pour valoir d'un appareil à l'autre.
+- **Changer de profil, c'est se reconnecter** (`POST /auth/switch`) : une
+  session neuve pour la cible, l'ancienne révoquée, et l'adresse est relue *au
+  moment du changement* — un enfant à qui l'on donne sa propre adresse sort de
+  la portée du parent aussitôt. Inconnu ou d'une autre adresse : le même 403.
+  Une adresse vide ne partage rien (`sameAddress`).
+- **Ce n'est pas une déconnexion** : rien n'est vidé. Le cache refuse déjà
+  l'entrée d'un autre membre (#387, #509) et le premier fetch réécrit ;
+  `pp-club-user` est réécrit, sinon un démarrage sans réseau rouvrirait
+  l'ancien profil. **Hors ligne, pas de changement** : il faut le serveur pour
+  émettre une session, et `profiles` reste vide tant qu'il n'a pas répondu.
+- `/auth/me` et chaque réponse de connexion portent `profiles` — le membre
+  connecté compris, clubs nommés. Le sélecteur (`profilesByClub`) groupe par
+  club ; il n'apparaît **qu'avec un autre profil à proposer**
+  (`hasOtherProfiles`) : en-tête et Mon compte sur le web, Mon compte dans
+  l'app. Après un changement, on revient à l'accueil : l'écran d'avant était
+  celui de l'autre profil, peut-être un écran d'administration.
+- **Un appareil sonne pour tous les profils de son adresse**, dérivé à l'envoi
+  (`tokensByUser`) et non écrit une ligne par profil : `push_tokens` reste clé
+  sur le jeton, donc un téléphone repris par quelqu'un d'autre passe encore en
+  entier (#495), et un enfant doté de sa propre adresse quitte le téléphone du
+  parent sur-le-champ. **Chaque profil garde ses interrupteurs** : ceux de
+  l'enfant décident si ses matchs sonnent.
+- **Sur un appareil partagé, la notification dit pour qui** (`addressedTo`) :
+  « Sacha, ta dispo ? » pour la demande de dispo — le corps nomme déjà l'équipe
+  —, « Sacha · … » pour le reste. Un appareil à un seul profil lit exactement
+  ce qu'il lisait. Le destinataire part toujours dans `data.userId`.
+- **Un toucher ouvre le bon profil** : l'app bascule sur le destinataire avant
+  d'ouvrir le match, mais seulement vers un profil que le serveur a nommé —
+  jamais sur la seule foi d'une charge utile. Une réponse n'est traitée qu'une
+  fois : elle arrive deux fois (écouteur, puis
+  `getLastNotificationResponseAsync`), et la seconde ramènerait le profil
+  quitté depuis.
+- **L'alerte capitaine épargne le foyer de l'auteur** : un parent capitaine
+  qui change la réponse de son enfant depuis le profil de l'enfant serait
+  prévenu de son propre geste, sur le téléphone qu'il tient.
+- **Inviter un administrateur sous une adresse déjà prise est permis**, pour
+  un autre nom : un parent sans licence qui administre le club de son enfant
+  est exactement ce cas. Même adresse **et** même nom, c'est la même personne
+  — `email_taken`, à désigner plutôt qu'à inviter. L'approbation d'une demande
+  d'administration (#474) suit la même règle.
+- L'anonymisation de la base dev **garde partagée une adresse partagée**, pour
+  qu'une préversion montre le sélecteur. Les fixtures (`src/mock/data.ts`) et
+  `seed.sql` en portent une : Fabrice et Bastien Dangelser. Sans backend
+  (`npm run dev`, E2E), le sélecteur lit les profils dans la liste du
+  sélecteur de connexion, et changer revient à sélectionner l'autre.
+
 ### Une photo est à celui qu'elle montre (#571)
 - `PUT` et `DELETE /users/:id/avatar` ne regardaient pas l'appelant : n'importe
   quel licencié connecté remplaçait ou effaçait la photo de n'importe qui, dans

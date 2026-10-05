@@ -1,4 +1,4 @@
-import type { DevUser, User } from '@shared/types'
+import type { DevUser, Profile, User } from '@shared/types'
 import { apiUrl, clientHeaders } from '@/constants/api'
 
 // ---------------------------------------------------------------------------
@@ -104,6 +104,17 @@ export function authFetch(path: string, init: RequestInit, token: string): Promi
 export interface AuthSession {
   token: string
   user: User
+  /**
+   * Every profile the address signs in as, the signed-in one included (#640).
+   * Optional for a server older than the feature, which sends none.
+   */
+  profiles?: Profile[]
+}
+
+/** Who is signed in, and the other profiles of their address (#640). */
+export interface Me {
+  user: User
+  profiles: Profile[]
 }
 
 /** Request an email OTP. `devCode` is only present in local dev (no email provider). */
@@ -119,10 +130,19 @@ export function oauthLogin(provider: 'google' | 'apple', idToken: string): Promi
   return postJson('/auth/oauth', { provider, idToken })
 }
 
-export async function fetchMe(token: string): Promise<User> {
+export async function fetchMe(token: string): Promise<Me> {
   const res = await authFetch('/auth/me', { method: 'GET' }, token)
-  const { user } = await parse<{ user: User }>(res)
-  return user
+  const { user, profiles } = await parse<{ user: User; profiles?: Profile[] }>(res)
+  return { user, profiles: profiles ?? [] }
+}
+
+/**
+ * Become another profile of the same address (#640). A new session comes back
+ * and the one presented is revoked — so the caller must store the new token
+ * before anything else asks the API.
+ */
+export function switchProfile(userId: string, token: string): Promise<AuthSession> {
+  return postJson('/auth/switch', { userId }, token)
 }
 
 export async function logout(token: string): Promise<void> {

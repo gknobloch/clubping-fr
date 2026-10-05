@@ -213,3 +213,15 @@ export function gameIdOf(response: NotificationsModule.NotificationResponse | nu
   const data = response?.notification.request.content.data as { gameId?: unknown } | undefined
   return typeof data?.gameId === 'string' && data.gameId ? data.gameId : null
 }
+
+/**
+ * Whom a tapped notification was for (#640). A device rings for every profile
+ * of its address, so a parent may tap the child's reminder while signed in as
+ * themselves — and the match screen is one member's view, so the app switches
+ * to the recipient before opening it. Absent on a notification sent before the
+ * field existed, which opens on whoever is signed in, as it always did.
+ */
+export function recipientOf(response: NotificationsModule.NotificationResponse | null): string | null {
+  const data = response?.notification.request.content.data as { userId?: unknown } | undefined
+  return typeof data?.userId === 'string' && data.userId ? data.userId : null
+}

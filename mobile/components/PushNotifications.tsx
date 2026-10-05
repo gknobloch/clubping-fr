@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { Notifications } from '@/utils/expoNotifications'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { gameIdOf, registerForPush, trainingOf } from '@/utils/push'
+import { gameIdOf, recipientOf, registerForPush, trainingOf } from '@/utils/push'
 
 /**
  * Everything push does while the app is running (#495): register the device
@@ -29,7 +29,15 @@ Notifications?.setNotificationHandler({
 
 export function PushNotifications() {
   const router = useRouter()
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, profiles, switchProfile } = useAuth()
+  // Read when a tap arrives, not when the listener was set up: the listener
+  // outlives every profile switch (#640).
+  const session = useRef({ user, profiles, switchProfile })
+  session.current = { user, profiles, switchProfile }
+  // A response is offered twice — to the listener, and again by
+  // getLastNotificationResponseAsync — and a second handling would switch
+  // profile back after the member had moved on.
+  const handled = useRef(new Set<string>())
   const { games, teams, loading } = useAppData()
   // The match a tap asked for, held until the data needed to open it is here.
   const [pendingGameId, setPendingGameId] = useState<string | null>(null)
@@ -46,7 +54,25 @@ export function PushNotifications() {
     // A training reminder or cancellation (#608) opens the Entraînements tab:
     // the list is short and the session is at its top, so there is nothing to
     // wait for — unlike a match, whose screen needs a team resolved first.
-    const open = (r: Parameters<typeof gameIdOf>[0]) => {
+    const open = async (r: Parameters<typeof gameIdOf>[0]) => {
+      if (!r) return
+      const key = r.notification.request.identifier
+      if (handled.current.has(key)) return
+      handled.current.add(key)
+      // The child's reminder, tapped on a parent's phone (#640): become the
+      // child first, so the screen that opens is theirs. Only among the
+      // profiles the server named — never on a payload's word alone, which
+      // the server would refuse anyway. Offline there are none, and it opens
+      // on whoever is signed in rather than not at all.
+      const recipient = recipientOf(r)
+      const { user: me, profiles: mine, switchProfile: become } = session.current
+      if (recipient && recipient !== me?.id && mine.some((p) => p.id === recipient)) {
+        try {
+          await become(recipient)
+        } catch {
+          /* unreachable or refused: open on the current profile */
+        }
+      }
       if (trainingOf(r)) {
         router.push('/entrainements')
         return
@@ -55,7 +81,7 @@ export function PushNotifications() {
       if (gameId) setPendingGameId(gameId)
     }
     void Notifications.getLastNotificationResponseAsync().then(open)
-    const sub = Notifications.addNotificationResponseReceivedListener(open)
+    const sub = Notifications.addNotificationResponseReceivedListener((r) => void open(r))
     return () => sub.remove()
   }, [isAuthenticated, router])
 
