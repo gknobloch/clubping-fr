@@ -309,12 +309,35 @@ export const PHASE_AVAILABILITY = {
  * Noah Fontaine, because he has not played for team 1 at all: lending him down
  * burns nothing, which keeps `computeBrulage` saying about Camille Durand
  * exactly what screen 07 is there to show, and about nobody else.
+ *
+ * And lent for a reason (#636): Hugo Girard, of team 2's own four, said no
+ * for that journée — an answer somebody once entered by hand, kept, and now
+ * stated. The first version of this line-up named him anyway, which put a
+ * « non » inside a composition. Everybody fielded answers yes, Noah on team
+ * 2's match as well as on his own team's: the match screen of either reads
+ * the answer filed on its own fixture.
  */
 export const LENT = {
   journee: 3,
   teamId: 'demo-team-2',
-  lineup: ['demo-player-5', 'demo-player-7', 'demo-player-8', 'demo-player-9'],
+  lineup: ['demo-player-5', 'demo-player-6', 'demo-player-8', 'demo-player-9'],
+  absent: 'demo-player-7',
 }
+
+/**
+ * Team 2's journée already played (#636) — four, what its division asks for.
+ *
+ * Never stated until now, and production held three: the journées matrix,
+ * which is screenshot 08 on a tablet, prints a line-up short of its division
+ * as « Compo 3/4 » in red — the error #598 corrected for team 1, still there
+ * for its neighbour. Its whole roster, since all four played; all of them
+ * answered yes, the only story a finished fixture tells.
+ *
+ * Hugo Girard is in it, and also played up in team 1 the journée after:
+ * one match in a higher team burns nobody, so the brûlage stays Camille
+ * Durand's alone.
+ */
+export const TEAM2_PLAYED_LINEUP = ['demo-player-6', 'demo-player-7', 'demo-player-8', 'demo-player-9']
 
 /**
  * The halls (#611, #613).
@@ -591,7 +614,9 @@ function main(argv) {
     ...DEMO_LINEUP,
     ...DEMO_PLAYED_LINEUP,
     ...LENT.lineup,
+    LENT.absent,
     LENT.teamId,
+    ...TEAM2_PLAYED_LINEUP,
     ...DEMO_ADDRESSES.flatMap((a) => [a.id, a.clubId]),
     ...DEMO_TRAININGS.flatMap((t) => [t.id, ...t.managerIds]),
     ...GUIDED_ANSWERS.flatMap((answers) => Object.keys(answers)),
@@ -614,6 +639,10 @@ function main(argv) {
     (f) => f.number === LENT.journee && (f.homeTeamId === LENT.teamId || f.awayTeamId === LENT.teamId),
   )
   if (!lentGame) throw new Error(`Aucun match de ${LENT.teamId} en journée ${LENT.journee}.`)
+  const team2Played = fixtures.find(
+    (f) => f.number === PLAYED_JOURNEE && (f.homeTeamId === LENT.teamId || f.awayTeamId === LENT.teamId),
+  )
+  if (!team2Played) throw new Error(`Aucun match de ${LENT.teamId} en journée ${PLAYED_JOURNEE}.`)
 
   // The journées nobody has played or composed yet, whose answers are what
   // the planning de la phase reads.
@@ -725,6 +754,27 @@ function main(argv) {
     `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
       `VALUES (${sqlStr(lentGame.gameId)}, ${sqlStr(LENT.teamId)}, ${sqlStr(JSON.stringify(LENT.lineup))}) ` +
       `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
+    // …and the answers on that match, rewritten: the four fielded say yes,
+    // and the one they replace says no — see LENT.
+    `DELETE FROM game_availabilities WHERE game_id = ${sqlStr(lentGame.gameId)}`,
+    ...[
+      ...LENT.lineup.map((playerId) => [playerId, 'available']),
+      [LENT.absent, 'unavailable'],
+    ].map(
+      ([playerId, status]) =>
+        `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) ` +
+        `VALUES (${sqlStr(lentGame.gameId)}, ${sqlStr(playerId)}, ${sqlStr(status)}, NULL)`,
+    ),
+    // Team 2's played journée — see TEAM2_PLAYED_LINEUP.
+    `INSERT INTO game_selections (game_id, team_id, player_ids) ` +
+      `VALUES (${sqlStr(team2Played.gameId)}, ${sqlStr(LENT.teamId)}, ${sqlStr(JSON.stringify(TEAM2_PLAYED_LINEUP))}) ` +
+      `ON CONFLICT(game_id, team_id) DO UPDATE SET player_ids = excluded.player_ids`,
+    `DELETE FROM game_availabilities WHERE game_id = ${sqlStr(team2Played.gameId)}`,
+    ...TEAM2_PLAYED_LINEUP.map(
+      (playerId) =>
+        `INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) ` +
+        `VALUES (${sqlStr(team2Played.gameId)}, ${sqlStr(playerId)}, 'available', NULL)`,
+    ),
     // The halls — see DEMO_ADDRESSES. One per club, so each is its default.
     ...DEMO_ADDRESSES.map(
       (a) =>
@@ -841,7 +891,12 @@ function main(argv) {
     .join(', ')
   console.log(`  reste de la phase → réponses (${later}), sans composition`)
   console.log(
-    `  prêt → ${LENT.lineup[0]} aligné par ${LENT.teamId} en journée ${LENT.journee} (${lentGame.gameId})`,
+    `  prêt → ${LENT.lineup[0]} aligné par ${LENT.teamId} en journée ${LENT.journee} ` +
+      `(${lentGame.gameId}), à la place de ${LENT.absent}, absent`,
+  )
+  console.log(
+    `  ${LENT.teamId}, journée ${PLAYED_JOURNEE} (${team2Played.gameId}) → composition de ` +
+      `${TEAM2_PLAYED_LINEUP.length} joueurs, tous disponibles`,
   )
   for (const a of DEMO_ADDRESSES) {
     console.log(`  ${a.clubId} → ${a.label}, ${a.street}, ${a.postalCode} ${a.city}`)

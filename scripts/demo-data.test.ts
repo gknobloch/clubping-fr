@@ -22,6 +22,7 @@ import {
   demoFixtures,
   PHASE_AVAILABILITY,
   LENT,
+  TEAM2_PLAYED_LINEUP,
   DEMO_ADDRESSES,
   DEMO_TRAININGS,
   guidedDates,
@@ -391,6 +392,34 @@ describe('the player lent to team 2', () => {
 
   it('happens on a journée still to come', () => {
     expect(LENT.journee).toBeGreaterThan(UPCOMING_JOURNEE)
+  })
+
+  it('replaces somebody who said no, and never fields him (#636)', () => {
+    // The first version named Hugo Girard, whose answer for that match was
+    // « non »: a refusal printed inside a composition.
+    expect(LENT.lineup).not.toContain(LENT.absent)
+    expect(TEAM2_PLAYED_LINEUP).toContain(LENT.absent) // one of team 2's own
+  })
+
+  it('names only demo rows', () => {
+    expect(() => assertDemoOnly([...LENT.lineup, LENT.absent, LENT.teamId])).not.toThrow()
+  })
+})
+
+describe('team 2’s journée already played (#636)', () => {
+  it('fields what its division asks for — « Compo 3/4 » was the bug', () => {
+    expect(TEAM2_PLAYED_LINEUP).toHaveLength(4)
+    expect(new Set(TEAM2_PLAYED_LINEUP).size).toBe(4)
+  })
+
+  it('fields only team 2’s own, never Camille Durand', () => {
+    // A team-1 player in team 2's played match would be one more game in her
+    // count, and the brûlage on screen 07 has to be hers for the reason given.
+    for (const id of DEMO_PLAYED_LINEUP) expect(TEAM2_PLAYED_LINEUP).not.toContain(id)
+  })
+
+  it('names only demo rows', () => {
+    expect(() => assertDemoOnly(TEAM2_PLAYED_LINEUP)).not.toThrow()
   })
 })
 
