@@ -810,7 +810,10 @@ invisible dans le diff comme dans la revue.
   — `email_taken`, à désigner plutôt qu'à inviter. L'approbation d'une demande
   d'administration (#474) suit la même règle.
 - L'anonymisation de la base dev **garde partagée une adresse partagée**, pour
-  qu'une préversion montre le sélecteur.
+  qu'une préversion montre le sélecteur. Les fixtures (`src/mock/data.ts`) et
+  `seed.sql` en portent une : Fabrice et Bastien Dangelser. Sans backend
+  (`npm run dev`, E2E), le sélecteur lit les profils dans la liste du
+  sélecteur de connexion, et changer revient à sélectionner l'autre.
 
 ### Une photo est à celui qu'elle montre (#571)
 - `PUT` et `DELETE /users/:id/avatar` ne regardaient pas l'appelant : n'importe

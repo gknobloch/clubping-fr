@@ -104,14 +104,16 @@ const basePlayers: Player[] = [
   { id: 'p2-player-6', firstName: 'Christian', lastName: 'Buchi', licenseNumber: '6815117', email: 'christian.buchi@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-10', firstName: 'Olivier', lastName: 'Philippe', licenseNumber: '683975', email: 'olivier.philippe@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-7', firstName: 'Hervé', lastName: 'Ceroni', licenseNumber: '684545', email: 'herve.ceroni@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
-  { id: 'p2-player-9', firstName: 'Fabrice', lastName: 'Dangelser', licenseNumber: '682480', email: 'fabrice.dangelser@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
+  // Fabrice and Bastien Dangelser share one address, a parent and a child's (#640):
+  // signing in as either offers the other in the profile switcher.
+  { id: 'p2-player-9', firstName: 'Fabrice', lastName: 'Dangelser', licenseNumber: '682480', email: 'famille.dangelser@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-8', firstName: 'Cédric', lastName: 'Cunin', licenseNumber: '6810711', email: 'cedric.cunin@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   // Equipe 3
   { id: 'p2-player-12', firstName: 'Sébastien', lastName: 'Rentz', licenseNumber: '687433', email: 'sebastien.rentz@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-13', firstName: 'Sébastien', lastName: 'Schatt', licenseNumber: '685143', email: 'sebastien.schatt@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-14', firstName: 'Yannick', lastName: 'Schill', licenseNumber: '6814304', email: 'yannick.schill@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-11', firstName: 'Nello', lastName: 'Cristini', licenseNumber: '683787', email: 'nello.cristini@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
-  { id: 'p2-player-17', firstName: 'Bastien', lastName: 'Dangelser', licenseNumber: '684113', email: 'bastien.dangelser@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
+  { id: 'p2-player-17', firstName: 'Bastien', lastName: 'Dangelser', licenseNumber: '684113', email: 'famille.dangelser@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   // Equipe 4
   { id: 'p2-player-16', firstName: 'Didier', lastName: 'Clément', licenseNumber: '392885', email: 'didier.clement@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },
   { id: 'p2-player-19', firstName: 'Mathieu', lastName: 'Mougey', licenseNumber: '6810243', email: 'mathieu.mougey@example.com', phone: '', status: 'active', clubId: 'club-fftt-06680011' },

@@ -313,3 +313,24 @@ describe('switching profile', () => {
     expect(result.current.user?.id).toBe('benjamin')
   })
 })
+
+describe('switching profile with no backend — local dev and E2E (#640)', () => {
+  // The fixtures give Fabrice and Bastien Dangelser one address.
+  it('reads the profiles off the picker and switches by selection', async () => {
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(() => result.current.devLoginAs('p2-player-9'))
+    expect(result.current.profiles.map((p) => p.id).sort()).toEqual(['p2-player-17', 'p2-player-9'])
+
+    await act(() => result.current.switchProfile('p2-player-17'))
+    expect(result.current.user?.firstName).toBe('Bastien')
+  })
+
+  it('offers nothing to a member whose address is their own', async () => {
+    const { result } = render()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(() => result.current.devLoginAs('p2-player-4'))
+    expect(result.current.profiles.map((p) => p.id)).toEqual(['p2-player-4'])
+    await expect(result.current.switchProfile('p2-player-17')).rejects.toThrow('not_allowed')
+  })
+})

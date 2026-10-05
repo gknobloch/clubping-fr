@@ -261,6 +261,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [devUserId, devUsers],
   )
 
+  // Local dev and E2E have no backend to name the profiles (#640), so they are
+  // read off the picker's own list: whoever shares the selected member's
+  // address. That is what lets the shared address in the fixtures show the
+  // switcher under plain `npm run dev`.
+  const devProfiles = useMemo<Profile[]>(() => {
+    const address = devUser?.email?.trim().toLowerCase()
+    if (!devUser || !address) return []
+    return devUsers
+      .filter((u) => u.email?.trim().toLowerCase() === address)
+      .map((u) => ({
+        id: u.id, role: u.role,
+        ...(u.firstName ? { firstName: u.firstName } : {}),
+        ...(u.lastName ? { lastName: u.lastName } : {}),
+        ...(u.clubId ? { clubId: u.clubId } : {}),
+        ...(u.clubName ? { clubName: u.clubName } : {}),
+        ...(u.status ? { status: u.status } : {}),
+      }))
+  }, [devUser, devUsers])
+
   const user = realUser ?? devUser
 
   const applySession = useCallback((session: AuthSession) => {
@@ -316,9 +335,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // refetches, and its cache already refuses another member's entry (#387).
   const switchProfile = useCallback(
     async (userId: string) => {
+      // The local picker's session is the selection itself: switching is
+      // selecting another member of the same address.
+      if (!realUser && devUser) {
+        if (!devProfiles.some((p) => p.id === userId)) throw new Error('not_allowed')
+        setDevUserId(userId)
+        storage.set(DEV_USER_KEY, userId)
+        return
+      }
       applySession(await apiSwitchProfile(userId, realToken ?? undefined))
     },
-    [realToken, applySession],
+    [realUser, devUser, devProfiles, realToken, applySession],
   )
 
   const devLoginAs = useCallback(
@@ -350,14 +377,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCode,
       loginWithIdToken,
       logout,
-      profiles,
+      profiles: realUser ? profiles : devProfiles,
       switchProfile,
       devUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
     // devUsers matters: the list arrives asynchronously on a preview, and
     // omitting it would leave the picker showing the mock fallback forever.
-    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, profiles, switchProfile, devUsers, devLoginAs],
+    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, realUser, profiles, devProfiles, switchProfile, devUsers, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
