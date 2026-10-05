@@ -13,6 +13,8 @@ import {
   pngWithoutOrientationMetadata,
   clockComplaint,
   CLOCK_TOLERANCE_SECONDS,
+  connectivityComplaint,
+  API_HOST,
   REQUIRED_SCREENS,
   PLAY_MAX_SCREENSHOTS,
   TARGETS,
@@ -420,5 +422,47 @@ describe('clockComplaint', () => {
 
   it('treats an unreadable clock as a problem, not as agreement', () => {
     expect(clockComplaint(Number.NaN, host)).toMatch(/illisible/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The emulator's network
+//
+// An emulator keeps the DNS servers it found at boot. Once the Mac changed
+// network, it showed its Wi-Fi as connected and resolved nothing, and the run
+// failed at login on « login-code-input not found » — a selector message for a
+// network problem. The outputs below are what the emulator actually printed.
+// ---------------------------------------------------------------------------
+
+describe('connectivityComplaint', () => {
+  it('says nothing when the host answered — even through an emulator’s garbled timings', () => {
+    const out =
+      'PING clubping.fr (104.21.44.83) 56(84) bytes of data.\n' +
+      '64 bytes from 104.21.44.83: icmp_seq=0 ttl=255 time=6326840225019655 ms\n'
+    expect(connectivityComplaint(out)).toBeNull()
+  })
+
+  it('names the DNS when the name does not resolve, and how to get out of it', () => {
+    const problem = connectivityComplaint('ping: unknown host clubping.fr\n')
+    expect(problem).toContain('ne résout pas clubping.fr')
+    expect(problem).toContain('adb emu kill')
+  })
+
+  it('tells an unreachable host apart from an unresolved one', () => {
+    const out =
+      'PING clubping.fr (104.21.44.83) 56(84) bytes of data.\n\n' +
+      '--- clubping.fr ping statistics ---\n2 packets transmitted, 0 received, 100% packet loss\n'
+    const problem = connectivityComplaint(out)
+    expect(problem).toContain('rien ne répond')
+    expect(problem).not.toContain('ne résout pas')
+  })
+
+  it('treats no output at all as a failure, not a pass', () => {
+    expect(connectivityComplaint('')).not.toBeNull()
+    expect(connectivityComplaint(undefined)).not.toBeNull()
+  })
+
+  it('checks the host the review account signs in against', () => {
+    expect(API_HOST).toBe('clubping.fr')
   })
 })
