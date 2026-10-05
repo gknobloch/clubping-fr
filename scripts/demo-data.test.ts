@@ -17,6 +17,18 @@ import {
   DEMO_PLAYED_LINEUP,
   PLAYED_JOURNEE,
   UPCOMING_JOURNEE,
+  JOURNEES,
+  DEMO_POULES,
+  demoFixtures,
+  PHASE_AVAILABILITY,
+  LENT,
+  DEMO_ADDRESSES,
+  DEMO_TRAININGS,
+  guidedDates,
+  CANCELLED_SESSION,
+  GUIDED_ANSWERS,
+  GUIDED_SESSIONS,
+  localToday,
 } from './demo-data.mjs'
 import { normalizeCategory } from '../src/lib/playerCategories'
 
@@ -65,10 +77,13 @@ describe('journeeDates', () => {
   const today = '2026-09-13'
   const dates = journeeDates(today)
 
-  it('puts one journée behind today and two ahead', () => {
+  it('puts one journée behind today and the rest of the phase ahead', () => {
     expect(dates[1] < today).toBe(true)
-    expect(dates[2] > today).toBe(true)
-    expect(dates[3] > dates[2]).toBe(true)
+    for (let n = 2; n <= JOURNEES; n++) expect(dates[n] > today).toBe(true)
+  })
+
+  it('dates every journée of the phase — the planning reads all of them (#634)', () => {
+    expect(Object.keys(dates)).toHaveLength(JOURNEES)
   })
 
   it('puts journée 2 inside the coming week — the whole point', () => {
@@ -80,8 +95,7 @@ describe('journeeDates', () => {
   })
 
   it('leaves a fortnight between journées', () => {
-    expect(shiftDate(dates[1], 14)).toBe(dates[2])
-    expect(shiftDate(dates[2], 14)).toBe(dates[3])
+    for (let n = 1; n < JOURNEES; n++) expect(shiftDate(dates[n], 14)).toBe(dates[n + 1])
   })
 
   it('never produces the same calendar twice from different days', () => {
@@ -259,7 +273,7 @@ describe('the journée already played', () => {
 
   it('keeps Camille Durand, whose brûlage needs both matches', () => {
     // computeBrulage counts two games across the club's teams; her badge is
-    // the subject of screenshots 06 and 07.
+    // the subject of screenshot 07.
     expect(DEMO_PLAYED_LINEUP).toContain('demo-player-2')
     expect(DEMO_LINEUP).toContain('demo-player-2')
   })
@@ -275,5 +289,187 @@ describe('the journée already played', () => {
   it('sits in the past of the calendar the offsets build', () => {
     const dates = journeeDates('2026-09-20')
     expect(dates[PLAYED_JOURNEE] < dates[UPCOMING_JOURNEE]).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The whole phase (#634)
+//
+// The planning de la phase reads every journée of one team's phase, so the
+// demo phase grew from three journées to a poule's full six — and the
+// fixtures are derived here, since a calendar that is only ever updated can
+// never grow. The aller has to land exactly on the rows the database already
+// held, or the upsert would turn the coming match into somebody else's.
+// ---------------------------------------------------------------------------
+
+type Fixture = {
+  poule: string; number: number; gameId: string; matchDayId: string
+  groupId: string; homeTeamId: string; awayTeamId: string
+}
+
+describe('demoFixtures', () => {
+  const fixtures = demoFixtures() as Fixture[]
+
+  it('keeps the aller the database already held', () => {
+    const g = (id: string) => fixtures.find((f) => f.gameId === id)
+    expect(g('demo-g-1-1')).toMatchObject({ homeTeamId: 'demo-team-1', awayTeamId: 'demo-opp-a1' })
+    // The coming match is AWAY — which is why the opponents need a hall.
+    expect(g('demo-g-1-2')).toMatchObject({ homeTeamId: 'demo-opp-b1', awayTeamId: 'demo-team-1' })
+    expect(g('demo-g-1-3')).toMatchObject({ homeTeamId: 'demo-team-1', awayTeamId: 'demo-opp-c1' })
+    expect(g('demo-g-2-2')).toMatchObject({ homeTeamId: 'demo-opp-b2', awayTeamId: 'demo-team-2' })
+  })
+
+  it('plays each opponent twice, once at each end', () => {
+    for (const p of DEMO_POULES as { key: string; teamId: string; opponents: string[] }[]) {
+      const own = fixtures.filter((f) => f.poule === p.key)
+      expect(own).toHaveLength(JOURNEES)
+      for (const opp of p.opponents) {
+        expect(own.filter((f) => f.homeTeamId === opp && f.awayTeamId === p.teamId)).toHaveLength(1)
+        expect(own.filter((f) => f.homeTeamId === p.teamId && f.awayTeamId === opp)).toHaveLength(1)
+      }
+    }
+  })
+
+  it('files each game under its own journée, and names only demo rows', () => {
+    for (const f of fixtures) {
+      expect(f.matchDayId).toBe(`demo-md-${f.poule}-${f.number}`)
+      expect(() => assertDemoOnly([f.gameId, f.matchDayId, f.groupId, f.homeTeamId, f.awayTeamId])).not.toThrow()
+    }
+  })
+})
+
+describe('the squad’s answers across the phase', () => {
+  const answers = PHASE_AVAILABILITY as Record<number, Record<string, string>>
+  const later = Object.keys(answers).map(Number).filter((n) => n > UPCOMING_JOURNEE)
+
+  it('covers every journée still to come', () => {
+    for (let n = UPCOMING_JOURNEE + 1; n <= JOURNEES; n++) expect(answers[n]).toBeDefined()
+  })
+
+  it('thins out the further away a journée is, as a real squad does', () => {
+    const counts = later.map((n) => Object.keys(answers[n]).length)
+    for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeLessThanOrEqual(counts[i - 1])
+    // …and never empties: a blank column reads as a feature nobody uses.
+    expect(Math.min(...counts)).toBeGreaterThan(0)
+  })
+
+  it('has the captain answer for every journée of his own phase', () => {
+    for (const n of later) expect(answers[n][DEMO_USER]).toBe('available')
+  })
+
+  it('leaves no played match with a « sans réponse »', () => {
+    const played = new Set([...DEMO_PLAYED_LINEUP, ...Object.keys(answers[PLAYED_JOURNEE] ?? {})])
+    // The squad is the six DEMO_AVAILABILITY speaks for, plus the silent one.
+    expect(played.size).toBe(Object.keys(DEMO_AVAILABILITY).length + 1)
+  })
+
+  it('names only demo rows and statuses the app knows', () => {
+    for (const a of Object.values(answers)) {
+      expect(() => assertDemoOnly(Object.keys(a))).not.toThrow()
+      for (const s of Object.values(a)) expect(['available', 'maybe', 'unavailable']).toContain(s)
+    }
+  })
+})
+
+describe('the player lent to team 2', () => {
+  const lent = LENT.lineup[0]
+
+  it('is a full line-up for the division', () => {
+    expect(LENT.lineup).toHaveLength(4)
+    expect(new Set(LENT.lineup).size).toBe(4)
+  })
+
+  it('lends somebody who said yes, so the hatching has a oui under it', () => {
+    expect((PHASE_AVAILABILITY as Record<number, Record<string, string>>)[LENT.journee][lent]).toBe('available')
+  })
+
+  it('lends somebody team 1 has not fielded — Camille Durand’s brûlage stays hers alone', () => {
+    expect(DEMO_LINEUP).not.toContain(lent)
+    expect(DEMO_PLAYED_LINEUP).not.toContain(lent)
+    expect(LENT.lineup).not.toContain('demo-player-2')
+  })
+
+  it('happens on a journée still to come', () => {
+    expect(LENT.journee).toBeGreaterThan(UPCOMING_JOURNEE)
+  })
+})
+
+describe('the halls', () => {
+  const addresses = DEMO_ADDRESSES as { id: string; clubId: string; city: string; label: string }[]
+
+  it('gives every club of the demo poules one, the coming away match first', () => {
+    const clubs = new Set(addresses.map((a) => a.clubId))
+    for (const c of ['demo-club', 'demo-club-adv-a', 'demo-club-adv-b', 'demo-club-adv-c']) {
+      expect(clubs.has(c)).toBe(true)
+    }
+    expect(addresses.filter((a) => a.clubId === 'demo-club-adv-b')).toHaveLength(1)
+  })
+
+  it('names a hall, which is what the venue line prints first', () => {
+    for (const a of addresses) expect(a.label).not.toBe('Salle')
+  })
+
+  it('is in a town that does not exist — a tap opens a map', () => {
+    for (const a of addresses) expect(a.city).toBe('Démoville')
+  })
+
+  it('names only demo rows', () => {
+    expect(() => assertDemoOnly(addresses.flatMap((a) => [a.id, a.clubId]))).not.toThrow()
+  })
+})
+
+describe('the trainings (#634)', () => {
+  const today = '2026-10-05' // a Monday
+  const dates = guidedDates(today) as string[]
+  type T = { id: string; kind: string; weekday: number | null; managerIds: string[] }
+  const trainings = DEMO_TRAININGS as T[]
+
+  it('shows both kinds, which is the point of the list', () => {
+    expect(trainings.map((t) => t.kind).sort()).toEqual(['guided', 'regular'])
+  })
+
+  it('gives the free slot a day, and the coached series a coach', () => {
+    expect(trainings.find((t) => t.kind === 'regular')?.weekday).toBeGreaterThan(0)
+    expect(trainings.find((t) => t.kind === 'guided')?.managerIds.length).toBeGreaterThan(0)
+  })
+
+  it('dates the coached sessions on Thursdays, strictly after today', () => {
+    expect(dates).toHaveLength(GUIDED_SESSIONS)
+    for (const d of dates) {
+      expect(new Date(`${d}T00:00:00Z`).getUTCDay()).toBe(4)
+      expect(d > today).toBe(true)
+    }
+    // Run on a Thursday, the first session is next week's, not tonight's.
+    expect(guidedDates('2026-10-08')[0]).toBe('2026-10-15')
+  })
+
+  it('calls one off — not the next one, whose card carries the answers', () => {
+    expect(CANCELLED_SESSION.index).toBeGreaterThan(0)
+    expect(CANCELLED_SESSION.index).toBeLessThan(GUIDED_SESSIONS)
+    expect(CANCELLED_SESSION.note.length).toBeGreaterThan(0)
+  })
+
+  it('has the review account answer the next session held', () => {
+    expect((GUIDED_ANSWERS as Record<string, string>[])[0][DEMO_USER]).toBe('available')
+    expect(GUIDED_ANSWERS.length).toBeLessThan(GUIDED_SESSIONS)
+  })
+
+  it('names only demo rows', () => {
+    expect(() =>
+      assertDemoOnly([
+        ...trainings.flatMap((t) => [t.id, ...t.managerIds]),
+        ...(GUIDED_ANSWERS as Record<string, string>[]).flatMap((a) => Object.keys(a)),
+      ]),
+    ).not.toThrow()
+  })
+})
+
+describe('localToday', () => {
+  it('reads the host calendar, not UTC', () => {
+    // 00:30 in the host's zone on 5 October: still the 5th here, whatever UTC
+    // says — `toISOString()` gave the 4th to every run east of Greenwich
+    // between midnight and the offset.
+    expect(localToday(new Date(2026, 9, 5, 0, 30))).toBe('2026-10-05')
+    expect(localToday(new Date(2026, 9, 5, 23, 30))).toBe('2026-10-05')
   })
 })

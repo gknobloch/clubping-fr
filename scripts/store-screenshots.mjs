@@ -43,16 +43,28 @@ const FLOW = path.join(MOBILE, '.maestro/screenshots/capture.yaml')
 // ignored since #492, alongside the generated metadata, because `deliver` and
 // `supply` read them off the machine that runs the release. So a fresh clone
 // has none, and re-running this script is how you get them back.
+//
+// Eight, because that is all Google Play takes for a phone (the App Store
+// takes ten): the 1.6.0 trainings and the 1.7.0 planning de la phase came in
+// as 09 and 10 by taking out two that said something another screen already
+// says (#634). `04-equipes` was the plain list `05-equipe` shows with a team
+// in it; `06-joueur-apercu` was the same player as `07-joueur-profil`, once as
+// a sheet. Their numbers stay unused rather than being handed to the new
+// screens: a number names one screen, in every set and every capture since
+// #520, so an old image left on disk can never pass for a new one.
 export const REQUIRED_SCREENS = [
   '01-accueil',
   '02-composition',
   '03-feuille',
-  '04-equipes',
   '05-equipe',
-  '06-joueur-apercu',
   '07-joueur-profil',
   '08-journees',
+  '09-planning',
+  '10-entrainements',
 ]
+
+/** What a set may hold at most: Google Play's limit for phone screenshots. */
+export const PLAY_MAX_SCREENSHOTS = 8
 // Nothing is optional. 02-composition is the only screen the flow guards
 // (`runFlow: when:` on the compose button, which exists for a captain on a
 // match still to come) — and it is guarded so that a skipped tap cannot file
@@ -65,8 +77,10 @@ export const OPTIONAL_SCREENS = []
  * The screens a target keeps, which is every one of them unless it says
  * otherwise.
  *
- * The flow always captures all eight — one file, one device deciding what it
- * draws — and the target decides which of them ship. Dropping a shot here
+ * The flow always captures the whole set — one file, one device deciding what
+ * it draws — and the target decides which of them ship. No target drops
+ * anything today (#634), and the mechanism stays for the next screen that
+ * exists on one device class only. Dropping a shot here
  * rather than branching the flow keeps the numbering fixed: `05-equipe` is the
  * same screen in every set, and a missing number is a deliberate omission
  * rather than a renumbering nobody can follow.
@@ -139,7 +153,7 @@ function loadDevVars() {
  * simulator's UDID is specific to the Mac it was created on, and committing
  * one would work once, on one machine, and nowhere else.
  */
-const TARGETS = [
+export const TARGETS = [
   {
     id: 'iphone',
     platform: 'ios',
@@ -165,20 +179,11 @@ const TARGETS = [
     // landscape iPad screenshots; the portrait check below is per target for
     // exactly this.
     orientation: 'LANDSCAPE_LEFT',
-    // The équipes screen is two panes above the tablet threshold, so this
-    // shot is the teams list beside "Choisissez une équipe pour afficher sa
-    // fiche." — a placeholder with an icon in it. 05-equipe shows the same
-    // list with a team actually in the right pane, and says everything this
-    // one says.
-    // Two panes everywhere above the tablet threshold (#447), which drops two
-    // shots rather than one. `04-equipes` is the teams list beside
-    // "Choisissez une équipe pour afficher sa fiche." — a placeholder with an
-    // icon in it, where `05-equipe` shows the same list with a team in the
-    // right pane. `06-joueur-apercu` has no tablet equivalent at all: the
-    // player is selected from the Joueurs tab, so her fiche IS the pane and
-    // there is no quick-view sheet to photograph.
+    // Two panes everywhere above the tablet threshold (#447). The two shots
+    // that used to be dropped here for it — the teams list beside a
+    // placeholder, and a quick view a tablet does not have — have left the
+    // set altogether (#634), so the iPad now ships the same eight as a phone.
     twoPane: true,
-    dropScreens: ['04-equipes', '06-joueur-apercu'],
     destDir: path.join(MOBILE, 'fastlane/screenshots/fr-FR'),
     filePrefix: 'ipad_',
   },
@@ -233,6 +238,35 @@ export function pngDimensions(buf) {
 export function isPlausibleScreenshot({ width, height }, orientation = 'PORTRAIT') {
   if (width < 800 || height < 800) return false
   return orientation === 'PORTRAIT' ? height > width : width > height
+}
+
+/**
+ * The images already in a target's folder that its set no longer holds.
+ *
+ * `store:fastlane -- notes` uploads whatever PNGs sit in the folder and
+ * REPLACES the listing with them. A screen that left the set (#634) would
+ * otherwise stay behind on the one machine that captured it before, and ride
+ * along on the next upload: ten images to Play, which takes eight, or an
+ * App Store page showing the old screen beside its replacement.
+ *
+ * Only this target's own files: the iPhone and the iPad share a folder
+ * (deliver buckets by pixel size), told apart by prefix, so an unprefixed
+ * target only ever claims names that look like a capture — never the other
+ * device's, and never something somebody put there by hand.
+ *
+ * @param {string[]} filenames — what the folder holds, e.g. "iphone_04-equipes.png"
+ * @param {{filePrefix: string}} target
+ * @param {string[]} wanted — the target's set, as `screensFor` gives it
+ */
+export function staleScreenshots(filenames, target, wanted) {
+  const keep = new Set(wanted.map((name) => `${target.filePrefix}${name}.png`))
+  const prefixes = TARGETS.map((t) => t.filePrefix).filter((p) => p && p !== target.filePrefix)
+  return filenames.filter((f) => {
+    if (keep.has(f) || !f.startsWith(target.filePrefix)) return false
+    // An unprefixed target must not claim another target's prefixed files.
+    if (!target.filePrefix && prefixes.some((p) => f.startsWith(p))) return false
+    return /^\d{2}-[a-z-]+\.png$/.test(f.slice(target.filePrefix.length))
+  })
 }
 
 /**
@@ -788,6 +822,11 @@ function validateAndInstall(target, captured) {
     console.warn(`  ⚠ ${target.id} : ${missing.join(', ')} n'a pas été capturé.`)
   }
   mkdirSync(target.destDir, { recursive: true })
+  // Before copying, and said out loud: see staleScreenshots.
+  for (const stale of staleScreenshots(readdirSync(target.destDir), target, wanted)) {
+    rmSync(path.join(target.destDir, stale))
+    console.log(`  — ${target.id}/${stale} : retiré, hors du jeu actuel.`)
+  }
   const keep = new Set(wanted)
   for (const { file, basename } of captured) {
     // Captured but not wanted here — the flow is one file for every target.
