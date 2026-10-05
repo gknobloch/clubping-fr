@@ -48,8 +48,9 @@ same app again. Let the user decide whether it is worth it.
 `npm run store:screenshots` (#520) recaptures the store images and stays
 deliberately manual — it needs a simulator, an emulator and the review account,
 and most releases change nothing a screenshot shows. The eight screens it
-captures are Accueil, la composition, la feuille de match, les équipes, une
-équipe, l'aperçu d'une joueuse, son profil et les journées. If this release
+captures are Accueil, la composition, la feuille de match, une équipe, le
+profil d'une joueuse, les journées, le planning de la phase et les
+entraînements. If this release
 visibly changes one of those, say so and let the user decide; do not run it as
 part of the release.
 
@@ -270,7 +271,7 @@ Run this **every release**, before handing over for review — not only when
 screenshots are being recaptured. A store reviewer signs into the live app with
 the review account, and the demo club's calendar is built from offsets rather
 than dates precisely so it can be re-anchored: one journée just played, one in
-the coming week, one a fortnight out. Skip it and somebody opening the app in
+the coming week, the rest of the phase a fortnight apart. Skip it and somebody opening the app in
 November finds a season that ended in September, with an empty "prochaines
 journées" — which is what the screenshots were showing before #520.
 

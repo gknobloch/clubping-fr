@@ -1477,26 +1477,36 @@ invisible dans le diff comme dans la revue.
   sont retirés après rotation ; l'absence d'étiquette vaut orientation 1, ce
   qu'un fichier correctement tourné aurait dû annoncer d'emblée. Devant une
   capture de travers, regarder la métadonnée avant les pixels.
-- **L'iPad se capture en paysage, et il lui manque un écran.** Une tablette se
+- **L'iPad se capture en paysage.** Une tablette se
   tient en travers, et c'est la forme pour laquelle #447 a dessiné l'app : les
   cinq destinations deviennent un rail à gauche et la matrice des journées a
   enfin sa largeur. Le sens est **passé au flow** (`-e ORIENTATION=…`) plutôt
   que laissé à ce que le simulateur avait gardé de la dernière fois, et il est
   **vérifié** à la sortie : une cible qui demande le paysage et revient en
   portrait a shooté tout un jeu de travers, ce qui doit s'entendre.
-  Deux captures sautent, les deux parce que tout est en deux volets au-dessus
-  du seuil tablette (#447). `04-equipes` est la liste à côté de « Choisissez
-  une équipe pour afficher sa fiche », là où `05-equipe` montre la même liste
-  avec une fiche dedans. `06-joueur-apercu` n'a tout bonnement pas
-  d'équivalent : sur tablette la joueuse se choisit dans l'onglet **Joueurs**,
-  donc la liste du club reste à côté de sa fiche et il n'y a aucune feuille
-  d'aperçu à photographier. C'est la seule vraie bifurcation du flow —
-  `TWO_PANE`, passé par la cible comme `ORIENTATION`, plutôt que deviné sur un
-  élément propre aux tablettes. Le flow capture tout ce que sa branche
-  traverse ; c'est `dropScreens` sur la cible qui décide de ce qui part, d'où
-  un trou dans la numérotation plutôt qu'un décalage : `05-equipe` doit
-  désigner le même écran dans tous les jeux.
-- **Le jeu est de huit écrans, et le n° 8 n'est pas le même selon l'appareil.**
+  Sur tablette la joueuse se choisit dans l'onglet **Joueurs** (la liste du
+  club reste à côté de sa fiche) et le planning se dessine dans le volet de
+  « Tous les matchs » plutôt que dans une feuille : ce sont les deux vraies
+  bifurcations du flow — `TWO_PANE`, passé par la cible comme `ORIENTATION`,
+  plutôt que deviné sur un élément propre aux tablettes. `dropScreens` reste
+  sur la cible pour le prochain écran qui n'existerait que d'un côté ; depuis
+  #634, aucune cible n'en écarte.
+- **Le jeu est de huit écrans parce que Google Play n'en prend pas plus** sur
+  un téléphone (l'App Store en prend dix). Le planning de la phase et les
+  entraînements, absents de toute fiche jusqu'à #634, y sont entrés en
+  `09-planning` et `10-entrainements` en prenant la place de deux écrans qui
+  redisaient autre chose : `04-equipes`, la liste que `05-equipe` montre avec
+  une équipe dedans (sur tablette, une liste à côté d'un écran d'attente), et
+  `06-joueur-apercu`, la même joueuse que `07-joueur-profil` dans une
+  feuille. **Un numéro désigne un écran pour toujours** : 04 et 06 restent
+  vides plutôt que d'être donnés aux nouveaux, et la fiche suit l'ordre des
+  numéros, pas celui du parcours.
+- **Une capture qui sort du jeu est retirée du dossier** (`staleScreenshots`).
+  `store:fastlane -- notes` téléverse tous les PNG qu'il y trouve et remplace
+  la fiche avec : un `04-equipes` resté d'une capture antérieure partait sinon
+  avec les autres — dix images pour Play, qui en refuse au-delà de huit.
+  Seulement les fichiers de la cible : iPhone et iPad partagent un dossier.
+- **Le n° 8 n'est pas le même selon l'appareil.**
   Un téléphone liste les journées, une tablette affiche la matrice de
   disponibilités à la place — `journees/index.tsx` bifurque sur `isTablet`,
   donc la matrice n'existe tout simplement pas sur iPhone. Ce n'est pas un
@@ -1554,8 +1564,9 @@ invisible dans le diff comme dans la revue.
   18 mai 2030, une date choisie pour que « prochaines journées » cesse de se
   vider — le problème rustiné plutôt que résolu. `scripts/demo-data.mjs`
   recalcule tout depuis aujourd'hui : une journée qui vient d'être jouée, une
-  dans la semaine qui vient, une quinze jours plus tard. À relancer avant une
-  session de captures **et avant une revue de store** : un examinateur qui
+  dans la semaine qui vient, puis le reste de la phase de quinze en quinze.
+  À relancer avant une session de captures **et avant une revue de store** :
+  un examinateur qui
   ouvre l'app en novembre ne doit pas tomber sur une saison finie en septembre.
 - Le compte de revue s'appelle **Julien Mercier** : un nom inventé et
   ordinaire, pas « Démo App Store », qui est une étiquette et se lisait comme
@@ -1581,13 +1592,37 @@ invisible dans le diff comme dans la revue.
   en tête de l'effectif qu'il capitaine. Les points se déclarent par **phase**
   (0038), donc la ligne est clavée sur la phase de `demo-team-1`, lue sur
   l'équipe et non supposée active.
-- **La fiche de Camille Durand est remplie**, parce que deux des huit captures
-  sont ses écrans à elle : une catégorie (V40, saison active — une catégorie
+- **La fiche de Camille Durand est remplie**, parce que `07-joueur-profil`
+  est son écran à elle : une catégorie (V40, saison active — une catégorie
   appartient à une saison, #482) et un numéro de téléphone, sans lequel
   `PhoneRow` et son bouton de copie (#503) n'apparaissent pas du tout. Le
   numéro est pris dans la plage réservée à la fiction par l'ARCEP
   (07 99 98 xx xx) : la capture part sur une fiche publique, et « qui a l'air
   inventé » n'est pas « qui n'est attribué à personne ».
+- **La phase de démo fait six journées, et le club de démo s'entraîne**
+  (#634). Trois colonnes faisaient d'un planning de la phase un moignon : une
+  poule de quatre en joue six, aller puis retour, et les journées 4 à 6 sont
+  **créées** par `demo:refresh` — les rencontres sont dérivées dans le script
+  (`demoFixtures`) et non relues en base, parce qu'un calendrier qu'on ne fait
+  que mettre à jour ne peut pas grandir. Les réponses s'éclaircissent avec la
+  distance, comme celles d'une vraie équipe ; un joueur de l'équipe 1 est
+  prêté à l'équipe 2 (la case hachurée), et jamais Camille Durand, dont le
+  brûlage doit rester le seul.
+- **Le script décrit tous les entraînements du club de démo**, et supprime
+  ceux qu'il ne nomme pas — deux séries créées à la main pour essayer #608,
+  aux dates figées, y traînaient. Un créneau libre le mardi, une série
+  dirigée le jeudi dont les séances sont des **écarts** depuis aujourd'hui,
+  une annulée avec son motif, des réponses sur les suivantes. Le public est
+  tout le club (`[]`) et non un groupe : le compte de revue doit être
+  attendu, sinon la carte n'a pas de « Ma disponibilité ». La clé
+  d'agenda est posée une fois, jamais renouvelée par un nouveau passage.
+- **Chaque club des poules de démo a sa salle**, dans une ville qui n'existe
+  pas (Démoville) : le prochain match se joue **à l'extérieur**, et sans
+  adresse chez l'adversaire l'accueil tirait une ville de « Démo TT Bravo ».
+  Une vraie rue d'une vraie ville est la porte de quelqu'un, et un toucher
+  sur l'adresse ouvre le plan.
+- **`demo:refresh` lit la date sur le calendrier local**, plus en UTC : lancé
+  entre minuit et 2 h, il ancrait tout sur la veille (#561).
 - **Les identifiants du compte de revue se lisent dans `.dev.vars`.**
   `REVIEW_LOGIN_EMAIL` et `REVIEW_LOGIN_CODE` sont des secrets Cloudflare
   Pages : ils sont déjà là sur toute machine qui a lancé l'API en local, dans

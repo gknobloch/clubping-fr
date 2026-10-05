@@ -358,6 +358,7 @@ export function MatchDetail({
               le rail à côté *est* cette liste (#585). */}
           {!embedded && (
             <TouchableOpacity
+              testID="match-phase-games"
               style={styles.compose}
               onPress={() =>
                 router.push({

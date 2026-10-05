@@ -14,6 +14,9 @@ import {
   clockComplaint,
   CLOCK_TOLERANCE_SECONDS,
   REQUIRED_SCREENS,
+  PLAY_MAX_SCREENSHOTS,
+  TARGETS,
+  staleScreenshots,
 } from './store-screenshots.mjs'
 
 // ---------------------------------------------------------------------------
@@ -92,12 +95,24 @@ describe('missingRequiredScreens', () => {
   })
 
   it('expects the whole set, in order', () => {
-    // The numbers are the listing's order on the store page, so a gap is a
-    // reordering nobody asked for.
-    expect(REQUIRED_SCREENS).toHaveLength(8)
+    // The numbers are the listing's order on the store page. 04 and 06 left
+    // the set in #634 and stay unused: a number names one screen for good, so
+    // an old capture left on disk cannot pass for a new screen.
     expect(REQUIRED_SCREENS.map((s: string) => s.slice(0, 2))).toEqual([
-      '01', '02', '03', '04', '05', '06', '07', '08',
+      '01', '02', '03', '05', '07', '08', '09', '10',
     ])
+  })
+
+  it('fits what Google Play takes for a phone', () => {
+    // Eight. The App Store takes ten, so Play is the one that decides — and
+    // an upload over the limit is refused after both builds have been made.
+    expect(REQUIRED_SCREENS.length).toBeLessThanOrEqual(PLAY_MAX_SCREENSHOTS)
+    for (const t of TARGETS) expect(screensFor(t).length).toBeLessThanOrEqual(PLAY_MAX_SCREENSHOTS)
+  })
+
+  it('shows what 1.6.0 and 1.7.0 shipped (#634)', () => {
+    expect(REQUIRED_SCREENS).toContain('09-planning')
+    expect(REQUIRED_SCREENS).toContain('10-entrainements')
   })
 
   it('reports everything missing from an empty capture', () => {
@@ -113,18 +128,64 @@ describe('screensFor', () => {
   it('drops what a target names, and renumbers nothing', () => {
     // The gap is the point: 05-equipe must be the same screen in every set,
     // so an omission reads as an omission rather than a reshuffle.
-    const dropScreens = ['04-equipes', '06-joueur-apercu']
+    const dropScreens = ['02-composition', '09-planning']
     const set = screensFor({ id: 'ipad', dropScreens })
     expect(set).toEqual(REQUIRED_SCREENS.filter((s: string) => !dropScreens.includes(s)))
-    expect(set[set.length - 1]).toBe('08-journees')
+    expect(set[set.length - 1]).toBe('10-entrainements')
   })
 
   it('measures a run against that target’s set, not the full one', () => {
-    const set = screensFor({ id: 'ipad', dropScreens: ['04-equipes', '06-joueur-apercu'] })
+    const set = screensFor({ id: 'ipad', dropScreens: ['02-composition', '09-planning'] })
     expect(missingRequiredScreens(set, set)).toEqual([])
     // …while the same capture is short two screens for a target that wants
     // them, which is what stops a tablet run from passing as a phone one.
-    expect(missingRequiredScreens(set)).toEqual(['04-equipes', '06-joueur-apercu'])
+    expect(missingRequiredScreens(set)).toEqual(['02-composition', '09-planning'])
+  })
+
+  it('gives every target today the same set (#634)', () => {
+    for (const t of TARGETS) expect(screensFor(t)).toEqual(REQUIRED_SCREENS)
+  })
+})
+
+describe('staleScreenshots', () => {
+  // What the folders held after the last capture before #634.
+  const iosFolder = [
+    ...['01-accueil', '02-composition', '03-feuille', '04-equipes', '05-equipe',
+      '06-joueur-apercu', '07-joueur-profil', '08-journees'].map((n) => `iphone_${n}.png`),
+    ...['01-accueil', '05-equipe', '08-journees'].map((n) => `ipad_${n}.png`),
+    '.DS_Store',
+  ]
+  const iphone = { id: 'iphone', filePrefix: 'iphone_' }
+  const ipad = { id: 'ipad', filePrefix: 'ipad_' }
+  const android = { id: 'android', filePrefix: '' }
+
+  it('names the screens that left the set, so the upload cannot carry them', () => {
+    expect(staleScreenshots(iosFolder, iphone, REQUIRED_SCREENS)).toEqual([
+      'iphone_04-equipes.png',
+      'iphone_06-joueur-apercu.png',
+    ])
+  })
+
+  it('never touches the other device’s files in a shared folder', () => {
+    expect(staleScreenshots(iosFolder, ipad, REQUIRED_SCREENS)).toEqual([])
+    expect(staleScreenshots(iosFolder, android, REQUIRED_SCREENS)).toEqual([])
+  })
+
+  it('claims only what looks like a capture', () => {
+    const folder = ['04-equipes.png', '01-accueil.png', 'notes.txt', 'Capture.png', 'iphone_04-equipes.png']
+    expect(staleScreenshots(folder, android, REQUIRED_SCREENS)).toEqual(['04-equipes.png'])
+  })
+})
+
+describe('the set the flow walks', () => {
+  it('captures every required screen, and nothing that left the set', async () => {
+    // The flow names the screens and the script decides which are required:
+    // two lists of the same thing, held together here rather than by memory.
+    const { readFileSync } = await import('node:fs')
+    const path = await import('node:path')
+    const flow = readFileSync(path.join(__dirname, '../mobile/.maestro/screenshots/capture.yaml'), 'utf8')
+    const shots = new Set([...flow.matchAll(/takeScreenshot:\s*(\S+)/g)].map((m) => m[1]))
+    expect([...shots].sort()).toEqual([...REQUIRED_SCREENS].sort())
   })
 })
 

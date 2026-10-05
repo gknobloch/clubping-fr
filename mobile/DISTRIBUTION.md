@@ -233,7 +233,7 @@ npm run demo:refresh -- --apply
 The demo club's fixtures used to carry fixed dates, which go stale by definition — it
 had a journée on 18 May 2030, a date somebody picked to stop "prochaines journées"
 emptying. What is stored now are offsets recomputed from today: one journée just played,
-one in the coming week, one a fortnight out. That is also worth running **before a store
+one in the coming week, the rest of the phase a fortnight apart. That is also worth running **before a store
 review**, so a reviewer opening the app in November does not find a season that ended in
 September.
 
@@ -271,21 +271,28 @@ tree — dumping the hierarchy on the home screen returns no member name, no fix
 availability buttons and no "Composer l'équipe", only ids. A selector written against a
 visible label will not match, however it is spelled.
 
-**The set is eight screens**, one thread rather than a tour of the tabs: Accueil, the
-line-up sheet, the feuille de match, the club's teams, one team in full, a player's quick
-view, her profile, and the calendar. The match screen itself is not in it — it is the way
-to the two sheets that are.
+**The set is eight screens** — Google Play's limit for a phone; the App Store takes ten —
+walked as one thread rather than a tour of the tabs: Accueil, the line-up sheet, the
+feuille de match, the planning de la phase, one team in full, a player's profile, the
+calendar, and the club's trainings. The match screen itself is not in it — it is the way
+to the sheets that are. The numbers are the listing's order, not the walk's.
 
 | | |
 | --- | --- |
 | `01-accueil` | the hero card — the match, the answers, the line-up |
 | `02-composition` | the captain's line-up sheet |
 | `03-feuille` | the feuille de match, read-only and open to everyone |
-| `04-equipes` | the club's teams |
 | `05-equipe` | team 1 in full |
-| `06-joueur-apercu` | Camille Durand, quick view |
-| `07-joueur-profil` | her profile, carrying the brûlage badge |
+| `07-joueur-profil` | Camille Durand's profile, carrying the brûlage badge |
 | `08-journees` | the calendar |
+| `09-planning` | the planning de la phase — a sheet on a phone, the pane on a tablet |
+| `10-entrainements` | the club's trainings, one coached session called off |
+
+`04` and `06` are unused since #634: `04-equipes` (the teams list) and `06-joueur-apercu`
+(the quick view) made way for the planning and the trainings, and a number never names a
+second screen. The script **removes** an image whose screen left the set from the
+fastlane folders before copying — otherwise a capture from before would ride along on the
+next upload, and Play refuses a ninth phone image.
 
 **#8 is deliberately a different screen per device.** A phone shows the journées as a
 list; a tablet shows the availability matrix instead — `journees/index.tsx` branches on
@@ -301,7 +308,10 @@ review account has stopped being captain of `demo-team-1`.
 
 `demo:refresh` is what makes all of this true: it makes the review account captain of
 `demo-team-1` and fills the line-up, which is what makes the Accueil card read 4/4 rather
-than 0/4 and what burns Camille Durand into team 1 for screens 6 and 7.
+than 0/4 and what burns Camille Durand into team 1 for screen 7. Since #634 it also gives
+the phase six journées with answers across them, a player lent to team 2, every demo club
+a hall, and the club its two trainings — without it, screens 9 and 10 have nothing to
+show, and the trainings tab does not exist at all.
 
 **Both sheets are closed by their own footer button** — `match-sheet-close`,
 `selection-cancel` — never by a tap on the backdrop. The backdrop's free area is the top
@@ -310,7 +320,7 @@ window, so a coordinate that is backdrop on one is the panel on the other. `sele
 rather than the save button, so a capture run cannot rewrite the line-up `demo:refresh`
 just put there.
 
-**The iPad set is landscape, and one screen shorter.** A slab gets held sideways, and
+**The iPad set is landscape.** A slab gets held sideways, and
 that is the shape #447 drew the app for: the five destinations become a rail down the
 left edge and the journées matrix gets the width it needs. The orientation is passed to
 the flow (`-e ORIENTATION=…`) rather than left to whatever the simulator was last set to,
@@ -337,16 +347,16 @@ left un-answered by an earlier run survives `clearState` and `clearKeychain` bot
 belongs to SpringBoard, not the app — and comes back over the next launch owning the
 hierarchy, hiding every element under it. That is what a stuck iPad run looks like.
 
-**Two shots are dropped from the iPad set**, both because everything is two panes above
-the tablet threshold (#447). `04-equipes` is the teams list beside *"Choisissez une équipe
-pour afficher sa fiche."* — a placeholder with an icon in it, where `05-equipe` shows the
-same list with a team actually in the right pane. `06-joueur-apercu` has no tablet
-equivalent at all: a player is picked from the **Joueurs** tab, so the club's list stays
-beside her fiche and there is no quick-view sheet to photograph.
+**The iPad ships the same eight.** It used to drop `04-equipes` and `06-joueur-apercu`,
+both placeholders or impossibilities above the tablet threshold (#447); they have left the
+set for everyone since #634, and `dropScreens` is kept for the next screen that exists on
+one device class only.
 
-That last one is the only genuine fork in the flow — `TWO_PANE`, passed by the target the
-way `ORIENTATION` is, rather than sniffed from a tablet-only element. A phone walks squad
-row → quick view → profile; a tablet goes to the Joueurs tab and selects Camille there.
+The flow forks twice on `TWO_PANE`, passed by the target the way `ORIENTATION` is rather
+than sniffed from a tablet-only element. For the player, a phone walks squad row → quick
+view → profile, and a tablet goes to the Joueurs tab and selects Camille there. For the
+planning, a phone opens it as a sheet from « Tous les matchs », and a tablet draws it in
+the pane beside the rail (`rail-planning`).
 
 The flow still captures every screen its branch reaches; `dropScreens` on the target
 decides what ships, which is why the numbering has a gap rather than a reshuffle:

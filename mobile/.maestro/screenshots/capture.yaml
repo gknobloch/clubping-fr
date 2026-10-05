@@ -5,7 +5,8 @@
 # connected device decides whether Maestro drives the simulator or the
 # emulator. scripts/store-screenshots.mjs runs this once per target and moves
 # each PNG to wherever `deliver` (iOS) or `supply` (Android) expects it — this
-# file only ever writes 01..08 into its own debug output.
+# file only ever writes the set's names into its own debug output. The set is
+# REQUIRED_SCREENS in that script, and a test holds the two together.
 #
 # Everything is selected by `testID`. This app exposes almost no text to the
 # accessibility tree: dumping the hierarchy on the Accueil screen returns no
@@ -14,10 +15,14 @@
 #
 # The set walks one thread rather than touring the tabs: a captain opens the
 # app, opens the coming match, composes the line-up, reads the feuille de
-# match, then goes to his team, looks a player up, opens her profile, and
-# ends on the calendar. Screens 6 and 7 are Camille Durand, who has played
-# twice and is therefore burned into team 1 — a rule this app explains and its
-# competitors do not.
+# match, looks at his whole phase, then goes to his team, opens a player's
+# profile, reads the calendar, and ends on the club's trainings. Screen 7 is
+# Camille Durand, who has played twice and is therefore burned into team 1 — a
+# rule this app explains and its competitors do not.
+#
+# The numbers are the store page's order, not this walk's: 09-planning is shot
+# fourth, because it is reached from the match screen, and lands near the end
+# of the listing. 04 and 06 are unused since #634 — see REQUIRED_SCREENS.
 #
 # Both sheets are closed by their OWN footer button, never by a tap on the
 # backdrop. The backdrop's free area is the top 12% of a phone, but on a tablet
@@ -93,37 +98,73 @@ appId: fr.clubping.app
 - tapOn:
     id: "match-sheet-close"
 
-# 4 and 5 — the club's teams, then one of them in full.
+# 9 — the planning de la phase (#623): every journée of the phase, every
+# player, with who answered what and who is in which line-up. Reached the way
+# a captain reaches it, from the match: « Tous les matchs de l'équipe ».
+#
+# The demo phase is six journées for this (#634) — three columns read as a
+# stub — with a team-1 player lent to team 2 (the hatched cell) and one from
+# team 2 borrowed (the Renforts row). scripts/demo-data.mjs states all of it.
+- tapOn:
+    id: "match-phase-games"
+
+# On a PHONE, a sheet: debout it holds four or five journées and invites the
+# phone to turn, which is the honest picture of it. Closed by its own button.
+- runFlow:
+    when:
+      true: ${TWO_PANE == 'false'}
+    commands:
+      - tapOn:
+          id: "team-phase-planning"
+      - assertVisible:
+          id: "phase-sheet"
+      - takeScreenshot: 09-planning
+      - tapOn:
+          id: "phase-sheet-close"
+
+# On a TABLET, the grid in the pane beside the rail of matches — the whole
+# phase at once, which is what a slab is for. Tapped rather than assumed: the
+# rail's first entry, so the pane cannot be showing a match instead.
+- runFlow:
+    when:
+      true: ${TWO_PANE == 'true'}
+    commands:
+      - tapOn:
+          id: "rail-planning"
+      - assertVisible:
+          id: "phase-panel"
+      - takeScreenshot: 09-planning
+
+# 5 — one of the club's teams, in full. The list in front of it was 04 until
+# #634: on a phone it said nothing this one does not, on a tablet it was a
+# placeholder.
 - tapOn:
     id: "tab-equipes"
-- takeScreenshot: 04-equipes
 - tapOn:
     id: "team-row-demo-team-1"
 - takeScreenshot: 05-equipe
 
-# 6 and 7 — Camille Durand, who carries the brûlage badge. How you get to her
-# is the one place the two devices genuinely want different screens, so this is
-# a branch rather than one path that reads badly on both.
+# 7 — Camille Durand, who carries the brûlage badge. How you get to her is
+# the one place the two devices genuinely want different screens, so this is a
+# branch rather than one path that reads badly on both.
 #
-# On a PHONE, twice over: the quick view that opens from a squad row, then the
-# full profile behind it. A phone has room for one of them at a time, which is
-# what makes the pair worth showing.
+# On a PHONE, through the quick view that opens from a squad row, to the full
+# profile behind it. The quick view was 06 until #634 — the same player twice,
+# for two places the trainings and the planning needed more.
 - runFlow:
     when:
       true: ${TWO_PANE == 'false'}
     commands:
       - tapOn:
           id: "squad-player-demo-player-2"
-      - takeScreenshot: 06-joueur-apercu
       - tapOn:
           id: "player-sheet-profile"
       - takeScreenshot: 07-joueur-profil
 
-# On a TABLET, once, from the Joueurs tab: selecting her there keeps the club's
+# On a TABLET, from the Joueurs tab: selecting her there keeps the club's
 # whole list beside her fiche (`isTwoPane`, #447), which is the thing a slab
 # does that a phone cannot — and a better picture than a sheet drawn over a
-# squad. There is no quick view to capture here, so 06 is dropped for that
-# target rather than faked.
+# squad.
 - runFlow:
     when:
       true: ${TWO_PANE == 'true'}
@@ -142,3 +183,14 @@ appId: fr.clubping.app
 - tapOn:
     id: "tab-journees"
 - takeScreenshot: 08-journees
+
+# 10 — the club's trainings (#608): a free slot every Tuesday and a coached
+# series on Thursdays, one session answered, one called off with its reason.
+# The tab only exists for a club that publishes trainings, which the demo club
+# does once scripts/demo-data.mjs has run — so its absence here means the demo
+# data is stale, and the tap fails loudly rather than shooting another screen.
+- tapOn:
+    id: "tab-entrainements"
+- assertVisible:
+    id: "trainings-list"
+- takeScreenshot: 10-entrainements
