@@ -17,6 +17,8 @@ interface Row {
   club_id: string | null
   status: string
   email?: string | null
+  first_name?: string
+  last_name?: string
 }
 
 /**
@@ -37,7 +39,12 @@ function fakeDb(users: Row[]) {
           if (/FROM clubs/.test(sql)) return params[0] === CLUB || params[0] === OTHER ? { id: params[0] } : null
           if (/lower\(email\)/.test(sql)) {
             const email = String(params[0]).toLowerCase()
-            return users.find((u) => (u.email ?? '').toLowerCase() === email) ?? null
+            // The invite matches the name as well since #640.
+            const named = /first_name/.test(sql)
+            const same = (a: string | null | undefined, b: unknown) =>
+              (a ?? '').trim().toLowerCase() === String(b).toLowerCase()
+            return users.find((u) => (u.email ?? '').toLowerCase() === email &&
+              (!named || (same(u.first_name, params[1]) && same(u.last_name, params[2])))) ?? null
           }
           return null
         },
@@ -146,14 +153,29 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
     ])
   })
 
-  it('refuses an address another member already signs in with', async () => {
-    const { db, writes } = fakeDb([{ ...admin('a0'), email: 'Taken@example.com' }])
+  it('refuses to invite again someone the address already names (#640)', async () => {
+    const { db, writes } = fakeDb([
+      { ...admin('a0'), email: 'Taken@example.com', first_name: 'Quentin', last_name: 'Colle' },
+    ])
     const res = await send(db, `/clubs/${CLUB}/admins`, 'POST', {
-      firstName: 'Q', lastName: 'Colle', email: 'taken@example.com',
+      firstName: 'quentin', lastName: 'COLLE', email: 'taken@example.com',
     })
     expect(res.status).toBe(409)
     expect((await errorOf(res)).error).toBe('email_taken')
     expect(writes).toEqual([])
+  })
+
+  it('invites somebody else under an address a family member already uses (#640)', async () => {
+    // A parent who does not play, administering the club where their child
+    // plays under the parent's address.
+    const { db, writes } = fakeDb([
+      { ...admin('a0'), email: 'henaut@example.com', first_name: 'Sacha', last_name: 'Henaut' },
+    ])
+    const res = await send(db, `/clubs/${CLUB}/admins`, 'POST', {
+      firstName: 'Benjamin', lastName: 'Henaut', email: 'henaut@example.com',
+    })
+    expect(res.status).toBe(200)
+    expect(writes.find((w) => /INSERT INTO users/.test(w.sql))?.params[1]).toBe('henaut@example.com')
   })
 
   it('demands a name and an address — the address is the way in', async () => {

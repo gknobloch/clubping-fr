@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import type { DevUser, User } from '@/types'
+import type { DevUser, Profile, User } from '@/types'
 import {
   mockClubs,
   mockPhases,
@@ -15,7 +15,9 @@ import {
   logout as apiLogout,
   oauthLogin,
   requestEmailCode,
+  switchProfile as apiSwitchProfile,
   verifyEmailCode,
+  type AuthSession,
 } from '@/lib/authApi'
 
 const SESSION_KEY = 'pp-club-session'
@@ -133,6 +135,14 @@ interface AuthContextValue {
   verifyCode: (email: string, code: string) => Promise<void>
   loginWithIdToken: (provider: 'google' | 'apple', idToken: string) => Promise<void>
   logout: () => void
+  /**
+   * Every profile the member's address signs in as, them included (#640).
+   * Empty until the server has said — offline, the switcher is not offered:
+   * switching mints a session, which takes a network.
+   */
+  profiles: Profile[]
+  /** Become another of `profiles`. Rejects when the server refuses or is unreachable. */
+  switchProfile: (userId: string) => Promise<void>
   /** Dev login (gated by DEV_LOGIN) */
   devUsers: DevUser[]
   devLoginAs: (userId: string) => Promise<void>
@@ -144,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Real authenticated session (email OTP / OAuth).
   const [realUser, setRealUser] = useState<User | null>(null)
   const [realToken, setRealToken] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<Profile[]>([])
   // Dev-login selection (no server session).
   const [devUserId, setDevUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -182,9 +193,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const me = await fetchMe(token)
             if (!cancelled) {
-              setRealUser(me)
+              setRealUser(me.user)
+              setProfiles(me.profiles)
               setRealToken(token)
-              storage.set(USER_KEY, JSON.stringify(me))
+              storage.set(USER_KEY, JSON.stringify(me.user))
             }
             return
           } catch (err) {
@@ -211,8 +223,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const me = await fetchMe()
           if (!cancelled) {
-            setRealUser(me)
-            storage.set(USER_KEY, JSON.stringify(me))
+            setRealUser(me.user)
+            setProfiles(me.profiles)
+            storage.set(USER_KEY, JSON.stringify(me.user))
           }
           return
         } catch (err) {
@@ -250,12 +263,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const user = realUser ?? devUser
 
-  const applySession = useCallback((token: string, sessionUser: User) => {
-    storage.set(SESSION_KEY, token)
-    storage.set(USER_KEY, JSON.stringify(sessionUser))
+  const applySession = useCallback((session: AuthSession) => {
+    storage.set(SESSION_KEY, session.token)
+    // Rewritten on a switch too (#640): a boot with no network restores the
+    // member named here, and must not reopen the profile switched away from.
+    storage.set(USER_KEY, JSON.stringify(session.user))
     storage.remove(DEV_USER_KEY)
-    setRealToken(token)
-    setRealUser(sessionUser)
+    setRealToken(session.token)
+    setRealUser(session.user)
+    setProfiles(session.profiles ?? [])
     setDevUserId(null)
   }, [])
 
@@ -267,7 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyCode = useCallback(
     async (email: string, code: string) => {
       const session = await verifyEmailCode(email, code)
-      applySession(session.token, session.user)
+      applySession(session)
     },
     [applySession],
   )
@@ -275,7 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithIdToken = useCallback(
     async (provider: 'google' | 'apple', idToken: string) => {
       const session = await oauthLogin(provider, idToken)
-      applySession(session.token, session.user)
+      applySession(session)
     },
     [applySession],
   )
@@ -292,8 +308,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     storage.remove(DEV_USER_KEY)
     setRealUser(null)
     setRealToken(null)
+    setProfiles([])
     setDevUserId(null)
   }, [realToken, realUser])
+
+  // Not a logout (#640): nothing is cleared. DataContext sees a new member and
+  // refetches, and its cache already refuses another member's entry (#387).
+  const switchProfile = useCallback(
+    async (userId: string) => {
+      applySession(await apiSwitchProfile(userId, realToken ?? undefined))
+    },
+    [realToken, applySession],
+  )
 
   const devLoginAs = useCallback(
     async (userId: string) => {
@@ -302,7 +328,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // nothing, and every API call would come back 401 (#313).
       if (serverDevLogin) {
         const session = await apiDevLogin(userId)
-        applySession(session.token, session.user)
+        applySession(session)
         return
       }
       // Local dev / E2E: no backend to ask, so the selection is the session.
@@ -324,12 +350,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCode,
       loginWithIdToken,
       logout,
+      profiles,
+      switchProfile,
       devUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
     // devUsers matters: the list arrives asynchronously on a preview, and
     // omitting it would leave the picker showing the mock fallback forever.
-    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, devUsers, devLoginAs],
+    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, profiles, switchProfile, devUsers, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import * as AppleAuthentication from 'expo-apple-authentication'
-import type { DevUser, User } from '@shared/types'
+import type { DevUser, Profile, User } from '@shared/types'
 import { getDisplayName, getRoleLabel } from '@/utils/roles'
 import {
   devLogin as apiDevLogin,
@@ -12,7 +12,9 @@ import {
   oauthLogin,
   requestEmailCode,
   setSession,
+  switchProfile as apiSwitchProfile,
   verifyEmailCode,
+  type AuthSession,
 } from '@/utils/api'
 import { IS_PRODUCTION_API } from '@/constants/api'
 import { forgetPush } from '@/utils/push'
@@ -86,6 +88,14 @@ interface AuthContextValue {
   loginWithIdToken: (provider: 'google' | 'apple', idToken: string) => Promise<void>
   loginWithApple: () => Promise<void>
   logout: () => Promise<void>
+  /**
+   * Every profile the member's address signs in as, them included (#640).
+   * Empty until the server has said — offline there is nothing to switch to,
+   * since switching mints a session.
+   */
+  profiles: Profile[]
+  /** Become another of `profiles`. Rejects when refused or unreachable. */
+  switchProfile: (userId: string) => Promise<void>
   /** Dev login (gated by DEV_LOGIN) */
   availableUsers: DevUser[]
   devLoginAs: (userId: string) => Promise<void>
@@ -105,6 +115,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // mints one too).
   const [user, setUser] = useState<User | null>(null)
   const [realToken, setRealToken] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<Profile[]>([])
   // The dev picker's list, straight from the backend.
   const [devUsers, setDevUsers] = useState<DevUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,10 +135,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             const me = await fetchMe(token)
             if (!cancelled) {
-              setUser(me)
+              setUser(me.user)
+              setProfiles(me.profiles)
               setRealToken(token)
-              setSession(token, me.id)
-              await AsyncStorage.setItem(USER_KEY, JSON.stringify(me))
+              setSession(token, me.user.id)
+              await AsyncStorage.setItem(USER_KEY, JSON.stringify(me.user))
             }
             return
           } catch (err) {
@@ -185,12 +197,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   // --- Real auth actions ---
-  const applySession = useCallback(async (token: string, sessionUser: User) => {
-    await SecureStore.setItemAsync(SESSION_KEY, token)
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(sessionUser))
-    setSession(token, sessionUser.id) // triggers a DataContext refetch with the session
-    setRealToken(token)
-    setUser(sessionUser)
+  const applySession = useCallback(async (session: AuthSession) => {
+    await SecureStore.setItemAsync(SESSION_KEY, session.token)
+    // Rewritten on a switch too (#640): a boot with no signal restores the
+    // member named here, and must not reopen the profile switched away from.
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(session.user))
+    setSession(session.token, session.user.id) // triggers a DataContext refetch with the session
+    setRealToken(session.token)
+    setUser(session.user)
+    setProfiles(session.profiles ?? [])
   }, [])
 
   const requestCode = useCallback(async (email: string) => {
@@ -201,7 +216,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const verifyCode = useCallback(
     async (email: string, code: string) => {
       const session = await verifyEmailCode(email, code)
-      await applySession(session.token, session.user)
+      await applySession(session)
     },
     [applySession],
   )
@@ -209,7 +224,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loginWithIdToken = useCallback(
     async (provider: 'google' | 'apple', idToken: string) => {
       const session = await oauthLogin(provider, idToken)
-      await applySession(session.token, session.user)
+      await applySession(session)
     },
     [applySession],
   )
@@ -237,7 +252,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await AsyncStorage.removeItem(DEV_USER_KEY)
     setUser(null)
     setRealToken(null)
+    setProfiles([])
   }, [realToken])
+
+  // Not a logout (#640): the device stays registered — it rings for every
+  // profile of the address anyway — and nothing is cleared. DataContext sees a
+  // new member and refetches; its cache refuses another member's entry (#509).
+  const switchProfile = useCallback(
+    async (userId: string) => {
+      if (!realToken) throw new Error('no_session')
+      await applySession(await apiSwitchProfile(userId, realToken))
+    },
+    [realToken, applySession],
+  )
 
   // --- Dev login ---
   // Takes a real session like every other login path: a bare selection
@@ -247,7 +274,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (userId: string) => {
       if (!DEV_LOGIN) return
       const session = await apiDevLogin(userId)
-      await applySession(session.token, session.user)
+      await applySession(session)
     },
     [applySession],
   )
@@ -264,12 +291,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loginWithIdToken,
       loginWithApple,
       logout,
+      profiles,
+      switchProfile,
       availableUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
     // devUsers matters: the list arrives asynchronously, and omitting it would
     // leave the picker empty for as long as the login screen stays mounted.
-    [user, loading, devUsers, requestCode, verifyCode, loginWithIdToken, loginWithApple, logout, devLoginAs],
+    [user, loading, devUsers, requestCode, verifyCode, loginWithIdToken, loginWithApple, logout, profiles, switchProfile, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

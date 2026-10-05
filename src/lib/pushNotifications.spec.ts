@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AVAILABILITY_WINDOW_DAYS,
+  addressedTo,
   availabilityChangePush,
   availabilityRequestPush,
   availabilityRequestsDue,
@@ -222,5 +223,36 @@ describe('what the notifications say', () => {
     // French makes you pick one for a pronoun, and this does not know.
     const push = availabilityChangePush(labels, 'Alice Martin', 'available', 'maybe', true)
     expect(push.body).not.toMatch(/\bIl\b|\bElle\b/)
+  })
+})
+
+describe('saying whom a message is for (#640)', () => {
+  const game: GameLabels = {
+    gameId: 'g1', date: '2026-09-18', teamLabel: 'PPA Rixheim 3',
+    opponentLabel: 'Mulhouse ASPTT 2', isHome: true,
+  }
+  const request = availabilityRequestPush(game, TODAY)
+
+  it('asks the child by name on a shared phone, the team staying in the body', () => {
+    const m = addressedTo(request, { id: 'sacha', firstName: 'Sacha' }, true)
+    expect(m.title).toBe('Sacha, ta dispo ?')
+    expect(m.body).toBe(request.body)
+    expect(m.data).toEqual({ ...request.data, userId: 'sacha' })
+  })
+
+  it('puts the name in front of any other title', () => {
+    const change = availabilityChangePush(game, 'Alice Martin', 'available', 'unavailable', false)
+    expect(addressedTo(change, { id: 'cap', firstName: 'Camille' }, true).title)
+      .toBe('Camille · Alice Martin — indisponible')
+  })
+
+  it('changes nothing a reader sees on a phone with one profile', () => {
+    const m = addressedTo(request, { id: 'alice', firstName: 'Alice' }, false)
+    expect(m.title).toBe(request.title)
+    expect(m.data.userId).toBe('alice')
+  })
+
+  it('does not invent a name it does not have', () => {
+    expect(addressedTo(request, { id: 'x', firstName: '  ' }, true).title).toBe(request.title)
   })
 })

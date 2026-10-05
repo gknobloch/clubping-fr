@@ -258,3 +258,58 @@ describe('logging out', () => {
     expect(callTo('/auth/logout')).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Several profiles behind one address (#640)
+// ---------------------------------------------------------------------------
+describe('switching profile', () => {
+  const benjamin = { ...member, id: 'benjamin', firstName: 'Benjamin', lastName: 'Henaut' }
+  const sacha = { ...member, id: 'sacha', firstName: 'Sacha', lastName: 'Henaut' }
+  const profiles = [
+    { id: 'benjamin', role: 'player', firstName: 'Benjamin', clubId: 'c1', clubName: 'PPA Rixheim' },
+    { id: 'sacha', role: 'player', firstName: 'Sacha', clubId: 'c1', clubName: 'PPA Rixheim' },
+  ]
+
+  function signedInAsBenjamin() {
+    window.localStorage.setItem(SESSION_KEY, 'tok-benjamin')
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/auth/me')) return ok({ user: benjamin, profiles })
+      if (String(url).includes('/auth/switch')) {
+        const { userId } = JSON.parse(String(init?.body))
+        return userId === 'sacha'
+          ? ok({ token: 'tok-sacha', user: sacha, profiles })
+          : { ok: false, status: 403, json: async () => ({ error: 'not_allowed' }) }
+      }
+      return ok({ users: [] })
+    })
+  }
+
+  it('knows the other profiles of the address from a restored session', async () => {
+    signedInAsBenjamin()
+    const { result } = render()
+    await waitFor(() => expect(result.current.user?.id).toBe('benjamin'))
+    expect(result.current.profiles.map((p) => p.id)).toEqual(['benjamin', 'sacha'])
+  })
+
+  it('becomes the child, with the new token, and remembers who for the next boot', async () => {
+    signedInAsBenjamin()
+    const { result } = render()
+    await waitFor(() => expect(result.current.user?.id).toBe('benjamin'))
+    await act(() => result.current.switchProfile('sacha'))
+    expect(result.current.user?.id).toBe('sacha')
+    expect(result.current.token).toBe('tok-sacha')
+    expect(window.localStorage.getItem(SESSION_KEY)).toBe('tok-sacha')
+    expect(JSON.parse(window.localStorage.getItem('pp-club-user')!).id).toBe('sacha')
+    // The old session is sent with the request — it is what proves the address.
+    const [, init] = callTo('/auth/switch')!
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-benjamin')
+  })
+
+  it('stays who it was when the server refuses', async () => {
+    signedInAsBenjamin()
+    const { result } = render()
+    await waitFor(() => expect(result.current.user?.id).toBe('benjamin'))
+    await expect(result.current.switchProfile('stranger')).rejects.toMatchObject({ status: 403 })
+    expect(result.current.user?.id).toBe('benjamin')
+  })
+})

@@ -5,6 +5,8 @@ import { BrandMark } from '@/components/BrandMark'
 import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
 import { useConfirm } from '@/components/useConfirm'
 import { OfflineBanner } from '@/components/OfflineBanner'
+import { ProfileSwitcherDialog, SwitchProfileIcon } from '@/components/ProfileSwitcher'
+import { hasOtherProfiles } from '@/lib/profiles'
 
 function PreviewBanner() {
   if (!IS_PR_PREVIEW) return null
@@ -42,7 +44,11 @@ function LogoutIcon() {
 }
 
 export function AppShell() {
-  const { user, displayName, logout } = useAuth()
+  const { user, displayName, logout, profiles } = useAuth()
+  // A parent and a child on one address (#640). Only when there is another
+  // profile to become: one profile is not a choice.
+  const canSwitch = hasOtherProfiles(profiles, user?.id)
+  const [switching, setSwitching] = useState(false)
   const [confirm, confirmDialog] = useConfirm()
   const location = useLocation()
   const navigate = useNavigate()
@@ -101,6 +107,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {confirmDialog}
+      {switching && <ProfileSwitcherDialog onClose={() => setSwitching(false)} />}
       <PreviewBanner />
       <OfflineBanner />
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -125,6 +132,17 @@ export function AppShell() {
               <Link to="/compte" className="text-right" title="Mon compte">
                 <p className="text-sm font-medium text-slate-800 hover:text-accent-600">{displayName}</p>
               </Link>
+              {canSwitch && (
+                <button
+                  type="button"
+                  onClick={() => setSwitching(true)}
+                  title="Changer de profil"
+                  aria-label="Changer de profil"
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <SwitchProfileIcon />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -184,6 +202,16 @@ export function AppShell() {
                 <Link to="/compte" className={`${drawerLinkClass(location.pathname === '/compte')} flex-1`}>
                   {displayName}
                 </Link>
+                {canSwitch && (
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); setSwitching(true) }}
+                    aria-label="Changer de profil"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <SwitchProfileIcon />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleLogout}

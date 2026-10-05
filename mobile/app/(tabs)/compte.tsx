@@ -21,6 +21,8 @@ import {
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
+import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
+import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
 
 /**
  * Ce qu'un membre change sur lui-même — `OWN_PROFILE_FIELDS` côté API (#558),
@@ -30,7 +32,11 @@ import { fonts } from '@/constants/typography'
 const OWN_FIELDS: readonly ContactField[] = ['email', 'phone', 'birthDate', 'birthPlace']
 
 export default function MonCompteScreen() {
-  const { user, logout } = useAuth()
+  const { user, logout, profiles } = useAuth()
+  // A parent and a child on one address (#640): only with another profile to
+  // become — one profile is not a choice.
+  const canSwitch = hasOtherProfiles(profiles, user?.id)
+  const [switching, setSwitching] = useState(false)
   const {
     players, teams, clubs, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
   } = useAppData()
@@ -220,13 +226,39 @@ export default function MonCompteScreen() {
           </View>
         )}
 
+        {/* Profils — the other members this address signs in as (#640) */}
+        {canSwitch && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mes profils</Text>
+            <Text style={styles.switchHint}>
+              Votre adresse e-mail donne accès à plusieurs profils :{' '}
+              {profiles.filter((p) => p.id !== user?.id).map(profileName).join(', ')}.
+            </Text>
+            <TouchableOpacity
+              testID="switch-profile"
+              style={styles.switchBtn}
+              onPress={() => setSwitching(true)}
+              accessibilityRole="button"
+            >
+              <Ionicons name="swap-horizontal" size={18} color={colors.accent} />
+              <Text style={styles.switchBtnText}>Changer de profil</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Notifications — the member's own switch, not a club setting */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notifications</Text>
           <View style={styles.switchRow}>
             <View style={styles.switchLabels}>
               <Text style={styles.switchTitle}>Recevoir des notifications</Text>
-              <Text style={styles.switchHint}>Sur tous les appareils où vous êtes connecté.</Text>
+              <Text style={styles.switchHint}>
+                {canSwitch
+                  // Each profile has its own switches, and a device rings for
+                  // every profile of its address (#640).
+                  ? 'Pour ce profil, sur tous les appareils connectés à votre adresse.'
+                  : 'Sur tous les appareils où vous êtes connecté.'}
+              </Text>
             </View>
             <Switch
               testID="notify-master"
@@ -291,6 +323,8 @@ export default function MonCompteScreen() {
       {/* Le même formulaire que la fiche joueur, deux champs de plus (#600) :
           ici c'est le membre qui écrit sur lui-même, là un administrateur de
           club qui corrige un licencié. */}
+      {switching && <ProfileSwitcherSheet onClose={() => setSwitching(false)} />}
+
       {editing && player && (
         <ContactEditor
           title="Modifier mon profil"
@@ -375,6 +409,12 @@ const styles = StyleSheet.create({
   colorDot: { width: 10, height: 10, borderRadius: 5 },
   teamName: { flex: 1, fontSize: 15, color: colors.textPrimary },
   cap: { fontSize: 11, fontFamily: fonts.semiBold, color: colors.accent },
+  switchBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.accentSoftBorder,
+    backgroundColor: colors.accentSoft, marginTop: 4,
+  },
+  switchBtnText: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.accent },
   logoutBtn: {
     marginHorizontal: 16, marginTop: 8, borderRadius: 12,
     borderWidth: 1, borderColor: colors.accentSoftBorder, backgroundColor: colors.accentSoft,

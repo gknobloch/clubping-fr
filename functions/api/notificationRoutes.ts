@@ -19,6 +19,7 @@ import {
   availabilityChangePush,
   availabilityRequestPush,
   availabilityRequestsDue,
+  addressedTo,
   captainsToAlert,
   sentKey,
   type GameLabels,
@@ -270,16 +271,16 @@ export async function dispatchAvailabilityRequests(
   const messages: OutgoingPush[] = []
   const notified: Array<{ userId: string; gameId: string }> = []
   for (const d of due) {
-    const deviceTokens = tokens.get(d.userId)
+    const devices = tokens.get(d.userId)
     // No device, or the member turned notifications off: nothing is recorded
     // either, so installing the app on Thursday still brings Saturday's ask.
-    if (!deviceTokens?.length) continue
+    if (!devices?.length) continue
     const teamId = teamOfPlayer.get(`${d.gameId}:${d.userId}`)
     const labels = teamId ? labelsByGameTeam.get(`${d.gameId}:${teamId}`) : undefined
     if (!labels) continue
     const message = availabilityRequestPush(labels, today)
     const ref = { kind: AVAILABILITY_REQUEST, userId: d.userId, gameId: d.gameId }
-    for (const to of deviceTokens) messages.push({ to, ...message, ref })
+    for (const device of devices) messages.push({ ...addressed(message, d.userId, device), ref })
     notified.push(d)
   }
 
@@ -432,14 +433,14 @@ export async function dispatchTrainingNotifications(
       if (!mine.length) continue
       const tokens = await tokensByUser(db, categoryOfTraining(trainingKind), mine.map((d) => d.userId))
       for (const d of mine) {
-        const deviceTokens = tokens.get(d.userId)
+        const devices = tokens.get(d.userId)
         const l = labels.get(d.key)
         // No device: nothing recorded either, as for a match — installing the
         // app on Monday still brings Tuesday's reminder.
-        if (!deviceTokens?.length || !l) continue
+        if (!devices?.length || !l) continue
         const m = message(l)
         const ref = { kind, userId: d.userId, gameId: d.key }
-        for (const to of deviceTokens) messages.push({ to, ...m, ref })
+        for (const device of devices) messages.push({ ...addressed(m, d.userId, device), ref })
         notified.push({ userId: d.userId, gameId: d.key })
       }
     }
@@ -553,7 +554,12 @@ export async function notifyAvailabilityChange(
     if (!context) return
     if (!withinWindow(context.date, args.today)) return
 
+    // Nor anyone who shares the author's address (#640): a parent who changes
+    // their child's answer from the child's profile is the captain being told
+    // about their own tap, on the phone they just tapped it on.
+    const household = args.actorId ? await sameAddressIds(env.DB, args.actorId) : new Set<string>()
     const captains = captainsToAlert(context.teams, args.playerId, args.actorId)
+      .filter((id) => !household.has(id))
     if (!captains.length) return
 
     const team = context.teams.find((t) => t.playerIds.includes(args.playerId))
@@ -642,6 +648,19 @@ async function playerName(db: D1Database, playerId: string): Promise<string> {
   return name || 'Un joueur'
 }
 
+/**
+ * The members who sign in with the same address as `userId`, `userId`
+ * included (#640) — one household, as far as a device can tell.
+ */
+async function sameAddressIds(db: D1Database, userId: string): Promise<Set<string>> {
+  const r = await db.prepare(
+    `SELECT s.id AS id FROM users u
+       JOIN users s ON s.id = u.id OR (COALESCE(u.email, '') != '' AND lower(s.email) = lower(u.email))
+      WHERE u.id = ?`,
+  ).bind(userId).all<{ id: string }>()
+  return new Set([userId, ...(r.results ?? []).map((x) => x.id)])
+}
+
 /** Send one message to several members, on every device each of them has. */
 async function pushTo(
   env: Env['Bindings'],
@@ -652,7 +671,7 @@ async function pushTo(
   const tokens = await tokensByUser(env.DB, category, userIds)
   const messages: OutgoingPush[] = []
   for (const userId of userIds) {
-    for (const to of tokens.get(userId) ?? []) messages.push({ to, ...message })
+    for (const device of tokens.get(userId) ?? []) messages.push(addressed(message, userId, device))
   }
   if (!messages.length) return
   const delivery = await sendPushes(env, messages)
@@ -678,7 +697,23 @@ const chunked = <T>(items: T[], size = BIND_CHUNK): T[][] => {
 interface TokenRow {
   token: string
   user_id: string
+  first_name?: string | null
   notification_preferences?: string | null
+  /** How many members the device's address signs in as (#640). */
+  profiles?: number | null
+}
+
+/** One device a member is reached on, and what it takes to address them there. */
+export interface Device {
+  token: string
+  firstName: string | null
+  /** The device rings for more than one profile, so a message must say whose. */
+  shared: boolean
+}
+
+/** A message to `userId` on `device`, named when the device is shared (#640). */
+function addressed(message: PushMessage, userId: string, device: Device): OutgoingPush {
+  return { to: device.token, ...addressedTo(message, { id: userId, firstName: device.firstName }, device.shared) }
 }
 
 /**
@@ -686,23 +721,39 @@ interface TokenRow {
  * already dropped — the master switch, and the category this message belongs
  * to (#608). Both are enforced here rather than at each call site, and the
  * category is a required argument, so no future sender can forget either.
+ *
+ * A device rings for every profile of the address it was registered under
+ * (#640) — a parent's phone, for the child's matches as well as the parent's.
+ * Derived here, at the send, rather than written as one row per profile: an
+ * administrator who gives the child an address of their own takes the child
+ * off the parent's phone that instant, and a phone signed into by somebody else
+ * still moves over whole, as #495 requires. Each profile's own switches apply
+ * — the child's preferences decide whether the child's matches ring.
  */
 async function tokensByUser(
   db: D1Database,
   category: NotificationCategory,
   userIds?: string[],
-): Promise<Map<string, string[]>> {
-  const byUser = new Map<string, string[]>()
+): Promise<Map<string, Device[]>> {
+  const byUser = new Map<string, Device[]>()
   const collect = (rows: TokenRow[]) => {
     for (const r of rows) {
       if (!resolveNotificationPreferences(parsePreferences(r.notification_preferences))[category].enabled) continue
-      byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), r.token])
+      const device: Device = { token: r.token, firstName: r.first_name ?? null, shared: (r.profiles ?? 0) > 1 }
+      byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), device])
     }
   }
+  // `o` registered the device; `u` is each member it rings for — `o` itself,
+  // and whoever shares `o`'s address. An empty address shares nothing.
   const base =
-    `SELECT p.token AS token, p.user_id AS user_id, u.notification_preferences AS notification_preferences
+    `SELECT p.token AS token, u.id AS user_id, u.first_name AS first_name,
+            u.notification_preferences AS notification_preferences,
+            (SELECT count(*) FROM users s
+              WHERE COALESCE(o.email, '') != '' AND lower(s.email) = lower(o.email)) AS profiles
        FROM push_tokens p
-       JOIN users u ON u.id = p.user_id
+       JOIN users o ON o.id = p.user_id
+       JOIN users u ON u.id = o.id
+                    OR (COALESCE(o.email, '') != '' AND lower(u.email) = lower(o.email))
       WHERE u.notifications_enabled = 1`
   if (!userIds) {
     const r = await db.prepare(base).all<TokenRow>()
@@ -711,7 +762,7 @@ async function tokensByUser(
   }
   for (const chunk of chunked([...new Set(userIds)])) {
     const holes = chunk.map(() => '?').join(',')
-    const r = await db.prepare(`${base} AND p.user_id IN (${holes})`)
+    const r = await db.prepare(`${base} AND u.id IN (${holes})`)
       .bind(...chunk).all<TokenRow>()
     collect(r.results)
   }

@@ -91,8 +91,9 @@ export function canManageClubAdmins(viewer: AdminViewer, clubId: string): boolea
  * `candidate` is an existing member; the "invite someone by e-mail" path
  * creates the member first and then asks this of the fresh row, so both routes
  * meet the same rules. The `email_taken` refusal is the one this cannot decide
- * — uniqueness lives in the database — and it is declared here only so callers
- * have a single vocabulary for the failure.
+ * — it is a lookup in the database (the same address under the same name,
+ * #640) — and it is declared here only so callers have a single vocabulary for
+ * the failure.
  */
 export function canAddClubAdmin(
   users: AdminCandidate[],
@@ -151,7 +152,7 @@ export const REFUSAL_MESSAGES: Record<Refusal, string> = {
   general_admin: "Cette personne est administrateur général : elle administre déjà tous les clubs.",
   other_club: "Cette personne est membre d’un autre club.",
   archived: "Cette personne est archivée. Réactivez-la d’abord.",
-  email_taken: 'Cette adresse est déjà utilisée par un autre membre.',
+  email_taken: 'Cette personne existe déjà avec cette adresse : désignez-la parmi les membres.',
   not_an_admin: "Cette personne n’administre pas ce club.",
   last_admin:
     "C’est le dernier administrateur du club. Désignez-en un autre avant de le retirer, sans quoi plus personne ne pourrait administrer le club.",

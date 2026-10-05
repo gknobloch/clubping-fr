@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { act, renderHook, waitFor } from '@testing-library/react-native'
 import type { DevUser } from '@shared/types'
-import { getSessionToken, setSession } from '@/utils/api'
+import { getSessionToken, getSessionUserId, setSession } from '@/utils/api'
 import { AuthProvider, useAuth } from './AuthContext'
 
 // ---------------------------------------------------------------------------
@@ -315,5 +315,60 @@ describe('the stored member (#513)', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     expect(result.current.isAuthenticated).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Several profiles behind one address (#640)
+// ---------------------------------------------------------------------------
+describe('AuthProvider — switching profile', () => {
+  const benjamin = { id: 'benjamin', role: 'player' as const, isPlayer: true, firstName: 'Benjamin', email: 'henaut@example.org' }
+  const sacha = { id: 'sacha', role: 'player' as const, isPlayer: true, firstName: 'Sacha', email: 'henaut@example.org' }
+  const profiles = [
+    { id: 'benjamin', role: 'player', firstName: 'Benjamin', clubId: 'c1', clubName: 'PPA Rixheim' },
+    { id: 'sacha', role: 'player', firstName: 'Sacha', clubId: 'c1', clubName: 'PPA Rixheim' },
+  ]
+
+  async function signedInAsBenjamin() {
+    await SecureStore.setItemAsync('pp-club-session', 'tok-benjamin')
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/auth/me')) return okResponse({ user: benjamin, profiles })
+      if (url.endsWith('/auth/switch')) {
+        const { userId } = JSON.parse(String(init?.body))
+        return userId === 'sacha'
+          ? okResponse({ token: 'tok-sacha', user: sacha, profiles })
+          : errorResponse(403, 'not_allowed')
+      }
+      return okResponse({ users: [] })
+    })
+  }
+
+  it('knows the other profiles from the restored session', async () => {
+    await signedInAsBenjamin()
+    const { result } = render()
+    await waitFor(() => expect(result.current.user?.id).toBe('benjamin'))
+    expect(result.current.profiles.map((p) => p.id)).toEqual(['benjamin', 'sacha'])
+  })
+
+  it('becomes the child — new token stored, member published, remembered for an offline boot', async () => {
+    await signedInAsBenjamin()
+    const { result } = render()
+    await waitFor(() => expect(result.current.user?.id).toBe('benjamin'))
+    await act(() => result.current.switchProfile('sacha'))
+    expect(result.current.user?.id).toBe('sacha')
+    expect(await SecureStore.getItemAsync('pp-club-session')).toBe('tok-sacha')
+    // The holder DataContext keys its cache on (#509): token and member together.
+    expect(getSessionToken()).toBe('tok-sacha')
+    expect(getSessionUserId()).toBe('sacha')
+    expect(JSON.parse((await AsyncStorage.getItem('pp-club-user'))!).id).toBe('sacha')
+  })
+
+  it('stays who it was when the server refuses', async () => {
+    await signedInAsBenjamin()
+    const { result } = render()
+    await waitFor(() => expect(result.current.user?.id).toBe('benjamin'))
+    await expect(result.current.switchProfile('stranger')).rejects.toMatchObject({ status: 403 })
+    expect(result.current.user?.id).toBe('benjamin')
+    expect(getSessionToken()).toBe('tok-benjamin')
   })
 })

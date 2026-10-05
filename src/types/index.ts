@@ -551,3 +551,22 @@ export interface DevUser extends User {
   /** Numbers of the teams this member captains, ascending. Absent if none. */
   captainOf?: number[]
 }
+
+/**
+ * One of the members an e-mail address signs in as (#640) — a parent and a
+ * child sharing the parent's address are two. The session is always ONE of
+ * them; the others are what the profile switcher offers.
+ *
+ * Only what the switcher draws: the club comes named, because the switcher
+ * groups by club before `GET /api/data` has said anything about the profile it
+ * would switch to.
+ */
+export interface Profile {
+  id: string
+  firstName?: string
+  lastName?: string
+  role: Role
+  clubId?: string
+  clubName?: string
+  status?: PlayerStatus
+}

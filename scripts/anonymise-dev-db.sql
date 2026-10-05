@@ -18,6 +18,18 @@
 -- reach this database. The deletes at the foot of this file are a safety net
 -- for a load that bypassed that flag, not the primary mechanism (#359).
 
+-- Members who share a real address (#640 — a parent and a child) keep sharing
+-- one, so a preview can show the profile switcher. Each address is mapped to
+-- the lowest rowid among its members BEFORE the update below rewrites it:
+-- read from the table being updated, the grouping would see half-rewritten
+-- rows. Dropped again at the foot of the file.
+DROP TABLE IF EXISTS anonymise_shared_emails;
+CREATE TABLE anonymise_shared_emails AS
+  SELECT lower(trim(email)) AS address, min(rowid) AS first_rowid
+    FROM users
+   WHERE email IS NOT NULL AND trim(email) != ''
+   GROUP BY lower(trim(email));
+
 -- Pseudonyms rather than "Joueur 12": names of realistic length are what
 -- surface wrapping and truncation bugs, which is half the point of previewing
 -- on a phone. 12 x 12 combinations, deterministic on rowid so a given row keeps
@@ -35,7 +47,10 @@ UPDATE users SET
     WHEN 9 THEN 'Moreau'  WHEN 10 THEN 'Simon'  ELSE 'Laurent' END,
   -- .invalid is reserved by RFC 2606: guaranteed never to resolve, so a stray
   -- send from a preview cannot reach a real inbox.
-  email = 'membre' || rowid || '@example.invalid',
+  email = 'membre' || COALESCE(
+    (SELECT first_rowid FROM anonymise_shared_emails WHERE address = lower(trim(users.email))),
+    rowid
+  ) || '@example.invalid',
   phone = '0600000000',
   -- An FFTT licence number identifies a real person through the federation's
   -- public directory, so it goes even though the name is already fake. Cost:
@@ -136,3 +151,5 @@ DELETE FROM fftt_season_cache;
 DELETE FROM user_avatars;
 DELETE FROM player_avatars_pre_0036;
 DELETE FROM club_logos;
+
+DROP TABLE IF EXISTS anonymise_shared_emails;

@@ -34,6 +34,8 @@ interface UserRowish {
   status: string
   email?: string | null
   license_number?: string
+  first_name?: string
+  last_name?: string
 }
 
 /**
@@ -80,7 +82,12 @@ function fakeDb(opts: {
       }
       if (/lower\(email\)/.test(sql)) {
         const email = String(params[0]).toLowerCase()
-        return users.find((u) => (u.email ?? '').toLowerCase() === email) ?? null
+        // Matched on the name as well since #640.
+        const named = /first_name/.test(sql)
+        const same = (a: unknown, b: unknown) =>
+          String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
+        return users.find((u) => (u.email ?? '').toLowerCase() === email &&
+          (!named || (same(u.first_name, params[1]) && same(u.last_name, params[2])))) ?? null
       }
     }
     return null
@@ -314,7 +321,10 @@ describe('PATCH /onboarding/requests/:id — deciding (#474)', () => {
     const { db, writes } = fakeDb({
       clubs: [CLUB],
       requests: [{ ...pending, club_id: CLUB }],
-      users: [{ id: 'p1', role: 'player', club_id: CLUB, status: 'active', email: 'quentin.colle@example.fr' }],
+      users: [{
+        id: 'p1', role: 'player', club_id: CLUB, status: 'active', email: 'quentin.colle@example.fr',
+        first_name: 'Quentin', last_name: 'Colle',
+      }],
     })
     const res = await send(db, '/onboarding/requests/r1', 'PATCH', { status: 'approved' })
     expect(res.status).toBe(200)
@@ -324,6 +334,21 @@ describe('PATCH /onboarding/requests/:id — deciding (#474)', () => {
     expect(w.params[0]).toBe(CLUB)
     expect(w.params[w.params.length - 1]).toBe('p1')
     expect(writes.some((x) => /INSERT INTO users/.test(x.sql))).toBe(false)
+  })
+
+  it('creates the requester when the address is a family member’s (#640)', async () => {
+    const { db, writes } = fakeDb({
+      clubs: [CLUB],
+      requests: [{ ...pending, club_id: CLUB }],
+      users: [{
+        id: 'p1', role: 'player', club_id: CLUB, status: 'active', email: 'quentin.colle@example.fr',
+        first_name: 'Léo', last_name: 'Colle',
+      }],
+    })
+    const res = await send(db, '/onboarding/requests/r1', 'PATCH', { status: 'approved' })
+    expect(res.status).toBe(200)
+    expect(writes.some((x) => /INSERT INTO users/.test(x.sql))).toBe(true)
+    expect(writes.some((x) => /UPDATE users/.test(x.sql) && x.params.includes('p1'))).toBe(false)
   })
 
   // The cap belongs to the club, so it has to hold through this door too —

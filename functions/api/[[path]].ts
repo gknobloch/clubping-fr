@@ -4309,9 +4309,10 @@ function clearGamesOfTeam(db: Env['Bindings']['DB'], teamId: string) {
 // Players are users with is_player = 1 (see #105). These routes manage that row.
 
 /**
- * A member with no address on file must land on NULL, never on '' (#315):
- * `users.email` is UNIQUE, so a second empty string would be rejected as a
- * duplicate, and an empty address would still count as one for lookups.
+ * A member with no address on file must land on NULL, never on '' (#315): an
+ * empty address would still count as one for lookups — and, since several
+ * members may share an address (#640), every member left with '' would be
+ * one family to the profile switcher.
  */
 const emailOrNull = (email: unknown): string | null =>
   typeof email === 'string' && email.trim() !== '' ? email.trim() : null
@@ -4501,11 +4502,17 @@ app.post('/clubs/:clubId/admins', async (c) => {
   const decision = canAddClubAdmin(users, clubId, fresh, viewer)
   if (!decision.ok) return c.json(refuse(decision.reason), decision.reason === 'not_allowed' ? 403 : 409)
 
-  // `users.email` is UNIQUE and it is the sign-in identifier: a duplicate is a
-  // different person's account, never a second one for this member.
+  // An address may sign in as several members since #640 — a parent who does
+  // not play, administering the club their licensed child plays in under the
+  // parent's address, is exactly who this form exists for. What it must not do
+  // is mint a second row for someone the address already names: same address
+  // and same name is that person, to be designated rather than invited.
   const taken = await db
-    .prepare('SELECT id FROM users WHERE lower(email) = lower(?)')
-    .bind(email)
+    .prepare(
+      `SELECT id FROM users WHERE lower(email) = lower(?)
+          AND lower(trim(first_name)) = lower(?) AND lower(trim(last_name)) = lower(?)`,
+    )
+    .bind(email, firstName, lastName)
     .first()
   if (taken) return c.json(refuse('email_taken'), 409)
 
@@ -4955,9 +4962,15 @@ app.patch('/onboarding/requests/:id', async (c) => {
           .bind(licence)
           .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
       : null) ??
+    // By address AND name since #640: an address may sign in as a whole
+    // family, and the requester is the one of them who wrote the request.
+    // Nobody of that name is somebody new, under an address they share.
     (await db
-      .prepare('SELECT id, role, club_id, status FROM users WHERE lower(email) = lower(?)')
-      .bind(row.email)
+      .prepare(
+        `SELECT id, role, club_id, status FROM users WHERE lower(email) = lower(?)
+            AND lower(trim(first_name)) = lower(trim(?)) AND lower(trim(last_name)) = lower(trim(?))`,
+      )
+      .bind(row.email, row.first_name, row.last_name)
       .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>())
 
   const candidate = existing
