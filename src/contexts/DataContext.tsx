@@ -12,10 +12,12 @@ import type { Division } from '@/types'
 import type {
   Address,
   Club,
+  ClubAffiliation,
   ClubChannel,
   Competition,
   CompetitionGroup,
   DataState,
+  Federation,
   Organization,
   Season,
   SeasonStatus,
@@ -55,6 +57,7 @@ import {
   mockGameSelections,
   mockUsers,
   mockCompetitions,
+  mockFederations,
   mockCompetitionGroups,
   mockMemberGroups,
   mockTrainings,
@@ -68,6 +71,7 @@ import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { clubIdFromAffiliation, gameIdFor, teamIdFor } from '@/lib/entityIds'
+import { clubIdForAffiliation } from '@/lib/federations'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
 import {
@@ -463,6 +467,13 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
   updateClub: (id: string, patch: Partial<Club>) => void
+  /**
+   * Declare or correct the club's affiliation to a federation other than the
+   * FFTT (#643) — the FFTT number goes through `updateClub`.
+   */
+  setClubAffiliation: (clubId: string, affiliation: ClubAffiliation) => void
+  /** Leave a federation; what the club plays there is not touched. */
+  removeClubAffiliation: (clubId: string, federationId: string) => void
   archiveClub: (id: string) => void
   deleteClub: (id: string) => void
   addClubAddress: (clubId: string, data: Omit<Address, 'id'>) => Address
@@ -625,6 +636,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const { token, logout, user, loading: authLoading } = useAuth()
   const [divisions, setDivisions] = useState<Division[]>(initialData?.divisions ?? [])
   const [competitions, setCompetitions] = useState<Competition[]>(initialData?.competitions ?? [])
+  const [federations, setFederations] = useState<Federation[]>(initialData?.federations ?? [])
   const [competitionGroups, setCompetitionGroups] = useState<CompetitionGroup[]>(
     initialData?.competitionGroups ?? [],
   )
@@ -692,6 +704,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPhases(data.phases)
       setDivisions(data.divisions)
       setCompetitions(data.competitions ?? [])
+      // A cache written before #643 knows no federation; every screen reads a
+      // missing one as the FFTT, which is what that data was.
+      setFederations(data.federations ?? [])
       // Defaulted: a cache written before #604 carries none, and "no club has
       // restricted anything" is the right reading of that.
       setCompetitionGroups(data.competitionGroups ?? [])
@@ -720,6 +735,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       console.warn('API unavailable, falling back to mock data (no persistence)')
       setPersist(false)
       applyData({
+        federations: mockFederations,
         seasons: mockSeasons, phases: mockPhases, divisions: mockDivisions,
         competitions: mockCompetitions,
         competitionGroups: mockCompetitionGroups,
@@ -1561,8 +1577,37 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   // up. Falls back to a generated id when there is no usable number, or when
   // the FFTT-aligned one is already taken (the caller is expected to have
   // offered the existing club instead; a duplicate id would just fail to save).
+  const setClubAffiliation = useCallback((clubId: string, affiliation: ClubAffiliation) => {
+    setClubs((prev) => prev.map((c) => c.id !== clubId ? c : {
+      ...c,
+      affiliations: [
+        ...(c.affiliations ?? []).filter((a) => a.federationId !== affiliation.federationId),
+        affiliation,
+      ],
+    }))
+    if (persist) {
+      api(`/clubs/${clubId}/affiliations/${affiliation.federationId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ affiliationNumber: affiliation.affiliationNumber, name: affiliation.name ?? null }),
+      })
+    }
+  }, [persist])
+
+  const removeClubAffiliation = useCallback((clubId: string, federationId: string) => {
+    setClubs((prev) => prev.map((c) => c.id !== clubId ? c : {
+      ...c,
+      affiliations: (c.affiliations ?? []).filter((a) => a.federationId !== federationId),
+    }))
+    if (persist) api(`/clubs/${clubId}/affiliations/${federationId}`, { method: 'DELETE' })
+  }, [persist])
+
+  // A club outside the FFTT takes its id from its first affiliation instead
+  // (`club-agr-680036`, #643) — same reasoning, its own federation's id space.
   const addClub = useCallback((data: Omit<Club, 'id'>) => {
-    const preferred = clubIdFromAffiliation(data.affiliationNumber)
+    const firstOther = data.affiliations?.[0]
+    const preferred = data.affiliationNumber?.trim() || !firstOther
+      ? clubIdFromAffiliation(data.affiliationNumber)
+      : clubIdForAffiliation(firstOther.federationId, firstOther.affiliationNumber)
     const id = preferred && !clubs.some((c) => c.id === preferred) ? preferred : nextId('club')
     const club: Club = { ...data, id }
     setClubs((prev) => [...prev, club])
@@ -2364,6 +2409,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const value = useMemo<DataContextValue>(
     () => ({
       staleSince,
+      federations,
       divisions,
       competitions,
       competitionGroups,
@@ -2386,6 +2432,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       deleteCompetition,
       setCompetitionGroup,
       updateClub,
+      setClubAffiliation,
+      removeClubAffiliation,
       archiveClub,
       deleteClub,
       addClubAddress,
@@ -2475,7 +2523,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }),
     [
       staleSince,
-      divisions, competitions, competitionGroups,
+      federations, divisions, competitions, competitionGroups,
       clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
       playerSeasonLicences, setClubSeasonLicences,
@@ -2486,7 +2534,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, archiveClub, deleteClub, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

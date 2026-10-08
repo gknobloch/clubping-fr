@@ -5,6 +5,7 @@ import { useClubAddressFormState } from '@/pages/useClubAddressForm'
 import { WhatsAppIcon } from '@/components/icons'
 import { PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useConfirm } from '@/components/useConfirm'
+import { ClubAffiliations } from '@/components/ClubAffiliations'
 
 const emptyAddressForm = {
   label: '',
@@ -90,6 +91,7 @@ export function ClubDetailView({
     updateClub, addClubAddress, updateClubAddress, deleteClubAddress,
     setClubLogo, removeClubLogo,
     addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
+    federations,
   } = useAppData()
   const [form, setForm] = useState({ affiliationNumber: club.affiliationNumber, displayName: club.displayName })
   const [addressForm, setAddressForm] = useClubAddressFormState()
@@ -223,12 +225,15 @@ export function ClubDetailView({
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="font-display text-lg font-medium text-slate-800">Informations du club</h2>
         <div className="mt-4 space-y-4">
+          {/* A club outside the FFTT has no number to show (#643); the general
+              admin keeps the field, to give it one. */}
+          {(club.affiliationNumber || (canEdit && canEditAffiliationNumber)) && (
           <div>
             <label
               htmlFor={`${idPrefix}-affiliationNumber`}
               className="block text-sm font-medium text-slate-700"
             >
-              N° affiliation
+              N° affiliation{federations.length > 1 && ' FFTT'}
             </label>
             <input
               id={`${idPrefix}-affiliationNumber`}
@@ -243,6 +248,7 @@ export function ClubDetailView({
               className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-50 disabled:text-slate-600"
             />
           </div>
+          )}
           <div>
             <label
               htmlFor={`${idPrefix}-displayName`}
@@ -271,6 +277,7 @@ export function ClubDetailView({
             </button>
           </div>
         )}
+        <ClubAffiliations club={club} canEdit={canEdit} idPrefix={idPrefix} />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

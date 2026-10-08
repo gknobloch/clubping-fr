@@ -27,9 +27,51 @@ export interface ClubChannel {
   sortOrder: number
 }
 
+/**
+ * A federation that runs championships (#643): the FFTT, and the AGR (Section
+ * du Haut-Rhin). Federation → competition → division → poule.
+ */
+export interface Federation {
+  /** 'fftt' | 'agr' — seeded by migration 0061. */
+  id: string
+  displayName: string
+  /** What the screens print beside a club or a competition: "FFTT", "AGR". */
+  shortName: string
+  /**
+   * Whether its data comes from an import (the FFTT's API). False means typed
+   * in by hand or read off its documents — which is what lets a club admin
+   * build its competitions (#647).
+   */
+  isImported: boolean
+  sortOrder: number
+}
+
+/**
+ * A club's affiliation to a federation other than the FFTT (#643) — the FFTT
+ * number stays `Club.affiliationNumber`. Read both together through
+ * `clubAffiliations` (src/lib/federations.ts), never one or the other.
+ */
+export interface ClubAffiliation {
+  federationId: string
+  /** That federation's number for the club ("680036"); may be blank. */
+  affiliationNumber: string
+  /**
+   * The club's name in that federation's documents ("KEMBS ASL TT"), what its
+   * calendars are matched against. Absent when it is the club's own name.
+   */
+  name?: string
+}
+
 export interface Club {
   id: string
+  /** The FFTT affiliation number; blank for a club outside the FFTT (#643). */
   affiliationNumber: string
+  /**
+   * Affiliations to every federation but the FFTT (#643). The payload always
+   * fills it; absent — an older cache, a fixture — means none, which is what
+   * every club was until a second federation existed.
+   */
+  affiliations?: ClubAffiliation[]
   displayName: string
   isArchived: boolean
   addresses: Address[]
@@ -112,6 +154,12 @@ export interface Division {
 export interface Competition {
   id: string
   displayName: string
+  /**
+   * The federation that runs it (#643). Always in the payload; absent — a
+   * cache or fixture predating it — means the FFTT, which every competition
+   * was. Read through `federationOfCompetition`.
+   */
+  federationId?: string
   /**
    * The categories admitted by default. **Empty means every category** — the
    * senior championship does not enumerate seventeen codes to say "anyone".
@@ -445,6 +493,8 @@ export interface GameSelection {
  * still go missing from the payload without a type error — see #292.
  */
 export interface DataState {
+  /** The federations (#643), ordered — reference data, the same for everyone. */
+  federations: Federation[]
   divisions: Division[]
   competitions: Competition[]
   /**

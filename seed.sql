@@ -92,6 +92,12 @@ INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_de
   ('addr-ballons', 'club-fftt-06880064', 'Salle', '1 rue du Sport', '68000', 'Ballons des Vosges', 1),
   ('addr-mutt', 'club-fftt-06680105', 'Salle', '1 rue du Sport', '68000', 'Mulhouse', 1);
 
+-- club_federations (#643)
+-- Kembs plays the AGR too, under the name the AGR prints. The federations
+-- themselves are seeded by migration 0061.
+INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES
+  ('club-fftt-06680140', 'agr', '680021', 'KEMBS ASL TT');
+
 -- groups
 -- group_id (FFTT pool id, #278) is NULL here: the seed's groups are local,
 -- not imported from FFTT.

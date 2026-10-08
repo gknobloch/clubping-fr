@@ -3,12 +3,13 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseCategories, jsonParseIds, trainingFromRow } from './rows'
-import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubChannel, Competition, DataState } from '../../src/types'
+import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubAffiliation, ClubChannel, Competition, DataState } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
   MemberGroupRow, MemberGroupMemberRow, CompetitionGroupRow,
   TrainingRow, TrainingSessionRow, TrainingAvailabilityRow,
+  FederationRow, ClubFederationRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibility'
@@ -326,6 +327,7 @@ app.get('/data', async (c) => {
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, competitionGroupsR, memberGroupsR, memberGroupMembersR,
     trainingsR, trainingSessionsR, trainingAvailsR,
+    federationsR, clubFederationsR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -354,6 +356,8 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM trainings').all<TrainingRow>(),
     db.prepare('SELECT * FROM training_sessions').all<TrainingSessionRow>(),
     db.prepare('SELECT * FROM training_availabilities').all<TrainingAvailabilityRow>(),
+    db.prepare('SELECT * FROM federations ORDER BY sort_order').all<FederationRow>(),
+    db.prepare('SELECT * FROM club_federations').all<ClubFederationRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -370,6 +374,16 @@ app.get('/data', async (c) => {
       id: a.id, label: a.label, street: a.street,
       postalCode: a.postal_code, city: a.city, isDefault: bool(a.is_default),
     })
+  }
+
+  // A club's federations other than the FFTT (#643), whose number stays on
+  // the club row — see clubAffiliations.
+  const affiliationsByClub = new Map<string, ClubAffiliation[]>()
+  for (const r of clubFederationsR.results) {
+    affiliationsByClub.set(r.club_id, [...(affiliationsByClub.get(r.club_id) ?? []), {
+      federationId: r.federation_id, affiliationNumber: r.affiliation_number,
+      ...(r.name ? { name: r.name } : {}),
+    }])
   }
 
   // Channels are pre-sorted by sort_order in the query above.
@@ -412,6 +426,10 @@ app.get('/data', async (c) => {
   // Annotated with the shared contract (#285) so a field renamed or dropped
   // here fails the build instead of reaching the client as undefined.
   const payload: DataState = {
+    federations: federationsR.results.map((r) => ({
+      id: r.id, displayName: r.display_name, shortName: r.short_name,
+      isImported: bool(r.is_imported), sortOrder: r.sort_order,
+    })),
     seasons: seasonsR.results.map(r => ({
       id: r.id, displayName: r.display_name, status: r.status,
     })),
@@ -438,7 +456,7 @@ app.get('/data', async (c) => {
     })),
     // Pre-sorted by sort_order in the query above (#482).
     competitions: competitionsR.results.map(r => ({
-      id: r.id, displayName: r.display_name,
+      id: r.id, displayName: r.display_name, federationId: r.federation_id,
       categories: jsonParseCategories(r.categories),
       sortOrder: r.sort_order, isArchived: bool(r.is_archived),
       ...(r.fftt_contest_identifier ? { ffttContestIdentifier: r.fftt_contest_identifier } : {}),
@@ -459,6 +477,7 @@ app.get('/data', async (c) => {
       isArchived: bool(r.is_archived),
       addresses: addrByClub.get(r.id) ?? [],
       channels: channelsByClub.get(r.id) ?? [],
+      affiliations: affiliationsByClub.get(r.id) ?? [],
       ...(logoUpdatedAt.has(r.id)
         ? { logoUpdatedAt: logoUpdatedAt.get(r.id) }
         : {}),
@@ -949,8 +968,9 @@ async function competitionForContest(
     .prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM competitions')
     .first<{ next: number }>()
   await db.prepare(
-    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name)
-     VALUES (?, ?, '[]', ?, 0, ?, ?)`,
+    // An FFTT contest is the FFTT's, by definition (#643).
+    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name, federation_id)
+     VALUES (?, ?, '[]', ?, 0, ?, ?, 'fftt')`,
   ).bind(id, displayName ?? contest.name, nextOrder?.next ?? 1, contest.identifier, contest.name).run()
   return id
 }
@@ -3280,14 +3300,22 @@ const categoriesJson = (v: unknown): string => {
     typeof x === 'string' && (PLAYER_CATEGORIES as readonly string[]).includes(x)))
 }
 
+/** Whether a federation id names one that exists (#643). */
+const federationExists = async (db: D1Database, id: unknown): Promise<boolean> =>
+  typeof id === 'string' &&
+  !!(await db.prepare('SELECT id FROM federations WHERE id = ?').bind(id).first<{ id: string }>())
+
 app.post('/competitions', async (c) => {
   if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
   const d = await c.req.json()
+  // Absent is the FFTT, as it was for every competition before #643.
+  const federationId = d.federationId ?? 'fftt'
+  if (!(await federationExists(c.env.DB, federationId))) return c.json({ error: 'bad_request' }, 400)
   await c.env.DB.prepare(
-    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, federation_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   ).bind(
-    d.id, d.displayName, categoriesJson(d.categories), d.sortOrder ?? 0, d.isArchived ? 1 : 0,
+    d.id, d.displayName, categoriesJson(d.categories), d.sortOrder ?? 0, d.isArchived ? 1 : 0, federationId,
   ).run()
   return c.json({ ok: true })
 })
@@ -3301,6 +3329,18 @@ app.patch('/competitions/:id', async (c) => {
   if ('categories' in p) { s.push('categories = ?'); v.push(categoriesJson(p.categories)) }
   if ('sortOrder' in p) { s.push('sort_order = ?'); v.push(p.sortOrder) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
+  if ('federationId' in p) {
+    // A competition changes federation only while nothing is filed under it
+    // (#643): its divisions would move with it, and with them every team,
+    // poule and match — a mistake made on creation is what this is for.
+    if (!(await federationExists(c.env.DB, p.federationId))) return c.json({ error: 'bad_request' }, 400)
+    const filed = await c.env.DB
+      .prepare('SELECT id FROM divisions WHERE competition_id = ? LIMIT 1')
+      .bind(id)
+      .first<{ id: string }>()
+    if (filed) return c.json({ error: 'competition_has_divisions' }, 409)
+    s.push('federation_id = ?'); v.push(p.federationId)
+  }
   if (s.length) {
     v.push(id)
     await c.env.DB.prepare(`UPDATE competitions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
@@ -3383,6 +3423,18 @@ app.post('/clubs', async (c) => {
   await c.env.DB.prepare(
     'INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, ?)'
   ).bind(d.id, d.affiliationNumber, d.displayName, d.isArchived ? 1 : 0).run()
+  // Its federations other than the FFTT (#643) — Landser ASL is created as an
+  // AGR club, with no FFTT number at all.
+  const affiliations = (Array.isArray(d.affiliations) ? d.affiliations : []).filter(
+    (a: Record<string, unknown>) => typeof a.federationId === 'string' && a.federationId !== 'fftt',
+  )
+  if (affiliations.length) {
+    await c.env.DB.batch(affiliations.map((a: Record<string, unknown>) =>
+      c.env.DB.prepare(
+        `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name)
+         SELECT ?, id, ?, ? FROM federations WHERE id = ?`,
+      ).bind(d.id, String(a.affiliationNumber ?? '').trim(), cleanName(a.name), a.federationId)))
+  }
   // Insert addresses
   if (d.addresses?.length) {
     const stmts = d.addresses.map((a: Record<string, unknown>) =>
@@ -3416,6 +3468,51 @@ app.patch('/clubs/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+/** A federation's name for a club: trimmed, and null when it says nothing (#643). */
+const cleanName = (v: unknown): string | null =>
+  typeof v === 'string' && v.trim() ? v.trim() : null
+
+/**
+ * Declare — or correct — a club's affiliation to a federation other than the
+ * FFTT (#643): its number there, and the name that federation prints for it.
+ *
+ * The club's own decision, so `administers` (#558). The FFTT is refused: its
+ * number is `clubs.affiliation_number`, written through PATCH /clubs/:id, and a
+ * row here would be a second copy of it (see 0061).
+ */
+app.put('/clubs/:clubId/affiliations/:federationId', async (c) => {
+  const db = c.env.DB
+  const clubId = c.req.param('clubId')
+  const federationId = c.req.param('federationId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  if (federationId === 'fftt') return c.json({ error: 'bad_request' }, 400)
+  const d = await c.req.json<{ affiliationNumber?: unknown; name?: unknown }>()
+  if (!(await federationExists(db, federationId))) return c.json(notFound, 404)
+  const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first<{ id: string }>()
+  if (!club) return c.json(notFound, 404)
+  await db.prepare(
+    `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES (?, ?, ?, ?)
+     ON CONFLICT (club_id, federation_id) DO UPDATE
+       SET affiliation_number = excluded.affiliation_number, name = excluded.name`,
+  ).bind(clubId, federationId, String(d.affiliationNumber ?? '').trim(), cleanName(d.name)).run()
+  return c.json({ ok: true })
+})
+
+/**
+ * Leave a federation (#643). What the club plays there is not touched: teams
+ * belong to poules, not to the affiliation, and a club that leaves by mistake
+ * gets its row back without losing anything.
+ */
+app.delete('/clubs/:clubId/affiliations/:federationId', async (c) => {
+  const clubId = c.req.param('clubId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  await c.env.DB
+    .prepare('DELETE FROM club_federations WHERE club_id = ? AND federation_id = ?')
+    .bind(clubId, c.req.param('federationId'))
+    .run()
+  return c.json({ ok: true })
+})
+
 // Only ever called on a club the admin has confirmed has no teams/players
 // left (checked client-side, #247 follow-up) — no cascade needed here.
 app.delete('/clubs/:id', async (c) => {
@@ -3425,6 +3522,7 @@ app.delete('/clubs/:id', async (c) => {
   await db.batch([
     db.prepare('DELETE FROM club_addresses WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM club_channels WHERE club_id = ?').bind(id),
+    db.prepare('DELETE FROM club_federations WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM club_logos WHERE club_id = ?').bind(id),
     db.prepare(
       'DELETE FROM member_group_members WHERE group_id IN (SELECT id FROM member_groups WHERE club_id = ?)',

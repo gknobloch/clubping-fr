@@ -485,6 +485,35 @@ invisible dans le diff comme dans la revue.
   minuit et 2 h. `src/lib/weeks.spec.ts` épingle une horloge française, sans
   quoi le défaut est invisible sur une CI en UTC.
 
+### Fédérations (#643, suivi dans #642)
+- **Fédération → compétition → division → poule.** La FFTT et l'AGR (Section
+  du Haut-Rhin), semées par 0061. La fédération pend à la **compétition**,
+  jamais à la division ni à l'équipe, pour la raison de #482 : une équipe dit
+  déjà sa division, une division sa compétition, et un championnat est d'une
+  seule fédération. Une division sans compétition est à la FFTT — ce qu'elle a
+  toujours été. `federationOfDivision` est la seule façon de le demander.
+- **Le numéro FFTT reste `clubs.affiliation_number`**, et `club_federations` ne
+  porte que les *autres* fédérations. Les imports, la salle (#613),
+  l'onboarding et la feuille de match lisent déjà la colonne : une ligne FFTT
+  à côté serait une seconde copie, que chacun des quatre chemins de création
+  d'un club devrait penser à écrire. `clubAffiliations` réunit les deux, et
+  **rien ne lit l'un sans l'autre**. L'API refuse une ligne `fftt`.
+- Un club **hors FFTT** n'a pas de numéro FFTT du tout et prend un id de sa
+  fédération : `club-agr-680036` (`clubIdForAffiliation`).
+- **Le nom d'un club dans une fédération** (`ClubAffiliation.name`) : l'AGR
+  imprime « KEMBS ASL TT », et c'est contre lui que ses calendriers seront
+  rapprochés (#647). Vide, c'est le nom du club (`clubNameIn`).
+- **Une compétition ne change de fédération que vide** : avec une seule
+  division rattachée, archivée comprise, l'API répond 409 — ses équipes, ses
+  poules et ses rencontres changeraient de championnat avec elle.
+- Déclarer ou retirer une affiliation suit `administers` (#558) : c'est la
+  décision du club. La retirer ne touche à rien de ce qu'il joue — les équipes
+  sont aux poules, pas à cette ligne — et la confirmation le dit comme un fait.
+- `Club.affiliations` et `Competition.federationId` sont **optionnels dans le
+  type**, toujours présents dans le payload : leur absence (un cache, une
+  fixture) veut dire « FFTT seule », ce qu'était toute donnée avant. Lus
+  seulement par `src/lib/federations.ts`.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

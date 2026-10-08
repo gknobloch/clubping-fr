@@ -9,12 +9,14 @@ import { ImportIcon, PlusIcon } from '@/components/icons'
 import { ImportCompetitionsModal } from '@/components/ImportCompetitionsModal'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, type PlayerCategory } from '@/lib/playerCategories'
+import { FFTT_FEDERATION_ID, federationOfCompetition, federationOptionLabel } from '@/lib/federations'
 
 const INPUT_CLASS =
   'mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20'
 
 const emptyForm = {
   displayName: '',
+  federationId: FFTT_FEDERATION_ID,
   categories: [] as PlayerCategory[],
 }
 
@@ -27,7 +29,7 @@ const emptyForm = {
  */
 export function CompetitionsPage() {
   const {
-    competitions, divisions, addCompetition, updateCompetition, deleteCompetition,
+    competitions, divisions, federations, addCompetition, updateCompetition, deleteCompetition,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
 
@@ -51,6 +53,14 @@ export function CompetitionsPage() {
   const divisionCount = (competitionId: string) =>
     divisions.filter((d) => d.competitionId === competitionId && !d.isArchived).length
 
+  // A competition changes federation only while nothing is filed under it,
+  // archived divisions included — the API refuses otherwise (#643).
+  const holdsDivisions = (competitionId: string) =>
+    divisions.some((d) => d.competitionId === competitionId)
+
+  const federationLabel = (id: string) =>
+    federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
+
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
@@ -62,6 +72,7 @@ export function CompetitionsPage() {
     setEditing(competition)
     setForm({
       displayName: competition.displayName,
+      federationId: federationOfCompetition(competition),
       categories: competition.categories,
     })
   }
@@ -86,11 +97,15 @@ export function CompetitionsPage() {
     const categories = orderedCategories()
       .map((c) => c.code)
       .filter((c) => form.categories.includes(c))
+    const { federationId } = form
     if (editing) {
-      updateCompetition(editing.id, { displayName, categories })
+      updateCompetition(editing.id, {
+        displayName, categories,
+        ...(federationId !== federationOfCompetition(editing) ? { federationId } : {}),
+      })
     } else {
       addCompetition({
-        displayName, categories,
+        displayName, categories, federationId,
         sortOrder: Math.max(0, ...competitions.map((c) => c.sortOrder)) + 1,
         isArchived: false,
       })
@@ -170,14 +185,13 @@ export function CompetitionsPage() {
               <tr key={competition.id} className={`hover:bg-slate-50/50 ${competition.isArchived ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {competition.displayName}
-                  {competition.ffttContestIdentifier && (
-                    <span
-                      className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
-                      title="Créée par l'import des divisions FFTT"
-                    >
-                      FFTT
-                    </span>
-                  )}
+                  {/* Which federation runs it (#643); an imported one says so. */}
+                  <span
+                    className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
+                    title={competition.ffttContestIdentifier ? "Créée par l'import des divisions FFTT" : undefined}
+                  >
+                    {federationLabel(federationOfCompetition(competition))}
+                  </span>
                   {competition.isArchived && (
                     <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">
                       Archivée
@@ -257,6 +271,30 @@ export function CompetitionsPage() {
                   className={INPUT_CLASS}
                 />
               </div>
+
+              {federations.length > 1 && (
+                <div>
+                  <label htmlFor="competition-federation" className="block text-sm font-medium text-slate-700">
+                    Fédération
+                  </label>
+                  <select
+                    id="competition-federation"
+                    value={form.federationId}
+                    onChange={(e) => setForm((f) => ({ ...f, federationId: e.target.value }))}
+                    disabled={!!editing && holdsDivisions(editing.id)}
+                    className={`${INPUT_CLASS} disabled:bg-slate-50 disabled:text-slate-600`}
+                  >
+                    {federations.map((f) => (
+                      <option key={f.id} value={f.id}>{federationOptionLabel(f)}</option>
+                    ))}
+                  </select>
+                  {editing && holdsDivisions(editing.id) && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Des divisions y sont rattachées : la fédération ne se change plus.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <fieldset>
                 <legend className="text-sm font-medium text-slate-700">
