@@ -10,6 +10,7 @@ import {
   competitionGroupOf, competitionsOfClub, engagedOutsideGroup, isPlayerEligible, playerEligibility,
   type EligiblePlayer,
 } from '@shared/lib/competitionEligibility'
+import { clubFederationIds } from '@shared/lib/federations'
 import { assignmentSummary, assignmentsByPlayer } from '@shared/lib/competitionAssignments'
 import { categoriesSummary, categoryDisplay } from '@shared/lib/playerCategories'
 import { withSeasonCategory } from '@shared/lib/seasonCategories'
@@ -84,9 +85,11 @@ export function ClubCompetitionsSection({
   onSetMembers: (groupId: string, ids: string[]) => void
 }) {
   const [showOthers, setShowOthers] = useState(false)
+  // The folded list only offers the club's own federations' championships (#643).
+  const federationIds = useMemo(() => clubFederationIds(club), [club])
   const { played, others } = useMemo(
-    () => competitionsOfClub(club.id, competitions, teams, divisions, competitionGroups),
-    [club.id, competitions, teams, divisions, competitionGroups],
+    () => competitionsOfClub(club.id, competitions, teams, divisions, competitionGroups, federationIds),
+    [club.id, competitions, teams, divisions, competitionGroups, federationIds],
   )
   const seasonId = seasons.find((s) => s.status === 'active')?.id
   const clubPlayers = useMemo(

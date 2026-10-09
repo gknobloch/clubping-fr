@@ -47,6 +47,11 @@ export function clubAffiliations(club: Pick<Club, 'affiliationNumber' | 'affilia
   return [...fftt, ...others]
 }
 
+/** The ids of every federation a club belongs to, the FFTT first. */
+export function clubFederationIds(club: Pick<Club, 'affiliationNumber' | 'affiliations'>): string[] {
+  return clubAffiliations(club).map((a) => a.federationId)
+}
+
 /** Whether a club belongs to a federation. */
 export function clubIsIn(club: Pick<Club, 'affiliationNumber' | 'affiliations'>, federationId: string): boolean {
   return clubAffiliations(club).some((a) => a.federationId === federationId)

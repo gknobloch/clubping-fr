@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Club } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
@@ -10,7 +10,7 @@ import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowAction
 import { ImportClubModal } from '@/components/ImportClubModal'
 import { useConfirm } from '@/components/useConfirm'
 import { clubsMissingVenue, type VenueFillResult } from '@/lib/clubVenues'
-import { FFTT_FEDERATION_ID, clubAffiliations, federationOptionLabel } from '@/lib/federations'
+import { FFTT_FEDERATION_ID, clubAffiliations, clubIsIn, federationOptionLabel } from '@/lib/federations'
 
 const emptyForm = { federationId: FFTT_FEDERATION_ID, affiliationNumber: '', displayName: '' }
 
@@ -25,7 +25,22 @@ export function ClubsPage() {
 
   const activeClubs = clubs.filter((c) => !c.isArchived)
   const archivedClubs = clubs.filter((c) => c.isArchived)
-  const visibleClubs = showArchived ? clubs : activeClubs
+  // One federation at a time (#643), in the URL so the back button from a
+  // club's page returns to the same list. Unknown or absent: every club.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const federationFilter = federations.some((f) => f.id === searchParams.get('federation'))
+    ? searchParams.get('federation')
+    : null
+  const setFederationFilter = (id: string) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (id) next.set('federation', id)
+      else next.delete('federation')
+      return next
+    }, { replace: true })
+  const visibleClubs = (showArchived ? clubs : activeClubs)
+    .filter((c) => !federationFilter || clubIsIn(c, federationFilter))
+  const shortName = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
 
   const openEdit = (club: Club) => {
     navigate(`/clubs/${encodeURIComponent(club.id)}`)
@@ -88,6 +103,20 @@ export function ClubsPage() {
         }
       />
       <VenueBackfill />
+      {federations.length > 1 && (
+        <div className="flex items-center gap-2">
+          <label htmlFor="clubs-federation" className="text-sm text-slate-600">Fédération</label>
+          <select
+            id="clubs-federation"
+            value={federationFilter ?? ''}
+            onChange={(e) => setFederationFilter(e.target.value)}
+            className="min-h-[44px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 md:min-h-0 md:py-1.5 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+          >
+            <option value="">Toutes</option>
+            {federations.map((f) => <option key={f.id} value={f.id}>{f.shortName}</option>)}
+          </select>
+        </div>
+      )}
       {archivedClubs.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
@@ -126,12 +155,12 @@ export function ClubsPage() {
             {visibleClubs.map((club) => (
               <tr key={club.id} className={`hover:bg-slate-50/50 ${club.isArchived ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm text-slate-900">
-                  {/* One line per federation (#643); the FFTT's alone looks as it always did. */}
+                  {/* One line per federation, each tagged (#643). */}
                   {clubAffiliations(club).map((a) => (
                     <span key={a.federationId} className="block whitespace-nowrap">
-                      {(clubAffiliations(club).length > 1 || a.federationId !== FFTT_FEDERATION_ID) && (
-                        <span className="mr-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
-                          {federations.find((f) => f.id === a.federationId)?.shortName ?? a.federationId.toUpperCase()}
+                      {federations.length > 1 && (
+                        <span className="mr-1.5 inline-block w-11 rounded bg-slate-100 py-0.5 text-center text-xs font-medium text-slate-600">
+                          {shortName(a.federationId)}
                         </span>
                       )}
                       <span className="font-mono">{a.affiliationNumber || '—'}</span>
@@ -176,6 +205,13 @@ export function ClubsPage() {
                 </td>
               </tr>
             ))}
+            {visibleClubs.length === 0 && federationFilter && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
+                  Aucun club affilié à la {shortName(federationFilter)}.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

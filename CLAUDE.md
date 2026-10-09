@@ -509,6 +509,14 @@ invisible dans le diff comme dans la revue.
 - Déclarer ou retirer une affiliation suit `administers` (#558) : c'est la
   décision du club. La retirer ne touche à rien de ce qu'il joue — les équipes
   sont aux poules, pas à cette ligne — et la confirmation le dit comme un fait.
+- **Un club ne se voit proposer que les championnats de ses fédérations** :
+  la liste repliée de la section Compétitions de `/club` (`competitionsOfClub`,
+  web et app) ne garde que ceux-là — Landser, à l'AGR seule, n'a que faire des
+  compétitions FFTT. Ce que le club joue ou a réservé reste listé quoi qu'en
+  disent ses affiliations, pour la raison qui ne cache jamais un choix fait.
+- **Sur `/clubs`, chaque affiliation porte son étiquette**, la FFTT comprise,
+  dès qu'il existe une seconde fédération, et un filtre par fédération vit dans
+  l'URL (`?federation=agr`). Kembs est dans les deux listes.
 - `Club.affiliations` et `Competition.federationId` sont **optionnels dans le
   type**, toujours présents dans le payload : leur absence (un cache, une
   fixture) veut dire « FFTT seule », ce qu'était toute donnée avant. Lus
