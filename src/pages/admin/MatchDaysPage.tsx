@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'rea
 import { useSearchParams } from 'react-router-dom'
 import { poolLabel } from '@/lib/poolLabel'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
+import { federationOfTeam, licenceOf } from '@/lib/licences'
+import { FFTT_FEDERATION_ID } from '@/lib/federations'
 import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
@@ -143,12 +145,18 @@ function MatchDayColgroup({ matchDayCount }: { matchDayCount: number }) {
  * column the matrix cannot afford to widen.
  */
 function LicenceLine({
-  licenseNumber,
-  unlicensed,
+  player,
+  federationId,
+  unlicensed: unlicensedByFftt,
 }: {
-  licenseNumber?: string
+  player: Pick<Player, 'licenseNumber' | 'licences'>
+  /** The federation of the team the row is about — its licence is the one printed (#644). */
+  federationId: string
   unlicensed: boolean
 }) {
+  const licenseNumber = licenceOf(player, federationId)
+  // "Sans licence" is the FFTT's listing (#488): it says nothing of an AGR team.
+  const unlicensed = unlicensedByFftt && federationId === FFTT_FEDERATION_ID
   if (!licenseNumber && !unlicensed) return null
   return (
     <span className="block text-xs">
@@ -1350,7 +1358,8 @@ export function MatchDaysPage() {
                                 })()}
                               </span>
                               <LicenceLine
-                                licenseNumber={player.licenseNumber}
+                                player={player}
+                                federationId={federationOfTeam(team, divisions, competitions)}
                                 unlicensed={unlicensed.has(player.id)}
                               />
                             </td>
@@ -1687,7 +1696,9 @@ export function MatchDaysPage() {
                         })()}
                       </span>
                       <LicenceLine
-                        licenseNumber={player.licenseNumber}
+                        player={player}
+                        // Nobody's team: the club's teams of this phase decide.
+                        federationId={federationOfTeam(myClubTeamsInPhase[0], divisions, competitions)}
                         unlicensed={unlicensed.has(player.id)}
                       />
                     </td>

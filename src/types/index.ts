@@ -62,6 +62,16 @@ export interface ClubAffiliation {
   name?: string
 }
 
+/**
+ * A member's licence in a federation other than the FFTT (#644) — the FFTT
+ * licence stays `User.licenseNumber`. Read both through `licencesOf`
+ * (src/lib/licences.ts), never one or the other.
+ */
+export interface FederationLicence {
+  federationId: string
+  number: string
+}
+
 export interface Club {
   id: string
   /** The FFTT affiliation number; blank for a club outside the FFTT (#643). */
@@ -552,7 +562,13 @@ export interface User {
   isPlayer: boolean
   firstName?: string
   lastName?: string
+  /** The FFTT licence; blank for a member who holds none (#644). */
   licenseNumber?: string
+  /**
+   * Licences in every federation but the FFTT (#644). The payload always
+   * fills it for a player; absent — an older cache, a fixture — means none.
+   */
+  licences?: FederationLicence[]
   phone?: string
   birthDate?: string
   birthPlace?: string

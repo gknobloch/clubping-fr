@@ -522,6 +522,40 @@ invisible dans le diff comme dans la revue.
   fixture) veut dire « FFTT seule », ce qu'était toute donnée avant. Lus
   seulement par `src/lib/federations.ts`.
 
+### Une licence par fédération (#644)
+- **La licence FFTT reste `users.license_number`**, et `federation_licences`
+  (0062) ne porte que les *autres* — la même règle que les affiliations d'un
+  club (#643), pour la même raison : cinq chemins l'écrivent (imports,
+  onboarding, fiche) et l'import FFTT apparie dessus. Une copie dans la table
+  serait à tenir au pas par chacun ; le jour où l'un oublie, l'import apparie
+  sur un numéro et l'écran en imprime un autre. Y ramener la licence FFTT et
+  supprimer la colonne est un changement en deux déploiements (#410), pour le
+  jour où plus rien ne la lit.
+- `licencesOf` réunit les deux, FFTT d'abord ; `licenceOf(membre, fédération)`
+  répond pour une seule. **Un écran ne lit jamais `licenseNumber` pour
+  afficher une licence** : il demande celle de la fédération dont il parle.
+  Les imports FFTT, eux, continuent de lire `licenseNumber` — c'est la FFTT.
+- **La fédération d'une équipe décide de la licence imprimée**
+  (`federationOfTeam`, par sa division et sa compétition) : feuille de match,
+  effectif, ligne de licence de la matrice, web et app. Une équipe AGR imprime
+  le numéro AGR. Les « autres joueurs », sans équipe, prennent celle des
+  équipes du club dans la phase.
+- **« Sans licence » (#488) n'est dit que sous une équipe FFTT** : c'est la
+  liste de la FFTT, qui ne dit rien d'une équipe AGR — même pour Kembs, dont
+  l'import FFTT a bien tourné.
+- **Les licences voyagent avec `POST` / `PATCH /players`**, en
+  remplacement, sous les gardes de #558 ; jamais depuis « Mon compte » — le
+  champ n'est pas dans `OWN_PROFILE_FIELDS`, une licence décidant où l'on
+  joue. Une entrée FFTT, une fédération inconnue ou un numéro vide sont
+  écartés.
+- **Le formulaire offre une case par fédération du club du licencié** :
+  Landser demande une licence AGR et aucune FFTT, Kembs les deux. La case
+  FFTT reste offerte à qui en a déjà une, et une licence qu'aucune case ne
+  montre est gardée telle quelle (la règle des remplacements de #602).
+- Sur la fiche et dans « Mon compte », une ligne par licence : « Licence »
+  tant que la FFTT est seule, « Licence AGR » dès qu'il y en a une autre
+  (`licenceLabel`).
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

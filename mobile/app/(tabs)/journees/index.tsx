@@ -35,6 +35,8 @@ import { teamEligibility } from '@shared/lib/competitionEligibility'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
+import { federationOfTeam, licenceOf } from '@shared/lib/licences'
+import { FFTT_FEDERATION_ID } from '@shared/lib/federations'
 
 // ---------------------------------------------------------------------------
 // Match card — consistent with the Accueil next-match header
@@ -341,6 +343,8 @@ export default function JourneesScreen() {
     )
     const fixtures = teamGames(team)
     const clubTeamsInPhase = clubTeams
+    // The team's federation decides which licence the row prints (#644).
+    const federationId = federationOfTeam(team, divisions, competitions)
     return roster.map((player) => {
       const brulageInfo = computeBrulage(player.id, clubTeamsInPhase, matchDays, games, gameSelections)
       const burnedInto = brulageInfo.burnedIntoTeamId
@@ -349,7 +353,8 @@ export default function JourneesScreen() {
       return {
         player,
         isCaptain: team.captainId === player.id,
-        unlicensed: unlicensed.has(player.id),
+        licence: licenceOf(player, federationId),
+        unlicensed: unlicensed.has(player.id) && federationId === FFTT_FEDERATION_ID,
         points: pointsFor(playerPhasePoints, team.phaseId, player.id) || undefined,
         availableCount: fixtures.filter(
           (g) => availabilityOf(player.id, g.id) === 'available',
@@ -423,6 +428,8 @@ export default function JourneesScreen() {
     const composable = visibleGroups.map((group) =>
       clubTeams.some((t) => !!teamGame(t, group.matchDays).game && !!user && mayManageTeam(user, t)),
     )
+    // Nobody's team: the club's teams of this phase decide (#644).
+    const federationId = federationOfTeam(clubTeams[0], divisions, competitions)
     return shownOtherPlayers.map((player) => {
       const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
       const burnedInto = brulageInfo.burnedIntoTeamId
@@ -431,7 +438,8 @@ export default function JourneesScreen() {
       return {
         player,
         isCaptain: false,
-        unlicensed: unlicensed.has(player.id),
+        licence: licenceOf(player, federationId),
+        unlicensed: unlicensed.has(player.id) && federationId === FFTT_FEDERATION_ID,
         // Read on the phase, not on a team (#384): these players are in none,
         // and they have points all the same.
         points: phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined,

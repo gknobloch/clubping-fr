@@ -20,6 +20,8 @@ import { poolLabel } from '@/lib/poolLabel'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { withSeasonCategory } from '@/lib/seasonCategories'
+import { licenceOf } from '@/lib/licences'
+import { federationOfCompetition } from '@/lib/federations'
 
 export function TeamsPage() {
   const { user } = useAuth()
@@ -722,7 +724,8 @@ export function TeamsPage() {
                               {p.firstName} {p.lastName}
                             </td>
                             <td className="px-3 py-2 text-slate-500 text-xs">
-                              {p.licenseNumber}
+                              {/* The team's federation's licence (#644). */}
+                              {licenceOf(p, federationOfCompetition(teamCompetition))}
                             </td>
                             {/* Read-only since #384: points come from the FFTT
                                 import and belong to the phase, so they are shown

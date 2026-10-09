@@ -15,12 +15,13 @@ import { clubLicences } from '@/lib/seasonLicences'
 import { LicenceBadge } from '@/components/LicenceBadge'
 import { ChecklistDialog } from '@/components/ChecklistDialog'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@/lib/memberGroups'
+import { licenceLabel, licencesOf } from '@/lib/licences'
 
 export function PlayerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { user } = useAuth()
   const {
-    players, clubs, playerSeasonCategories, playerSeasonLicences, seasons,
+    players, clubs, federations = [], playerSeasonCategories, playerSeasonLicences, seasons,
     memberGroups, setGroupsOfMember,
   } = useAppData()
   const [zoom, setZoom] = useState(false)
@@ -101,7 +102,10 @@ export function PlayerDetailPage() {
           Informations
         </h2>
         <dl className="divide-y divide-slate-100">
-          {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+          {/* One row per federation (#644): Gilles holds an FFTT and an AGR licence. */}
+          {licencesOf(player).map((l) => (
+            <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+          ))}
           <InfoRow
             label="Catégorie"
             value={categoryDisplay(category) || 'Inconnue'}

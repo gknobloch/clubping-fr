@@ -11,6 +11,7 @@ import { LicenceTag } from '@/components/LicenceTag'
 import { unlicensedIds } from '@shared/lib/seasonLicences'
 import type { Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
 
 export type PlayerHistoryEntry = {
   jNumber?: number
@@ -73,7 +74,7 @@ export function PlayerSheet({
    */
   showProfile?: boolean
 }) {
-  const { clubs, players, seasons, playerSeasonLicences } = useAppData()
+  const { clubs, federations, players, seasons, playerSeasonLicences } = useAppData()
 
   // The FFTT did not list their licence this season (#488) — said here too,
   // since this sheet is how a captain looks a player up from the matrix.
@@ -110,10 +111,13 @@ export function PlayerSheet({
           <Text style={s.name}>{player.firstName} {player.lastName}</Text>
           {unlicensed && <LicenceTag />}
         </View>
-        <View style={s.row}>
-          <Text style={s.label}>Licence</Text>
-          <Text style={s.value}>{player.licenseNumber}</Text>
-        </View>
+        {/* One row per federation (#644). */}
+        {licencesOf(player).map((l) => (
+          <View key={l.federationId} style={s.row}>
+            <Text style={s.label}>{licenceLabel(l.federationId, federations)}</Text>
+            <Text style={s.value}>{l.number}</Text>
+          </View>
+        ))}
 
         <View style={s.divider} />
 

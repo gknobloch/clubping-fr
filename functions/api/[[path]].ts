@@ -3,13 +3,13 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseCategories, jsonParseIds, trainingFromRow } from './rows'
-import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubAffiliation, ClubChannel, Competition, DataState } from '../../src/types'
+import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubAffiliation, ClubChannel, Competition, DataState, FederationLicence } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
   MemberGroupRow, MemberGroupMemberRow, CompetitionGroupRow,
   TrainingRow, TrainingSessionRow, TrainingAvailabilityRow,
-  FederationRow, ClubFederationRow,
+  FederationRow, ClubFederationRow, FederationLicenceRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibility'
@@ -327,7 +327,7 @@ app.get('/data', async (c) => {
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, competitionGroupsR, memberGroupsR, memberGroupMembersR,
     trainingsR, trainingSessionsR, trainingAvailsR,
-    federationsR, clubFederationsR,
+    federationsR, clubFederationsR, federationLicencesR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -358,6 +358,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM training_availabilities').all<TrainingAvailabilityRow>(),
     db.prepare('SELECT * FROM federations ORDER BY sort_order').all<FederationRow>(),
     db.prepare('SELECT * FROM club_federations').all<ClubFederationRow>(),
+    db.prepare('SELECT * FROM federation_licences').all<FederationLicenceRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -383,6 +384,15 @@ app.get('/data', async (c) => {
     affiliationsByClub.set(r.club_id, [...(affiliationsByClub.get(r.club_id) ?? []), {
       federationId: r.federation_id, affiliationNumber: r.affiliation_number,
       ...(r.name ? { name: r.name } : {}),
+    }])
+  }
+
+  // A member's licences other than the FFTT (#644), whose number stays on the
+  // user row — see licencesOf.
+  const licencesByUser = new Map<string, FederationLicence[]>()
+  for (const r of federationLicencesR.results) {
+    licencesByUser.set(r.user_id, [...(licencesByUser.get(r.user_id) ?? []), {
+      federationId: r.federation_id, number: r.number,
     }])
   }
 
@@ -491,6 +501,7 @@ app.get('/data', async (c) => {
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
       id: r.id, firstName: r.first_name ?? '', lastName: r.last_name ?? '',
       licenseNumber: r.license_number ?? '', phone: r.phone,
+      licences: licencesByUser.get(r.id) ?? [],
       ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
@@ -564,6 +575,7 @@ app.get('/data', async (c) => {
       ...(r.first_name ? { firstName: r.first_name } : {}),
       ...(r.last_name ? { lastName: r.last_name } : {}),
       ...(r.license_number ? { licenseNumber: r.license_number } : {}),
+      ...(licencesByUser.has(r.id) ? { licences: licencesByUser.get(r.id) } : {}),
       ...(r.phone ? { phone: r.phone } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
@@ -4472,8 +4484,35 @@ app.post('/players', async (c) => {
     `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
      VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+  // A Landser licensee is created with their AGR licence and no FFTT one (#644).
+  if ('licences' in d) await replaceLicences(c.env.DB, d.id, d.licences)
   return c.json({ ok: true })
 })
+
+/**
+ * Replace a member's licences outside the FFTT with `licences` (#644): a
+ * replacement, like the groups of a member (#602), so two admins saving at once
+ * end on one list rather than a mixture. An FFTT entry, an unknown federation
+ * or a blank number is dropped — the FFTT licence is `users.license_number`,
+ * written as it always was (see 0062).
+ */
+async function replaceLicences(db: D1Database, userId: string, licences: unknown): Promise<void> {
+  const list = (Array.isArray(licences) ? licences : []) as Array<Record<string, unknown>>
+  const wanted = new Map<string, string>()
+  for (const l of list) {
+    const federationId = typeof l.federationId === 'string' ? l.federationId : ''
+    const number = typeof l.number === 'string' ? l.number.trim() : ''
+    if (federationId && federationId !== 'fftt' && number) wanted.set(federationId, number)
+  }
+  await db.batch([
+    db.prepare('DELETE FROM federation_licences WHERE user_id = ?').bind(userId),
+    // The SELECT drops a federation that does not exist, without a lookup first.
+    ...[...wanted].map(([federationId, number]) => db.prepare(
+      `INSERT INTO federation_licences (user_id, federation_id, number)
+       SELECT ?, id, ? FROM federations WHERE id = ?`,
+    ).bind(userId, number, federationId)),
+  ])
+}
 
 /**
  * What a member may change about themselves from "Mon compte" (#558).
@@ -4516,6 +4555,9 @@ app.patch('/players/:id', async (c) => {
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  // Not one of OWN_PROFILE_FIELDS, so only an administrator gets here with it:
+  // a licence decides where somebody may play (#644).
+  if ('licences' in p) await replaceLicences(c.env.DB, id, p.licences)
   // A member who changes club leaves the old club's groups (#602): those are
   // how the club they left sorts its own people, and it no longer lists them.
   if ('clubId' in p) {

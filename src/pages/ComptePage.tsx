@@ -11,10 +11,11 @@ import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
 import { pointsFor } from '@/lib/phasePoints'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { licenceLabel, licencesOf } from '@/lib/licences'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
-  const { players, clubs, teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, clubs, federations = [], teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
@@ -161,7 +162,9 @@ export function ComptePage() {
             {me.phone && <InfoRow label="Téléphone" value={me.phone} />}
             {me.birthDate && <InfoRow label="Date de naissance" value={me.birthDate} />}
             {me.birthPlace && <InfoRow label="Lieu de naissance" value={me.birthPlace} />}
-            {me.licenseNumber && <InfoRow label="Licence" value={me.licenseNumber} />}
+            {licencesOf(me).map((l) => (
+              <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+            ))}
           </dl>
         )}
       </section>

@@ -22,6 +22,7 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { ChecklistSheet } from '@/components/ChecklistSheet'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -54,7 +55,7 @@ export function PlayerDetail({
 }) {
   const id = playerId
   const {
-    players, teams, clubs, phases, seasons, playerPhasePoints,
+    players, teams, clubs, federations, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
     updatePlayer, memberGroups, setGroupsOfMember,
   } = useAppData()
@@ -178,7 +179,10 @@ export function PlayerDetail({
         {/* Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informations</Text>
-          {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+          {/* One row per federation (#644): an FFTT and an AGR licence, say. */}
+          {licencesOf(player).map((l) => (
+            <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+          ))}
           <InfoRow label="Catégorie" value={category || 'Inconnue'} />
           {phasePoints && <InfoRow label="Points" value={phasePoints} />}
           {/* Same badge as the quick view, `danger` and all: the two screens

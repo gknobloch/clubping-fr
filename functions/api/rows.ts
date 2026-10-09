@@ -140,6 +140,13 @@ export interface FederationRow {
   sort_order: number
 }
 
+/** A member's licence in a federation other than the FFTT (0062, #644). */
+export interface FederationLicenceRow {
+  user_id: string
+  federation_id: string
+  number: string
+}
+
 /** A club's affiliation to a federation other than the FFTT (0061, #643). */
 export interface ClubFederationRow {
   club_id: string
