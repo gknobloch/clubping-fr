@@ -555,6 +555,20 @@ invisible dans le diff comme dans la revue.
 - Sur la fiche et dans « Mon compte », une ligne par licence : « Licence »
   tant que la FFTT est seule, « Licence AGR » dès qu'il y en a une autre
   (`licenceLabel`).
+- **Jouer pour un second club, c'est un second profil** (#640) : Gilles a un
+  profil à Rixheim (FFTT) et un à Landser (AGR), reliés par la seule adresse.
+  « Ajouter à un autre club », sur la fiche, le crée : `POST
+  /players/:id/profiles` **copie côté serveur** nom, adresse, téléphone et
+  naissance depuis la ligne source — ressaisie à la main, une faute de frappe
+  dans l'adresse et le sélecteur ne propose jamais l'autre profil. L'appelant
+  ne dit que ce qui est au nouveau club : lequel, et ses licences.
+- Suit `administers` du club **qui reçoit** (#558) ; rien n'est écrit sur
+  celui d'origine. Même nom et même adresse déjà dans ce club : 409
+  `already_in_club`, avec l'id du profil existant, que le dialogue propose
+  d'ouvrir. Sans adresse, le dialogue prévient que rien ne reliera les deux.
+- `linkedProfiles` (même adresse, comparée comme à la connexion) et
+  `clubsToAddTo` (`src/lib/linkedProfiles.ts`) sont la règle de la section
+  « Autres clubs » de la fiche.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →

@@ -14,6 +14,7 @@ import type {
   Club,
   ClubAffiliation,
   ClubChannel,
+  FederationLicence,
   Competition,
   CompetitionGroup,
   DataState,
@@ -443,6 +444,17 @@ async function memberGroupWrite(path: string, method: 'POST' | 'PATCH', body: un
  */
 export type ClubAdminResult = { ok: true } | { ok: false; message: string }
 
+/** What `addProfileInClub` writes on the receiving club (#644). */
+export interface ProfileInClub {
+  clubId: string
+  /** Its FFTT licence, when the receiving club is in the FFTT. */
+  licenseNumber?: string
+  licences?: FederationLicence[]
+}
+
+/** The new profile's id, or why there is none — `id` names one already there. */
+export type ProfileResult = { ok: true; id: string } | { ok: false; message: string; id?: string }
+
 /** Who to appoint: a member the club already has, or someone new by name. */
 export type ClubAdminTarget =
   | { userId: string }
@@ -467,6 +479,11 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
   updateClub: (id: string, patch: Partial<Club>) => void
+  /**
+   * Give a licensee a profile in another club, copied from this one and linked
+   * to it by the same address (#644). Waits for the API: it creates a person.
+   */
+  addProfileInClub: (playerId: string, profile: ProfileInClub) => Promise<ProfileResult>
   /**
    * Declare or correct the club's affiliation to a federation other than the
    * FFTT (#643) — the FFTT number goes through `updateClub`.
@@ -1954,6 +1971,41 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     return player
   }, [persist])
 
+  const addProfileInClub = useCallback(
+    async (playerId: string, profile: ProfileInClub): Promise<ProfileResult> => {
+      const source = players.find((p) => p.id === playerId)
+      if (!source) return { ok: false, message: 'Licencié introuvable.' }
+      let id = nextId('player')
+      if (persist) {
+        try {
+          const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/profiles`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify(profile),
+          })
+          const body = (await res.json().catch(() => null)) as { id?: string; message?: string } | null
+          if (!res.ok) return { ok: false, message: body?.message ?? "L'opération a échoué.", ...(body?.id ? { id: body.id } : {}) }
+          if (body?.id) id = body.id
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // What the server copied, so the list shows it before the next fetch.
+      const created: Player = {
+        id, clubId: profile.clubId, status: 'active',
+        firstName: source.firstName, lastName: source.lastName,
+        licenseNumber: profile.licenseNumber?.trim() ?? '',
+        licences: (profile.licences ?? []).filter((l) => l.number.trim()),
+        phone: source.phone,
+        ...(source.email ? { email: source.email } : {}),
+        ...(source.birthDate ? { birthDate: source.birthDate } : {}),
+        ...(source.birthPlace ? { birthPlace: source.birthPlace } : {}),
+      }
+      setPlayers((prev) => [...prev, created])
+      setUsers((prev) => [...prev, { ...created, role: 'player', isPlayer: true }])
+      return { ok: true, id }
+    },
+    [persist, players],
+  )
+
   // --- Club admins (#474) ---
   // Unlike every other mutation here, these wait for the API and report back:
   // the cap of 5 and the never-zero rule are enforced server-side, so an
@@ -2432,6 +2484,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       deleteCompetition,
       setCompetitionGroup,
       updateClub,
+      addProfileInClub,
       setClubAffiliation,
       removeClubAffiliation,
       archiveClub,
@@ -2534,7 +2587,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

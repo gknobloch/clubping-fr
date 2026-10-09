@@ -25,11 +25,18 @@ const member = (over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow => ({
 const landserAdmin = member({ id: 'ca', role: 'club_admin' })
 const otherAdmin = member({ id: 'ca2', role: 'club_admin', club_id: OTHER })
 const gilles = member({ id: 'p-gilles' })
-const USERS = [landserAdmin, otherAdmin, gilles]
+/** Gilles at Rixheim, for the FFTT — the profile Landser copies. */
+const gillesRixheim = member({
+  id: 'p-gilles-rixheim', club_id: OTHER, email: 'gilles@club.fr', first_name: 'Gilles', last_name: 'Knobloch',
+  license_number: '6810333', phone: '0799980001', birth_date: '1980-01-01', birth_place: 'Mulhouse',
+})
+const generalAdmin = member({ id: 'ga', role: 'general_admin', club_id: null, is_player: 0 })
+const USERS = [landserAdmin, otherAdmin, gilles, gillesRixheim, generalAdmin]
+const CLUBS = [LANDSER, OTHER]
 
 interface Write { sql: string; params: unknown[] }
 
-function fakeDb(viewerId: string) {
+function fakeDb(viewerId: string, existingProfile?: string) {
   const writes: Write[] = []
   const answer = async (sql: string, params: unknown[]) => {
     if (sql.includes('FROM sessions')) {
@@ -37,6 +44,8 @@ function fakeDb(viewerId: string) {
       return params.includes(key) ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR } : null
     }
     if (sql.includes('FROM users WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
+    if (sql.includes('FROM clubs WHERE id = ?')) return CLUBS.includes(params[0] as string) ? { id: params[0] } : null
+    if (sql.includes('FROM users WHERE club_id = ? AND email = ?')) return existingProfile ? { id: existingProfile } : null
     return null
   }
   const db = {
@@ -123,5 +132,52 @@ describe('POST /players — licences (#644)', () => {
     })
     expect(res.status).toBe(200)
     expect(licenceWrites(writes).at(-1)!.params).toEqual(['p-new', '688786', 'agr'])
+  })
+})
+
+describe('POST /players/:id/profiles — a profile in another club (#644)', () => {
+  const body = { clubId: LANDSER, licences: [{ federationId: 'agr', number: '1251178' }] }
+  const userInserts = (writes: Write[]) => writes.filter((w) => /INSERT INTO users/.test(w.sql))
+
+  it('copies the person from the source row, and writes only the new club and its licences', async () => {
+    const { db, writes } = fakeDb('ca')
+    const res = await send(db, '/players/p-gilles-rixheim/profiles', 'POST', body)
+    expect(res.status).toBe(200)
+    const { id } = await res.json() as { id: string }
+    const [insert] = userInserts(writes)
+    // id, email, first, last, licence, phone, birth date, birth place, club
+    expect(insert.params).toEqual([
+      id, 'gilles@club.fr', 'Gilles', 'Knobloch', '', '0799980001', '1980-01-01', 'Mulhouse', LANDSER,
+    ])
+    expect(licenceWrites(writes).at(-1)!.params).toEqual([id, '1251178', 'agr'])
+  })
+
+  it('is the receiving club\'s to decide: refused to another club\'s admin', async () => {
+    const { db, writes } = fakeDb('ca2')
+    expect((await send(db, '/players/p-gilles-rixheim/profiles', 'POST', body)).status).toBe(403)
+    expect(userInserts(writes)).toHaveLength(0)
+  })
+
+  it('refuses the club the licensee is already in', async () => {
+    const { db, writes } = fakeDb('ga')
+    const res = await send(db, '/players/p-gilles-rixheim/profiles', 'POST', { clubId: OTHER })
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { error: string }).error).toBe('same_club')
+    expect(userInserts(writes)).toHaveLength(0)
+  })
+
+  it('names the profile already there instead of making a second one', async () => {
+    const { db, writes } = fakeDb('ca', 'p-already')
+    const res = await send(db, '/players/p-gilles-rixheim/profiles', 'POST', body)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: 'already_in_club', id: 'p-already' })
+    expect(userInserts(writes)).toHaveLength(0)
+  })
+
+  it('answers 404 for an unknown licensee or club', async () => {
+    const { db, writes } = fakeDb('ga')
+    expect((await send(db, '/players/nobody/profiles', 'POST', body)).status).toBe(404)
+    expect((await send(db, '/players/p-gilles-rixheim/profiles', 'POST', { clubId: 'club-nope' })).status).toBe(404)
+    expect(userInserts(writes)).toHaveLength(0)
   })
 })

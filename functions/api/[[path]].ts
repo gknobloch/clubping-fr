@@ -4569,6 +4569,64 @@ app.patch('/players/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * Give a licensee a profile in another club (#644) — Gilles, at Rixheim for the
+ * FFTT, joins Landser for the AGR.
+ *
+ * A session is one member in one club (#640), so playing for a second club is
+ * a second profile, linked to the first by the e-mail address alone. Retyping
+ * it by hand is how the link breaks: one typo and the switcher never offers the
+ * other profile. So the server copies what describes the person — name,
+ * address, phone, birth — from the source row, and the caller says only what
+ * belongs to the new club: which one, and the licences played there.
+ *
+ * Writing on the club that receives the profile, so `administers` of it
+ * (#558); nothing is written on the source's club. The copy reads nothing the
+ * payload does not already carry to the same caller.
+ */
+const PROFILE_REFUSALS = {
+  same_club: 'Ce licencié est déjà dans ce club.',
+  already_in_club: 'Ce licencié a déjà un profil dans ce club.',
+} as const
+
+app.post('/players/:id/profiles', async (c) => {
+  const db = c.env.DB
+  const sourceId = c.req.param('id')
+  const d = await c.req.json<{ clubId?: unknown; licenseNumber?: unknown; licences?: unknown }>()
+  const clubId = typeof d.clubId === 'string' ? d.clubId : ''
+  if (!clubId || !administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+
+  const source = await db.prepare('SELECT * FROM users WHERE id = ?').bind(sourceId).first<UserRow>()
+  if (!source || !bool(source.is_player)) return c.json(notFound, 404)
+  const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first<{ id: string }>()
+  if (!club) return c.json(notFound, 404)
+  const refuseProfile = (reason: keyof typeof PROFILE_REFUSALS, existingId?: string) =>
+    c.json({ error: reason, message: PROFILE_REFUSALS[reason], ...(existingId ? { id: existingId } : {}) }, 409)
+  if (source.club_id === clubId) return refuseProfile('same_club')
+
+  // A second click, or a profile somebody made by hand with the same address:
+  // same name and same address in that club is this person already (#640).
+  if (source.email) {
+    const existing = await db.prepare(
+      `SELECT id FROM users WHERE club_id = ? AND email = ? COLLATE NOCASE
+         AND first_name = ? COLLATE NOCASE AND last_name = ? COLLATE NOCASE`,
+    ).bind(clubId, source.email, source.first_name ?? '', source.last_name ?? '').first<{ id: string }>()
+    if (existing) return refuseProfile('already_in_club', existing.id)
+  }
+
+  const id = newId('player')
+  const licenseNumber = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
+  await db.prepare(
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+  ).bind(
+    id, source.email, source.first_name, source.last_name, licenseNumber,
+    source.phone ?? '', source.birth_date, source.birth_place, clubId,
+  ).run()
+  await replaceLicences(db, id, d.licences)
+  return c.json({ ok: true, id })
+})
+
 // --- Club admins (#474) ---
 // A club admin is `users.role = 'club_admin'` + `users.club_id`, not a row of
 // its own — so these two routes are the whole feature. The rules they enforce
