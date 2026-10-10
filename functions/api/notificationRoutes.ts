@@ -122,7 +122,7 @@ notificationsApp.patch('/preferences', async (c) => {
   if (hasCategories) {
     // Read again rather than trusted from the session's row: two switches
     // flicked in quick succession must not have the second undo the first.
-    const row = await c.env.DB.prepare('SELECT notification_preferences FROM users WHERE id = ?')
+    const row = await c.env.DB.prepare('SELECT notification_preferences FROM profiles WHERE id = ?')
       .bind(user.id).first<{ notification_preferences: string | null }>()
     stored = mergePreferences(parsePreferences(row?.notification_preferences ?? null), patch)
     await c.env.DB.prepare('UPDATE users SET notification_preferences = ? WHERE id = ?')
@@ -464,7 +464,7 @@ async function clubMembers(db: D1Database, clubIds: string[]): Promise<MemberRow
   for (const chunk of chunked(clubIds)) {
     const holes = chunk.map(() => '?').join(',')
     const r = await db.prepare(
-      `SELECT id, club_id, is_player, status, notification_preferences FROM users WHERE club_id IN (${holes})`,
+      `SELECT id, club_id, is_player, status, notification_preferences FROM profiles WHERE club_id IN (${holes})`,
     ).bind(...chunk).all<MemberRow>()
     out.push(...r.results)
   }
@@ -643,7 +643,7 @@ async function isSelected(
 }
 
 async function playerName(db: D1Database, playerId: string): Promise<string> {
-  const row = await db.prepare('SELECT first_name, last_name FROM users WHERE id = ?')
+  const row = await db.prepare('SELECT first_name, last_name FROM profiles WHERE id = ?')
     .bind(playerId).first<{ first_name: string | null; last_name: string | null }>()
   const name = [row?.first_name, row?.last_name].filter(Boolean).join(' ').trim()
   return name || 'Un joueur'
@@ -739,10 +739,10 @@ export async function tokensByUser(
   const base =
     `SELECT DISTINCT p.token AS token, u.id AS user_id, u.first_name AS first_name,
             u.notification_preferences AS notification_preferences,
-            (SELECT count(*) FROM users s WHERE ${reaches('o', 's')}) AS profiles
+            (SELECT count(*) FROM profiles s WHERE ${reaches('o', 's')}) AS profiles
        FROM push_tokens p
-       JOIN users o ON o.id = p.user_id
-       JOIN users u ON ${reaches('o', 'u')}
+       JOIN profiles o ON o.id = p.user_id
+       JOIN profiles u ON ${reaches('o', 'u')}
       WHERE u.notifications_enabled = 1`
   if (!userIds) {
     const r = await db.prepare(base).all<TokenRow>()

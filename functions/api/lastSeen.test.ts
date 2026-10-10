@@ -70,7 +70,7 @@ function dbWith(users: UserRow[], viewerId: string | null) {
               ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ?')) return copyOf(params[0])
+          if (sql.includes('FROM profiles WHERE id = ?')) return copyOf(params[0])
           return null
         },
         async all() {
@@ -89,7 +89,7 @@ function dbWith(users: UserRow[], viewerId: string | null) {
           return null
         },
         async all() {
-          return { results: sql === 'SELECT * FROM users' ? users.map((u) => ({ ...u })) : [] }
+          return { results: sql === 'SELECT * FROM profiles' ? users.map((u) => ({ ...u })) : [] }
         },
         async run() {
           return { success: true }

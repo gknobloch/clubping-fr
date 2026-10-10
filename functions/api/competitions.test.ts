@@ -61,7 +61,7 @@ function fakeDb(
               ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ?')) {
+          if (sql.includes('FROM profiles WHERE id = ?')) {
             return users.find((u) => u.id === params[0]) ?? null
           }
           if (sql.includes('FROM member_groups WHERE id = ? AND club_id = ?')) {
@@ -82,7 +82,7 @@ function fakeDb(
           return null
         },
         async all() {
-          if (sql.includes('FROM users WHERE club_id = ?')) {
+          if (sql.includes('FROM profiles WHERE club_id = ?')) {
             return { results: users.filter((u) => u.club_id === params[0]).map((u) => ({ id: u.id })) }
           }
           return { results: [] }

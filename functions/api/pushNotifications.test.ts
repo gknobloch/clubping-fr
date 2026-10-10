@@ -94,10 +94,10 @@ function fakeDb(f: DbFixture) {
               ? { token: key, user_id: f.viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ?')) {
+          if (sql.includes('FROM profiles WHERE id = ?')) {
             return users.find((u) => u.id === params[0]) ?? null
           }
-          if (sql.includes('first_name, last_name FROM users')) {
+          if (sql.includes('first_name, last_name FROM profiles')) {
             const u = users.find((x) => x.id === params[0])
             return u ? { first_name: u.first_name, last_name: u.last_name } : null
           }
@@ -140,7 +140,7 @@ function fakeDb(f: DbFixture) {
           // The household (`householdIds`, reach.ts): by address here, which
           // is all these fixtures share — delegation is pinned against a real
           // schema in reach.test.ts.
-          if (sql.includes('FROM users a JOIN users u')) {
+          if (sql.includes('FROM profiles a JOIN profiles u')) {
             return { results: householdOf(String(params[0])).map((u) => ({ id: u.id })) }
           }
           if (sql.includes('FROM push_receipts')) {

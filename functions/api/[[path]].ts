@@ -311,7 +311,7 @@ async function authorityTeam(db: D1Database, teamId: string): Promise<AuthorityT
 /** The licensee being answered for. Their club is half the rule. */
 async function authorityPlayer(db: D1Database, playerId: string): Promise<AuthorityPlayer | null> {
   const u = await db
-    .prepare('SELECT id, club_id FROM users WHERE id = ?')
+    .prepare('SELECT id, club_id FROM profiles WHERE id = ?')
     .bind(playerId)
     .first<{ id: string; club_id: string | null }>()
   return u ? { id: u.id, clubId: u.club_id ?? '' } : null
@@ -344,7 +344,7 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM games').all<GameRow>(),
     db.prepare('SELECT * FROM game_availabilities').all<GameAvailabilityRow>(),
     db.prepare('SELECT * FROM game_selections').all<GameSelectionRow>(),
-    db.prepare('SELECT * FROM users').all<UserRow>(),
+    db.prepare('SELECT * FROM profiles').all<UserRow>(),
     // Only the version marker — the image bytes are served separately so this
     // bulk payload stays light.
     db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
@@ -3586,7 +3586,7 @@ app.post('/clubs/:clubId/fftt-venue', async (c) => {
   const viewer = managingViewer(c)
   if (viewer.role !== 'general_admin') {
     const ownAdmin = await db
-      .prepare("SELECT id FROM users WHERE role = 'club_admin' AND club_id = ? LIMIT 1")
+      .prepare("SELECT id FROM profiles WHERE role = 'club_admin' AND club_id = ? LIMIT 1")
       .bind(clubId).first()
     if (ownAdmin || !administersAny(viewer, await clubsSharingAPoule(db, clubId))) {
       return c.json(notAllowed, 403)
@@ -3804,7 +3804,7 @@ app.put('/clubs/:clubId/member-groups/:groupId/members', async (c) => {
   if (!(await groupOfClub(db, clubId, groupId))) return c.json(notFound, 404)
 
   const members = await db
-    .prepare('SELECT id FROM users WHERE club_id = ?')
+    .prepare('SELECT id FROM profiles WHERE club_id = ?')
     .bind(clubId)
     .all<{ id: string }>()
   const ours = new Set(members.results.map((r) => r.id))
@@ -3832,7 +3832,7 @@ app.put('/clubs/:clubId/members/:userId/member-groups', async (c) => {
   const { groupIds } = await c.req.json<{ groupIds?: string[] }>()
   if (!Array.isArray(groupIds)) return c.json({ error: 'bad_request' }, 400)
   const member = await db
-    .prepare('SELECT id FROM users WHERE id = ? AND club_id = ?')
+    .prepare('SELECT id FROM profiles WHERE id = ? AND club_id = ?')
     .bind(userId, clubId)
     .first<{ id: string }>()
   if (!member) return c.json(notFound, 404)
@@ -3937,7 +3937,7 @@ async function trainingColumns(
   let managerIds = existing ? jsonParseIds(existing.manager_ids) : []
   if ('managerIds' in d) {
     if (!Array.isArray(d.managerIds)) return { ok: false, error: 'bad_managers' }
-    const members = await db.prepare('SELECT id FROM users WHERE club_id = ?').bind(clubId).all<{ id: string }>()
+    const members = await db.prepare('SELECT id FROM profiles WHERE club_id = ?').bind(clubId).all<{ id: string }>()
     const ours = new Set(members.results.map((r) => r.id))
     managerIds = [...new Set(d.managerIds as unknown[])].filter((id): id is string => typeof id === 'string' && ours.has(id))
   }
@@ -4432,7 +4432,7 @@ const emailOrNull = (email: unknown): string | null =>
 /** The club a licensee belongs to, or `undefined` for an id the table has never
  *  heard of (#558). */
 const clubOfPlayer = async (db: D1Database, id: string) =>
-  (await db.prepare('SELECT club_id FROM users WHERE id = ?').bind(id).first<{ club_id: string | null }>())
+  (await db.prepare('SELECT club_id FROM profiles WHERE id = ?').bind(id).first<{ club_id: string | null }>())
     ?.club_id ?? undefined
 
 /**
@@ -4481,9 +4481,10 @@ async function mayWritePlayers(
 //
 // A `users` row is a CLUB PROFILE; the person behind it — name, address,
 // phone, birth — is a `people` row (0063). Gilles is one person with two
-// profiles, Rixheim and Landser. Those fields still live on `users` as well, as
-// a mirror kept equal to the person's: the API reads them there in a hundred
-// places, and those reads move later, in their own deploy (#410).
+// profiles, Rixheim and Landser. The API reads a profile through the
+// `profiles` view (0066), which takes those fields from the person, and writes
+// them to `people` alone: the copies on `users` are no longer kept, and go in a
+// later deploy (#410).
 
 /** The person a new club profile gets: one of its own, keyed on it. */
 const personIdFor = (userId: string) => `person-${userId}`
@@ -4508,7 +4509,7 @@ async function insertPerson(db: D1Database, personId: string, f: PersonFields): 
   ).bind(personId, f.firstName ?? null, f.lastName ?? null, f.email, f.phone ?? '', f.birthDate ?? null, f.birthPlace ?? null).run()
 }
 
-/** The fields a person holds, by their payload name — what `users` mirrors. */
+/** The fields a person holds, by their payload name, and their `people` column. */
 const PERSON_COLUMNS = {
   firstName: 'first_name',
   lastName: 'last_name',
@@ -4533,9 +4534,9 @@ app.post('/players', async (c) => {
     phone: d.phone, birthDate: d.birthDate, birthPlace: d.birthPlace,
   })
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId, personId).run()
+    `INSERT INTO users (id, role, is_player, license_number, status, club_id, person_id)
+     VALUES (?, 'player', 1, ?, ?, ?, ?)`
+  ).bind(d.id, d.licenseNumber, d.status, d.clubId, personId).run()
   // A Landser licensee is created with their AGR licence and no FFTT one (#644).
   if ('licences' in d) await replaceLicences(c.env.DB, d.id, d.licences)
   return c.json({ ok: true })
@@ -4601,7 +4602,7 @@ app.patch('/players/:id', async (c) => {
         : p[k]
   const askedPersonKeys = Object.keys(p).filter(isPersonKey)
   const target = askedPersonKeys.length
-    ? await db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>()
+    ? await db.prepare('SELECT * FROM profiles WHERE id = ?').bind(id).first<UserRow>()
     : null
   // Only what CHANGES is judged: the forms send every field, and a club admin
   // correcting a licence must not be refused over an address left as it was.
@@ -4609,7 +4610,7 @@ app.patch('/players/:id', async (c) => {
     !target || (personValue(k) ?? null) !== (target[PERSON_COLUMNS[k]] ?? null))
   const personId = target?.person_id ?? null
   const personClubs = personId
-    ? (await db.prepare('SELECT DISTINCT club_id FROM users WHERE person_id = ?').bind(personId)
+    ? (await db.prepare('SELECT DISTINCT club_id FROM profiles WHERE person_id = ?').bind(personId)
       .all<{ club_id: string | null }>()).results.map((r) => r.club_id)
     : []
   const clubsOfPerson = personClubs.length ? personClubs : [target?.club_id ?? null]
@@ -4635,13 +4636,8 @@ app.patch('/players/:id', async (c) => {
   // fields on its own row, as every profile did before (#655).
   if (!personId) { s.push(...ps); v.push(...pv) }
   if (s.length) { v.push(id); await db.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
-  if (personId && ps.length) {
-    // The person, and the mirror on every profile of theirs.
-    await db.batch([
-      db.prepare(`UPDATE people SET ${ps.join(', ')} WHERE id = ?`).bind(...pv, personId),
-      db.prepare(`UPDATE users SET ${ps.join(', ')} WHERE person_id = ?`).bind(...pv, personId),
-    ])
-  }
+  // The person, which every profile of theirs reads through `profiles` (0066).
+  if (personId && ps.length) await db.prepare(`UPDATE people SET ${ps.join(', ')} WHERE id = ?`).bind(...pv, personId).run()
   // Not one of OWN_PROFILE_FIELDS, so only an administrator gets here with it:
   // a licence decides where somebody may play (#644).
   if ('licences' in p) await replaceLicences(c.env.DB, id, p.licences)
@@ -4683,7 +4679,7 @@ app.post('/players/:id/profiles', async (c) => {
   const clubId = typeof d.clubId === 'string' ? d.clubId : ''
   if (!clubId || !administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
 
-  const source = await db.prepare('SELECT * FROM users WHERE id = ?').bind(sourceId).first<UserRow>()
+  const source = await db.prepare('SELECT * FROM profiles WHERE id = ?').bind(sourceId).first<UserRow>()
   if (!source || !bool(source.is_player)) return c.json(notFound, 404)
   const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first<{ id: string }>()
   if (!club) return c.json(notFound, 404)
@@ -4693,7 +4689,7 @@ app.post('/players/:id/profiles', async (c) => {
 
   // The person's profile there already (#655) — a second click, say.
   if (source.person_id) {
-    const own = await db.prepare('SELECT id FROM users WHERE club_id = ? AND person_id = ?')
+    const own = await db.prepare('SELECT id FROM profiles WHERE club_id = ? AND person_id = ?')
       .bind(clubId, source.person_id).first<{ id: string }>()
     if (own) return refuseProfile('already_in_club', own.id)
   }
@@ -4701,7 +4697,7 @@ app.post('/players/:id/profiles', async (c) => {
   // same address in that club is this person already (#640).
   if (source.email) {
     const existing = await db.prepare(
-      `SELECT id FROM users WHERE club_id = ? AND email = ? COLLATE NOCASE
+      `SELECT id FROM profiles WHERE club_id = ? AND email = ? COLLATE NOCASE
          AND first_name = ? COLLATE NOCASE AND last_name = ? COLLATE NOCASE`,
     ).bind(clubId, source.email, source.first_name ?? '', source.last_name ?? '').first<{ id: string }>()
     if (existing) return refuseProfile('already_in_club', existing.id)
@@ -4710,9 +4706,8 @@ app.post('/players/:id/profiles', async (c) => {
   const id = newId('player')
   const licenseNumber = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
   // The new profile belongs to the same PERSON (#655): that is the link, and
-  // the copied fields below are only the mirror `users` still carries. A
-  // source written in the deploy window has no person yet — it gets one here,
-  // and both profiles share it.
+  // nothing is copied — the name and address are the person's. A source with
+  // no person yet gets one here, and both profiles share it.
   let personId = source.person_id ?? null
   if (!personId) {
     personId = personIdFor(source.id)
@@ -4723,12 +4718,9 @@ app.post('/players/:id/profiles', async (c) => {
     await db.prepare('UPDATE users SET person_id = ? WHERE id = ?').bind(personId, source.id).run()
   }
   await db.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
-  ).bind(
-    id, source.email, source.first_name, source.last_name, licenseNumber,
-    source.phone ?? '', source.birth_date, source.birth_place, clubId, personId,
-  ).run()
+    `INSERT INTO users (id, role, is_player, license_number, status, club_id, person_id)
+     VALUES (?, 'player', 1, ?, 'active', ?, ?)`,
+  ).bind(id, licenseNumber, clubId, personId).run()
   await replaceLicences(db, id, d.licences)
   return c.json({ ok: true, id })
 })
@@ -4803,7 +4795,7 @@ app.post('/people/:personId/delegates', async (c) => {
     // A member's id is accepted as well as a person's: the screens list members.
     const found = await db.prepare(
       `SELECT id FROM people WHERE id = ?
-       UNION SELECT person_id AS id FROM users WHERE id = ? AND person_id IS NOT NULL`,
+       UNION SELECT person_id AS id FROM profiles WHERE id = ? AND person_id IS NOT NULL`,
     ).bind(d.delegateId, d.delegateId).all<{ id: string }>()
     delegateId = found.results[0]?.id ?? null
     if (!delegateId) return c.json(notFound, 404)
@@ -4870,8 +4862,6 @@ app.post('/people/:personId/address-to-delegate', async (c) => {
 
   await db.batch([
     db.prepare('UPDATE people SET email = NULL WHERE id = ?').bind(personId),
-    // The person's fields are still mirrored on each club profile (#655, step 1).
-    db.prepare('UPDATE users SET email = NULL WHERE person_id = ?').bind(personId),
     db.prepare('INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at) VALUES (?, ?, ?)')
       .bind(personId, delegateId, Date.now()),
   ])
@@ -4927,15 +4917,8 @@ app.post('/people/:personId/merge-into', async (c) => {
          SELECT person_id, ?, created_at FROM person_delegates WHERE delegate_id = ? AND person_id != ?`,
     ).bind(targetId, personId, targetId),
     db.prepare('DELETE FROM person_delegates WHERE person_id = ? OR delegate_id = ?').bind(personId, personId),
+    // The profiles read the person's fields through `profiles` (0066): moving them is all it takes.
     db.prepare('UPDATE users SET person_id = ? WHERE person_id = ?').bind(targetId, personId),
-    // The person's fields are still mirrored on each club profile (#655, step 1).
-    db.prepare(
-      `UPDATE users SET
-         first_name = (SELECT first_name FROM people WHERE id = ?), last_name = (SELECT last_name FROM people WHERE id = ?),
-         email = (SELECT email FROM people WHERE id = ?), phone = (SELECT COALESCE(phone, '') FROM people WHERE id = ?),
-         birth_date = (SELECT birth_date FROM people WHERE id = ?), birth_place = (SELECT birth_place FROM people WHERE id = ?)
-       WHERE person_id = ?`,
-    ).bind(targetId, targetId, targetId, targetId, targetId, targetId, targetId),
     db.prepare('DELETE FROM people WHERE id = ?').bind(personId),
   ])
   return c.json({ ok: true })
@@ -4951,7 +4934,7 @@ app.post('/people/:personId/merge-into', async (c) => {
 /** Members shaped for the rules: role, club and status are all they read. */
 async function clubAdminCandidates(db: D1Database) {
   const r = await db
-    .prepare('SELECT id, role, club_id, status FROM users')
+    .prepare('SELECT id, role, club_id, status FROM profiles')
     .all<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
   return r.results.map((u) => ({
     id: u.id,
@@ -5021,7 +5004,7 @@ app.post('/clubs/:clubId/admins', async (c) => {
   // and same name is that person, to be designated rather than invited.
   const taken = await db
     .prepare(
-      `SELECT id FROM users WHERE lower(email) = lower(?)
+      `SELECT id FROM profiles WHERE lower(email) = lower(?)
           AND lower(trim(first_name)) = lower(?) AND lower(trim(last_name)) = lower(?)`,
     )
     .bind(email, firstName, lastName)
@@ -5034,10 +5017,10 @@ app.post('/clubs/:clubId/admins', async (c) => {
   })
   await db
     .prepare(
-      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
-       VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?, ?)`,
+      `INSERT INTO users (id, role, is_player, license_number, status, club_id, person_id)
+       VALUES (?, 'club_admin', 0, '', 'active', ?, ?)`,
     )
-    .bind(fresh.id, email, firstName, lastName, (body.phone ?? '').trim(), clubId, personId)
+    .bind(fresh.id, clubId, personId)
     .run()
   return c.json({ ok: true, userId: fresh.id })
 })
@@ -5164,7 +5147,7 @@ const summaryOf = (r: ClubAdminRequestRow): RequestSummary => ({
 /** Every general admin who can actually receive a message. */
 async function generalAdminEmails(db: D1Database): Promise<string[]> {
   const r = await db
-    .prepare("SELECT email FROM users WHERE role = 'general_admin' AND email IS NOT NULL AND email != ''")
+    .prepare("SELECT email FROM profiles WHERE role = 'general_admin' AND email IS NOT NULL AND email != ''")
     .all<{ email: string }>()
   return r.results.map((u) => u.email)
 }
@@ -5225,7 +5208,7 @@ app.post('/onboarding/requests', async (c) => {
   // requester to go and sign in rather than wait for a decision.
   if (clubId) {
     const existing = await db
-      .prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND role = 'club_admin' AND club_id = ?")
+      .prepare("SELECT id FROM profiles WHERE lower(email) = lower(?) AND role = 'club_admin' AND club_id = ?")
       .bind(email, clubId)
       .first()
     if (existing) return refuseRequest('already_admin', 409)
@@ -5474,7 +5457,7 @@ app.patch('/onboarding/requests/:id', async (c) => {
   const existing =
     (licence
       ? await db
-          .prepare("SELECT id, role, club_id, status FROM users WHERE license_number = ? AND license_number != ''")
+          .prepare("SELECT id, role, club_id, status FROM profiles WHERE license_number = ? AND license_number != ''")
           .bind(licence)
           .first<Pick<UserRow, 'id' | 'role' | 'club_id' | 'status'>>()
       : null) ??
@@ -5483,7 +5466,7 @@ app.patch('/onboarding/requests/:id', async (c) => {
     // Nobody of that name is somebody new, under an address they share.
     (await db
       .prepare(
-        `SELECT id, role, club_id, status FROM users WHERE lower(email) = lower(?)
+        `SELECT id, role, club_id, status FROM profiles WHERE lower(email) = lower(?)
             AND lower(trim(first_name)) = lower(trim(?)) AND lower(trim(last_name)) = lower(trim(?))`,
       )
       .bind(row.email, row.first_name, row.last_name)
@@ -5527,13 +5510,10 @@ app.patch('/onboarding/requests/:id', async (c) => {
     })
     await db
       .prepare(
-        `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
-         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?, ?)`,
+        `INSERT INTO users (id, role, is_player, license_number, status, club_id, person_id)
+         VALUES (?, 'club_admin', ?, ?, 'active', ?, ?)`,
       )
-      .bind(
-        candidate.id, row.email, licence ? 1 : 0, row.first_name, row.last_name,
-        licence, row.phone, clubId, personId,
-      )
+      .bind(candidate.id, licence ? 1 : 0, licence, clubId, personId)
       .run()
   }
 
@@ -5796,7 +5776,7 @@ app.put('/clubs/:clubId/seasons/:seasonId/licences', async (c) => {
   if (!Array.isArray(playerIds)) return c.json({ error: 'bad_request' }, 400)
 
   const members = await db
-    .prepare('SELECT id FROM users WHERE club_id = ?')
+    .prepare('SELECT id FROM profiles WHERE club_id = ?')
     .bind(clubId)
     .all<{ id: string }>()
   const ours = new Set(members.results.map((r) => r.id))
@@ -5805,7 +5785,7 @@ app.put('/clubs/:clubId/seasons/:seasonId/licences', async (c) => {
   const statements = [
     db.prepare(
       `DELETE FROM player_season_licences
-       WHERE season_id = ? AND player_id IN (SELECT id FROM users WHERE club_id = ?)`,
+       WHERE season_id = ? AND player_id IN (SELECT id FROM profiles WHERE club_id = ?)`,
     ).bind(seasonId, clubId),
     ...keep.map((playerId) => db.prepare(
       'INSERT OR IGNORE INTO player_season_licences (season_id, player_id) VALUES (?, ?)',

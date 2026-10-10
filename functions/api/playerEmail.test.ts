@@ -37,13 +37,17 @@ const send = (db: D1Database, path: string, method: string, body: unknown) =>
     { DB: db, AUTH_GUARD_DISABLED: 'true' },
   )
 
-/** The parameter bound to `email` by the statement that wrote the users row. */
+/**
+ * The parameter bound to `email` by the statement that wrote the address: the
+ * new person on a creation (#655 — a profile carries no address of its own
+ * since 0066), the member's row on a PATCH of a profile with no person.
+ */
 function boundEmail(statements: { sql: string; params: unknown[] }[]): unknown {
-  const write = statements.filter((s) => /INSERT INTO users|UPDATE users/.test(s.sql)).pop()
-  expect(write, 'no write to users was issued').toBeDefined()
+  const write = statements.filter((s) => /INSERT OR IGNORE INTO people|UPDATE (users|people)/.test(s.sql)).pop()
+  expect(write, 'no write of the address was issued').toBeDefined()
   const { sql, params } = write!
-  // INSERT lists the columns in a fixed order, email second.
-  if (sql.includes('INSERT')) return params[1]
+  // The person's INSERT lists its columns in a fixed order: id, names, email.
+  if (sql.includes('INSERT')) return params[3]
   // PATCH builds `SET a = ?, b = ?, …` in the order the keys were seen.
   const columns = sql.slice(sql.indexOf('SET ') + 4, sql.indexOf(' WHERE ')).split(', ')
   return params[columns.findIndex((c) => c.startsWith('email'))]
