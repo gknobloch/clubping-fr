@@ -653,6 +653,18 @@ invisible dans le diff comme dans la revue.
   faux qui reconnaît les requêtes à leur forme, et ne rend rien en production.
   `*.testkit.ts` est du côté des tests dans les deux tsconfig, et n'est pas une
   suite.
+- **Une adresse partagée se règle à la main, par l'administrateur général**
+  (étape 3). 0063 ne fusionnait qu'adresse **et** nom ; une adresse et deux
+  noms, c'est un parent et un enfant ou deux conjoints, et rien ne dit à qui
+  elle est. Sur `/demandes` (« Adresses partagées », tant qu'il en reste) et
+  sur la fiche, il désigne **qui la garde** : les autres n'ont plus d'adresse
+  et cette personne devient leur délégué (`POST
+  /people/:personId/address-to-delegate`) — le même accès qu'avant, par la
+  relation et non plus par une coïncidence de chaînes. `sharedAddresses` est
+  la seule dérivation des cas.
+- La route **relit l'adresse** plutôt que de croire l'écran (409 `not_shared`
+  si elle a changé depuis), et vide l'adresse et crée la délégation **dans un
+  seul batch** : entre les deux, l'enfant serait hors de portée du parent.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →

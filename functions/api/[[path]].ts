@@ -4837,6 +4837,47 @@ app.delete('/people/:personId/delegates/:delegateId', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * Settle an address two people share (#655, step 3): the delegate keeps it,
+ * and becomes the delegate of the person whose address is emptied — Sacha
+ * shares Benjamin's, so Benjamin manages Sacha. 0063 could not decide this:
+ * one address and two names is a parent and a child, or two spouses.
+ *
+ * The general admin's alone, as is naming a delegate for someone who cannot
+ * sign in. The address is re-read here rather than trusted from the screen:
+ * a list loaded an hour ago must not empty an address the person has since
+ * changed. Emptying and delegating land in one batch, so the profiles are
+ * never out of the delegate's reach between the two.
+ */
+app.post('/people/:personId/address-to-delegate', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  const d = await c.req.json<{ delegateId?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  if (typeof d.delegateId !== 'string' || !d.delegateId) return c.json({ error: 'bad_request' }, 400)
+  const delegateId = d.delegateId
+  if (delegateId === personId) return c.json({ error: 'self', message: DELEGATION_REFUSALS.self }, 400)
+
+  const found = await db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
+    .bind(personId, delegateId).all<{ id: string; email: string | null }>()
+  const person = found.results.find((r) => r.id === personId)
+  const delegate = found.results.find((r) => r.id === delegateId)
+  if (!person || !delegate) return c.json(notFound, 404)
+  const address = (r: { email: string | null }) => r.email?.trim().toLowerCase() ?? ''
+  if (!address(person) || address(person) !== address(delegate)) {
+    return c.json({ error: 'not_shared', message: "Ces deux personnes ne partagent plus d'adresse." }, 409)
+  }
+
+  await db.batch([
+    db.prepare('UPDATE people SET email = NULL WHERE id = ?').bind(personId),
+    // The person's fields are still mirrored on each club profile (#655, step 1).
+    db.prepare('UPDATE users SET email = NULL WHERE person_id = ?').bind(personId),
+    db.prepare('INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at) VALUES (?, ?, ?)')
+      .bind(personId, delegateId, Date.now()),
+  ])
+  return c.json({ ok: true })
+})
+
 // --- Club admins (#474) ---
 // A club admin is `users.role = 'club_admin'` + `users.club_id`, not a row of
 // its own — so these two routes are the whole feature. The rules they enforce

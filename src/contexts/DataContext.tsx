@@ -499,6 +499,8 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   addDelegate: (personId: string, target: { delegateId: string } | { email: string }) => Promise<DelegateResult>
   /** Withdraw a delegation, or step down from one. False when it did not land. */
   removeDelegate: (personId: string, delegateId: string) => Promise<boolean>
+  /** A shared address settled (#655): `delegateId` keeps it and becomes the delegate of `personId`, whose address is emptied. */
+  addressToDelegate: (personId: string, delegateId: string) => Promise<{ ok: true } | { ok: false; message: string }>
   /**
    * Declare or correct the club's affiliation to a federation other than the
    * FFTT (#643) — the FFTT number goes through `updateClub`.
@@ -2066,6 +2068,29 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [persist])
 
+  const addressToDelegate = useCallback(
+    async (personId: string, delegateId: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (persist) {
+        try {
+          const res = await fetch(`/api/people/${encodeURIComponent(personId)}/address-to-delegate`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ delegateId }),
+          })
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null
+            return { ok: false, message: body?.message ?? "L'opération a échoué." }
+          }
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // What the API emptied: the person's address, on every profile of theirs.
+      setUsers((prev) => prev.map((u) => (u.personId === personId ? { ...u, email: undefined } : u)))
+      setPlayers((prev) => prev.map((p) => (p.personId === personId ? { ...p, email: undefined } : p)))
+      return { ok: true }
+    },
+    [persist],
+  )
+
   // --- Club admins (#474) ---
   // Unlike every other mutation here, these wait for the API and report back:
   // the cap of 5 and the never-zero rule are enforced server-side, so an
@@ -2548,6 +2573,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       fetchDelegations,
       addDelegate,
       removeDelegate,
+      addressToDelegate,
       setClubAffiliation,
       removeClubAffiliation,
       archiveClub,
@@ -2650,7 +2676,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
