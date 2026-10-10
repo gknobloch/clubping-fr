@@ -6,6 +6,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { phaseScope } from '@/lib/phaseScope'
+import { rankingLabel } from '@/lib/ranking'
 import { FederationSwitch } from '@/components/FederationSwitch'
 import { CaptainIcon, ClockIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
@@ -788,7 +789,7 @@ export function TeamsPage() {
                       <tr>
                         <th className="px-3 py-2 text-left font-medium text-slate-700">Joueur</th>
                         <th className="px-3 py-2 text-left font-medium text-slate-700">Licence</th>
-                        <th className="px-3 py-2 text-left font-medium text-slate-700">Points (phase)</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-700">{rankingLabel(form.federationId)} (phase)</th>
                         <th className="px-3 py-2 text-center font-medium text-slate-700">Capitaine</th>
                         <th className="px-3 py-2 text-right font-medium text-slate-700"></th>
                       </tr>

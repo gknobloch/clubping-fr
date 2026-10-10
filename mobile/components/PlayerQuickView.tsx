@@ -5,6 +5,8 @@ import { gameDate } from '@/utils/matchdays'
 import { todayIso } from '@/utils/weeks'
 import { computeBrulage } from '@shared/lib/brulage'
 import { pointsFor } from '@shared/lib/phasePoints'
+import { rankingLabel } from '@shared/lib/ranking'
+import { federationOfPhase } from '@shared/lib/federations'
 import type { Team } from '@shared/types'
 
 // ---------------------------------------------------------------------------
@@ -43,7 +45,7 @@ export function PlayerQuickView({
   showProfile?: boolean
 }) {
   const {
-    players, teams, clubs, phases, matchDays, games, gameSelections, playerPhasePoints,
+    players, teams, clubs, phases, seasons = [], matchDays, games, gameSelections, playerPhasePoints,
   } = useAppData()
 
   const player = players.find((p) => p.id === playerId)
@@ -86,6 +88,7 @@ export function PlayerQuickView({
       player={player}
       phaseLabel={phaseLabel ?? (phase ? `Saison ${phase.displayName}` : undefined)}
       phasePoints={inPhase ? pointsFor(playerPhasePoints, inPhase, player.id) || undefined : undefined}
+      pointsLabel={rankingLabel(phase ? federationOfPhase(phase, seasons) : undefined)}
       gamesPlayed={history.filter((e) => e.isPast).length}
       gamesTotal={gamesTotal}
       team={team}

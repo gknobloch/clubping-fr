@@ -43,7 +43,17 @@ describe('MatchSheetView (#383)', () => {
   // rather than as an empty "pts".
   it('renders missing points as a dash', () => {
     setup({ players: [{ id: 'p1', firstName: 'Hugo', lastName: 'Bernard', points: '' }] })
-    expect(screen.getByText('— pts')).toBeInTheDocument()
+    // Two dashes: no licence on this line either.
+    expect(screen.getAllByText('—')).toHaveLength(2)
+    expect(screen.queryByText(/pts/)).not.toBeInTheDocument()
+  })
+
+  it('prints points at the FFTT and the classement at the AGR (#646)', () => {
+    const { unmount } = setup()
+    expect(screen.getByText('1200 pts')).toBeInTheDocument()
+    unmount()
+    setup({ federationId: 'agr', players: [{ id: 'p1', firstName: 'Hugo', lastName: 'Bernard', points: '45' }] })
+    expect(screen.getByText('Classement 45')).toBeInTheDocument()
   })
 
   it('defaults to A.. at home and ..Z away', () => {

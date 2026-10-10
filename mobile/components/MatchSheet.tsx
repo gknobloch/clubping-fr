@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { formatRanking } from '@shared/lib/ranking'
 import {
   ScrollView, StyleSheet, Text, TouchableOpacity, View,
   PanResponder, type PanResponderInstance,
@@ -26,12 +27,15 @@ export function MatchSheet({
   clubName,
   affiliationNumber,
   players,
+  federationId,
   onClose,
 }: {
   matchup: string
   clubName: string
   affiliationNumber: string
   players: MatchSheetPlayer[]
+  /** Whose ranking the values are: « 1731 pts », or « Classement 45 » at the AGR (#646). */
+  federationId?: string
   onClose: () => void
 }) {
   const byKey = useMemo(() => new Map(players.map((p, i) => [String(i), p])), [players])
@@ -130,7 +134,7 @@ export function MatchSheet({
               </View>
               <View style={s.playerMeta}>
                 <Text style={s.license}>{p.license ?? '—'}</Text>
-                <Text style={s.points}>{p.points ?? '—'} pts</Text>
+                <Text style={s.points}>{formatRanking(p.points, federationId)}</Text>
               </View>
             </View>
           )

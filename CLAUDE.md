@@ -712,6 +712,22 @@ invisible dans le diff comme dans la revue.
 - Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
   page : la phase de la FFTT n'a pas de division AGR.
 
+### Points et classement (#646)
+- **La FFTT classe par points (plus haut = mieux), l'AGR par un classement
+  (plus bas = mieux)**, 25 à 80 sur la liste de Landser. Les deux se rangent
+  dans `player_phase_points`, clé (phase, joueur) : une phase est à une seule
+  fédération (#645), donc la clé dit à qui est la valeur.
+- `src/lib/ranking.ts` est la règle : `rankingLabel` (« Points » /
+  « Classement »), `formatRanking` (« 1731 pts » / « Classement 45 », « — »
+  sans valeur) et **`compareRanking`, la seule comparaison** pour tout ce qui
+  trie ou désigne « le mieux classé » — égalités permises, sans valeur en
+  dernier. Une table dans le code plutôt que des colonnes : deux fédérations,
+  connues ; une troisième ajouterait une ligne.
+- **Une valeur par fédération du club** (`currentRankings`) : un membre de
+  Kembs a ses points FFTT et son classement AGR, chacun sous son nom (et le
+  nom de la fédération quand il y en a deux). Les équipes « de cette phase »
+  sont celles de la phase active de chaque fédération (`activePhaseIdsOf`).
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

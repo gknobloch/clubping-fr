@@ -11,7 +11,6 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
 import { fonts } from '@/constants/typography'
-import { pointsFor } from '@shared/lib/phasePoints'
 import { categoryFor } from '@shared/lib/seasonCategories'
 import { categoryDisplay } from '@shared/lib/playerCategories'
 import { clubLicences } from '@shared/lib/seasonLicences'
@@ -25,7 +24,8 @@ import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared
 import { ChecklistSheet } from '@/components/ChecklistSheet'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
 import { activeSeasonId } from '@shared/lib/season'
-import { activePhaseOf } from '@shared/lib/federations'
+import { activePhaseIdsOf, activePhaseOf, clubFederationIds } from '@shared/lib/federations'
+import { currentRankings } from '@shared/lib/ranking'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -98,14 +98,21 @@ export function PlayerDetail({
     else router.push({ pathname: '/membres', params: { groupes: groupId } })
   }
 
-  const activePhase = activePhaseOf(phases, seasons)
+  // Each federation of the club has its active phase (#645).
+  const playerFederations = club ? clubFederationIds(club) : ['fftt']
+  const activePhaseIds = activePhaseIdsOf(phases, seasons, playerFederations)
   const playerTeams = teams.filter(
-    (t) => t.phaseId === activePhase?.id && t.playerIds?.includes(id ?? ''),
+    (t) => activePhaseIds.includes(t.phaseId) && t.playerIds?.includes(id ?? ''),
   )
 
   // Points belong to (phase, player) since #384 — a player with no team this
-  // phase still has them.
-  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, id)
+  // phase still has them. One per federation, each under its own name: points
+  // at the FFTT, a classement at the AGR (#646).
+  const rankings = currentRankings({
+    playerId: id, federationIds: playerFederations, phases, seasons, rows: playerPhasePoints,
+  })
+  const rankingRowLabel = (r: { federationId: string; label: string }) =>
+    rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
 
   // A category belongs to a season, not to the licensee (#482): a cadet becomes
   // a junior, and last season's answer is not this season's.
@@ -120,6 +127,8 @@ export function PlayerDetail({
   //
   // Over the whole phase, with no `asOfMatchDayId`: a fiche is not being read
   // from inside one match-day, so the question is simply where they stand now.
+  // The FFTT's rule, in the FFTT's active phase: the AGR's brûlage is #651.
+  const activePhase = activePhaseOf(phases, seasons)
   const brulageTeam = (() => {
     if (!player || !activePhase) return null
     const clubTeamsInPhase = teams.filter(
@@ -190,7 +199,7 @@ export function PlayerDetail({
             <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
           ))}
           <InfoRow label="Catégorie" value={category || 'Inconnue'} />
-          {phasePoints && <InfoRow label="Points" value={phasePoints} />}
+          {rankings.map((r) => <InfoRow key={r.federationId} label={rankingRowLabel(r)} value={r.value} />)}
           {/* Same badge as the quick view, `danger` and all: the two screens
               show one licensee, and a rule that looked different depending on
               which you opened would be worse than one screen not showing it. */}

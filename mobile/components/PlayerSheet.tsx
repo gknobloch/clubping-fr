@@ -45,6 +45,7 @@ export function PlayerSheet({
   player,
   phaseLabel,
   phasePoints,
+  pointsLabel = 'Points',
   gamesPlayed,
   gamesTotal,
   team,
@@ -58,6 +59,8 @@ export function PlayerSheet({
   /** e.g. "Saison 2025/2026 Phase 2" — used as section heading above phase stats */
   phaseLabel?: string
   phasePoints?: string
+  /** « Points » at the FFTT, « Classement » at the AGR (#646). */
+  pointsLabel?: string
   gamesPlayed: number
   /** When provided, "Matchs joués" reads "played / total". */
   gamesTotal?: number
@@ -127,7 +130,7 @@ export function PlayerSheet({
         <View style={s.rows}>
           {phasePoints && (
             <View style={s.row}>
-              <Text style={s.label}>Points</Text>
+              <Text style={s.label}>{pointsLabel}</Text>
               <Text style={s.value}>{phasePoints}</Text>
             </View>
           )}
