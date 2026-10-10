@@ -1,4 +1,4 @@
--- 0065 — reads go through the person (#655, fourth step)
+-- 0066 — reads go through the person (#655, fourth step)
 --
 --   profiles   a club profile with its person's fields: what `users` was
 --

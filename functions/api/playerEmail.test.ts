@@ -40,7 +40,7 @@ const send = (db: D1Database, path: string, method: string, body: unknown) =>
 /**
  * The parameter bound to `email` by the statement that wrote the address: the
  * new person on a creation (#655 — a profile carries no address of its own
- * since 0065), the member's row on a PATCH of a profile with no person.
+ * since 0066), the member's row on a PATCH of a profile with no person.
  */
 function boundEmail(statements: { sql: string; params: unknown[] }[]): unknown {
   const write = statements.filter((s) => /INSERT OR IGNORE INTO people|UPDATE (users|people)/.test(s.sql)).pop()

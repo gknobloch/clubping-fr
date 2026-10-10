@@ -5,13 +5,13 @@
 import { describe, expect, it } from 'vitest'
 import { addMember, migratedD1 } from './migratedD1.testkit'
 
-// #655, step 4 — the API reads a club profile through `profiles` (0065): the
+// #655, step 4 — the API reads a club profile through `profiles` (0066): the
 // row of `users`, with its person's fields taken from `people`.
 
 const columns = (d1: ReturnType<typeof migratedD1>, table: string) =>
   d1.rows<{ name: string }>(`SELECT name FROM pragma_table_info('${table}')`).map((c) => c.name).sort()
 
-describe('the profiles view (0065)', () => {
+describe('the profiles view (0066)', () => {
   it('has every column of users — a column added to users must be added to the view', () => {
     const d1 = migratedD1()
     // email_pre_0060 is the emptied UNIQUE column 0060 left behind; nothing reads it.

@@ -82,7 +82,7 @@ const patch = (db: D1Database, id: string, body: unknown) =>
 const routeWrites = (writes: Write[]) => writes.filter((w) => !/last_seen_at/.test(w.sql))
 
 describe('PATCH /players/:id — the person behind the profile (#655)', () => {
-  it("writes a person's phone on the person alone — every profile reads it there (0065)", async () => {
+  it("writes a person's phone on the person alone — every profile reads it there (0066)", async () => {
     const { db, writes } = fakeDb('ca')
     expect((await patch(db, 'sam', { phone: '0633' })).status).toBe(200)
     const written = routeWrites(writes)

@@ -18,7 +18,7 @@
 -- reach this database. The deletes at the foot of this file are a safety net
 -- for a load that bypassed that flag, not the primary mechanism (#359).
 
--- Since 0065 the person (#655) is the truth for name, address and phone: the
+-- Since 0066 the person (#655) is the truth for name, address and phone: the
 -- API reads them from `people`, and the copies on `users` are stale. So the
 -- PERSON is pseudonymised, and every profile's copy is then overwritten from it
 -- — the stale copies hold real data too, and must not survive either.
@@ -76,7 +76,7 @@ UPDATE people SET
   birth_place = NULL;
 
 -- Every profile's copy, overwritten from its person; a profile with no person
--- (none should exist since 0065) is emptied rather than left holding real data.
+-- (none should exist since 0066) is emptied rather than left holding real data.
 UPDATE users SET
   first_name = (SELECT p.first_name FROM people p WHERE p.id = users.person_id),
   last_name = (SELECT p.last_name FROM people p WHERE p.id = users.person_id),
