@@ -4878,6 +4878,69 @@ app.post('/people/:personId/address-to-delegate', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * Two people who are one (#655): the same human created twice — most often a
+ * general admin's profile, written without a name, beside the profiles they
+ * play under, which 0063 could not fold for want of the same name. `personId`
+ * joins `targetId`: its profiles, its delegations, and whatever it knew that
+ * the target left blank. The target's own fields win — it is the one chosen to
+ * stay.
+ *
+ * The general admin's alone, and only for two people who share an address —
+ * the one fact that says they might be one, re-read here like the hand-over
+ * above. Everything lands in one batch: half a merge is a profile pointing at
+ * a person who no longer exists.
+ */
+app.post('/people/:personId/merge-into', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  const d = await c.req.json<{ targetId?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  if (typeof d.targetId !== 'string' || !d.targetId) return c.json({ error: 'bad_request' }, 400)
+  const targetId = d.targetId
+  if (targetId === personId) return c.json({ error: 'self' }, 400)
+
+  const found = await db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
+    .bind(personId, targetId).all<{ id: string; email: string | null }>()
+  const person = found.results.find((r) => r.id === personId)
+  const target = found.results.find((r) => r.id === targetId)
+  if (!person || !target) return c.json(notFound, 404)
+  const address = (r: { email: string | null }) => r.email?.trim().toLowerCase() ?? ''
+  if (!address(person) || address(person) !== address(target)) {
+    return c.json({ error: 'not_shared', message: "Ces deux personnes ne partagent plus d'adresse." }, 409)
+  }
+
+  const fill = (col: string) => `${col} = COALESCE(NULLIF(${col}, ''), (SELECT NULLIF(${col}, '') FROM people WHERE id = ?))`
+  await db.batch([
+    db.prepare(
+      `UPDATE people SET ${['first_name', 'last_name', 'birth_date', 'birth_place'].map(fill).join(', ')},
+         phone = COALESCE(NULLIF(phone, ''), (SELECT phone FROM people WHERE id = ?), '')
+       WHERE id = ?`,
+    ).bind(personId, personId, personId, personId, personId, targetId),
+    // Delegations follow the person, never onto themselves.
+    db.prepare(
+      `INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at)
+         SELECT ?, delegate_id, created_at FROM person_delegates WHERE person_id = ? AND delegate_id != ?`,
+    ).bind(targetId, personId, targetId),
+    db.prepare(
+      `INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at)
+         SELECT person_id, ?, created_at FROM person_delegates WHERE delegate_id = ? AND person_id != ?`,
+    ).bind(targetId, personId, targetId),
+    db.prepare('DELETE FROM person_delegates WHERE person_id = ? OR delegate_id = ?').bind(personId, personId),
+    db.prepare('UPDATE users SET person_id = ? WHERE person_id = ?').bind(targetId, personId),
+    // The person's fields are still mirrored on each club profile (#655, step 1).
+    db.prepare(
+      `UPDATE users SET
+         first_name = (SELECT first_name FROM people WHERE id = ?), last_name = (SELECT last_name FROM people WHERE id = ?),
+         email = (SELECT email FROM people WHERE id = ?), phone = (SELECT COALESCE(phone, '') FROM people WHERE id = ?),
+         birth_date = (SELECT birth_date FROM people WHERE id = ?), birth_place = (SELECT birth_place FROM people WHERE id = ?)
+       WHERE person_id = ?`,
+    ).bind(targetId, targetId, targetId, targetId, targetId, targetId, targetId),
+    db.prepare('DELETE FROM people WHERE id = ?').bind(personId),
+  ])
+  return c.json({ ok: true })
+})
+
 // --- Club admins (#474) ---
 // A club admin is `users.role = 'club_admin'` + `users.club_id`, not a row of
 // its own — so these two routes are the whole feature. The rules they enforce

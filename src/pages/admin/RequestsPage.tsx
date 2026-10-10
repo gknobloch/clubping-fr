@@ -159,7 +159,8 @@ export function RequestsPage() {
           <p className="text-sm text-slate-600">
             Plusieurs personnes se connectent avec la même adresse — un parent et son enfant, le plus
             souvent. Choisissez qui la garde : les autres n’ont plus d’adresse, et cette personne devient
-            leur délégué, avec le même accès à leurs profils qu’aujourd’hui.
+            leur délégué, avec le même accès à leurs profils qu’aujourd’hui. Si ce sont deux fiches d’une
+            même personne — un profil d’administration générale sans nom, par exemple —, réunissez-les.
           </p>
           <SharedAddresses />
         </section>
