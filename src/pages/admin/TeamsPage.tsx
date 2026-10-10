@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
-import { orderPhases, defaultPhase } from '@/lib/phases'
+import { phaseScope } from '@/lib/phaseScope'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { CaptainIcon, ClockIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -82,11 +83,18 @@ export function TeamsPage() {
   const archivedTeams = useMemo(() => allVisibleTeams.filter((t) => t.isArchived), [allVisibleTeams])
   const teamsInScope = showArchived ? allVisibleTeams : activeTeams
 
-  // Phase switcher — defaults to the active phase, chronological order (#432).
-  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
+  // The federation first, then its phases (#645) — defaults to its active
+  // phase, chronological order (#432). A club of one federation is not asked.
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
+  const scope = phaseScope({ federations, seasons, phases, club: scopedClub, chosen: chosenFederation })
+  const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? defaultPhase(phases)
+  const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
+  const changeFederation = (federationId: string) => {
+    setChosenFederation(federationId)
+    setPhaseId(undefined)
+  }
 
   const teams = useMemo(
     () => teamsInScope.filter((t) => t.phaseId === phase?.id).sort((a, b) => a.number - b.number),
@@ -153,6 +161,20 @@ export function TeamsPage() {
   const federationOptions = federationChoices(federations, dialogClub)
   const firstFederationOf = (club: Club | undefined) =>
     federationChoices(federations, club)[0]?.id ?? FFTT_FEDERATION_ID
+  /** The federation a club keeps when it is in it — the page's, or the one already picked — else its first. */
+  const federationFor = (club: Club | undefined, preferred: string) =>
+    federationChoices(federations, club).some((f) => f.id === preferred) ? preferred : firstFederationOf(club)
+  /** One federation's phases for the dialog — a team's phase is its federation's (#645). */
+  const phasesIn = (federationId: string) =>
+    phaseScope({ federations, seasons, phases, chosen: federationId }).phases
+  /** Federation, phase, division and poule together: the phase kept when it is that federation's. */
+  const placementIn = (federationId: string, preferredPhaseId: string) => {
+    const own = phasesIn(federationId)
+    const nextPhaseId = own.some((p) => p.id === preferredPhaseId)
+      ? preferredPhaseId
+      : phaseScope({ federations, seasons, phases, chosen: federationId }).defaultPhase?.id ?? ''
+    return { federationId, phaseId: nextPhaseId, ...firstPlacement(nextPhaseId, federationId) }
+  }
   const divisionsIn = (inPhaseId: string, federationId: string) =>
     inPhaseId ? divisionsOfFederation(divisions, competitions, federationId).filter((d) => d.phaseId === inPhaseId) : []
   const divisionsInPhase = divisionsIn(form.phaseId, form.federationId)
@@ -274,16 +296,13 @@ export function TeamsPage() {
     setEditing(null)
     setCreating(true)
     const firstClub = clubsForSelect[0]
-    // The phase on screen, not the first one ever created.
-    const firstPhase = phase ?? phases[0]
-    const federationId = firstFederationOf(firstClub)
+    // The federation and phase on screen (#645), not the first ones ever created.
+    const placement = placementIn(federationFor(firstClub, scope.federationId), phase?.id ?? '')
     const defaultAddr = firstClub?.addresses?.find((a) => a.isDefault) ?? firstClub?.addresses?.[0]
     setForm({
       clubId: firstClub?.id ?? '',
-      phaseId: firstPhase?.id ?? '',
       number: 1,
-      federationId,
-      ...firstPlacement(firstPhase?.id ?? '', federationId),
+      ...placement,
       gameLocationId: defaultAddr?.id ?? '',
       defaultDay: 'Jeudi',
       defaultTime: '20h00',
@@ -412,7 +431,9 @@ export function TeamsPage() {
           )
         }
         controls={
-          phase ? (
+          <>
+          <FederationSwitch options={scope.options} value={scope.federationId} onChange={changeFederation} />
+          {phase ? (
             <div className="flex h-11 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:h-9">
               <PhaseSwitchButton
                 dir="prev"
@@ -428,7 +449,8 @@ export function TeamsPage() {
                 onClick={() => phaseIndex < orderedPhases.length - 1 && setPhaseId(orderedPhases[phaseIndex + 1].id)}
               />
             </div>
-          ) : undefined
+          ) : null}
+          </>
         }
       />
       {importOpen && (
@@ -571,11 +593,11 @@ export function TeamsPage() {
                     value={form.clubId}
                     onChange={(e) => {
                       const clubId = e.target.value
-                      const federationId = firstFederationOf(clubs.find((c) => c.id === clubId))
+                      const federationId = federationFor(clubs.find((c) => c.id === clubId), form.federationId)
                       setForm((f) => ({
                         ...f, clubId, gameLocationId: '', captainId: '', playerIds: [],
                         // Another club may not be in the federation picked for the first.
-                        ...(f.federationId === federationId ? {} : { federationId, ...firstPlacement(f.phaseId, federationId) }),
+                        ...(f.federationId === federationId ? {} : placementIn(federationId, f.phaseId)),
                       }))
                     }}
                     disabled={!!editing}
@@ -628,9 +650,7 @@ export function TeamsPage() {
                   id="team-federationId"
                   options={federationOptions}
                   value={form.federationId}
-                  onChange={(federationId) =>
-                    setForm((f) => ({ ...f, federationId, ...firstPlacement(f.phaseId, federationId) }))
-                  }
+                  onChange={(federationId) => setForm((f) => ({ ...f, ...placementIn(federationId, f.phaseId) }))}
                   wide
                 />
               )}
@@ -653,7 +673,7 @@ export function TeamsPage() {
                     }}
                     className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100 disabled:text-slate-500"
                   >
-                    {phases.map((p) => (
+                    {(creating ? phasesIn(form.federationId) : phases.filter((p) => p.id === form.phaseId)).map((p) => (
                       <option key={p.id} value={p.id}>{p.displayName}</option>
                     ))}
                   </select>
