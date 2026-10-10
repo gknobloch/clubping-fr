@@ -10,10 +10,10 @@ import { PersonDelegates } from '@/components/PersonDelegates'
 import { hasOtherProfiles } from '@/lib/profiles'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
-import { pointsFor } from '@/lib/phasePoints'
+import { currentRankings } from '@/lib/ranking'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { licenceLabel, licencesOf } from '@/lib/licences'
-import { activePhaseOf } from '@/lib/federations'
+import { activePhaseIdsOf, clubFederationIds } from '@/lib/federations'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
@@ -24,9 +24,16 @@ export function ComptePage() {
 
   const me = user?.isPlayer ? players.find((p) => p.id === user.id) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
-  const activePhase = activePhaseOf(phases, seasons)
-  const myTeams = me && activePhase ? teams.filter((t) => t.phaseId === activePhase.id && t.playerIds.includes(me.id)) : []
-  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, me?.id)
+  // Each federation of the club has its active phase (#645), and its own
+  // ranking — points at the FFTT, a classement at the AGR (#646).
+  const myFederations = myClub ? clubFederationIds(myClub) : ['fftt']
+  const activePhaseIds = activePhaseIdsOf(phases, seasons, myFederations)
+  const myTeams = me ? teams.filter((t) => activePhaseIds.includes(t.phaseId) && t.playerIds.includes(me.id)) : []
+  const rankings = currentRankings({
+    playerId: me?.id, federationIds: myFederations, phases, seasons, rows: playerPhasePoints,
+  })
+  const rankingRowLabel = (r: { federationId: string; label: string }) =>
+    rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
 
   const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -177,7 +184,7 @@ export function ComptePage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profil</h2>
           <dl className="mt-2 divide-y divide-slate-100">
             {myClub && <InfoRow label="Club" value={myClub.displayName} />}
-            {phasePoints && <InfoRow label="Points" value={phasePoints} />}
+            {rankings.map((r) => <InfoRow key={r.federationId} label={rankingRowLabel(r)} value={r.value} />)}
             {myTeams.map((t) => (
               <div key={t.id} className="flex items-center justify-between py-2.5">
                 <dt className="text-sm text-slate-500">Équipe</dt>

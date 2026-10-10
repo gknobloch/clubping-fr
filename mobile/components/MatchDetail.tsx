@@ -440,6 +440,7 @@ export function MatchDetail({
             clubName={club?.displayName ?? ''}
             affiliationNumber={club?.affiliationNumber ?? ''}
             players={sheetPlayers}
+            federationId={federationOfTeam(team, divisions, competitions)}
             onClose={() => setShowSheet(false)}
           />
         )

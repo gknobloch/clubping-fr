@@ -356,6 +356,7 @@ export function MatchDayDetailPage() {
           affiliationNumber={clubs.find((c) => c.id === team.clubId)?.affiliationNumber}
           players={lineUp}
           isHome={isHome}
+          federationId={federationOfTeam(team, divisions, competitions)}
           onClose={() => setShowingSheet(false)}
         />
       )}

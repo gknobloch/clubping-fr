@@ -11,6 +11,8 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
 import type { Team } from '@/types'
+import { rankingLabel } from '@/lib/ranking'
+import { federationOfPhase } from '@/lib/federations'
 import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 type HistoryEntry = {
@@ -32,6 +34,8 @@ type PhaseBlock = {
   team?: Team
   isCaptain: boolean
   points?: string
+  /** « Points » or « Classement »: the phase's federation decides (#646). */
+  pointsLabel: string
   brulageTeam: Team | null
   /** Played / total past games for `team` this phase — undefined with no rostered team. */
   played?: number
@@ -141,6 +145,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           // Points follow the phase, not the roster (#384), so a phase where
           // the player had no team still shows what they were worth.
           points: pointsFor(playerPhasePoints, ph.id, playerId),
+          pointsLabel: rankingLabel(federationOfPhase(ph, seasons)),
           brulageTeam,
           played,
           total,
@@ -148,7 +153,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           history: rows.sort((a, b) => a.raw.localeCompare(b.raw)).map((r) => r.e),
         }
       })
-  }, [player, playerId, teams, phases, matchDays, games, gameSelections, playerPhasePoints, clubs, today])
+  }, [player, playerId, teams, phases, seasons, matchDays, games, gameSelections, playerPhasePoints, clubs, today])
 
   if (phaseBlocks.length === 0) return null
 
@@ -217,7 +222,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
               )}
             </div>
             <dl className="divide-y divide-slate-100 px-5">
-              {b.points && <InfoRow label="Points" value={b.points} />}
+              {b.points && <InfoRow label={b.pointsLabel} value={b.points} />}
               {b.team && (
                 <TeamRow
                   label="Équipe"

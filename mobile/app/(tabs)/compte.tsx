@@ -11,7 +11,7 @@ import { getTeamName, getRoleLabel } from '@/utils/roles'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
-import { pointsFor } from '@shared/lib/phasePoints'
+import { currentRankings } from '@shared/lib/ranking'
 import { setNotificationPreferences, setNotificationsEnabled } from '@/utils/push'
 import {
   LEAD_DAY_CHOICES, NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, hasChoosableLead,
@@ -25,7 +25,7 @@ import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
 import { DelegationsSection } from '@/components/DelegationsSection'
 import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
-import { activePhaseOf } from '@shared/lib/federations'
+import { activePhaseIdsOf, clubFederationIds } from '@shared/lib/federations'
 
 /**
  * Ce qu'un membre change sur lui-même — `OWN_PROFILE_FIELDS` côté API (#558),
@@ -65,11 +65,18 @@ export default function MonCompteScreen() {
   const player = user?.isPlayer ? players.find((p) => p.id === user.id) : null
   const club = player ? clubs.find((c) => c.id === player.clubId) : null
 
-  const activePhase = activePhaseOf(phases, seasons)
+  // Each federation of the club has its active phase (#645) and its own
+  // ranking — points at the FFTT, a classement at the AGR (#646).
+  const myFederations = club ? clubFederationIds(club) : ['fftt']
+  const activePhaseIds = activePhaseIdsOf(phases, seasons, myFederations)
   const playerTeams = player
-    ? teams.filter((t) => t.phaseId === activePhase?.id && t.playerIds?.includes(player.id))
+    ? teams.filter((t) => activePhaseIds.includes(t.phaseId) && t.playerIds?.includes(player.id))
     : []
-  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, player?.id)
+  const rankings = currentRankings({
+    playerId: player?.id, federationIds: myFederations, phases, seasons, rows: playerPhasePoints,
+  })
+  const rankingRowLabel = (r: { federationId: string; label: string }) =>
+    rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
 
   // Optimistic, and put back on failure: a switch that stays where it was put
   // while the server never heard is the one thing this must not do.
@@ -220,7 +227,7 @@ export default function MonCompteScreen() {
             {licencesOf(player).map((l) => (
               <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
             ))}
-            {phasePoints && <InfoRow label="Points" value={phasePoints} />}
+            {rankings.map((r) => <InfoRow key={r.federationId} label={rankingRowLabel(r)} value={r.value} />)}
             {playerTeams.map((t) => (
               <View key={t.id} style={styles.teamRow}>
                 <View style={[styles.colorDot, { backgroundColor: t.color ?? colors.accent }]} />

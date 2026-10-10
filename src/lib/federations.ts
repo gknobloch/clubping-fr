@@ -69,6 +69,18 @@ export function activePhaseOf<P extends Pick<Phase, 'seasonId' | 'status'>>(
 }
 
 /**
+ * The active phase of each of these federations — a member of Kembs plays in
+ * the FFTT's and in the AGR's at the same time (#645).
+ */
+export function activePhaseIdsOf(
+  phases: ReadonlyArray<Pick<Phase, 'id' | 'seasonId' | 'status'>>,
+  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
+  federationIds: readonly string[],
+): string[] {
+  return federationIds.flatMap((f) => activePhaseOf(phases, seasons, f)?.id ?? [])
+}
+
+/**
  * The divisions played in one federation — what a division picker offers once
  * the federation is chosen. A picker listing every federation's divisions at
  * once mixes "GE 3" with "Promotion Honneur", and offers a club a division of
