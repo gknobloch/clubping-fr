@@ -639,7 +639,7 @@ invisible dans le diff comme dans la revue.
   construction : un délégué n'atteint jamais les délégations de celui qui
   délègue. Plusieurs délégués par personne, plusieurs personnes par délégué.
 - **Qui délègue** : la personne (dans « Mon compte », par l'adresse de son
-  délégué) et l'administrateur général (sur la fiche, en choisissant un membre —
+  délégué — sur le web comme dans l'app, `DelegationsSection`) et l'administrateur général (sur la fiche, en choisissant un membre —
   pour qui ne peut pas se connecter). Un délégué peut **se retirer** (« Ne plus
   gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Aucun
   administrateur de club. Une adresse qu'aucun compte n'utilise, ou que
