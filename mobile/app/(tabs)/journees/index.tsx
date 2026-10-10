@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { orderPhases, defaultPhase } from '@shared/lib/phases'
+import { phaseScope } from '@shared/lib/phaseScope'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
@@ -36,7 +37,7 @@ import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/t
 import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
 import { federationOfTeam, licenceOf } from '@shared/lib/licences'
-import { FFTT_FEDERATION_ID } from '@shared/lib/federations'
+import { FFTT_FEDERATION_ID, federationOfPhase } from '@shared/lib/federations'
 import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ function shortDate(iso: string): string {
 export default function JourneesScreen() {
   const { user } = useAuth()
   const {
-    clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
+    clubs, seasons, federations = [], teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
     playerSeasonCategories, competitions, competitionGroups, memberGroups,
     setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
@@ -133,15 +134,23 @@ export default function JourneesScreen() {
   const myClubId = user?.clubId
   const myPlayerId = user?.isPlayer ? user.id : undefined
 
-  // Phases ordered for the < > switcher (chronological by name); default active.
-  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
-  const fallbackPhase = useMemo(() => defaultPhase(phases), [phases])
   // Opened on one journée (#608): the accueil's « Prochaines journées » pushes
   // this screen with the round it names. Read once, as the starting point —
   // the switchers are the member's from then on.
   const opened = useLocalSearchParams<{ phase?: string; journee?: string }>()
+  // The federation first, then its phases (#645) — the phase a link names
+  // opens on its own federation. Ordered for the < > switcher, active first.
+  const myClub = clubs.find((c) => c.id === user?.clubId)
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(() => {
+    const openedPhase = opened.phase ? phases.find((p) => p.id === opened.phase) : undefined
+    return openedPhase ? federationOfPhase(openedPhase, seasons) : undefined
+  })
+  const scope = phaseScope({
+    federations, seasons, phases, club: user?.role === 'general_admin' ? undefined : myClub, chosen: chosenFederation,
+  })
+  const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(opened.phase || undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
+  const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   const clubTeams = useMemo(
@@ -206,6 +215,12 @@ export default function JourneesScreen() {
     if (!p) return
     setPhaseId(p.id)
     setMdNumber(null) // reset to the new phase's active match-day
+  }
+
+  function selectFederation(federationId: string) {
+    setChosenFederation(federationId)
+    setPhaseId(undefined)
+    setMdNumber(null)
   }
 
   // Division / playersPerGame helpers
@@ -596,13 +611,18 @@ export default function JourneesScreen() {
     )
   }
 
-  const phaseSwitcher = phase ? (
-    <Switcher
-      title={`Saison ${phase.displayName}`}
-      onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
-      onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
-    />
-  ) : null
+  const phaseSwitcher = (
+    <>
+      <FederationSwitch options={scope.options} value={scope.federationId} onChange={selectFederation} />
+      {phase ? (
+        <Switcher
+          title={`Saison ${phase.displayName}`}
+          onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
+          onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
+        />
+      ) : null}
+    </>
+  )
 
   const sheet = editing && (
     <AvailabilitySheet
