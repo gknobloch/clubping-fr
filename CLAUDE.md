@@ -593,14 +593,16 @@ invisible dans le diff comme dans la revue.
 - **L'API lit un profil par la vue `profiles`** (0066, étape 4) : la ligne de
   `users`, avec les champs de la personne pris dans `people`. Toute lecture
   passe par elle — `FROM profiles`, jamais `FROM users` ; écrire et supprimer
-  restent sur la table. Les champs de la personne ne s'écrivent plus que dans
-  `people` : les colonnes de `users` sont des copies **périmées**, qui partent
-  dans un déploiement ultérieur (#410, étape 5). Ne rien y lire.
+  restent sur la table. Les champs de la personne ne s'écrivent que dans
+  `people` : `users` ne les porte plus depuis 0067 (étape 5, un `DROP COLUMN`
+  dans son propre déploiement, après celui de 0066 — #410). Seule reste
+  `email_pre_0060`, vide, que SQLite ne sait pas supprimer.
 - **La vue nomme ses colonnes** : une colonne ajoutée à `users` doit l'être à
   `profiles` aussi, et `profilesView.test.ts` casse le build sur la première
-  oubliée. Un champ de la personne vaut celui de la personne **même NULL** —
-  l'adresse vidée de Sacha ne doit pas laisser voir la copie (`CASE`, jamais
-  `COALESCE`).
+  oubliée. Pour la recréer : `DROP VIEW` puis `CREATE VIEW`, dans une
+  migration — jamais toucher à `users` pour elle.
+- **Le seed liste ses membres une fois**, dans une table de passage
+  (`seed_members`), puis les répartit entre `people` et `users`.
 - **Le rattrapage** : une personne par ligne, puis les lignes de même adresse
   **et** de même nom fusionnées — la règle de #640. La personne gardée est celle
   du profil **le plus ancien** (son orthographe), et elle reprend le téléphone
@@ -626,13 +628,12 @@ invisible dans le diff comme dans la revue.
   plus que pour un cache d'avant #655.
 - **L'anonymisation de la base dev** donne un pseudonyme par personne (sinon
   les deux profils de Gilles se liraient comme deux inconnus) : elle réécrit
-  `people`, puis écrase les copies de `users` depuis la personne — périmées,
-  elles portent encore de vraies données. Une personne sans adresse le reste.
+  `people`, où sont le nom, l'adresse et le téléphone. Une personne sans
+  adresse le reste.
   Elle anonymise aussi les licences des autres fédérations (#644) et les
   affiliations des clubs (#643) ; `refresh-dev-db.sh` vérifie les trois.
-- Un profil écrit entre la migration et la bascule du worker n'a pas de
-  personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
-  garde ses champs sur sa ligne, comme avant.
+- **Tout profil a sa personne** : 0066 en a donné une à ceux écrits pendant
+  le déploiement de 0063, et chaque création écrit la personne d'abord.
 - **Ce qu'un profil atteint est une seule relation, `reaches`**
   (`functions/api/reach.ts`) : les profils de sa personne, ceux des personnes
   qui lui ont délégué, et — le temps du nettoyage — ceux de la même adresse

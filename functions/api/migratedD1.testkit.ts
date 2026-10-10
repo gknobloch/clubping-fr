@@ -82,9 +82,10 @@ export function addMember(
     `INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone) VALUES (?, ?, ?, ?, '')`,
     personId, m.firstName, m.lastName ?? 'Henaut', m.email ?? null,
   )
+  // The name and the address are the person's: `users` has carried none since 0067.
   exec(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, status, club_id, last_seen_at, person_id)
-     VALUES (?, ?, ?, 1, ?, ?, '', '', 'active', ?, ?, ?)`,
-    m.id, m.email ?? null, m.role ?? 'player', m.firstName, m.lastName ?? 'Henaut', m.clubId ?? null, m.lastSeenAt ?? null, personId,
+    `INSERT INTO users (id, role, is_player, license_number, status, club_id, last_seen_at, person_id)
+     VALUES (?, ?, 1, '', 'active', ?, ?, ?)`,
+    m.id, m.role ?? 'player', m.clubId ?? null, m.lastSeenAt ?? null, personId,
   )
 }

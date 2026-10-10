@@ -149,12 +149,12 @@ describe('one person, several clubs (#655)', () => {
     expect((await post(db, 'switch', { userId: 'gilles-lan' }, body.token)).status).toBe(200)
   })
 
-  // The person is the link, not the address: changing it on one profile
-  // leaves the other in reach — which an address-only rule could not.
+  // The person is the link, not the address: changing the address leaves the
+  // other profile in reach — which an address-only rule could not.
   it('keeps both in reach whatever the address of either says', async () => {
     const { db, exec } = await world(gilles)
     const { token } = await signIn(db, 'gilles@example.fr')
-    exec("UPDATE users SET email = 'g.k@example.fr' WHERE id = 'gilles-lan'")
+    exec("UPDATE people SET email = 'g.k@example.fr' WHERE id = (SELECT person_id FROM users WHERE id = 'gilles-lan')")
     expect((await post(db, 'switch', { userId: 'gilles-lan' }, token)).status).toBe(200)
   })
 })

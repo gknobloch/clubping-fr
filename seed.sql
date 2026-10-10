@@ -373,8 +373,18 @@ INSERT INTO game_availabilities (game_id, player_id, status, overridden_by) VALU
   ('g7-8', 'p2-player-33', 'available', NULL),
   ('g7-8', 'p2-player-35', 'unavailable', NULL);
 
--- users
-INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id) VALUES
+-- users — and the person behind each one (#655). Since 0067 `users` is the
+-- club profile alone, and the name, address and phone are the person's: the
+-- members are listed once, in a scratch table, then split into the two and
+-- the scratch table dropped. Fabrice and Bastien Dangelser share an address
+-- and stay two people — the case the general admin settles (« Adresses
+-- partagées », #655 step 3).
+DROP TABLE IF EXISTS seed_members;
+CREATE TABLE seed_members (
+  id TEXT PRIMARY KEY, email TEXT, role TEXT, is_player INTEGER, first_name TEXT, last_name TEXT,
+  license_number TEXT, phone TEXT, birth_date TEXT, birth_place TEXT, status TEXT, club_id TEXT
+);
+INSERT INTO seed_members (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id) VALUES
   ('user-1', 'admin@example.com', 'general_admin', 0, NULL, NULL, NULL, '', NULL, NULL, 'active', NULL),
   ('user-2', 'club.admin@example.com', 'club_admin', 0, NULL, NULL, NULL, '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-5', 'joris.szulc@example.com', 'player', 1, 'Joris', 'Szulc', '686910', '', NULL, NULL, 'active', 'club-fftt-06680011'),
@@ -424,6 +434,11 @@ INSERT INTO users (id, email, role, is_player, first_name, last_name, license_nu
   ('p2-player-45', 'marieline.wertenschlag@example.com', 'player', 1, 'Marie-Line', 'Wertenschlag', '686416', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-25', 'jordan.pesenti@example.com', 'player', 1, 'Jordan', 'Pesenti', '6718937', '', NULL, NULL, 'active', 'club-fftt-06680011')
 ;
+INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
+  SELECT 'person-' || id, first_name, last_name, email, COALESCE(phone, ''), birth_date, birth_place FROM seed_members;
+INSERT INTO users (id, role, is_player, license_number, status, club_id, person_id)
+  SELECT id, role, is_player, license_number, status, club_id, 'person-' || id FROM seed_members;
+DROP TABLE seed_members;
 
 -- Age categories (#482). A licence is issued for a season, so the category is
 -- stated per season, never as one value on the person — the next August's
@@ -522,11 +537,3 @@ INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES
   ('p2-player-24', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'image/png', '2026-01-01T00:00:00.000Z');
 
 
--- people (#655) — a person behind every club profile seeded above, as 0063
--- does for a migrated database: the seed runs after the migrations, so its
--- members arrive without one. Fabrice and Bastien Dangelser share an address
--- and stay two people, which is the case delegation will replace.
-INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
-  SELECT 'person-' || id, first_name, last_name, email, phone, birth_date, birth_place
-    FROM users WHERE person_id IS NULL;
-UPDATE users SET person_id = 'person-' || id WHERE person_id IS NULL;

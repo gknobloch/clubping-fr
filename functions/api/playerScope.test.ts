@@ -25,6 +25,8 @@ const member = (over: Partial<UserRow> & Pick<UserRow, 'id'>): UserRow => ({
   status: 'active', club_id: CLUB, first_login_at: null, last_seen_at: Date.now(),
   notifications_enabled: 1,
   notification_preferences: null,
+  // Every profile has a person since 0066 (#655), and the person's fields are written there.
+  person_id: `person-${over.id}`,
   ...over,
 })
 
@@ -157,7 +159,7 @@ describe('PATCH /players/:id — editing a licensee', () => {
     const { db, writes } = fakeDb([clubAdmin, ours], 'ca')
     const res = await send(db, `/players/${ours.id}`, 'PATCH', rename)
     expect(res.status).toBe(200)
-    expect(featureWrites(writes)[0].sql).toMatch(/UPDATE users SET first_name/)
+    expect(featureWrites(writes)[0].sql).toMatch(/UPDATE people SET first_name/)
   })
 
   it("refuses a club admin editing another club's member", async () => {
@@ -205,7 +207,7 @@ describe('PATCH /players/:id — editing a licensee', () => {
       const { db, writes } = fakeDb([ours], 'p-ours')
       const res = await send(db, `/players/${ours.id}`, 'PATCH', coordinates)
       expect(res.status).toBe(200)
-      expect(featureWrites(writes)[0].sql).toMatch(/UPDATE users SET email/)
+      expect(featureWrites(writes)[0].sql).toMatch(/UPDATE people SET email/)
     })
 
     it('refuses a member changing their own club', async () => {
