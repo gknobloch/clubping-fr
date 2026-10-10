@@ -1,0 +1,19 @@
+-- 0065 — a season belongs to a federation (#645)
+--
+--   seasons.federation_id   the federation whose calendar this season is
+--
+-- Seasons and phases were global and aligned on the FFTT (`seasons.id` = "27",
+-- `phase-27-1`), with one phase active in the whole app. The AGR runs the same
+-- way at its own pace — its phase 2 may start on another date than the FFTT's
+-- — so each federation has its seasons, and one active season and phase.
+--
+-- A phase reaches its federation through its season, as a division reaches it
+-- through its competition (0061). Everything that exists is the FFTT's, which
+-- the default says without rewriting a row. An AGR season's id carries the
+-- federation (`agr-27`), so its phases are `phase-agr-27-1` and never meet the
+-- FFTT's: Kembs 1 FFTT and Kembs 1 AGR are in different phases, and team ids
+-- (club, phase, number) stay unique without a change (#282).
+--
+-- No REFERENCES: SQLite refuses a foreign key with a non-NULL default on ADD
+-- COLUMN, and the ids are checked by the API, like competitions' (0061).
+ALTER TABLE seasons ADD COLUMN federation_id TEXT NOT NULL DEFAULT 'fftt';

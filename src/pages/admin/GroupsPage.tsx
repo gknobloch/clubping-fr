@@ -14,13 +14,13 @@ import { FederationSelect } from '@/components/FederationSelect'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
-import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision } from '@/lib/federations'
+import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision, activePhaseOf } from '@/lib/federations'
 
 export function GroupsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
-    groups: allGroups, divisions, phases, teams, clubs, competitions = [], federations = [],
+    groups: allGroups, divisions, phases, seasons = [], teams, clubs, competitions = [], federations = [],
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
@@ -31,7 +31,7 @@ export function GroupsPage() {
     () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [phases],
   )
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activePhase = activePhaseOf(phases, seasons)
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const phase = phases.find((p) => p.id === phaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)

@@ -25,6 +25,7 @@ import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
 import { DelegationsSection } from '@/components/DelegationsSection'
 import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
+import { activePhaseOf } from '@shared/lib/federations'
 
 /**
  * Ce qu'un membre change sur lui-même — `OWN_PROFILE_FIELDS` côté API (#558),
@@ -40,7 +41,7 @@ export default function MonCompteScreen() {
   const canSwitch = hasOtherProfiles(profiles, user?.id)
   const [switching, setSwitching] = useState(false)
   const {
-    players, teams, clubs, federations, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
+    players, teams, clubs, federations, phases, seasons = [], playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
   } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -64,7 +65,7 @@ export default function MonCompteScreen() {
   const player = user?.isPlayer ? players.find((p) => p.id === user.id) : null
   const club = player ? clubs.find((c) => c.id === player.clubId) : null
 
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activePhase = activePhaseOf(phases, seasons)
   const playerTeams = player
     ? teams.filter((t) => t.phaseId === activePhase?.id && t.playerIds?.includes(player.id))
     : []

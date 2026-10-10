@@ -32,6 +32,8 @@ import {
 import { todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { activeSeasonId } from '@shared/lib/season'
+import { activePhaseOf } from '@shared/lib/federations'
 
 // ---------------------------------------------------------------------------
 // Home screen — player dashboard
@@ -88,8 +90,8 @@ export default function HomeScreen() {
     return map
   }, [teams, myPlayerId])
 
-  const activeSeason = seasons.find((s) => s.status === 'active')
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
+  const activePhase = activePhaseOf(phases, seasons)
   const myActiveTeam = activePhase ? myTeamByPhase.get(activePhase.id) : undefined
   const isCaptain = !!(user && myActiveTeam && mayManageTeam(user, myActiveTeam))
   const isPlayer = !!myPlayerId && !!myActiveTeam
@@ -499,7 +501,7 @@ export default function HomeScreen() {
             games,
             gameSelections,
             playerSeasonLicences,
-            seasonId: seasons.find((s) => s.status === 'active')?.id,
+            seasonId: activeSeasonId(seasons),
             // What this team's competition admits (#498).
             divisions,
             competitions,

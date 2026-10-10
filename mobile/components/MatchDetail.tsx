@@ -30,6 +30,7 @@ import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 import { federationOfTeam, licenceOf } from '@shared/lib/licences'
+import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
 // Match detail — one team's view of a game: availabilities (editable by the
@@ -179,7 +180,7 @@ export function MatchDetail({
     const clubIds = allClubPlayers.map((p) => p.id)
     const { statusOf } = clubLicences(
       playerSeasonLicences,
-      seasons.find((s) => s.status === 'active')?.id,
+      activeSeasonId(seasons),
       clubIds,
     )
     return new Set(clubIds.filter((playerId) => statusOf(playerId) === 'missing'))
@@ -394,7 +395,7 @@ export function MatchDetail({
             games,
             gameSelections,
             playerSeasonLicences,
-            seasonId: seasons.find((s) => s.status === 'active')?.id,
+            seasonId: activeSeasonId(seasons),
             // What this team's competition admits (#498).
             divisions,
             competitions,

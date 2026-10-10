@@ -21,7 +21,7 @@ import {
   fixtureOverride, mayAnswerOnFixture, mayManageTeam,
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
 } from '../../src/lib/teamAuthority'
-import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
+import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt, seasonNumber } from '../../src/lib/season'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -441,7 +441,7 @@ app.get('/data', async (c) => {
       isImported: bool(r.is_imported), sortOrder: r.sort_order,
     })),
     seasons: seasonsR.results.map(r => ({
-      id: r.id, displayName: r.display_name, status: r.status,
+      id: r.id, displayName: r.display_name, status: r.status, federationId: r.federation_id ?? 'fftt',
     })),
     phases: phasesR.results.map(r => ({
       id: r.id, seasonId: r.season_id, name: r.name, displayName: r.display_name,
@@ -594,40 +594,54 @@ const SEASON_STATUSES = ['active', 'upcoming', 'archived']
 
 // Demotion is chronology-aware (#227): what stops being active is archived
 // when it is older than what becomes active, but goes back to 'upcoming' when
-// it is newer (rolling back to an older phase/season).
-async function demoteActivePhases(db: Env['Bindings']['DB'], exceptId: string, newKey: number) {
-  const actives = await db.prepare(
-    "SELECT id, season_id, name FROM phases WHERE status = 'active' AND id != ?",
-  ).bind(exceptId).all()
+// it is newer (rolling back to an older phase/season). And it stays within one
+// federation (#645): the AGR's phase 2 may start on another date than the
+// FFTT's, so activating one never touches the other. The same rule as
+// src/lib/seasonActivation.ts, which the web applies optimistically.
+
+/** The federation of a season — the FFTT for one predating 0065, or unknown. */
+async function federationOfSeasonId(db: Env['Bindings']['DB'], seasonId: string): Promise<string> {
+  const row = await db.prepare('SELECT federation_id FROM seasons WHERE id = ?').bind(seasonId).first<{ federation_id: string | null }>()
+  return row?.federation_id ?? 'fftt'
+}
+
+/** Active phases of one federation, through their season. */
+const ACTIVE_PHASES_OF_FEDERATION = `
+  SELECT p.id, p.season_id, p.name FROM phases p LEFT JOIN seasons s ON s.id = p.season_id
+   WHERE p.status = 'active' AND COALESCE(s.federation_id, 'fftt') = ?`
+
+async function demoteActivePhases(db: Env['Bindings']['DB'], exceptId: string, newKey: number, federationId: string) {
+  const actives = await db.prepare(`${ACTIVE_PHASES_OF_FEDERATION} AND p.id != ?`).bind(federationId, exceptId).all()
   for (const r of actives.results) {
     const demoted = phaseOrderKey(r.season_id as string, r.name as string) < newKey ? 'archived' : 'upcoming'
     await db.prepare('UPDATE phases SET status = ? WHERE id = ?').bind(demoted, r.id).run()
   }
 }
 
-async function demoteActiveSeasons(db: Env['Bindings']['DB'], newSeasonId: string) {
+async function demoteActiveSeasons(db: Env['Bindings']['DB'], newSeasonId: string, federationId: string) {
   const actives = await db.prepare(
-    "SELECT id FROM seasons WHERE status = 'active' AND id != ?",
-  ).bind(newSeasonId).all()
+    "SELECT id FROM seasons WHERE status = 'active' AND id != ? AND federation_id = ?",
+  ).bind(newSeasonId, federationId).all()
   for (const r of actives.results) {
-    const demoted = Number(r.id) < Number(newSeasonId) ? 'archived' : 'upcoming'
+    const demoted = seasonNumber(r.id as string) < seasonNumber(newSeasonId) ? 'archived' : 'upcoming'
     await db.prepare('UPDATE seasons SET status = ? WHERE id = ?').bind(demoted, r.id).run()
   }
 }
 
-// Mirror of the phase→season cascade (#227): activating a season keeps the
-// active phase when it already belongs to it, otherwise switches to that
-// season's most recent non-archived phase (Phase 2 over Phase 1) — or none
-// when the season has no phases yet.
+// Mirror of the phase→season cascade (#227): activating a season keeps its
+// federation's active phase when it already belongs to it, otherwise switches
+// to that season's most recent non-archived phase (Phase 2 over Phase 1) — or
+// none when the season has no phases yet.
 async function alignActivePhaseToSeason(db: Env['Bindings']['DB'], seasonId: string) {
-  const active = await db.prepare("SELECT id, season_id FROM phases WHERE status = 'active'").all()
+  const federationId = await federationOfSeasonId(db, seasonId)
+  const active = await db.prepare(ACTIVE_PHASES_OF_FEDERATION).bind(federationId).all()
   const coherent = active.results.length > 0 && active.results.every(r => r.season_id === seasonId)
   if (coherent) return
   const latest = await db.prepare(
     "SELECT id, name FROM phases WHERE season_id = ? AND status != 'archived' ORDER BY name DESC LIMIT 1",
   ).bind(seasonId).first()
   // No phase to activate → compare against the season alone (phase 0).
-  await demoteActivePhases(db, (latest?.id as string) ?? '', phaseOrderKey(seasonId, (latest?.name as string) ?? ''))
+  await demoteActivePhases(db, (latest?.id as string) ?? '', phaseOrderKey(seasonId, (latest?.name as string) ?? ''), federationId)
   if (latest) await db.prepare("UPDATE phases SET status = 'active' WHERE id = ?").bind(latest.id).run()
 }
 
@@ -706,8 +720,9 @@ app.post('/seasons/import-current', async (c) => {
   if (!fftt) return c.json({ error: 'fftt_unavailable' }, 502)
   const existing = await db.prepare('SELECT id FROM seasons WHERE id = ?').bind(fftt.id).first()
   if (existing) return c.json({ error: 'already_exists' }, 409)
-  const activeR = await db.prepare("SELECT id FROM seasons WHERE status = 'active'").all()
-  await demoteActiveSeasons(db, fftt.id)
+  // The FFTT's season, read from the FFTT: only the FFTT's active season steps down.
+  const activeR = await db.prepare("SELECT id FROM seasons WHERE status = 'active' AND federation_id = 'fftt'").all()
+  await demoteActiveSeasons(db, fftt.id, 'fftt')
   await db.prepare("INSERT INTO seasons (id, display_name, status) VALUES (?, ?, 'active')")
     .bind(fftt.id, fftt.displayName).run()
   await alignActivePhaseToSeason(db, fftt.id)
@@ -723,16 +738,20 @@ app.post('/seasons', async (c) => {
   // The id is always derived from the name (FFTT convention), never trusted
   // from the client — this is what prevents garbage seasons.
   const displayName = typeof d.displayName === 'string' ? d.displayName.trim() : ''
-  const id = seasonIdFromName(displayName)
+  // A season belongs to a federation (#645); none named is the FFTT, as before.
+  const federationId = typeof d.federationId === 'string' && d.federationId ? d.federationId : 'fftt'
+  const federation = await c.env.DB.prepare('SELECT id FROM federations WHERE id = ?').bind(federationId).first()
+  if (!federation) return c.json({ error: 'unknown_federation' }, 400)
+  const id = seasonIdFromName(displayName, federationId)
   if (!id) return c.json({ error: 'invalid_name' }, 400)
   const existing = await c.env.DB.prepare('SELECT id FROM seasons WHERE id = ?').bind(id).first()
   if (existing) return c.json({ error: 'already_exists' }, 409)
   const status = SEASON_STATUSES.includes(d.status) ? d.status : 'upcoming'
-  if (status === 'active') await demoteActiveSeasons(c.env.DB, id)
-  await c.env.DB.prepare('INSERT INTO seasons (id, display_name, status) VALUES (?, ?, ?)')
-    .bind(id, displayName, status).run()
+  if (status === 'active') await demoteActiveSeasons(c.env.DB, id, federationId)
+  await c.env.DB.prepare('INSERT INTO seasons (id, display_name, status, federation_id) VALUES (?, ?, ?, ?)')
+    .bind(id, displayName, status, federationId).run()
   if (status === 'active') await alignActivePhaseToSeason(c.env.DB, id)
-  return c.json({ id, displayName, status })
+  return c.json({ id, displayName, status, federationId })
 })
 
 app.patch('/seasons/:id', async (c) => {
@@ -753,7 +772,7 @@ app.patch('/seasons/:id', async (c) => {
   if (s.length) {
     // Single-active invariant: activating a season demotes the previous one
     // (archived when older, back to 'upcoming' when newer).
-    if (p.status === 'active') await demoteActiveSeasons(c.env.DB, id)
+    if (p.status === 'active') await demoteActiveSeasons(c.env.DB, id, await federationOfSeasonId(c.env.DB, id))
     v.push(id)
     await c.env.DB.prepare(`UPDATE seasons SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
     // Season→phase cascade (#227), symmetric with the phase→season one.
@@ -3173,12 +3192,13 @@ app.delete('/seasons/:id', async (c) => {
 // --- Phases ---
 
 // The active (season · phase) combination must stay coherent (#227): activating
-// a phase demotes every other active phase (#221, archived when older,
-// 'upcoming' when newer) AND activates the phase's season (same demotion rule
-// for the previous season).
+// a phase demotes every other active phase of its federation (#221, #645 —
+// archived when older, 'upcoming' when newer) AND activates the phase's season
+// (same demotion rule for that federation's previous season).
 async function activatePhaseCascade(db: Env['Bindings']['DB'], phaseId: string, seasonId: string, phaseName: string) {
-  await demoteActivePhases(db, phaseId, phaseOrderKey(seasonId, phaseName))
-  await demoteActiveSeasons(db, seasonId)
+  const federationId = await federationOfSeasonId(db, seasonId)
+  await demoteActivePhases(db, phaseId, phaseOrderKey(seasonId, phaseName), federationId)
+  await demoteActiveSeasons(db, seasonId, federationId)
   await db.prepare("UPDATE seasons SET status = 'active' WHERE id = ?").bind(seasonId).run()
 }
 

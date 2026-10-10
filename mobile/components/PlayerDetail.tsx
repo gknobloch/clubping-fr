@@ -24,6 +24,8 @@ import { computeBrulage } from '@shared/lib/brulage'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { ChecklistSheet } from '@/components/ChecklistSheet'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
+import { activeSeasonId } from '@shared/lib/season'
+import { activePhaseOf } from '@shared/lib/federations'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -70,7 +72,7 @@ export function PlayerDetail({
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
-  const activeSeason = seasons.find((s) => s.status === 'active')
+  const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
 
   // Qui administre le club du licencié, et personne d'autre — la même question
   // que `administers` côté API, qui refuse déjà le reste depuis #558. Un
@@ -96,7 +98,7 @@ export function PlayerDetail({
     else router.push({ pathname: '/membres', params: { groupes: groupId } })
   }
 
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activePhase = activePhaseOf(phases, seasons)
   const playerTeams = teams.filter(
     (t) => t.phaseId === activePhase?.id && t.playerIds?.includes(id ?? ''),
   )

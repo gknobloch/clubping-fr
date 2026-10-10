@@ -4,6 +4,8 @@
 //   { phases { edges { node { id name } } } }
 // As of 2026-07-13 it returns /api/phases/1..3. Ids follow the same
 // FFTT-alignment idea as seasons: the numeric part of the IRI, as text.
+import { seasonNumber } from './season'
+
 export const FFTT_PHASES: ReadonlyArray<{ id: string; name: string }> = [
   { id: '1', name: 'Phase 1' },
   { id: '2', name: 'Phase 2' },
@@ -26,12 +28,12 @@ export function ffttPhaseIdForName(name: string): string | null {
 
 /**
  * Chronological key for a phase (#227): season first (FFTT-aligned numeric
- * ids — 26 < 27), then phase number (Phase 1 < Phase 2). Used to decide what
+ * ids — 26 < 27; "agr-27" counts as 27, #645), then phase number (Phase 1 <
+ * Phase 2). Only ever compared within one federation. Used to decide what
  * a demoted phase becomes: archived when older than the newly active one,
  * back to 'upcoming' when newer (rollback).
  */
 export function phaseOrderKey(seasonId: string, phaseName: string): number {
-  const season = Number(seasonId)
   const phase = Number(ffttPhaseIdForName(phaseName) ?? 0)
-  return (Number.isFinite(season) ? season : 0) * 10 + phase
+  return seasonNumber(seasonId) * 10 + phase
 }

@@ -36,6 +36,7 @@ import {
   type PlayerSyncField,
 } from '@shared/lib/ffttPlayers'
 import type { Player } from '@shared/types'
+import { activePhaseOf } from '@shared/lib/federations'
 
 // ---------------------------------------------------------------------------
 // Importer les licenciés FFTT, au doigt (#555)
@@ -91,7 +92,7 @@ type Search =
 export default function ImportPlayersScreen() {
   const { user } = useAuth()
   const {
-    clubs, phases, players, users, playerPhasePoints, playerSeasonCategories,
+    clubs, phases, seasons = [], players, users, playerPhasePoints, playerSeasonCategories,
     setClubSeasonLicences, applyPlayerImport,
   } = useAppData()
   const router = useRouter()
@@ -106,7 +107,7 @@ export default function ImportPlayersScreen() {
   // whoever needs the other one has the web.
   const phase = useMemo(() => {
     const ordered = [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName))
-    return phases.find((p) => p.status === 'active') ?? ordered[ordered.length - 1]
+    return activePhaseOf(phases, seasons) ?? ordered[ordered.length - 1]
   }, [phases])
 
   const [status, setStatus] = useState<Status>({ kind: 'loading' })

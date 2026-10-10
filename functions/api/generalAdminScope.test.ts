@@ -45,6 +45,10 @@ function fakeDb(users: UserRow[], viewerId: string | null) {
           if (sql.includes('FROM users WHERE id = ?')) {
             return users.find((u) => u.id === params[0]) ?? null
           }
+          // A season names its federation (#645); the seeded ones exist.
+          if (sql.includes('FROM federations WHERE id = ?')) {
+            return ['fftt', 'agr'].includes(String(params[0])) ? { id: params[0] } : null
+          }
           return null
         },
         async all() { return { results: [] } },

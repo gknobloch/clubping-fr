@@ -13,17 +13,18 @@ import { getTeamName } from '@/lib/teamName'
 import { pointsFor } from '@/lib/phasePoints'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { licenceLabel, licencesOf } from '@/lib/licences'
+import { activePhaseOf } from '@/lib/federations'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
-  const { players, clubs, federations = [], teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, clubs, federations = [], teams, phases, seasons = [], playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
 
   const me = user?.isPlayer ? players.find((p) => p.id === user.id) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activePhase = activePhaseOf(phases, seasons)
   const myTeams = me && activePhase ? teams.filter((t) => t.phaseId === activePhase.id && t.playerIds.includes(me.id)) : []
   const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, me?.id)
 

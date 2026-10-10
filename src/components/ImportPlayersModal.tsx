@@ -18,6 +18,7 @@ import {
 } from '@/lib/ffttPlayers'
 import { sortByName } from '@/lib/sortByName'
 import type { Player } from '@/types'
+import { activePhaseOf } from '@/lib/federations'
 
 type Status =
   | { kind: 'idle' }
@@ -39,7 +40,7 @@ type Status =
  */
 export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClose: () => void }) {
   const {
-    clubs, phases, players, users, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
+    clubs, phases, seasons = [], players, users, playerPhasePoints, addPlayer, updatePlayer, setPlayerPhasePoints,
     playerSeasonCategories, setPlayerSeasonCategories, setClubSeasonLicences,
   } = useAppData()
 
@@ -49,7 +50,7 @@ export function ImportPlayersModal({ clubId, onClose }: { clubId: string; onClos
     [phases],
   )
   const [phaseId, setPhaseId] = useState(
-    () => phases.find((p) => p.status === 'active')?.id ?? orderedPhases[orderedPhases.length - 1]?.id ?? '',
+    () => activePhaseOf(phases, seasons)?.id ?? orderedPhases[orderedPhases.length - 1]?.id ?? '',
   )
   const seasonId = phases.find((p) => p.id === phaseId)?.seasonId
 

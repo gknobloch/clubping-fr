@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { Season, SeasonStatus } from '@/types'
 import { useAppData, type FfttCurrentSeason } from '@/contexts/DataContext'
-import { seasonIdFromName } from '@/lib/season'
+import { seasonIdFromName, seasonNumber } from '@/lib/season'
+import { FFTT_FEDERATION_ID, activePhaseOf, federationChoices, federationOfSeason } from '@/lib/federations'
+import { FederationSelect } from '@/components/FederationSelect'
 import { phaseOrderKey } from '@/lib/ffttPhases'
 import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
@@ -14,14 +16,18 @@ import { useConfirm } from '@/components/useConfirm'
 
 export function SeasonsPage() {
   const {
-    seasons: allSeasons, phases, updateSeason, addSeason, archiveSeason, deleteSeason,
+    seasons: allSeasons, phases, federations = [], updateSeason, addSeason, archiveSeason, deleteSeason,
     checkFfttSeason, importFfttSeason,
   } = useAppData()
+  // Each federation has its seasons (#645); the tag says whose once there is a choice.
+  const federationOptions = federationChoices(federations)
+  const shortNameOf = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id
   const [editing, setEditing] = useState<Season | null>(null)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState<{ displayName: string; status: SeasonStatus }>({
+  const [form, setForm] = useState<{ displayName: string; status: SeasonStatus; federationId: string }>({
     displayName: '',
     status: 'upcoming',
+    federationId: FFTT_FEDERATION_ID,
   })
   const [showArchived, setShowArchived] = useState(false)
   // FFTT check is on demand (#217): idle until the admin clicks « Vérifier ».
@@ -68,7 +74,7 @@ export function SeasonsPage() {
   }
 
   // Manual creation follows the FFTT convention: the id derives from the name.
-  const derivedId = seasonIdFromName(form.displayName)
+  const derivedId = seasonIdFromName(form.displayName, form.federationId)
   const nameInvalid = form.displayName.trim() !== '' && !derivedId
   const duplicate = !!derivedId && allSeasons.some((s) => s.id === derivedId && s.id !== editing?.id)
   const canSave = !!derivedId && !duplicate
@@ -76,19 +82,20 @@ export function SeasonsPage() {
   const openEdit = (season: Season) => {
     setEditing(season)
     setCreating(false)
-    setForm({ displayName: season.displayName, status: season.status })
+    setForm({ displayName: season.displayName, status: season.status, federationId: federationOfSeason(season) })
   }
 
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    setForm({ displayName: '', status: 'upcoming' })
+    setForm({ displayName: '', status: 'upcoming', federationId: FFTT_FEDERATION_ID })
   }
 
   const handleSave = () => {
     if (!canSave) return
     if (editing) {
-      updateSeason(editing.id, form)
+      // The federation is fixed at creation: the id carries it (#645).
+      updateSeason(editing.id, { displayName: form.displayName, status: form.status })
       setEditing(null)
     } else if (creating) {
       addSeason(form)
@@ -217,6 +224,11 @@ export function SeasonsPage() {
               <tr key={season.id} className={`hover:bg-slate-50/50 ${season.status === 'archived' ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {season.displayName}
+                  {federationOptions.length > 1 && (
+                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
+                      {shortNameOf(federationOfSeason(season))}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -261,6 +273,15 @@ export function SeasonsPage() {
               {creating ? 'Ajouter une saison' : 'Modifier la saison'}
             </h2>
             <div className="mt-4 space-y-4">
+              {creating && (
+                <FederationSelect
+                  id="season-federation"
+                  options={federationOptions}
+                  value={form.federationId}
+                  onChange={(federationId) => setForm((f) => ({ ...f, federationId }))}
+                  wide
+                />
+              )}
               <div>
                 <label htmlFor="edit-displayName" className="block text-sm font-medium text-slate-700">
                   Nom (ex. 2026/2027)
@@ -292,8 +313,10 @@ export function SeasonsPage() {
                   // Resulting active (season · phase) combination (#227): the
                   // active phase follows the season — kept when it belongs to
                   // it, otherwise switched to the season's most recent phase.
+                  // Within the season's federation only (#645): the other's
+                  // active pair is untouched.
                   const targetId = editing?.id ?? derivedId
-                  const activePhase = phases.find((p) => p.status === 'active')
+                  const activePhase = activePhaseOf(phases, allSeasons, form.federationId)
                   const coherent = !!activePhase && activePhase.seasonId === targetId
                   const resulting = coherent
                     ? activePhase
@@ -301,9 +324,9 @@ export function SeasonsPage() {
                         .filter((p) => p.seasonId === targetId && p.status !== 'archived')
                         .sort((a, b) => b.name.localeCompare(a.name))[0]
                   const currentActive = allSeasons.find(
-                    (s) => s.status === 'active' && s.id !== editing?.id,
+                    (s) => s.status === 'active' && s.id !== editing?.id && federationOfSeason(s) === form.federationId,
                   )
-                  const seasonDemotion = currentActive && targetId && Number(currentActive.id) < Number(targetId)
+                  const seasonDemotion = currentActive && targetId && seasonNumber(currentActive.id) < seasonNumber(targetId)
                     ? 'sera archivée'
                     : 'repassera à « À venir »'
                   const phaseDemotion = activePhase && targetId
