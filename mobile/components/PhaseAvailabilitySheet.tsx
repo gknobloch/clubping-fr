@@ -28,6 +28,7 @@ import {
 import { Avatar } from '@/components/Avatar'
 import { TeamColorBadge } from '@/components/TeamColorBadge'
 import type { Player, Team } from '@shared/types'
+import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
 // Le planning de la phase (#623) — opened from «Tous les matchs».
@@ -145,7 +146,7 @@ export function PhaseAvailabilityPanel({
     () =>
       unlicensedIds(
         playerSeasonLicences,
-        seasons.find((s) => s.status === 'active')?.id,
+        activeSeasonId(seasons),
         players.filter((p) => p.clubId === team.clubId),
       ),
     [playerSeasonLicences, seasons, players, team.clubId],

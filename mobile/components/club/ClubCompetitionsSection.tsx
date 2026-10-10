@@ -19,6 +19,7 @@ import type {
   Club, Competition, CompetitionGroup, Division, GameSelection, MemberGroup, Player, PlayerSeasonCategory, Season, Team,
 } from '@shared/types'
 import { ClubSection, section } from './ClubSection'
+import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
 // Compétitions (#604) — le pendant de la section du web
@@ -91,7 +92,7 @@ export function ClubCompetitionsSection({
     () => competitionsOfClub(club.id, competitions, teams, divisions, competitionGroups, federationIds),
     [club.id, competitions, teams, divisions, competitionGroups, federationIds],
   )
-  const seasonId = seasons.find((s) => s.status === 'active')?.id
+  const seasonId = activeSeasonId(seasons)
   const clubPlayers = useMemo(
     () => withSeasonCategory(
       sortByName(players.filter((p) => p.clubId === club.id && p.status === 'active')),

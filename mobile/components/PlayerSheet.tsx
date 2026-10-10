@@ -12,6 +12,7 @@ import { unlicensedIds } from '@shared/lib/seasonLicences'
 import type { Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
+import { activeSeasonId } from '@shared/lib/season'
 
 export type PlayerHistoryEntry = {
   jNumber?: number
@@ -80,7 +81,7 @@ export function PlayerSheet({
   // since this sheet is how a captain looks a player up from the matrix.
   const unlicensed = unlicensedIds(
     playerSeasonLicences,
-    seasons.find((s) => s.status === 'active')?.id,
+    activeSeasonId(seasons),
     players.filter((p) => p.clubId === player.clubId),
   ).has(player.id)
   const router = useRouter()

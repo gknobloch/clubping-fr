@@ -83,6 +83,8 @@ export interface SeasonRow {
   display_name: string
   /** CHECK (status IN ('active', 'upcoming', 'archived')). */
   status: LifecycleStatus
+  /** 0065 (#645): the federation whose calendar this is; 'fftt' for every older row. */
+  federation_id?: string
 }
 
 export interface PhaseRow {

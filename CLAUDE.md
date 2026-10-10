@@ -654,6 +654,29 @@ invisible dans le diff comme dans la revue.
   `*.testkit.ts` est du côté des tests dans les deux tsconfig, et n'est pas une
   suite.
 
+### Saisons et phases par fédération (#645)
+- **Une saison appartient à une fédération** (`seasons.federation_id`, 0065) ;
+  une phase y arrive par sa saison (`federationOfPhase`), comme une division
+  par sa compétition. Tout ce qui existait est à la FFTT, ce que le défaut dit
+  sans réécrire une ligne.
+- **Les ids d'une autre fédération portent son préfixe** : `agr-27`, donc
+  `phase-agr-27-1`. Kembs 1 FFTT et Kembs 1 AGR sont dans deux phases, et les
+  ids d'équipe (club, phase, numéro — #282) restent uniques sans rien changer.
+  `seasonNumber` lit le numéro quelle que soit la fédération : c'est lui que
+  compare la chronologie (`phaseOrderKey`, la rétrogradation).
+- **Une saison et une phase actives par fédération.** Activer l'une ne
+  rétrograde que celles de sa fédération : la phase 2 de l'AGR peut commencer
+  à une autre date que celle de la FFTT. `src/lib/seasonActivation.ts` est la
+  règle côté écrans (le `DataContext` l'applique d'avance), et l'API la même
+  en SQL (`demoteActiveSeasons`, `demoteActivePhases`,
+  `alignActivePhaseToSeason`, tous clavés sur la fédération).
+- **« La phase active » se demande avec sa fédération** : `activePhaseOf`
+  (la FFTT par défaut), jamais `phases.find(active)`, qui rendrait la première
+  des deux. **`activeSeasonId` est celle de la FFTT** par défaut : les
+  catégories et le jeu de licences (#482, #488) sont des faits de la FFTT.
+- L'administrateur général choisit la fédération en créant une saison ; elle
+  ne change plus ensuite — l'id la porte.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a
