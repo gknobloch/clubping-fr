@@ -705,7 +705,8 @@ invisible dans le diff comme dans la revue.
   Divisions passent par `phaseScope` — les fédérations proposées (celles du
   club, toutes pour l'administrateur général), celle en vigueur, ses phases
   dans l'ordre et celle qui s'ouvre. L'en-tête porte `FederationSwitch`
-  (« FFTT | AGR ») ; il ne s'affiche que s'il y a un choix, donc jamais pour
+  (« FFTT | AGR »), sur le web comme dans l'app (un `FederationSwitch` de
+  chaque côté) ; il ne s'affiche que s'il y a un choix, donc jamais pour
   Landser ni pour Rixheim. Un lien qui nomme une phase (un match, une journée
   de l'accueil) ouvre sur sa fédération.
 - Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
