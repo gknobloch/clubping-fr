@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { Club } from '@/types'
 import {
   affiliationsLine, clubAffiliations, clubIdForAffiliation, clubIsIn, clubNameIn, federationOfCompetition,
-  federationOfDivision, federationOptionLabel,
+  divisionsOfFederation, federationChoices, federationOfDivision, federationOptionLabel,
 } from './federations'
 
 // #643 — a second federation. What matters here is the default: everything
@@ -29,6 +29,16 @@ describe('federationOfCompetition / federationOfDivision', () => {
     expect(federationOfDivision({}, competitions)).toBe('fftt')
     expect(federationOfDivision({ competitionId: 'c-old' }, competitions)).toBe('fftt')
     expect(federationOfDivision({ competitionId: 'gone' }, competitions)).toBe('fftt')
+  })
+
+  it('narrows a division list to one federation (#660)', () => {
+    const divisions = [
+      { id: 'ge3', competitionId: 'c-fftt' },
+      { id: 'excellence', competitionId: 'c-agr' },
+      { id: 'n3' },
+    ]
+    expect(divisionsOfFederation(divisions, competitions, 'fftt').map((d) => d.id)).toEqual(['ge3', 'n3'])
+    expect(divisionsOfFederation(divisions, competitions, 'agr').map((d) => d.id)).toEqual(['excellence'])
   })
 })
 
@@ -104,5 +114,22 @@ describe('federationOptionLabel', () => {
       .toBe('FFTT — Fédération française de tennis de table')
     expect(federationOptionLabel({ shortName: 'AGR', displayName: 'AGR Tennis de table — Section du Haut-Rhin' }))
       .toBe('AGR Tennis de table — Section du Haut-Rhin')
+  })
+})
+
+describe('federationChoices (#660)', () => {
+  const federations = [{ id: 'fftt' }, { id: 'agr' }]
+
+  it('offers a club its own federations, the FFTT first', () => {
+    const kembs = club({ affiliations: [{ federationId: 'agr', affiliationNumber: '680021' }] })
+    expect(federationChoices(federations, kembs).map((f) => f.id)).toEqual(['fftt', 'agr'])
+    const landser = club({ affiliationNumber: '', affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }] })
+    expect(federationChoices(federations, landser).map((f) => f.id)).toEqual(['agr'])
+    expect(federationChoices(federations, club()).map((f) => f.id)).toEqual(['fftt'])
+  })
+
+  it('offers every federation without a club, or for a club without any number', () => {
+    expect(federationChoices(federations).map((f) => f.id)).toEqual(['fftt', 'agr'])
+    expect(federationChoices(federations, club({ affiliationNumber: '' })).map((f) => f.id)).toEqual(['fftt', 'agr'])
   })
 })

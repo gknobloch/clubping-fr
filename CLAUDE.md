@@ -521,6 +521,17 @@ invisible dans le diff comme dans la revue.
   type**, toujours présents dans le payload : leur absence (un cache, une
   fixture) veut dire « FFTT seule », ce qu'était toute donnée avant. Lus
   seulement par `src/lib/federations.ts`.
+- **Un sélecteur de division ne liste qu'une fédération** (#660) : celle
+  qu'on a choisie avant — `FederationSelect`, qui ne s'affiche que s'il y a un
+  choix à faire. `federationChoices` dit lesquelles : toutes pour un
+  administrateur général, celles du club sinon (Landser : l'AGR seule, sans
+  sélecteur ; Kembs : les deux, la FFTT d'abord). `divisionsOfFederation` est
+  le filtre. La fédération d'une équipe ou d'une poule existante se lit sur sa
+  division et ne se change pas.
+- **Les imports FFTT ne sont offerts que là où la FFTT a quelque chose** :
+  pas d'« Importer depuis la FFTT » pour un club sans numéro FFTT, ni d'import
+  de calendrier FFTT pour une poule d'une autre fédération (`importableGroupIds`,
+  « Importer les matchs » d'une équipe, « Importer les groupes FFTT »).
 
 ### Une licence par fédération (#644)
 - **La licence FFTT reste `users.license_number`**, et `federation_licences`
