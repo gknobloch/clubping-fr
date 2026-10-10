@@ -12,9 +12,21 @@ describe('profilesByClub (#640)', () => {
       p({ id: 'benjamin', firstName: 'Benjamin', clubId: 'a', clubName: 'CSS Bergheim' }),
       p({ id: 'lou', firstName: 'Lou', clubId: 'b', clubName: 'Rixheim PPA' }),
     ])
-    expect(groups.map((g) => g.clubName)).toEqual(['CSS Bergheim', 'Rixheim PPA', 'Sans club'])
+    expect(groups.map((g) => g.clubName)).toEqual(['CSS Bergheim', 'Rixheim PPA', 'Administration générale'])
     expect(groups[1].profiles.map((x) => x.id)).toEqual(['lou', 'sacha'])
     expect(groups[2].clubId).toBeUndefined()
+  })
+
+  it('files the general administration apart — a role of the person, not a club (#655)', () => {
+    const groups = profilesByClub([
+      p({ id: 'ghost', firstName: 'Sans', lastName: 'Club' }),
+      p({ id: 'ga', role: 'general_admin', firstName: 'Gilles' }),
+      p({ id: 'rix', firstName: 'Gilles', clubId: 'r', clubName: 'Rixheim PPA' }),
+      p({ id: 'lan', firstName: 'Gilles', clubId: 'l', clubName: 'Landser ASL' }),
+    ])
+    expect(groups.map((g) => g.clubName)).toEqual(['Landser ASL', 'Rixheim PPA', 'Administration générale', 'Sans club'])
+    expect(groups[2]).toMatchObject({ generalAdmin: true, profiles: [{ id: 'ga' }] })
+    expect(groups[3].generalAdmin).toBeUndefined()
   })
 
   it('falls back on the id of a club it cannot name', () => {

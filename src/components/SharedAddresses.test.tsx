@@ -19,15 +19,16 @@ const club = (id: string, displayName: string): Club =>
 const player = (id: string, personId: string, firstName: string, email?: string, clubId = 'club-a'): Player => ({
   id, personId, firstName, lastName: 'Henaut', email, clubId, licenseNumber: '', phone: '', status: 'active',
 })
-const asUser = (p: Player): User => ({ ...p, role: 'player', isPlayer: true })
+const asUser = (p: Player, admins: string[] = []): User =>
+  ({ ...p, role: admins.includes(p.id) ? 'general_admin' : 'player', isPlayer: !admins.includes(p.id) })
 
-function renderWith(players: Player[], personId?: string) {
+function renderWith(players: Player[], personId?: string, admins: string[] = []) {
   const data = {
     divisions: [], clubs: [club('club-a', 'Rixheim PPA'), club('club-b', 'Landser ASL')], seasons: [], phases: [],
     competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
     groups: [], teams: [], players, playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
-    gameAvailabilities: [], gameSelections: [], users: players.map(asUser),
+    gameAvailabilities: [], gameSelections: [], users: players.map((p) => asUser(p, admins)),
   }
   return render(
     <MemoryRouter>
@@ -76,5 +77,22 @@ describe('SharedAddresses', () => {
   it('narrows to one person’s address on a fiche, and is nothing without one', () => {
     const { container } = renderWith(family, 'p-zoe')
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('offers to join two people who are one — an admin profile beside its owner’s', async () => {
+    const admin: Player = { ...player('ga', 'p-ga', '', 'g@example.fr', ''), firstName: '', lastName: '' }
+    const gilles = player('g-rix', 'p-g', 'Gilles', 'G@example.fr')
+    renderWith([admin, gilles], undefined, ['ga'])
+    expect(screen.getByText('Administration générale')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'C’est la même personne' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('deviennent une seule personne, Gilles Henaut, avec ses 2 profils : Rixheim PPA, Administration générale')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirmer' }))
+    await waitFor(() => expect(screen.queryByText('g@example.fr')).not.toBeInTheDocument())
+  })
+
+  it('offers no merge for three — which two would be ambiguous', () => {
+    renderWith([...family, player('lea', 'p-lea', 'Léa', 'henaut@example.fr')])
+    expect(screen.queryByRole('button', { name: 'C’est la même personne' })).not.toBeInTheDocument()
   })
 })
