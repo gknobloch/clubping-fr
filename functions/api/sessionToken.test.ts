@@ -45,7 +45,7 @@ const SCHEMA = `
   );
   INSERT INTO users (id, email) VALUES ('u1', 'membre@example.invalid'),
                                        ('u2', 'autre@example.invalid');
-  -- What the API reads a member through since 0065; these rows have no person.
+  -- What the API reads a member through since 0066; these rows have no person.
   CREATE VIEW profiles AS SELECT * FROM users;
 `
 

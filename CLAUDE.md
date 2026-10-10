@@ -590,7 +590,7 @@ invisible dans le diff comme dans la revue.
   six clés en cascade et trois tableaux JSON pointent vers `users.id` (le
   piège de 0036, #604, 0060). La personne s'ajoute **à côté**, et chaque id
   reste ce qu'il est.
-- **L'API lit un profil par la vue `profiles`** (0065, étape 4) : la ligne de
+- **L'API lit un profil par la vue `profiles`** (0066, étape 4) : la ligne de
   `users`, avec les champs de la personne pris dans `people`. Toute lecture
   passe par elle — `FROM profiles`, jamais `FROM users` ; écrire et supprimer
   restent sur la table. Les champs de la personne ne s'écrivent plus que dans

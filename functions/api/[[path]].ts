@@ -4482,7 +4482,7 @@ async function mayWritePlayers(
 // A `users` row is a CLUB PROFILE; the person behind it — name, address,
 // phone, birth — is a `people` row (0063). Gilles is one person with two
 // profiles, Rixheim and Landser. The API reads a profile through the
-// `profiles` view (0065), which takes those fields from the person, and writes
+// `profiles` view (0066), which takes those fields from the person, and writes
 // them to `people` alone: the copies on `users` are no longer kept, and go in a
 // later deploy (#410).
 
@@ -4636,7 +4636,7 @@ app.patch('/players/:id', async (c) => {
   // fields on its own row, as every profile did before (#655).
   if (!personId) { s.push(...ps); v.push(...pv) }
   if (s.length) { v.push(id); await db.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
-  // The person, which every profile of theirs reads through `profiles` (0065).
+  // The person, which every profile of theirs reads through `profiles` (0066).
   if (personId && ps.length) await db.prepare(`UPDATE people SET ${ps.join(', ')} WHERE id = ?`).bind(...pv, personId).run()
   // Not one of OWN_PROFILE_FIELDS, so only an administrator gets here with it:
   // a licence decides where somebody may play (#644).
@@ -4917,7 +4917,7 @@ app.post('/people/:personId/merge-into', async (c) => {
          SELECT person_id, ?, created_at FROM person_delegates WHERE delegate_id = ? AND person_id != ?`,
     ).bind(targetId, personId, targetId),
     db.prepare('DELETE FROM person_delegates WHERE person_id = ? OR delegate_id = ?').bind(personId, personId),
-    // The profiles read the person's fields through `profiles` (0065): moving them is all it takes.
+    // The profiles read the person's fields through `profiles` (0066): moving them is all it takes.
     db.prepare('UPDATE users SET person_id = ? WHERE person_id = ?').bind(targetId, personId),
     db.prepare('DELETE FROM people WHERE id = ?').bind(personId),
   ])

@@ -153,7 +153,7 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
     expect(writes.indexOf(person!)).toBeLessThan(writes.indexOf(insert!))
     expect(person?.params.slice(1, 5)).toEqual(['Virginie', 'Barlinge', 'v@example.com', '0686839957'])
     // The profile carries the club and the person — the name and the address
-    // are the person's alone since 0065.
+    // are the person's alone since 0066.
     expect(insert?.params).toEqual([expect.any(String), CLUB, person?.params[0]])
   })
 
