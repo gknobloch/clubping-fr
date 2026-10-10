@@ -22,6 +22,7 @@ import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
 import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
+import { DelegationsSection } from '@/components/DelegationsSection'
 import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
 
@@ -248,6 +249,9 @@ export default function MonCompteScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Délégations — who opens this person's profiles, and whose they open (#655) */}
+        {user?.personId && <DelegationsSection personId={user.personId} />}
 
         {/* Notifications — the member's own switch, not a club setting */}
         <View style={styles.section}>

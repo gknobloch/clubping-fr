@@ -1,4 +1,4 @@
-import type { DevUser, Profile, User } from '@shared/types'
+import type { Delegations, DevUser, Profile, User } from '@shared/types'
 import { apiUrl, clientHeaders } from '@/constants/api'
 
 // ---------------------------------------------------------------------------
@@ -165,4 +165,47 @@ export async function fetchDevUsers(): Promise<DevUser[]> {
 /** Sign in as any user, with no credential. Returns a real session. */
 export function devLogin(userId: string): Promise<AuthSession> {
   return postJson('/auth/dev/login', { userId })
+}
+
+// --- Delegation (#655) -------------------------------------------------------
+// Awaited, never optimistic, as on the web: the API decides who may, and a list
+// that showed a delegation the server refused would be a promise to a parent
+// that their child's profiles will open — and they would not.
+
+/** Who may open this person's profiles, and whose they open. */
+export async function fetchDelegations(personId: string): Promise<Delegations> {
+  const res = await fetch(apiUrl(`/people/${encodeURIComponent(personId)}/delegations`), { headers: dataHeaders() })
+  return parse<Delegations>(res)
+}
+
+/** The refusals the API words itself (no account, ambiguous, oneself), passed on as written. */
+export type DelegateOutcome = { ok: true } | { ok: false; message: string }
+
+/** Name a delegate by the address they sign in with — the person's own gesture. */
+export async function addDelegateByEmail(personId: string, email: string): Promise<DelegateOutcome> {
+  try {
+    const res = await fetch(apiUrl(`/people/${encodeURIComponent(personId)}/delegates`), {
+      method: 'POST',
+      headers: dataHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ email }),
+    })
+    if (res.ok) return { ok: true }
+    const body = (await res.json().catch(() => null)) as { message?: string } | null
+    return { ok: false, message: body?.message ?? "L'opération a échoué." }
+  } catch {
+    return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+  }
+}
+
+/** Withdraw a delegation — the person's, or the delegate stepping down. */
+export async function removeDelegate(personId: string, delegateId: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      apiUrl(`/people/${encodeURIComponent(personId)}/delegates/${encodeURIComponent(delegateId)}`),
+      { method: 'DELETE', headers: dataHeaders() },
+    )
+    return res.ok
+  } catch {
+    return false
+  }
 }
