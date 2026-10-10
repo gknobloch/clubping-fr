@@ -19,6 +19,7 @@ import { licenceLabel, licencesOf } from '@/lib/licences'
 import { clubsToAddTo, linkedProfiles } from '@/lib/linkedProfiles'
 import { AddToClubDialog } from '@/components/AddToClubDialog'
 import { PersonDelegates } from '@/components/PersonDelegates'
+import { SharedAddresses } from '@/components/SharedAddresses'
 import { LicenceNumbers } from '@/components/LicenceNumbers'
 
 export function PlayerDetailPage() {
@@ -31,6 +32,8 @@ export function PlayerDetailPage() {
   const [zoom, setZoom] = useState(false)
   const [editingGroups, setEditingGroups] = useState(false)
   const [addingToClub, setAddingToClub] = useState(false)
+  // Settling a shared address names a delegate: the list below reloads.
+  const [delegatesVersion, setDelegatesVersion] = useState(0)
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
@@ -216,7 +219,10 @@ export function PlayerDetailPage() {
           <h2 id="player-delegates-title" className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Délégations
           </h2>
-          <PersonDelegates personId={player.personId} mode="admin" idPrefix="player" />
+          <div className="space-y-4">
+            <SharedAddresses personId={player.personId} onSettled={() => setDelegatesVersion((v) => v + 1)} />
+            <PersonDelegates key={delegatesVersion} personId={player.personId} mode="admin" idPrefix="player" />
+          </div>
         </section>
       )}
 

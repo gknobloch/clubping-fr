@@ -28,6 +28,8 @@ import {
   type FfttClubDetail,
 } from '@/lib/ffttClub'
 import { decideClubAdminRequest, fetchClubAdminRequests } from '@/lib/onboardingApi'
+import { SharedAddresses } from '@/components/SharedAddresses'
+import { sharedAddresses } from '@/lib/sharedAddresses'
 
 /**
  * "Demandes d'accès" — where a general admin decides who administers a club
@@ -47,7 +49,8 @@ import { decideClubAdminRequest, fetchClubAdminRequests } from '@/lib/onboarding
  */
 export function RequestsPage() {
   const { user, token } = useAuth()
-  const { clubs } = useAppData()
+  const { clubs, users = [] } = useAppData()
+  const sharedCount = useMemo(() => sharedAddresses(users).length, [users])
   const [requests, setRequests] = useState<ClubAdminRequest[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showDecided, setShowDecided] = useState(false)
@@ -144,6 +147,22 @@ export function RequestsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* #655, step 3 — the other thing waiting on the general admin: addresses
+          0063 could not attribute to one person. Shown only while there are some. */}
+      {sharedCount > 0 && (
+        <section aria-labelledby="shared-addresses-title" className="space-y-3">
+          <h2 id="shared-addresses-title" className="font-display text-lg font-semibold text-slate-800">
+            Adresses partagées ({sharedCount})
+          </h2>
+          <p className="text-sm text-slate-600">
+            Plusieurs personnes se connectent avec la même adresse — un parent et son enfant, le plus
+            souvent. Choisissez qui la garde : les autres n’ont plus d’adresse, et cette personne devient
+            leur délégué, avec le même accès à leurs profils qu’aujourd’hui.
+          </p>
+          <SharedAddresses />
+        </section>
       )}
 
       {deciding && (
