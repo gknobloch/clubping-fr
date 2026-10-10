@@ -5728,7 +5728,7 @@ type DelegationContext = { get: (k: 'user') => UserRow | undefined; env: { DB: D
 
 async function administersPerson(c: DelegationContext, personId: string): Promise<boolean> {
   const viewer = managingViewer(c)
-  const clubs = (await c.env.DB.prepare('SELECT DISTINCT club_id FROM users WHERE person_id = ?')
+  const clubs = (await c.env.DB.prepare('SELECT DISTINCT club_id FROM profiles WHERE person_id = ?')
     .bind(personId).all<{ club_id: string | null }>()).results.map((r) => r.club_id)
   return clubs.length > 0 && clubs.every((club) => !!club && administers(viewer, club))
 }
