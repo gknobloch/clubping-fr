@@ -551,7 +551,14 @@ export interface DataState {
  * (admins) are not players. Person fields are populated when isPlayer is true.
  */
 export interface User {
+  /** The club profile — one per (person, club) since #655. */
   id: string
+  /**
+   * The person behind this club profile (#655): Gilles is one person with a
+   * Rixheim and a Landser profile. Absent on a cache predating it, or on a
+   * profile written in the deploy window — each is then its own person.
+   */
+  personId?: string
   /**
    * Absent when the member has no address on file (#315). E-mail is also the
    * sign-in identifier, so such a member cannot log in — which was already
@@ -616,6 +623,23 @@ export interface DevUser extends User {
   clubName?: string
   /** Numbers of the teams this member captains, ascending. Absent if none. */
   captainOf?: number[]
+}
+
+/** A person as a delegation names them (#655). */
+export interface DelegationPerson {
+  id: string
+  firstName?: string
+  lastName?: string
+  email?: string
+}
+
+/**
+ * A person's delegations (#655): who may open their profiles, and whose
+ * profiles they may open.
+ */
+export interface Delegations {
+  delegates: DelegationPerson[]
+  represents: DelegationPerson[]
 }
 
 /**

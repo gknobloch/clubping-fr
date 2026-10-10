@@ -18,6 +18,7 @@ import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
+import { mayEditPerson } from '@shared/lib/linkedProfiles'
 import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared/lib/memberGroups'
@@ -74,7 +75,10 @@ export function PlayerDetail({
   // Qui administre le club du licencié, et personne d'autre — la même question
   // que `administers` côté API, qui refuse déjà le reste depuis #558. Un
   // coéquipier qui lit la fiche ne voit donc pas le déclencheur.
+  // Et sur une personne qui joue aussi dans un autre club, ni l'un ni l'autre
+  // de ses administrateurs : ses coordonnées sont à elle (#655).
   const mayEditContact = !!user && !!player && canManageClub(user, player.clubId)
+    && mayEditPerson(player, user, players)
 
   // The club's groups (#602), and which of them this member is in. The payload
   // only carries the viewer's own club's, so another club's fiche shows none.

@@ -18,6 +18,7 @@ import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@/lib/m
 import { licenceLabel, licencesOf } from '@/lib/licences'
 import { clubsToAddTo, linkedProfiles } from '@/lib/linkedProfiles'
 import { AddToClubDialog } from '@/components/AddToClubDialog'
+import { PersonDelegates } from '@/components/PersonDelegates'
 import { LicenceNumbers } from '@/components/LicenceNumbers'
 
 export function PlayerDetailPage() {
@@ -201,6 +202,21 @@ export function PlayerDetailPage() {
               ))}
             </ul>
           )}
+        </section>
+      )}
+
+      {/* Delegations (#655) — the general admin's, for someone who cannot ask
+          for themselves (Sacha, no address). The person manages their own
+          from « Mon compte ». */}
+      {user?.role === 'general_admin' && player.personId && (
+        <section
+          aria-labelledby="player-delegates-title"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <h2 id="player-delegates-title" className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Délégations
+          </h2>
+          <PersonDelegates personId={player.personId} mode="admin" idPrefix="player" />
         </section>
       )}
 

@@ -25,6 +25,7 @@ import { GroupMatchToggle, MemberGroupFilter } from '@/components/MemberGroupFil
 import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@/lib/memberGroups'
 import { FFTT_FEDERATION_ID, clubFederationIds } from '@/lib/federations'
 import { LicenceNumbers } from '@/components/LicenceNumbers'
+import { linkedProfiles, mayEditPerson } from '@/lib/linkedProfiles'
 
 const STATUS_LABELS: Record<PlayerType['status'], string> = {
   active: 'Actif',
@@ -89,6 +90,14 @@ export function PlayersPage() {
     ...formFederationIds.filter((id) => id !== FFTT_FEDERATION_ID),
     ...Object.keys(form.otherLicences).filter((id) => form.otherLicences[id].trim()),
   ])]
+  // Name and coordinates belong to the PERSON, shared by every club profile of
+  // theirs (#655): on someone who also plays elsewhere, they are the person's
+  // own to change, or a general admin's — the rule PATCH /players/:id applies.
+  const personLocked = !!editing && !mayEditPerson(editing, user, allPlayers)
+  const otherClubNames = editing
+    ? linkedProfiles(editing, allPlayers)
+      .map((p) => clubs.find((c) => c.id === p.clubId)?.displayName ?? p.clubId).join(', ')
+    : ''
   const shortNameOf = (id: string) =>
     federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
   const licencesOfForm = () => Object.entries(form.otherLicences)
@@ -251,14 +260,18 @@ export function PlayersPage() {
     const email = form.email.trim()
     if (editing) {
       updatePlayer(editing.id, {
-        firstName: form.firstName,
-        lastName: form.lastName,
+        // Only what this admin may write: the person's fields stay out of the
+        // patch when they belong to the person (#655).
+        ...(personLocked ? {} : {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email,
+          phone: form.phone || undefined,
+          birthDate: form.birthDate || undefined,
+          birthPlace: form.birthPlace || undefined,
+        }),
         licenseNumber: form.licenseNumber,
         licences: licencesOfForm(),
-        email,
-        phone: form.phone || undefined,
-        birthDate: form.birthDate || undefined,
-        birthPlace: form.birthPlace || undefined,
         status: form.status,
       })
       saveCategory(editing.id)
@@ -570,6 +583,12 @@ export function PlayersPage() {
               {creating ? 'Ajouter un joueur' : 'Modifier le joueur'}
             </h2>
             <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {personLocked && (
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  Joue aussi à {otherClubNames} : son nom et ses coordonnées se modifient
+                  par le joueur lui-même, depuis « Mon compte », ou par l’administrateur général.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="player-firstName" className="block text-sm font-medium text-slate-700">Prénom</label>
@@ -578,7 +597,8 @@ export function PlayersPage() {
                     type="text"
                     value={form.firstName}
                     onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
                 <div>
@@ -588,7 +608,8 @@ export function PlayersPage() {
                     type="text"
                     value={form.lastName}
                     onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
               </div>
@@ -652,7 +673,8 @@ export function PlayersPage() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  readOnly={personLocked}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
               <div>
@@ -662,7 +684,8 @@ export function PlayersPage() {
                   type="text"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  readOnly={personLocked}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -676,7 +699,8 @@ export function PlayersPage() {
                     value={form.birthDate}
                     onChange={(e) => setForm((f) => ({ ...f, birthDate: e.target.value }))}
                     placeholder="JJ/MM/AAAA"
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
                 <div>
@@ -688,7 +712,8 @@ export function PlayersPage() {
                     type="text"
                     value={form.birthPlace}
                     onChange={(e) => setForm((f) => ({ ...f, birthPlace: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
               </div>

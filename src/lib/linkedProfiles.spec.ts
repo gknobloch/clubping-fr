@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Club } from '@/types'
-import { clubsToAddTo, linkedProfiles } from './linkedProfiles'
+import { clubsToAddTo, linkedProfiles, mayEditPerson } from './linkedProfiles'
 
 // #644 — Gilles at Rixheim (FFTT) and at Landser (AGR): two profiles, one
 // address. The address is the whole link, compared as at sign-in.
@@ -21,7 +21,19 @@ const nobody = { id: 'n', clubId: 'rixheim' }
 const players = [gillesRixheim, gillesLandser, someone, nobody]
 
 describe('linkedProfiles', () => {
-  it('finds the other profiles of the same address, case aside', () => {
+  // #655 — the person is the link, and a parent and a child sharing an address
+  // are two people.
+  it('finds the profiles of the same person, and not of the same address', () => {
+    const gillesA = { id: 'a', email: 'g@club.fr', personId: 'person-g', clubId: 'rixheim' }
+    const gillesB = { id: 'b', email: 'g@club.fr', personId: 'person-g', clubId: 'landser' }
+    const benjamin = { id: 'ben', email: 'h@club.fr', personId: 'person-ben', clubId: 'rixheim' }
+    const sacha = { id: 'sacha', email: 'h@club.fr', personId: 'person-sacha', clubId: 'rixheim' }
+    const all = [gillesA, gillesB, benjamin, sacha]
+    expect(linkedProfiles(gillesA, all)).toEqual([gillesB])
+    expect(linkedProfiles(benjamin, all)).toEqual([])
+  })
+
+  it('falls back on the address for a cache that predates people', () => {
     expect(linkedProfiles(gillesRixheim, players)).toEqual([gillesLandser])
   })
 
@@ -45,5 +57,27 @@ describe('clubsToAddTo', () => {
 
   it('offers a player nothing', () => {
     expect(clubsToAddTo(someone, { role: 'player', clubId: 'landser' }, clubs, players)).toEqual([])
+  })
+})
+
+describe('mayEditPerson (#655)', () => {
+  const gillesA = { id: 'a', email: 'g@club.fr', personId: 'person-g', clubId: 'rixheim' }
+  const gillesB = { id: 'b', email: 'g@club.fr', personId: 'person-g', clubId: 'landser' }
+  const sam = { id: 's', email: 's@club.fr', personId: 'person-s', clubId: 'rixheim' }
+  const all = [gillesA, gillesB, sam]
+
+  it("leaves a one-club person to that club's admin, as since #600", () => {
+    expect(mayEditPerson(sam, { role: 'club_admin', clubId: 'rixheim' }, all)).toBe(true)
+    expect(mayEditPerson(sam, { role: 'club_admin', clubId: 'landser' }, all)).toBe(false)
+  })
+
+  it('keeps a person playing in two clubs from the admin of either', () => {
+    expect(mayEditPerson(gillesA, { role: 'club_admin', clubId: 'rixheim' }, all)).toBe(false)
+    expect(mayEditPerson(gillesB, { role: 'club_admin', clubId: 'landser' }, all)).toBe(false)
+  })
+
+  it('lets a general admin, and nobody else', () => {
+    expect(mayEditPerson(gillesA, { role: 'general_admin' }, all)).toBe(true)
+    expect(mayEditPerson(gillesA, { role: 'player', clubId: 'rixheim' }, all)).toBe(false)
   })
 })

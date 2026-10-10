@@ -570,6 +570,79 @@ invisible dans le diff comme dans la revue.
   `clubsToAddTo` (`src/lib/linkedProfiles.ts`) sont la règle de la section
   « Autres clubs » de la fiche.
 
+### Une personne, ses profils de club (#655)
+- **Une ligne `users` est un profil de club** ; la personne derrière — nom,
+  adresse, téléphone, naissance — est une ligne `people` (0063), et
+  `users.person_id` les relie. Gilles est une personne, avec un profil à
+  Rixheim et un à Landser.
+- **`users` n'est ni renommée ni reconstruite** : une trentaine de colonnes,
+  six clés en cascade et trois tableaux JSON pointent vers `users.id` (le
+  piège de 0036, #604, 0060). La personne s'ajoute **à côté**, et chaque id
+  reste ce qu'il est.
+- **Les champs de la personne restent sur `users`, en miroir** : l'API les y
+  lit à une centaine d'endroits. Une écriture va à `people` **et** à chaque
+  profil de la personne (`PATCH /players/:id`) ; les lectures migreront plus
+  tard, puis les colonnes partiront, chaque étape dans son déploiement (#410).
+- **Le rattrapage** : une personne par ligne, puis les lignes de même adresse
+  **et** de même nom fusionnées — la règle de #640. La personne gardée est celle
+  du profil **le plus ancien** (son orthographe), et elle reprend le téléphone
+  et la naissance que l'un de ses profils connaissait. Un parent et un enfant
+  qui partagent une adresse restent deux personnes : rien ne dit lequel est le
+  parent.
+- **Toute création de profil écrit sa personne d'abord** (`insertPerson`,
+  `personIdFor`) : `POST /players`, l'invitation d'un administrateur,
+  l'approbation d'une demande (#474). « Ajouter à un autre club » rattache le
+  nouveau profil à la personne de la source — c'est le lien, la copie n'est que
+  le miroir.
+- **Qui écrit la personne** : elle-même (les quatre champs de « Mon compte »,
+  depuis n'importe lequel de ses profils) et l'administrateur général. Un
+  administrateur de club **seulement s'il administre tous les clubs de la
+  personne** : quelqu'un d'un seul club reste à corriger par son club (#600),
+  Gilles ne l'est ni par Rixheim ni par Landser. `mayEditPerson`
+  (`src/lib/linkedProfiles.ts`) côté écrans, la même règle dans l'API.
+- **Seul ce qui change est jugé** : les formulaires renvoient tous les champs,
+  et un administrateur qui corrige une licence ne doit pas être refusé pour une
+  adresse laissée telle quelle.
+- `linkedProfiles` relie par la **personne**, jamais par l'adresse — un parent
+  et un enfant ne sont pas deux clubs d'une même personne. L'adresse ne sert
+  plus que pour un cache d'avant #655.
+- **L'anonymisation de la base dev** donne un pseudonyme par personne (sinon
+  les deux profils de Gilles se liraient comme deux inconnus), réécrit
+  `people`, et anonymise aussi les licences des autres fédérations (#644) et
+  les affiliations des clubs (#643) ; `refresh-dev-db.sh` vérifie les trois.
+- Un profil écrit entre la migration et la bascule du worker n'a pas de
+  personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
+  garde ses champs sur sa ligne, comme avant.
+- **Ce qu'un profil atteint est une seule relation, `reaches`**
+  (`functions/api/reach.ts`) : les profils de sa personne, ceux des personnes
+  qui lui ont délégué, et — le temps du nettoyage — ceux de la même adresse
+  (#640). Le sélecteur la liste, `/auth/switch` l'admet, la connexion ouvre le
+  plus récent de ce qu'elle atteint, et un appareil sonne pour elle
+  (`tokensByUser`). Un seul fragment SQL pour tous : un téléphone qui sonnerait
+  pour un profil que le sélecteur n'ouvre pas est le défaut qu'il empêche.
+- **La session reste un profil de club** : aucune règle d'autorisation ne
+  change. Ce que la personne ouvre au-delà, c'est `reaches`, relu à chaque
+  changement — une délégation retirée prend effet aussitôt.
+- **La délégation** (`person_delegates`, 0064) : Benjamin ouvre les profils de
+  Sacha, Sacha n'ouvre pas ceux de Benjamin. **Un seul niveau**, par
+  construction : un délégué n'atteint jamais les délégations de celui qui
+  délègue. Plusieurs délégués par personne, plusieurs personnes par délégué.
+- **Qui délègue** : la personne (dans « Mon compte », par l'adresse de son
+  délégué) et l'administrateur général (sur la fiche, en choisissant un membre —
+  pour qui ne peut pas se connecter). Un délégué peut **se retirer** (« Ne plus
+  gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Aucun
+  administrateur de club. Une adresse qu'aucun compte n'utilise, ou que
+  plusieurs personnes partagent encore, est refusée avec sa raison.
+- `householdIds` est le foyer **dans les deux sens** — qui le profil atteint
+  et qui l'atteint : l'alerte capitaine épargne le parent qui a agi depuis le
+  profil de son enfant (#640), délégation ou adresse partagée.
+- **Les tests de cette relation tournent sur un vrai SQLite migré**
+  (`migratedD1.testkit.ts` : toutes les migrations, dans l'ordre). Une
+  jointure écrite contre la mauvaise colonne s'enregistre parfaitement dans un
+  faux qui reconnaît les requêtes à leur forme, et ne rend rien en production.
+  `*.testkit.ts` est du côté des tests dans les deux tsconfig, et n'est pas une
+  suite.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a
@@ -855,10 +928,12 @@ invisible dans le diff comme dans la revue.
   *un* membre. Se connecter ouvre **le profil vu le plus récemment**
   (`last_seen_at`), décidé côté serveur pour valoir d'un appareil à l'autre.
 - **Changer de profil, c'est se reconnecter** (`POST /auth/switch`) : une
-  session neuve pour la cible, l'ancienne révoquée, et l'adresse est relue *au
+  session neuve pour la cible, l'ancienne révoquée, et la portée est relue *au
   moment du changement* — un enfant à qui l'on donne sa propre adresse sort de
-  la portée du parent aussitôt. Inconnu ou d'une autre adresse : le même 403.
-  Une adresse vide ne partage rien (`sameAddress`).
+  la portée du parent aussitôt, sauf délégation. Inconnu ou hors de portée : le
+  même 403. Une adresse vide ne partage rien. Depuis #655, la portée est
+  `reaches` : la personne, ses délégations, et l'adresse partagée en
+  transition.
 - **Ce n'est pas une déconnexion** : rien n'est vidé. Le cache refuse déjà
   l'entrée d'un autre membre (#387, #509) et le premier fetch réécrit ;
   `pp-club-user` est réécrit, sinon un démarrage sans réseau rouvrirait
