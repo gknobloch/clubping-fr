@@ -29,6 +29,7 @@ import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { federationOfTeam, licenceOf } from '@shared/lib/licences'
 
 // ---------------------------------------------------------------------------
 // Match detail — one team's view of a game: availabilities (editable by the
@@ -426,7 +427,8 @@ export function MatchDetail({
           .map((p) => ({
             firstName: p.firstName,
             lastName: p.lastName,
-            license: p.licenseNumber,
+            // The licence of the federation this match is played in (#644).
+            license: licenceOf(p, federationOfTeam(team, divisions, competitions)),
             // A renfort brings their own points: they hang off the phase, not
             // off whichever team fields them (#384).
             points: pointsFor(playerPhasePoints, team.phaseId, p.id),

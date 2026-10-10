@@ -62,6 +62,16 @@ export interface ClubAffiliation {
   name?: string
 }
 
+/**
+ * A member's licence in a federation other than the FFTT (#644) — the FFTT
+ * licence stays `User.licenseNumber`. Read both through `licencesOf`
+ * (src/lib/licences.ts), never one or the other.
+ */
+export interface FederationLicence {
+  federationId: string
+  number: string
+}
+
 export interface Club {
   id: string
   /** The FFTT affiliation number; blank for a club outside the FFTT (#643). */
@@ -541,7 +551,14 @@ export interface DataState {
  * (admins) are not players. Person fields are populated when isPlayer is true.
  */
 export interface User {
+  /** The club profile — one per (person, club) since #655. */
   id: string
+  /**
+   * The person behind this club profile (#655): Gilles is one person with a
+   * Rixheim and a Landser profile. Absent on a cache predating it, or on a
+   * profile written in the deploy window — each is then its own person.
+   */
+  personId?: string
   /**
    * Absent when the member has no address on file (#315). E-mail is also the
    * sign-in identifier, so such a member cannot log in — which was already
@@ -552,7 +569,13 @@ export interface User {
   isPlayer: boolean
   firstName?: string
   lastName?: string
+  /** The FFTT licence; blank for a member who holds none (#644). */
   licenseNumber?: string
+  /**
+   * Licences in every federation but the FFTT (#644). The payload always
+   * fills it for a player; absent — an older cache, a fixture — means none.
+   */
+  licences?: FederationLicence[]
   phone?: string
   birthDate?: string
   birthPlace?: string
@@ -600,6 +623,23 @@ export interface DevUser extends User {
   clubName?: string
   /** Numbers of the teams this member captains, ascending. Absent if none. */
   captainOf?: number[]
+}
+
+/** A person as a delegation names them (#655). */
+export interface DelegationPerson {
+  id: string
+  firstName?: string
+  lastName?: string
+  email?: string
+}
+
+/**
+ * A person's delegations (#655): who may open their profiles, and whose
+ * profiles they may open.
+ */
+export interface Delegations {
+  delegates: DelegationPerson[]
+  represents: DelegationPerson[]
 }
 
 /**

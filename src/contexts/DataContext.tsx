@@ -14,6 +14,9 @@ import type {
   Club,
   ClubAffiliation,
   ClubChannel,
+  DelegationPerson,
+  Delegations,
+  FederationLicence,
   Competition,
   CompetitionGroup,
   DataState,
@@ -443,6 +446,20 @@ async function memberGroupWrite(path: string, method: 'POST' | 'PATCH', body: un
  */
 export type ClubAdminResult = { ok: true } | { ok: false; message: string }
 
+/** What `addProfileInClub` writes on the receiving club (#644). */
+export interface ProfileInClub {
+  clubId: string
+  /** Its FFTT licence, when the receiving club is in the FFTT. */
+  licenseNumber?: string
+  licences?: FederationLicence[]
+}
+
+/** A delegate named, or why not — the API's sentence (#655). */
+export type DelegateResult = { ok: true; delegate: DelegationPerson } | { ok: false; message: string }
+
+/** The new profile's id, or why there is none — `id` names one already there. */
+export type ProfileResult = { ok: true; id: string } | { ok: false; message: string; id?: string }
+
 /** Who to appoint: a member the club already has, or someone new by name. */
 export type ClubAdminTarget =
   | { userId: string }
@@ -467,6 +484,21 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
   updateClub: (id: string, patch: Partial<Club>) => void
+  /**
+   * Give a licensee a profile in another club, copied from this one and linked
+   * to it by the same address (#644). Waits for the API: it creates a person.
+   */
+  addProfileInClub: (playerId: string, profile: ProfileInClub) => Promise<ProfileResult>
+  /**
+   * A person's delegations (#655) — not part of the payload: only the person
+   * and a general admin read them, from « Mon compte » and the fiche. Null when
+   * they cannot be read.
+   */
+  fetchDelegations: (personId: string) => Promise<Delegations | null>
+  /** Name a delegate, by member (general admin) or by address (the person). */
+  addDelegate: (personId: string, target: { delegateId: string } | { email: string }) => Promise<DelegateResult>
+  /** Withdraw a delegation, or step down from one. False when it did not land. */
+  removeDelegate: (personId: string, delegateId: string) => Promise<boolean>
   /**
    * Declare or correct the club's affiliation to a federation other than the
    * FFTT (#643) — the FFTT number goes through `updateClub`.
@@ -1954,6 +1986,86 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     return player
   }, [persist])
 
+  const addProfileInClub = useCallback(
+    async (playerId: string, profile: ProfileInClub): Promise<ProfileResult> => {
+      const source = players.find((p) => p.id === playerId)
+      if (!source) return { ok: false, message: 'Licencié introuvable.' }
+      let id = nextId('player')
+      if (persist) {
+        try {
+          const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/profiles`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify(profile),
+          })
+          const body = (await res.json().catch(() => null)) as { id?: string; message?: string } | null
+          if (!res.ok) return { ok: false, message: body?.message ?? "L'opération a échoué.", ...(body?.id ? { id: body.id } : {}) }
+          if (body?.id) id = body.id
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // What the server copied, so the list shows it before the next fetch.
+      const created: Player = {
+        id, clubId: profile.clubId, status: 'active',
+        // The same person (#655): that is what links the two profiles.
+        ...(source.personId ? { personId: source.personId } : {}),
+        firstName: source.firstName, lastName: source.lastName,
+        licenseNumber: profile.licenseNumber?.trim() ?? '',
+        licences: (profile.licences ?? []).filter((l) => l.number.trim()),
+        phone: source.phone,
+        ...(source.email ? { email: source.email } : {}),
+        ...(source.birthDate ? { birthDate: source.birthDate } : {}),
+        ...(source.birthPlace ? { birthPlace: source.birthPlace } : {}),
+      }
+      setPlayers((prev) => [...prev, created])
+      setUsers((prev) => [...prev, { ...created, role: 'player', isPlayer: true }])
+      return { ok: true, id }
+    },
+    [persist, players],
+  )
+
+  // --- Delegation (#655) ---
+  // Awaited, like the club admins below: the API decides who may, and an
+  // optimistic list would show a delegation the person never got.
+  const fetchDelegations = useCallback(async (personId: string): Promise<Delegations | null> => {
+    if (!persist) return { delegates: [], represents: [] }
+    try {
+      const res = await fetch(`/api/people/${encodeURIComponent(personId)}/delegations`, { headers: authHeaders() })
+      return res.ok ? ((await res.json()) as Delegations) : null
+    } catch {
+      return null
+    }
+  }, [persist])
+
+  const addDelegate = useCallback(
+    async (personId: string, target: { delegateId: string } | { email: string }): Promise<DelegateResult> => {
+      if (!persist) return { ok: true, delegate: { id: 'delegateId' in target ? target.delegateId : target.email } }
+      try {
+        const res = await fetch(`/api/people/${encodeURIComponent(personId)}/delegates`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify(target),
+        })
+        const body = (await res.json().catch(() => null)) as { delegate?: DelegationPerson; message?: string } | null
+        if (!res.ok || !body?.delegate) return { ok: false, message: body?.message ?? "L'opération a échoué." }
+        return { ok: true, delegate: body.delegate }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
+
+  const removeDelegate = useCallback(async (personId: string, delegateId: string): Promise<boolean> => {
+    if (!persist) return true
+    try {
+      const res = await fetch(
+        `/api/people/${encodeURIComponent(personId)}/delegates/${encodeURIComponent(delegateId)}`,
+        { method: 'DELETE', headers: authHeaders() },
+      )
+      return res.ok
+    } catch {
+      return false
+    }
+  }, [persist])
+
   // --- Club admins (#474) ---
   // Unlike every other mutation here, these wait for the API and report back:
   // the cap of 5 and the never-zero rule are enforced server-side, so an
@@ -2432,6 +2544,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       deleteCompetition,
       setCompetitionGroup,
       updateClub,
+      addProfileInClub,
+      fetchDelegations,
+      addDelegate,
+      removeDelegate,
       setClubAffiliation,
       removeClubAffiliation,
       archiveClub,
@@ -2534,7 +2650,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

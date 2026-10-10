@@ -23,6 +23,7 @@ import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
 import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
 import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
 
 /**
  * Ce qu'un membre change sur lui-même — `OWN_PROFILE_FIELDS` côté API (#558),
@@ -38,7 +39,7 @@ export default function MonCompteScreen() {
   const canSwitch = hasOtherProfiles(profiles, user?.id)
   const [switching, setSwitching] = useState(false)
   const {
-    players, teams, clubs, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
+    players, teams, clubs, federations, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
   } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -214,7 +215,9 @@ export default function MonCompteScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Profil</Text>
             {club && <InfoRow label="Club" value={club.displayName} />}
-            {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+            {licencesOf(player).map((l) => (
+              <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+            ))}
             {phasePoints && <InfoRow label="Points" value={phasePoints} />}
             {playerTeams.map((t) => (
               <View key={t.id} style={styles.teamRow}>
@@ -231,7 +234,7 @@ export default function MonCompteScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Mes profils</Text>
             <Text style={styles.switchHint}>
-              Votre adresse e-mail donne accès à plusieurs profils :{' '}
+              Votre compte donne accès à plusieurs profils :{' '}
               {profiles.filter((p) => p.id !== user?.id).map(profileName).join(', ')}.
             </Text>
             <TouchableOpacity

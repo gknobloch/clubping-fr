@@ -21,6 +21,7 @@ import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetVi
 import { LicenceBadge } from '@/components/LicenceBadge'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
+import { federationOfTeam, licenceOf } from '@/lib/licences'
 
 /**
  * One team's view of one game: the roster laid out vertically with its
@@ -162,7 +163,8 @@ export function MatchDayDetailPage() {
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
-      license: p.licenseNumber || undefined,
+      // The licence of the federation this match is played in (#644).
+      license: licenceOf(p, federationOfTeam(team, divisions, competitions)) || undefined,
       points: pointsForPlayer(p.id) || undefined,
     }))
 
