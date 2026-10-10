@@ -4917,15 +4917,8 @@ app.post('/people/:personId/merge-into', async (c) => {
          SELECT person_id, ?, created_at FROM person_delegates WHERE delegate_id = ? AND person_id != ?`,
     ).bind(targetId, personId, targetId),
     db.prepare('DELETE FROM person_delegates WHERE person_id = ? OR delegate_id = ?').bind(personId, personId),
+    // The profiles read the person's fields through `profiles` (0065): moving them is all it takes.
     db.prepare('UPDATE users SET person_id = ? WHERE person_id = ?').bind(targetId, personId),
-    // The person's fields are still mirrored on each club profile (#655, step 1).
-    db.prepare(
-      `UPDATE users SET
-         first_name = (SELECT first_name FROM people WHERE id = ?), last_name = (SELECT last_name FROM people WHERE id = ?),
-         email = (SELECT email FROM people WHERE id = ?), phone = (SELECT COALESCE(phone, '') FROM people WHERE id = ?),
-         birth_date = (SELECT birth_date FROM people WHERE id = ?), birth_place = (SELECT birth_place FROM people WHERE id = ?)
-       WHERE person_id = ?`,
-    ).bind(targetId, targetId, targetId, targetId, targetId, targetId, targetId),
     db.prepare('DELETE FROM people WHERE id = ?').bind(personId),
   ])
   return c.json({ ok: true })

@@ -53,8 +53,8 @@ describe('merging two people who are one (#655)', () => {
     expect(d1.rows("SELECT first_name, last_name, phone FROM people WHERE id = 'person-g'"))
       .toEqual([{ first_name: 'Gilles', last_name: 'Knobloch', phone: '0611' }])
     expect(d1.rows("SELECT id FROM people WHERE id = 'person-g-admin'")).toEqual([])
-    // The mirror on the profiles agrees with the person (#655, step 1).
-    expect(d1.rows("SELECT first_name, phone FROM users WHERE id = 'g-admin'"))
+    // Every profile of the person reads its fields — the admin one included.
+    expect(d1.rows("SELECT first_name, phone FROM profiles WHERE id = 'g-admin'"))
       .toEqual([{ first_name: 'Gilles', phone: '0611' }])
   })
 
