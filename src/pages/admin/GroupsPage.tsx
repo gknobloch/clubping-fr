@@ -10,15 +10,17 @@ import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { FileIcon, ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
+import { FederationSelect } from '@/components/FederationSelect'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
+import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision } from '@/lib/federations'
 
 export function GroupsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
-    groups: allGroups, divisions, phases, teams, clubs,
+    groups: allGroups, divisions, phases, teams, clubs, competitions = [], federations = [],
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
@@ -33,6 +35,17 @@ export function GroupsPage() {
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const phase = phases.find((p) => p.id === phaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
+
+  // Federation — first, because everything below it is one federation's: a
+  // general admin picks among all of them, a club admin among their club's
+  // (#660). Without it the division picker mixed "GE 3" with "Excellence".
+  const viewerClub = user?.role === 'general_admin' ? undefined : clubs.find((c) => c.id === user?.clubId)
+  const federationOptions = useMemo(() => federationChoices(federations, viewerClub), [federations, viewerClub])
+  const [chosenFederationId, setChosenFederationId] = useState('')
+  const federationId = federationOptions.some((f) => f.id === chosenFederationId)
+    ? chosenFederationId
+    : federationOptions[0]?.id ?? FFTT_FEDERATION_ID
+  const isFftt = federationId === FFTT_FEDERATION_ID
 
   // Organization — optional filter narrowing the division picker to one FFTT
   // championship (#237). Best-effort: it never blocks browsing when the FFTT
@@ -49,7 +62,7 @@ export function GroupsPage() {
 
   useEffect(() => {
     const ffttPhaseId = phase ? ffttPhaseIdForName(phase.name) : null
-    if (!organizationId || !phase || !ffttPhaseId) {
+    if (!isFftt || !organizationId || !phase || !ffttPhaseId) {
       setOrgDivisionIds(null)
       return
     }
@@ -63,22 +76,22 @@ export function GroupsPage() {
       )
     })
     return () => { cancelled = true }
-  }, [organizationId, phase, fetchDivisionsPreview])
+  }, [isFftt, organizationId, phase, fetchDivisionsPreview])
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
 
   // Division — the actual scope of the page; reset whenever the phase or the
   // organization filter changes so a stale, now-hidden division can't linger.
   const [divisionId, setDivisionId] = useState('')
-  useEffect(() => { setDivisionId('') }, [phase?.id, organizationId])
+  useEffect(() => { setDivisionId('') }, [phase?.id, organizationId, federationId])
 
   const divisionsInPhase = useMemo(
     () =>
-      divisions
+      divisionsOfFederation(divisions, competitions, federationId)
         .filter((d) => d.phaseId === phase?.id && !d.isArchived)
         .filter((d) => !orgDivisionIds || orgDivisionIds.has(d.id))
         .sort((a, b) => a.rank - b.rank),
-    [divisions, phase?.id, orgDivisionIds],
+    [divisions, competitions, federationId, phase?.id, orgDivisionIds],
   )
   const division = divisionsInPhase.find((d) => d.id === divisionId)
 
@@ -88,7 +101,7 @@ export function GroupsPage() {
   const [importGamesFor, setImportGamesFor] = useState<Group | null>(null)
   const [importDocOpen, setImportDocOpen] = useState(false)
   const [importDocForGroup, setImportDocForGroup] = useState<Group | null>(null)
-  const [form, setForm] = useState({ divisionId: '', number: 1 })
+  const [form, setForm] = useState({ federationId: '', divisionId: '', number: 1 })
   const [showArchived, setShowArchived] = useState(false)
 
   const activeGroups = useMemo(() => allGroups.filter((g) => !g.isArchived), [allGroups])
@@ -105,20 +118,48 @@ export function GroupsPage() {
     return `${club?.displayName ?? team.clubId} ${team.number}`
   }
 
+  /**
+   * What the dialog's division picker offers: one federation's divisions, of
+   * one phase — the page's when creating, the group's own when editing. It
+   * listed every division of every phase and federation, so "GE 3" appeared
+   * once per season beside the AGR's (#660).
+   */
+  const dialogPhaseId = editing
+    ? divisions.find((d) => d.id === editing.divisionId)?.phaseId
+    : phase?.id
+  const dialogDivisions = useMemo(
+    () =>
+      divisionsOfFederation(divisions, competitions, form.federationId)
+        .filter((d) => d.phaseId === dialogPhaseId && (!d.isArchived || d.id === form.divisionId))
+        .sort((a, b) => a.rank - b.rank),
+    [divisions, competitions, form.federationId, form.divisionId, dialogPhaseId],
+  )
+  const nextGroupNumber = (divId: string) => allGroups.filter((g) => g.divisionId === divId).length + 1
+
   const openEdit = (group: Group) => {
     setEditing(group)
     setCreating(false)
-    setForm({ divisionId: group.divisionId, number: group.number })
+    const groupDivision = divisions.find((d) => d.id === group.divisionId)
+    setForm({
+      federationId: groupDivision ? federationOfDivision(groupDivision, competitions) : federationId,
+      divisionId: group.divisionId,
+      number: group.number,
+    })
   }
 
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    const divId = division?.id ?? divisions[0]?.id ?? ''
-    setForm({
-      divisionId: divId,
-      number: allGroups.filter((g) => g.divisionId === divId).length + 1,
-    })
+    const divId = division?.id ?? divisionsInPhase[0]?.id ?? ''
+    setForm({ federationId, divisionId: divId, number: nextGroupNumber(divId) })
+  }
+
+  /** A federation picked in the dialog starts over on its first division. */
+  const pickDialogFederation = (fedId: string) => {
+    const first = divisionsOfFederation(divisions, competitions, fedId)
+      .filter((d) => d.phaseId === phase?.id && !d.isArchived)
+      .sort((a, b) => a.rank - b.rank)[0]
+    setForm({ federationId: fedId, divisionId: first?.id ?? '', number: nextGroupNumber(first?.id ?? '') })
   }
 
   const closeModal = () => {
@@ -170,7 +211,7 @@ export function GroupsPage() {
             {isAdmin && (
               <HeaderAction variant="secondary" icon={<FileIcon />} label="Importer depuis un fichier" onClick={() => setImportDocOpen(true)} />
             )}
-            {isAdmin && division && (
+            {isAdmin && division && isFftt && (
               <HeaderAction icon={<ImportIcon />} label="Importer les groupes FFTT" onClick={() => setImportOpen(true)} />
             )}
           </>
@@ -197,8 +238,15 @@ export function GroupsPage() {
       />
 
 
-      {/* Organization (optional filter) + Division pickers */}
+      {/* Federation, Organization (optional filter, FFTT only) + Division pickers */}
       <div className="flex flex-wrap items-end gap-3">
+        <FederationSelect
+          id="groups-federation"
+          options={federationOptions}
+          value={federationId}
+          onChange={(id) => { setChosenFederationId(id); setOrganizationId('') }}
+        />
+        {isFftt && (
         <div>
           <label htmlFor="groups-org" className="block text-sm font-medium text-slate-700">
             Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
@@ -219,6 +267,7 @@ export function GroupsPage() {
             ))}
           </select>
         </div>
+        )}
         <div>
           <label htmlFor="groups-division" className="block text-sm font-medium text-slate-700">
             Division
@@ -367,6 +416,15 @@ export function GroupsPage() {
               {creating ? 'Ajouter un groupe' : 'Modifier le groupe'}
             </h2>
             <div className="mt-4 space-y-4">
+              {creating && (
+                <FederationSelect
+                  id="group-federationId"
+                  options={federationOptions}
+                  value={form.federationId}
+                  onChange={pickDialogFederation}
+                  wide
+                />
+              )}
               <div>
                 <label htmlFor="group-divisionId" className="block text-sm font-medium text-slate-700">
                   Division
@@ -374,10 +432,14 @@ export function GroupsPage() {
                 <select
                   id="group-divisionId"
                   value={form.divisionId}
-                  onChange={(e) => setForm((f) => ({ ...f, divisionId: e.target.value }))}
+                  onChange={(e) => {
+                    const divId = e.target.value
+                    setForm((f) => ({ ...f, divisionId: divId, number: creating ? nextGroupNumber(divId) : f.number }))
+                  }}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 >
-                  {divisions.map((d) => (
+                  {dialogDivisions.length === 0 && <option value="">Aucune division</option>}
+                  {dialogDivisions.map((d) => (
                     <option key={d.id} value={d.id}>{d.displayName}</option>
                   ))}
                 </select>

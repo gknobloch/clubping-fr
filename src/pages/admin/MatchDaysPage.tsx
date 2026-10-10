@@ -221,9 +221,9 @@ export function MatchDaysPage() {
   const importScopeClubId = hasClubScope ? user?.clubId : undefined
   const importableGroupIds = useMemo(
     () => importableGroupIdsFor({
-      phaseId: selectedPhaseId, divisions, groups, teams, clubId: importScopeClubId,
+      phaseId: selectedPhaseId, divisions, competitions, groups, teams, clubId: importScopeClubId,
     }),
-    [divisions, groups, teams, selectedPhaseId, importScopeClubId],
+    [divisions, competitions, groups, teams, selectedPhaseId, importScopeClubId],
   )
 
   /** All teams of the user's club in the selected phase (one block per team; each team has its own group's match-days). */

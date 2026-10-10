@@ -34,6 +34,20 @@ export function federationOfDivision(
 }
 
 /**
+ * The divisions played in one federation — what a division picker offers once
+ * the federation is chosen. A picker listing every federation's divisions at
+ * once mixes "GE 3" with "Promotion Honneur", and offers a club a division of
+ * a federation it does not belong to (#660).
+ */
+export function divisionsOfFederation<D extends Pick<Division, 'competitionId'>>(
+  divisions: ReadonlyArray<D>,
+  competitions: ReadonlyArray<Pick<Competition, 'id' | 'federationId'>>,
+  federationId: string,
+): D[] {
+  return divisions.filter((d) => federationOfDivision(d, competitions) === federationId)
+}
+
+/**
  * Every federation a club is affiliated to, the FFTT first.
  *
  * The FFTT entry is derived from `affiliationNumber` and carries no `name`:
@@ -55,6 +69,22 @@ export function clubFederationIds(club: Pick<Club, 'affiliationNumber' | 'affili
 /** Whether a club belongs to a federation. */
 export function clubIsIn(club: Pick<Club, 'affiliationNumber' | 'affiliations'>, federationId: string): boolean {
   return clubAffiliations(club).some((a) => a.federationId === federationId)
+}
+
+/**
+ * The federations a screen offers when a club is in view: the club's own, the
+ * FFTT first — a Landser admin never picks the FFTT, a Kembs admin picks one
+ * of two (#660). Every federation when no club narrows it, which is a general
+ * admin's view, and also for a club carrying no number at all: offering
+ * nothing would leave such a club unable to add anything.
+ */
+export function federationChoices<F extends Pick<Federation, 'id'>>(
+  federations: ReadonlyArray<F>,
+  club?: Pick<Club, 'affiliationNumber' | 'affiliations'>,
+): F[] {
+  const own = club ? clubFederationIds(club) : []
+  if (own.length === 0) return [...federations]
+  return own.flatMap((id) => federations.filter((f) => f.id === id))
 }
 
 /**
