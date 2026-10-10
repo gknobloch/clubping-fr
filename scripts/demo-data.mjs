@@ -689,6 +689,10 @@ function main(argv) {
       `last_name = ${sqlStr(DEMO_IDENTITY.lastName)}, ` +
       `license_number = ${sqlStr(DEMO_IDENTITY.licenseNumber)} ` +
       `WHERE id = ${sqlStr(DEMO_USER)}`,
+    // The name is the PERSON's (#655); `users` only mirrors it.
+    `UPDATE people SET first_name = ${sqlStr(DEMO_IDENTITY.firstName)}, ` +
+      `last_name = ${sqlStr(DEMO_IDENTITY.lastName)} ` +
+      `WHERE id = (SELECT person_id FROM users WHERE id = ${sqlStr(DEMO_USER)})`,
     // Keyed (phase_id, player_id) since 0038 — the team's own phase, not the
     // active one: they are the same today and need not be forever.
     `INSERT INTO player_phase_points (phase_id, player_id, points) ` +
@@ -839,6 +843,7 @@ function main(argv) {
     // What the player screens show — see DEMO_PROFILE.
     ...Object.entries(DEMO_PROFILE).flatMap(([playerId, { category, phone }]) => [
       `UPDATE users SET phone = ${sqlStr(phone)} WHERE id = ${sqlStr(playerId)}`,
+      `UPDATE people SET phone = ${sqlStr(phone)} WHERE id = (SELECT person_id FROM users WHERE id = ${sqlStr(playerId)})`,
       // Keyed (season_id, player_id) since 0050 — upserted, so re-running is
       // a no-op rather than a duplicate the PRIMARY KEY would reject.
       `INSERT INTO player_season_categories (season_id, player_id, category) ` +

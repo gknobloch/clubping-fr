@@ -145,10 +145,15 @@ describe('POST /players/:id/profiles — a profile in another club (#644)', () =
     expect(res.status).toBe(200)
     const { id } = await res.json() as { id: string }
     const [insert] = userInserts(writes)
-    // id, email, first, last, licence, phone, birth date, birth place, club
+    // id, email, first, last, licence, phone, birth date, birth place, club,
+    // and the PERSON (#655): this source predates people, so it gets one now
+    // and both profiles share it.
     expect(insert.params).toEqual([
       id, 'gilles@club.fr', 'Gilles', 'Knobloch', '', '0799980001', '1980-01-01', 'Mulhouse', LANDSER,
+      'person-p-gilles-rixheim',
     ])
+    expect(writes.find((w) => /UPDATE users SET person_id/.test(w.sql))?.params)
+      .toEqual(['person-p-gilles-rixheim', 'p-gilles-rixheim'])
     expect(licenceWrites(writes).at(-1)!.params).toEqual([id, '1251178', 'agr'])
   })
 

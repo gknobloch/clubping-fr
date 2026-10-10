@@ -284,6 +284,12 @@ export interface UserRow {
   birth_place: string | null
   status: PlayerStatus
   club_id: string | null
+  /**
+   * The person this club profile belongs to (0063, #655). Optional because a
+   * row written in the window between that migration and the new worker has
+   * none; such a profile is simply its own person until the next backfill.
+   */
+  person_id?: string | null
   /** Unix epoch ms of the member's first ever sign-in; NULL = never (#406). */
   first_login_at: number | null
   /** Unix epoch ms, refreshed at most hourly while the member uses the app. */

@@ -502,6 +502,7 @@ app.get('/data', async (c) => {
       id: r.id, firstName: r.first_name ?? '', lastName: r.last_name ?? '',
       licenseNumber: r.license_number ?? '', phone: r.phone,
       licences: licencesByUser.get(r.id) ?? [],
+      ...(r.person_id ? { personId: r.person_id } : {}),
       ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
@@ -576,6 +577,7 @@ app.get('/data', async (c) => {
       ...(r.last_name ? { lastName: r.last_name } : {}),
       ...(r.license_number ? { licenseNumber: r.license_number } : {}),
       ...(licencesByUser.has(r.id) ? { licences: licencesByUser.get(r.id) } : {}),
+      ...(r.person_id ? { personId: r.person_id } : {}),
       ...(r.phone ? { phone: r.phone } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
@@ -4475,15 +4477,65 @@ async function mayWritePlayers(
   return !foreign.some(Boolean)
 }
 
+// --- People (#655) ---
+//
+// A `users` row is a CLUB PROFILE; the person behind it — name, address,
+// phone, birth — is a `people` row (0063). Gilles is one person with two
+// profiles, Rixheim and Landser. Those fields still live on `users` as well, as
+// a mirror kept equal to the person's: the API reads them there in a hundred
+// places, and those reads move later, in their own deploy (#410).
+
+/** The person a new club profile gets: one of its own, keyed on it. */
+const personIdFor = (userId: string) => `person-${userId}`
+
+interface PersonFields {
+  firstName: unknown
+  lastName: unknown
+  email: string | null
+  phone: unknown
+  birthDate: unknown
+  birthPlace: unknown
+}
+
+/**
+ * Write a new person — before the profile that names it, so a profile never
+ * points at nobody. `OR IGNORE`: a retried request finds it already there.
+ */
+async function insertPerson(db: D1Database, personId: string, f: PersonFields): Promise<void> {
+  await db.prepare(
+    `INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(personId, f.firstName ?? null, f.lastName ?? null, f.email, f.phone ?? '', f.birthDate ?? null, f.birthPlace ?? null).run()
+}
+
+/** The fields a person holds, by their payload name — what `users` mirrors. */
+const PERSON_COLUMNS = {
+  firstName: 'first_name',
+  lastName: 'last_name',
+  email: 'email',
+  phone: 'phone',
+  birthDate: 'birth_date',
+  birthPlace: 'birth_place',
+} as const
+type PersonKey = keyof typeof PERSON_COLUMNS
+const isPersonKey = (k: string): k is PersonKey => k in PERSON_COLUMNS
+
 app.post('/players', async (c) => {
   const d = await c.req.json()
   // The club is named by the body, so there is nothing to look up: a club admin
   // fills their own roster, a general admin anyone's (#558).
   if (!administers(managingViewer(c), d.clubId)) return c.json(notAllowed, 403)
+  // A new licensee is a new person (#655); a second club for someone who
+  // already exists goes through POST /players/:id/profiles instead.
+  const personId = personIdFor(d.id)
+  await insertPerson(c.env.DB, personId, {
+    firstName: d.firstName, lastName: d.lastName, email: emailOrNull(d.email),
+    phone: d.phone, birthDate: d.birthDate, birthPlace: d.birthPlace,
+  })
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId, personId).run()
   // A Landser licensee is created with their AGR licence and no FFTT one (#644).
   if ('licences' in d) await replaceLicences(c.env.DB, d.id, d.licences)
   return c.json({ ok: true })
@@ -4532,29 +4584,64 @@ app.patch('/players/:id', async (c) => {
   // their own four contact fields (#558). A `clubId` in the patch is judged
   // twice over — moving somebody writes on the club they leave and on the one
   // they join, so both have to be the caller's.
+  const db = c.env.DB
   const viewer = managingViewer(c)
   const manages =
-    (viewer.role === 'general_admin' || administers(viewer, await clubOfPlayer(c.env.DB, id))) &&
+    (viewer.role === 'general_admin' || administers(viewer, await clubOfPlayer(db, id))) &&
     (!('clubId' in p) || administers(viewer, p.clubId))
-  if (!manages) {
-    const self = c.get('user')?.id === id
-    const ownFieldsOnly = Object.keys(p).every(
-      (k) => (OWN_PROFILE_FIELDS as readonly string[]).includes(k),
-    )
-    if (!self || !ownFieldsOnly) return c.json(notAllowed, 403)
-  }
+
+  // What describes the PERSON — name, address, phone, birth — is shared by
+  // every club profile they have (#655). An administrator of one club does not
+  // decide it for the other: on a person playing in two clubs, only the person
+  // and a general admin may. A person in one club only is the club admin's to
+  // correct, exactly as before (#600).
+  const personValue = (k: PersonKey): unknown =>
+    k === 'email' ? emailOrNull(p.email)
+      : k === 'birthDate' || k === 'birthPlace' ? p[k] ?? null
+        : p[k]
+  const askedPersonKeys = Object.keys(p).filter(isPersonKey)
+  const target = askedPersonKeys.length
+    ? await db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>()
+    : null
+  // Only what CHANGES is judged: the forms send every field, and a club admin
+  // correcting a licence must not be refused over an address left as it was.
+  const personKeys = askedPersonKeys.filter((k) =>
+    !target || (personValue(k) ?? null) !== (target[PERSON_COLUMNS[k]] ?? null))
+  const personId = target?.person_id ?? null
+  const personClubs = personId
+    ? (await db.prepare('SELECT DISTINCT club_id FROM users WHERE person_id = ?').bind(personId)
+      .all<{ club_id: string | null }>()).results.map((r) => r.club_id)
+    : []
+  const clubsOfPerson = personClubs.length ? personClubs : [target?.club_id ?? null]
+  const sessionUser = c.get('user')
+  const self = !!sessionUser && (sessionUser.id === id || (!!personId && sessionUser.person_id === personId))
+  const mayWritePerson = (key: PersonKey) =>
+    viewer.role === 'general_admin'
+    || (manages && clubsOfPerson.every((club) => administers(viewer, club ?? undefined)))
+    || (self && (OWN_PROFILE_FIELDS as readonly string[]).includes(key))
+
+  const profileKeys = Object.keys(p).filter((k) => !isPersonKey(k))
+  if (profileKeys.length && !manages) return c.json(notAllowed, 403)
+  if (!personKeys.every(mayWritePerson)) return c.json(notAllowed, 403)
+
+  const ps: string[] = [], pv: unknown[] = []
+  for (const k of personKeys) { ps.push(`${PERSON_COLUMNS[k]} = ?`); pv.push(personValue(k)) }
 
   const s: string[] = [], v: unknown[] = []
-  if ('firstName' in p) { s.push('first_name = ?'); v.push(p.firstName) }
-  if ('lastName' in p) { s.push('last_name = ?'); v.push(p.lastName) }
   if ('licenseNumber' in p) { s.push('license_number = ?'); v.push(p.licenseNumber) }
-  if ('email' in p) { s.push('email = ?'); v.push(emailOrNull(p.email)) }
-  if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
-  if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
-  if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
-  if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  // A profile with no person yet — written in the deploy window — keeps its
+  // fields on its own row, as every profile did before (#655).
+  if (!personId) { s.push(...ps); v.push(...pv) }
+  if (s.length) { v.push(id); await db.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  if (personId && ps.length) {
+    // The person, and the mirror on every profile of theirs.
+    await db.batch([
+      db.prepare(`UPDATE people SET ${ps.join(', ')} WHERE id = ?`).bind(...pv, personId),
+      db.prepare(`UPDATE users SET ${ps.join(', ')} WHERE person_id = ?`).bind(...pv, personId),
+    ])
+  }
   // Not one of OWN_PROFILE_FIELDS, so only an administrator gets here with it:
   // a licence decides where somebody may play (#644).
   if ('licences' in p) await replaceLicences(c.env.DB, id, p.licences)
@@ -4604,8 +4691,14 @@ app.post('/players/:id/profiles', async (c) => {
     c.json({ error: reason, message: PROFILE_REFUSALS[reason], ...(existingId ? { id: existingId } : {}) }, 409)
   if (source.club_id === clubId) return refuseProfile('same_club')
 
-  // A second click, or a profile somebody made by hand with the same address:
-  // same name and same address in that club is this person already (#640).
+  // The person's profile there already (#655) — a second click, say.
+  if (source.person_id) {
+    const own = await db.prepare('SELECT id FROM users WHERE club_id = ? AND person_id = ?')
+      .bind(clubId, source.person_id).first<{ id: string }>()
+    if (own) return refuseProfile('already_in_club', own.id)
+  }
+  // Or a profile somebody made by hand with the same address: same name and
+  // same address in that club is this person already (#640).
   if (source.email) {
     const existing = await db.prepare(
       `SELECT id FROM users WHERE club_id = ? AND email = ? COLLATE NOCASE
@@ -4616,12 +4709,25 @@ app.post('/players/:id/profiles', async (c) => {
 
   const id = newId('player')
   const licenseNumber = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
+  // The new profile belongs to the same PERSON (#655): that is the link, and
+  // the copied fields below are only the mirror `users` still carries. A
+  // source written in the deploy window has no person yet — it gets one here,
+  // and both profiles share it.
+  let personId = source.person_id ?? null
+  if (!personId) {
+    personId = personIdFor(source.id)
+    await insertPerson(db, personId, {
+      firstName: source.first_name, lastName: source.last_name, email: source.email,
+      phone: source.phone, birthDate: source.birth_date, birthPlace: source.birth_place,
+    })
+    await db.prepare('UPDATE users SET person_id = ? WHERE id = ?').bind(personId, source.id).run()
+  }
   await db.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
   ).bind(
     id, source.email, source.first_name, source.last_name, licenseNumber,
-    source.phone ?? '', source.birth_date, source.birth_place, clubId,
+    source.phone ?? '', source.birth_date, source.birth_place, clubId, personId,
   ).run()
   await replaceLicences(db, id, d.licences)
   return c.json({ ok: true, id })
@@ -4714,12 +4820,16 @@ app.post('/clubs/:clubId/admins', async (c) => {
     .first()
   if (taken) return c.json(refuse('email_taken'), 409)
 
+  const personId = personIdFor(fresh.id)
+  await insertPerson(db, personId, {
+    firstName, lastName, email, phone: (body.phone ?? '').trim(), birthDate: null, birthPlace: null,
+  })
   await db
     .prepare(
-      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-       VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?)`,
+      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+       VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?, ?)`,
     )
-    .bind(fresh.id, email, firstName, lastName, (body.phone ?? '').trim(), clubId)
+    .bind(fresh.id, email, firstName, lastName, (body.phone ?? '').trim(), clubId, personId)
     .run()
   return c.json({ ok: true, userId: fresh.id })
 })
@@ -5202,14 +5312,19 @@ app.patch('/onboarding/requests/:id', async (c) => {
     // FFTT player import, which matches on licence: it would find nothing and
     // insert the same person a second time (#474). Given the licence here, the
     // import finds them and fills in the rest.
+    const personId = personIdFor(candidate.id)
+    await insertPerson(db, personId, {
+      firstName: row.first_name, lastName: row.last_name, email: row.email,
+      phone: row.phone, birthDate: null, birthPlace: null,
+    })
     await db
       .prepare(
-        `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?)`,
+        `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?, ?)`,
       )
       .bind(
         candidate.id, row.email, licence ? 1 : 0, row.first_name, row.last_name,
-        licence, row.phone, clubId,
+        licence, row.phone, clubId, personId,
       )
       .run()
   }

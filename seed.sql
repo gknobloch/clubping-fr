@@ -521,3 +521,12 @@ INSERT INTO training_availabilities (training_id, date, player_id, status) VALUE
 INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES
   ('p2-player-24', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'image/png', '2026-01-01T00:00:00.000Z');
 
+
+-- people (#655) — a person behind every club profile seeded above, as 0063
+-- does for a migrated database: the seed runs after the migrations, so its
+-- members arrive without one. Fabrice and Bastien Dangelser share an address
+-- and stay two people, which is the case delegation will replace.
+INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
+  SELECT 'person-' || id, first_name, last_name, email, phone, birth_date, birth_place
+    FROM users WHERE person_id IS NULL;
+UPDATE users SET person_id = 'person-' || id WHERE person_id IS NULL;

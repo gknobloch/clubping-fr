@@ -1991,6 +1991,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       // What the server copied, so the list shows it before the next fetch.
       const created: Player = {
         id, clubId: profile.clubId, status: 'active',
+        // The same person (#655): that is what links the two profiles.
+        ...(source.personId ? { personId: source.personId } : {}),
         firstName: source.firstName, lastName: source.lastName,
         licenseNumber: profile.licenseNumber?.trim() ?? '',
         licences: (profile.licences ?? []).filter((l) => l.number.trim()),

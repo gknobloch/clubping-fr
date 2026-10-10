@@ -148,8 +148,12 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
     expect(res.status).toBe(200)
     const insert = writes.find((w) => /INSERT INTO users/.test(w.sql))
     expect(insert?.sql).toContain("'club_admin', 0")
+    // A person of their own (#655), written before the profile that names it.
+    const person = writes.find((w) => /INSERT OR IGNORE INTO people/.test(w.sql))
+    expect(writes.indexOf(person!)).toBeLessThan(writes.indexOf(insert!))
+    expect(person?.params.slice(1, 4)).toEqual(['Virginie', 'Barlinge', 'v@example.com'])
     expect(insert?.params).toEqual([
-      expect.any(String), 'v@example.com', 'Virginie', 'Barlinge', '0686839957', CLUB,
+      expect.any(String), 'v@example.com', 'Virginie', 'Barlinge', '0686839957', CLUB, person?.params[0],
     ])
   })
 
