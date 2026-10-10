@@ -676,6 +676,15 @@ invisible dans le diff comme dans la revue.
   catégories et le jeu de licences (#482, #488) sont des faits de la FFTT.
 - L'administrateur général choisit la fédération en créant une saison ; elle
   ne change plus ensuite — l'id la porte.
+- **La fédération d'abord, puis la phase** : Journées, Équipes, Groupes et
+  Divisions passent par `phaseScope` — les fédérations proposées (celles du
+  club, toutes pour l'administrateur général), celle en vigueur, ses phases
+  dans l'ordre et celle qui s'ouvre. L'en-tête porte `FederationSwitch`
+  (« FFTT | AGR ») ; il ne s'affiche que s'il y a un choix, donc jamais pour
+  Landser ni pour Rixheim. Un lien qui nomme une phase (un match, une journée
+  de l'accueil) ouvre sur sa fédération.
+- Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
+  page : la phase de la FFTT n'a pas de division AGR.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →

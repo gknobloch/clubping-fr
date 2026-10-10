@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import { mockFederations } from '@/mock/data'
-import type { Club, Competition, Division, Group, Phase } from '@/types'
+import type { Club, Competition, Division, Group, Phase, Season, Team } from '@/types'
 
 const viewer = vi.hoisted(() => ({ role: 'general_admin' as string, clubId: undefined as string | undefined }))
 
@@ -19,8 +19,16 @@ const { TeamsPage } = await import('./TeamsPage')
 // admin chooses which, a club is held to its own, and the FFTT imports are
 // not offered where the FFTT has nothing.
 
+// Each federation has its season and its active phase (#645).
+const seasons: Season[] = [
+  { id: '27', displayName: '2026/2027', status: 'active' },
+  { id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' },
+]
 const phase: Phase = {
   id: 'phase-27-1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active',
+}
+const agrPhase: Phase = {
+  id: 'phase-agr-27-1', seasonId: 'agr-27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active',
 }
 const club = (id: string, displayName: string, over: Partial<Club> = {}): Club => ({
   id, affiliationNumber: '', displayName, isArchived: false, addresses: [], channels: [], ...over,
@@ -37,7 +45,7 @@ const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat AGR', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },
 ]
 const division = (id: string, displayName: string, rank: number, competitionId?: string): Division => ({
-  id, phaseId: phase.id, displayName, rank, playersPerGame: 4, isArchived: false, competitionId,
+  id, phaseId: competitionId ? agrPhase.id : phase.id, displayName, rank, playersPerGame: 4, isArchived: false, competitionId,
 })
 const divisions = [
   division('d-ge3', 'GE 3', 1),
@@ -49,11 +57,23 @@ const groups: Group[] = divisions.map((d) => ({
   id: `g-${d.id}`, divisionId: d.id, number: 1, teamIds: [], isArchived: false,
 }))
 
+// Kembs 1 twice — once per federation, each in its own phase (#645).
+const team = (id: string, clubId: string, divisionId: string): Team => ({
+  id, clubId, phaseId: divisions.find((d) => d.id === divisionId)!.phaseId, number: 1, divisionId,
+  groupId: `g-${divisionId}`, gameLocationId: '', defaultDay: 'Jeudi', defaultTime: '20h00',
+  captainId: '', playerIds: [], isArchived: false,
+})
+const teams = [
+  team('kembs-fftt-1', kembs.id, 'd-ge3'),
+  team('kembs-agr-1', kembs.id, 'd-exc'),
+  team('landser-1', landser.id, 'd-hon'),
+]
+
 function renderPage(page: React.ReactNode) {
   const data = {
-    divisions, clubs: [rixheim, kembs, landser], seasons: [], phases: [phase], competitions,
+    divisions, clubs: [rixheim, kembs, landser], seasons, phases: [phase, agrPhase], competitions,
     competitionGroups: [], competitionEligibilities: [], federations: mockFederations,
-    groups, teams: [], players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
+    groups, teams, players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
     gameAvailabilities: [], gameSelections: [], users: [],
   }
@@ -151,5 +171,24 @@ describe('Équipes — the club’s federations only', () => {
     fireEvent.change(within(dialog).getByLabelText('Club'), { target: { value: landser.id } })
     expect(within(dialog).queryByLabelText('Fédération')).not.toBeInTheDocument()
     expect(optionsOf(within(dialog).getByLabelText('Division'))).toEqual(['Excellence', 'Honneur'])
+  })
+
+  // #645 — the federation first, then the phase.
+  it('switches a club in both between its FFTT and its AGR Kembs 1', () => {
+    as('club_admin', kembs.id)
+    renderPage(<TeamsPage />)
+    const federation = screen.getByRole('radiogroup', { name: 'Fédération' })
+    expect(within(federation).getAllByRole('radio').map((r) => r.textContent)).toEqual(['FFTT', 'AGR'])
+    expect(screen.getByText('GE 3 · P. 1')).toBeInTheDocument()
+    fireEvent.click(within(federation).getByRole('radio', { name: 'AGR' }))
+    expect(screen.getByText('Excellence · P. 1')).toBeInTheDocument()
+    expect(screen.queryByText('GE 3 · P. 1')).not.toBeInTheDocument()
+  })
+
+  it('opens a club of the AGR alone on its AGR phase, with no switch', () => {
+    as('club_admin', landser.id)
+    renderPage(<TeamsPage />)
+    expect(screen.queryByRole('radiogroup', { name: 'Fédération' })).not.toBeInTheDocument()
+    expect(screen.getByText('Honneur · P. 1')).toBeInTheDocument()
   })
 })
