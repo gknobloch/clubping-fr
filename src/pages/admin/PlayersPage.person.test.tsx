@@ -34,6 +34,8 @@ const data = vi.hoisted(() => ({ updatePlayer: vi.fn() }))
 vi.mock('@/contexts/DataContext', () => ({
   useAppData: () => ({
     players: [gillesRixheim, gillesLandser, sam],
+    // Everyone's address, for « one address, one person » (#655, 4 bis).
+    users: [gillesRixheim, gillesLandser, sam].map((p) => ({ ...p, role: 'player', isPlayer: true })),
     clubs: [club('rixheim', 'Rixheim PPA'), club('landser', 'Landser ASL')],
     federations: [],
     updatePlayer: data.updatePlayer, addPlayer: vi.fn(),
@@ -75,5 +77,19 @@ describe('PlayersPage — the person behind the profile (#655)', () => {
     const { dialog } = await openEdit('Sam Petit')
     expect(within(dialog).queryByText(/Joue aussi/)).not.toBeInTheDocument()
     expect(within(dialog).getByLabelText('Prénom')).not.toHaveAttribute('readonly')
+  })
+
+  it('refuses another person’s address before saving, and says whose it is (#655, 4 bis)', async () => {
+    const { user, dialog } = await openEdit('Sam Petit')
+    const email = within(dialog).getByLabelText('Email (optionnel)')
+    await user.clear(email)
+    await user.type(email, 'Gilles@club.fr')
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Cette adresse est déjà celle de Gilles Knobloch')
+    expect(within(dialog).getByRole('button', { name: 'Enregistrer' })).toBeDisabled()
+  })
+
+  it('lets a profile keep the address its person already has', async () => {
+    const { dialog } = await openEdit('Sam Petit')
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
   })
 })

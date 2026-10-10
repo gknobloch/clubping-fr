@@ -8,6 +8,7 @@ import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { addressOwner, addressTakenMessage } from '@/lib/addressOwner'
 import { sortByName } from '@/lib/sortByName'
 import { PLAYER_SEARCH_LABEL } from '@/lib/playerSearch'
 import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
@@ -35,7 +36,7 @@ const STATUS_LABELS: Record<PlayerType['status'], string> = {
 export function PlayersPage() {
   const { user } = useAuth()
   const {
-    players: allPlayers, clubs, federations = [], seasons, updatePlayer, addPlayer,
+    players: allPlayers, users = [], clubs, federations = [], seasons, updatePlayer, addPlayer,
     playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
     playerSeasonLicences, memberGroups,
   } = useAppData()
@@ -76,6 +77,14 @@ export function PlayersPage() {
     status: 'active' as PlayerType['status'],
     clubId: '',
   })
+  // One address, one person (#655, 4 bis): said under the field, before an
+  // optimistic save the API would refuse out of sight. Only an address that
+  // changes is judged — a pair from before the rule keeps theirs until the
+  // general admin settles it.
+  const emailChanged = form.email.trim().toLowerCase() !== (editing?.email ?? '').trim().toLowerCase()
+  const emailOwner = emailChanged
+    ? addressOwner(form.email, users, { personId: editing?.personId, id: editing?.id })
+    : undefined
 
   // A licence box per federation of the member's club (#644). The FFTT's stays
   // offered to a member who already holds one, whatever the club: a number on
@@ -674,8 +683,15 @@ export function PlayersPage() {
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                   readOnly={personLocked}
+                  aria-invalid={!!emailOwner}
+                  aria-describedby={emailOwner ? 'player-email-taken' : undefined}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                 />
+                {emailOwner && (
+                  <p id="player-email-taken" role="alert" className="mt-1 text-sm text-red-600">
+                    {addressTakenMessage(emailOwner)}
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="player-phone" className="block text-sm font-medium text-slate-700">Téléphone</label>
@@ -770,7 +786,8 @@ export function PlayersPage() {
                 disabled={
                   !form.firstName ||
                   !form.lastName ||
-                  (creating && !form.clubId)
+                  (creating && !form.clubId) ||
+                  !!emailOwner
                 }
                 className={PRIMARY_BUTTON_CLASS}
               >

@@ -22,6 +22,7 @@ import {
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
 } from '../../src/lib/teamAuthority'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt, seasonNumber } from '../../src/lib/season'
+import { addressTakenMessage } from '../../src/lib/addressOwner'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -4508,6 +4509,25 @@ async function mayWritePlayers(
 /** The person a new club profile gets: one of its own, keyed on it. */
 const personIdFor = (userId: string) => `person-${userId}`
 
+/**
+ * The person ANOTHER than `exceptPersonId` who already signs in with this
+ * address (#655, 4 bis), or null. One address opens one person: a second one
+ * on it is refused here rather than settled later under « Adresses
+ * partagées ». Case and surrounding space aside, as at sign-in.
+ */
+async function addressOwnerIn(db: D1Database, email: string | null, exceptPersonId: string | null) {
+  if (!email?.trim()) return null
+  return db.prepare(
+    `SELECT id, first_name, last_name FROM people
+      WHERE lower(trim(email)) = lower(trim(?)) AND id != ? LIMIT 1`,
+  ).bind(email, exceptPersonId ?? '').first<{ id: string; first_name: string | null; last_name: string | null }>()
+}
+
+const addressTaken = (owner: { first_name: string | null; last_name: string | null }) => ({
+  error: 'address_taken',
+  message: addressTakenMessage({ firstName: owner.first_name, lastName: owner.last_name }),
+}) as const
+
 interface PersonFields {
   firstName: unknown
   lastName: unknown
@@ -4546,7 +4566,10 @@ app.post('/players', async (c) => {
   // fills their own roster, a general admin anyone's (#558).
   if (!administers(managingViewer(c), d.clubId)) return c.json(notAllowed, 403)
   // A new licensee is a new person (#655); a second club for someone who
-  // already exists goes through POST /players/:id/profiles instead.
+  // already exists goes through POST /players/:id/profiles instead. And a new
+  // person cannot take another's address (4 bis).
+  const owner = await addressOwnerIn(c.env.DB, emailOrNull(d.email), null)
+  if (owner) return c.json(addressTaken(owner), 409)
   const personId = personIdFor(d.id)
   await insertPerson(c.env.DB, personId, {
     firstName: d.firstName, lastName: d.lastName, email: emailOrNull(d.email),
@@ -4643,6 +4666,12 @@ app.patch('/players/:id', async (c) => {
   const profileKeys = Object.keys(p).filter((k) => !isPersonKey(k))
   if (profileKeys.length && !manages) return c.json(notAllowed, 403)
   if (!personKeys.every(mayWritePerson)) return c.json(notAllowed, 403)
+  // A changed address must not be another person's (4 bis). Judged only when
+  // it changes: a form sent back unchanged is not taking anything.
+  if (personKeys.includes('email')) {
+    const owner = await addressOwnerIn(db, emailOrNull(p.email), personId)
+    if (owner) return c.json(addressTaken(owner), 409)
+  }
 
   const ps: string[] = [], pv: unknown[] = []
   for (const k of personKeys) { ps.push(`${PERSON_COLUMNS[k]} = ?`); pv.push(personValue(k)) }
@@ -5034,19 +5063,16 @@ app.post('/clubs/:clubId/admins', async (c) => {
   const decision = canAddClubAdmin(users, clubId, fresh, viewer)
   if (!decision.ok) return c.json(refuse(decision.reason), decision.reason === 'not_allowed' ? 403 : 409)
 
-  // An address may sign in as several members since #640 — a parent who does
-  // not play, administering the club their licensed child plays in under the
-  // parent's address, is exactly who this form exists for. What it must not do
-  // is mint a second row for someone the address already names: same address
-  // and same name is that person, to be designated rather than invited.
-  const taken = await db
-    .prepare(
-      `SELECT id FROM users WHERE lower(email) = lower(?)
-          AND lower(trim(first_name)) = lower(?) AND lower(trim(last_name)) = lower(?)`,
-    )
-    .bind(email, firstName, lastName)
-    .first()
-  if (taken) return c.json(refuse('email_taken'), 409)
+  // One address, one person (#655, 4 bis). Someone the address already names
+  // under the same name IS that person — to be designated, not invited again;
+  // under another name, the address is theirs and not this invitee's (#640
+  // let a parent and a child share one; that is over).
+  const owner = await addressOwnerIn(db, email, null)
+  if (owner) {
+    const same = (owner.first_name ?? '').trim().toLowerCase() === firstName.toLowerCase()
+      && (owner.last_name ?? '').trim().toLowerCase() === lastName.toLowerCase()
+    return c.json(same ? refuse('email_taken') : addressTaken(owner), 409)
+  }
 
   const personId = personIdFor(fresh.id)
   await insertPerson(db, personId, {

@@ -9,6 +9,7 @@ import { fonts } from '@/constants/typography'
 import { contentWidth } from '@/components/Screen'
 import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 import type { Player } from '@shared/types'
+import { addressTakenMessage } from '@shared/lib/addressOwner'
 
 // ---------------------------------------------------------------------------
 // Modifier les coordonnées d'un licencié (#600)
@@ -92,20 +93,30 @@ export function ContactEditor({
   title,
   fields,
   subject,
+  addressOwner,
   onSave,
   onClose,
 }: {
   title: string
   fields: readonly ContactField[]
   subject: ContactSubject
+  /**
+   * Who else already signs in with an address (#655, 4 bis) — one address,
+   * one person. Asked only of an address that changed: a pair from before the
+   * rule keeps theirs until the general admin settles it.
+   */
+  addressOwner?: (email: string) => { firstName?: string; lastName?: string } | undefined
   /** Appelé seulement s'il y a quelque chose à écrire. */
   onSave: (patch: ContactPatch) => void
   onClose: () => void
 }) {
   const [was] = useState<Draft>(() => draftOf(subject))
   const [draft, setDraft] = useState<Draft>(was)
+  const emailChanged = draft.email.trim().toLowerCase() !== was.email.trim().toLowerCase()
+  const owner = emailChanged && draft.email.trim() ? addressOwner?.(draft.email) : undefined
 
   function submit() {
+    if (owner) return
     const patch = patchOf(draft, was, fields)
     if (Object.keys(patch).length > 0) onSave(patch)
     onClose()
@@ -131,8 +142,14 @@ export function ContactEditor({
               <Text style={styles.cancel}>Annuler</Text>
             </TouchableOpacity>
             <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={submit} hitSlop={8} testID="contact-edit-save">
-              <Text style={styles.save}>Enregistrer</Text>
+            <TouchableOpacity
+              onPress={submit}
+              disabled={!!owner}
+              hitSlop={8}
+              testID="contact-edit-save"
+              accessibilityState={{ disabled: !!owner }}
+            >
+              <Text style={[styles.save, owner && styles.saveDisabled]}>Enregistrer</Text>
             </TouchableOpacity>
           </View>
 
@@ -153,6 +170,11 @@ export function ContactEditor({
                     placeholder={field.placeholder}
                     placeholderTextColor={colors.textSecondary}
                   />
+                  {name === 'email' && owner ? (
+                    <Text style={styles.error} accessibilityRole="alert" testID="contact-edit-email-taken">
+                      {addressTakenMessage(owner)}
+                    </Text>
+                  ) : null}
                 </View>
               )
             })}
@@ -173,6 +195,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
   cancel: { fontSize: 15, color: colors.textSecondary },
   save: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.accent },
+  saveDisabled: { opacity: 0.4 },
+  error: { fontSize: 13, color: colors.danger, marginTop: 6 },
   scroll: { padding: 16, gap: 16 },
   field: {
     backgroundColor: colors.card, borderRadius: 12,

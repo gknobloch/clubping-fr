@@ -665,6 +665,16 @@ invisible dans le diff comme dans la revue.
 - La route **relit l'adresse** plutôt que de croire l'écran (409 `not_shared`
   si elle a changé depuis), et vide l'adresse et crée la délégation **dans un
   seul batch** : entre les deux, l'enfant serait hors de portée du parent.
+- **Une adresse, une personne** (4 bis) : créer un licencié, inviter un
+  administrateur ou changer une adresse vers celle d'une **autre personne**
+  est refusé (409 `address_taken`, message nommant à qui elle est —
+  `addressOwner` / `addressTakenMessage`, `src/lib/addressOwner.ts`). Les
+  formulaires le disent **avant** d'enregistrer (le web écrit d'avance, et un
+  refus de l'API passerait inaperçu) ; l'API est le filet. Seule une adresse
+  **qui change** est jugée : une paire d'avant la règle garde la sienne
+  jusqu'à ce que l'administrateur général la règle. Un enfant n'a pas
+  d'adresse, ou la sienne — et son parent pour délégué. L'index unique
+  viendra une fois les adresses partagées réglées en production.
 - **Ou ce sont deux fiches d'une même personne** : « C'est la même personne »
   (deux personnes seulement — à trois, lesquelles ?) fusionne l'une dans
   l'autre (`POST /people/:personId/merge-into`) : ses profils, ses
@@ -1049,11 +1059,11 @@ invisible dans le diff comme dans la revue.
 - **L'alerte capitaine épargne le foyer de l'auteur** : un parent capitaine
   qui change la réponse de son enfant depuis le profil de l'enfant serait
   prévenu de son propre geste, sur le téléphone qu'il tient.
-- **Inviter un administrateur sous une adresse déjà prise est permis**, pour
-  un autre nom : un parent sans licence qui administre le club de son enfant
-  est exactement ce cas. Même adresse **et** même nom, c'est la même personne
-  — `email_taken`, à désigner plutôt qu'à inviter. L'approbation d'une demande
-  d'administration (#474) suit la même règle.
+- ~~Inviter un administrateur sous une adresse déjà prise est permis~~ —
+  **plus depuis #655 (4 bis) : une adresse, une personne.** Même adresse et
+  même nom, c'est la même personne — `email_taken`, à désigner plutôt qu'à
+  inviter ; même adresse et un autre nom, l'adresse est à quelqu'un d'autre —
+  `address_taken`, qui dit à qui.
 - L'anonymisation de la base dev **garde partagée une adresse partagée**, pour
   qu'une préversion montre le sélecteur. Les fixtures (`src/mock/data.ts`) et
   `seed.sql` en portent une : Fabrice et Bastien Dangelser. Sans backend

@@ -11,13 +11,14 @@ import { hasOtherProfiles } from '@/lib/profiles'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
 import { currentRankings } from '@/lib/ranking'
+import { addressOwner, addressTakenMessage } from '@/lib/addressOwner'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { licenceLabel, licencesOf } from '@/lib/licences'
 import { activePhaseIdsOf, clubFederationIds } from '@/lib/federations'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
-  const { players, clubs, federations = [], teams, phases, seasons = [], playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, users = [], clubs, federations = [], teams, phases, seasons = [], playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
@@ -70,9 +71,13 @@ export function ComptePage() {
   // they must still be able to edit the rest of their details, and an admin can
   // clear anyone's address from the Joueurs page (#315).
   const removingOwnEmail = !!me?.email && !form.email.trim()
+  // One address, one person (#655, 4 bis) — judged only when it changes.
+  const emailOwner = me && form.email.trim().toLowerCase() !== (me.email ?? '').trim().toLowerCase()
+    ? addressOwner(form.email, users, { personId: me.personId, id: me.id })
+    : undefined
 
   function saveEdit() {
-    if (!me || removingOwnEmail) return
+    if (!me || removingOwnEmail || emailOwner) return
     updatePlayer(me.id, {
       email: form.email.trim(),
       phone: form.phone || undefined,
@@ -146,6 +151,7 @@ export function ComptePage() {
         ) : editing ? (
           <div className="mt-3 space-y-3">
             <Field label="Email" type="email" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
+            {emailOwner && <p role="alert" className="text-sm text-red-600">{addressTakenMessage(emailOwner)}</p>}
             {removingOwnEmail && (
               <p className="text-sm text-red-600">
                 Votre adresse e-mail sert à vous connecter : vous ne pouvez pas la supprimer vous-même.
@@ -160,7 +166,7 @@ export function ComptePage() {
               <button type="button" onClick={() => setEditing(false)} className={NEUTRAL_BUTTON_CLASS}>
                 Annuler
               </button>
-              <button type="button" onClick={saveEdit} disabled={removingOwnEmail} className={PRIMARY_BUTTON_CLASS}>
+              <button type="button" onClick={saveEdit} disabled={removingOwnEmail || !!emailOwner} className={PRIMARY_BUTTON_CLASS}>
                 Enregistrer
               </button>
             </div>
