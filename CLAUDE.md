@@ -625,9 +625,10 @@ invisible dans le diff comme dans la revue.
   personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
   garde ses champs sur sa ligne, comme avant.
 - **Ce qu'un profil atteint est une seule relation, `reaches`**
-  (`functions/api/reach.ts`) : les profils de sa personne, ceux des personnes
-  qui lui ont délégué, et — le temps du nettoyage — ceux de la même adresse
-  (#640). Le sélecteur la liste, `/auth/switch` l'admet, la connexion ouvre le
+  (`functions/api/reach.ts`) : les profils de sa personne et ceux des
+  personnes qui lui ont délégué. Plus ceux de la même adresse : depuis 0068
+  (index unique sur `people`), une adresse est à une seule personne, donc
+  même adresse veut dire même personne. Le sélecteur la liste, `/auth/switch` l'admet, la connexion ouvre le
   plus récent de ce qu'elle atteint, et un appareil sonne pour elle
   (`tokensByUser`). Un seul fragment SQL pour tous : un téléphone qui sonnerait
   pour un profil que le sélecteur n'ouvre pas est le défaut qu'il empêche.
@@ -679,7 +680,8 @@ invisible dans le diff comme dans la revue.
   **qui change** est jugée : une paire d'avant la règle garde la sienne
   jusqu'à ce que l'administrateur général la règle. Un enfant n'a pas
   d'adresse, ou la sienne — et son parent pour délégué. L'index unique
-  viendra une fois les adresses partagées réglées en production.
+  (0068) ne se déploie qu'une fois les adresses partagées réglées en
+  production — sinon la migration échoue, et le déploiement avec.
 - **Ou ce sont deux fiches d'une même personne** : « C'est la même personne »
   (deux personnes seulement — à trois, lesquelles ?) fusionne l'une dans
   l'autre (`POST /people/:personId/merge-into`) : ses profils, ses

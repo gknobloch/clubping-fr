@@ -14,6 +14,9 @@ import { profileReaches } from './reach'
 
 function world() {
   const d1 = migratedD1()
+  // Data from before 0068: what the cleanup exists to settle cannot be
+  // written once an address is one person's, so the index is set aside here.
+  d1.exec('DROP INDEX people_email_unique')
   addMember(d1.exec, { id: 'g-rix', firstName: 'Gilles', lastName: 'Knobloch', email: 'g@example.fr', clubId: 'club-a', personId: 'person-g' })
   addMember(d1.exec, { id: 'g-lan', firstName: 'Gilles', lastName: 'Knobloch', email: 'g@example.fr', clubId: 'club-b', personId: 'person-g' })
   addMember(d1.exec, { id: 'g-admin', firstName: '', lastName: '', email: 'G@example.fr', clubId: null, role: 'general_admin' })

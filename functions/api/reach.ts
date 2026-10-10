@@ -8,9 +8,11 @@
 //   2. the profiles of every person who delegated to them — Benjamin reaches
 //      Sacha's (0064). One level: a delegate never reaches the delegator's own
 //      delegations, and a delegator never reaches their delegate;
-//   3. for now, the profiles sharing their address — #640's households, until
-//      the cleanup that turns each of them into a delegation. An empty address
-//      shares nothing.
+//
+// There used to be a third way — the profiles sharing their address, #640's
+// households — until the cleanup turned each of them into a delegation (#655,
+// step 3) and 0068 made an address one person's. Same address is now same
+// person, which the first way already covers.
 //
 // The profile switcher lists this, `/auth/switch` admits it, sign-in lands on
 // the most recent of it, and a device rings for it. One fragment for all of
@@ -26,7 +28,6 @@ export const reaches = (o: string, u: string) => `(
   OR (${o}.person_id IS NOT NULL AND ${u}.person_id = ${o}.person_id)
   OR (${o}.person_id IS NOT NULL AND ${u}.person_id IN (
         SELECT pd.person_id FROM person_delegates pd WHERE pd.delegate_id = ${o}.person_id))
-  OR (COALESCE(${o}.email, '') != '' AND lower(${u}.email) = lower(${o}.email))
 )`
 
 /** Whether the profile `fromId` reaches the profile `toId`. */

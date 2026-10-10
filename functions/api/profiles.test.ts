@@ -53,14 +53,20 @@ async function signIn(db: D1Database, email = 'henaut@example.fr'): Promise<Sess
   return res.json()
 }
 
-/** Benjamin and Sacha sharing Benjamin's address — #640's household. */
+/**
+ * #640's household, as #655 has it: Sacha has no address of his own, and
+ * Benjamin — whose address it used to share — is his delegate. Since 0068 an
+ * address is one person's, so a delegation is the only way a parent opens a
+ * child's profile.
+ */
 const household = (exec: ReturnType<typeof migratedD1>['exec'], sachaSeen = 1_000) => {
   addMember(exec, { id: 'benjamin', firstName: 'Benjamin', email: 'Henaut@example.fr', clubId: 'club-a', lastSeenAt: 2_000 })
-  addMember(exec, { id: 'sacha', firstName: 'Sacha', email: 'henaut@example.fr', clubId: 'club-b', lastSeenAt: sachaSeen })
+  addMember(exec, { id: 'sacha', firstName: 'Sacha', email: null, clubId: 'club-b', lastSeenAt: sachaSeen })
   addMember(exec, { id: 'stranger', firstName: 'Zoé', lastName: 'Roy', email: 'zoe@example.fr', clubId: 'club-a' })
+  exec("INSERT INTO person_delegates (person_id, delegate_id, created_at) VALUES ('person-sacha', 'person-benjamin', 0)")
 }
 
-describe('signing in with an address several profiles share (#640)', () => {
+describe('signing in as a parent who manages a child (#640, #655)', () => {
   it('opens the profile used most recently', async () => {
     const { db } = await world((exec) => household(exec))
     expect((await signIn(db)).user.id).toBe('benjamin')
@@ -122,11 +128,19 @@ describe('switching profile', () => {
     expect(await res.json()).toEqual({ error: 'not_allowed' })
   })
 
-  it('reads the address now — a child given their own is out of reach', async () => {
+  it('reads the delegation now — withdrawn, the child is out of reach', async () => {
     const { db, exec } = await world((build) => household(build))
     const { token } = await signIn(db)
-    exec("UPDATE users SET email = 'sacha@example.fr' WHERE id = 'sacha'")
+    exec("DELETE FROM person_delegates WHERE person_id = 'person-sacha'")
     expect((await post(db, 'switch', { userId: 'sacha' }, token)).status).toBe(403)
+  })
+
+  it('keeps the child in reach once given an address of their own — the delegation holds', async () => {
+    const { db, exec } = await world((build) => household(build))
+    const { token } = await signIn(db)
+    exec("UPDATE people SET email = 'sacha@example.fr' WHERE id = 'person-sacha'")
+    exec("UPDATE users SET email = 'sacha@example.fr' WHERE id = 'sacha'")
+    expect((await post(db, 'switch', { userId: 'sacha' }, token)).status).toBe(200)
   })
 
   it('needs a session', async () => {

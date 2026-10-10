@@ -385,14 +385,15 @@ INSERT INTO users (id, email, role, is_player, first_name, last_name, license_nu
   ('p2-player-6', 'christian.buchi@example.com', 'player', 1, 'Christian', 'Buchi', '6815117', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-10', 'olivier.philippe@example.com', 'player', 1, 'Olivier', 'Philippe', '683975', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-7', 'herve.ceroni@example.com', 'player', 1, 'Hervé', 'Ceroni', '684545', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  -- Fabrice and Bastien Dangelser share one address, a parent and a child's (#640).
+  -- Fabrice and Bastien Dangelser, a parent and a child: one address, the
+  -- parent's, and the child none — Fabrice is his delegate (#655).
   ('p2-player-9', 'famille.dangelser@example.com', 'player', 1, 'Fabrice', 'Dangelser', '682480', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-8', 'cedric.cunin@example.com', 'player', 1, 'Cédric', 'Cunin', '6810711', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-12', 'sebastien.rentz@example.com', 'player', 1, 'Sébastien', 'Rentz', '687433', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-13', 'sebastien.schatt@example.com', 'player', 1, 'Sébastien', 'Schatt', '685143', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-14', 'yannick.schill@example.com', 'player', 1, 'Yannick', 'Schill', '6814304', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-11', 'nello.cristini@example.com', 'player', 1, 'Nello', 'Cristini', '683787', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-17', 'famille.dangelser@example.com', 'player', 1, 'Bastien', 'Dangelser', '684113', '', NULL, NULL, 'active', 'club-fftt-06680011'),
+  ('p2-player-17', NULL, 'player', 1, 'Bastien', 'Dangelser', '684113', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-16', 'didier.clement@example.com', 'player', 1, 'Didier', 'Clément', '392885', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-19', 'mathieu.mougey@example.com', 'player', 1, 'Mathieu', 'Mougey', '6810243', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-18', 'bertrand.decoatpont@example.com', 'player', 1, 'Bertrand', 'De Coatpont', '6813454', '', NULL, NULL, 'active', 'club-fftt-06680011'),
@@ -524,9 +525,11 @@ INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES
 
 -- people (#655) — a person behind every club profile seeded above, as 0063
 -- does for a migrated database: the seed runs after the migrations, so its
--- members arrive without one. Fabrice and Bastien Dangelser share an address
--- and stay two people, which is the case delegation will replace.
+-- members arrive without one. Bastien Dangelser has no address of his own,
+-- and his father Fabrice is his delegate: the profile switcher shows the pair.
 INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
   SELECT 'person-' || id, first_name, last_name, email, phone, birth_date, birth_place
     FROM users WHERE person_id IS NULL;
 UPDATE users SET person_id = 'person-' || id WHERE person_id IS NULL;
+INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at)
+  VALUES ('person-p2-player-17', 'person-p2-player-9', 0);

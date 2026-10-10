@@ -82,6 +82,8 @@ describe('naming a delegate (#655)', () => {
 
   it('says when no account has the address, or several do', async () => {
     const d1 = world()
+    // Several people on one address is data from before 0068 (#655, 4 bis).
+    d1.exec('DROP INDEX people_email_unique')
     addMember(d1.exec, { id: 'twin', firstName: 'Bastien', email: 'henaut@example.fr', clubId: 'club-a' })
     const sacha = await as(d1, 'sacha')
     const none = await sacha('/people/person-sacha/delegates', 'POST', { email: 'inconnu@example.fr' })
