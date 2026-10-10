@@ -30,6 +30,7 @@ import type {
   AvailabilityStatus,
   Competition,
   CompetitionGroup,
+  Federation,
   PlayerSeasonCategory,
   PlayerSeasonLicence,
   MemberGroup,
@@ -55,6 +56,8 @@ import { clearCache, readCache, writeCache } from '@/utils/offlineCache'
 // State shape
 // ---------------------------------------------------------------------------
 interface DataState {
+  /** The federations (#643) — reference data, the same for everyone. */
+  federations: Federation[]
   clubs: Club[]
   seasons: Season[]
   phases: Phase[]
@@ -86,6 +89,7 @@ interface DataState {
 }
 
 const emptyState: DataState = {
+  federations: [],
   clubs: [],
   seasons: [],
   phases: [],
@@ -133,6 +137,9 @@ const withDefaults = (data: DataState): DataState => ({
   trainingAvailabilities: data.trainingAvailabilities ?? [],
   competitions: data.competitions ?? [],
   competitionGroups: data.competitionGroups ?? [],
+  // A cache written before #643 knows no federation; a club or competition
+  // without one reads as the FFTT's, which is what that data was.
+  federations: data.federations ?? [],
 })
 
 // ---------------------------------------------------------------------------

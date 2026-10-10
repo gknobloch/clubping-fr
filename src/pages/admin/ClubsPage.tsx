@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Club } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
@@ -10,19 +10,37 @@ import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowAction
 import { ImportClubModal } from '@/components/ImportClubModal'
 import { useConfirm } from '@/components/useConfirm'
 import { clubsMissingVenue, type VenueFillResult } from '@/lib/clubVenues'
+import { FFTT_FEDERATION_ID, clubAffiliations, clubIsIn, federationOptionLabel } from '@/lib/federations'
+
+const emptyForm = { federationId: FFTT_FEDERATION_ID, affiliationNumber: '', displayName: '' }
 
 export function ClubsPage() {
   const navigate = useNavigate()
-  const { clubs, addClub, archiveClub, updateClub, deleteClub, teams, players } = useAppData()
+  const { clubs, federations, addClub, archiveClub, updateClub, deleteClub, teams, players } = useAppData()
   const [creating, setCreating] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
-  const [form, setForm] = useState({ affiliationNumber: '', displayName: '' })
+  const [form, setForm] = useState(emptyForm)
   const [confirm, confirmDialog] = useConfirm()
 
   const activeClubs = clubs.filter((c) => !c.isArchived)
   const archivedClubs = clubs.filter((c) => c.isArchived)
-  const visibleClubs = showArchived ? clubs : activeClubs
+  // One federation at a time (#643), in the URL so the back button from a
+  // club's page returns to the same list. Unknown or absent: every club.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const federationFilter = federations.some((f) => f.id === searchParams.get('federation'))
+    ? searchParams.get('federation')
+    : null
+  const setFederationFilter = (id: string) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (id) next.set('federation', id)
+      else next.delete('federation')
+      return next
+    }, { replace: true })
+  const visibleClubs = (showArchived ? clubs : activeClubs)
+    .filter((c) => !federationFilter || clubIsIn(c, federationFilter))
+  const shortName = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
 
   const openEdit = (club: Club) => {
     navigate(`/clubs/${encodeURIComponent(club.id)}`)
@@ -30,12 +48,20 @@ export function ClubsPage() {
 
   const openCreate = () => {
     setCreating(true)
-    setForm({ affiliationNumber: '', displayName: '' })
+    setForm(emptyForm)
   }
 
   const handleSave = () => {
     if (creating) {
-      addClub({ ...form, isArchived: false, addresses: [], channels: [] })
+      // A club created for another federation has no FFTT number at all —
+      // Landser ASL plays the AGR alone (#643).
+      const { federationId, affiliationNumber, displayName } = form
+      const inFftt = federationId === FFTT_FEDERATION_ID
+      addClub({
+        displayName, isArchived: false, addresses: [], channels: [],
+        affiliationNumber: inFftt ? affiliationNumber.trim() : '',
+        affiliations: inFftt ? [] : [{ federationId, affiliationNumber: affiliationNumber.trim() }],
+      })
       setCreating(false)
     }
   }
@@ -77,6 +103,20 @@ export function ClubsPage() {
         }
       />
       <VenueBackfill />
+      {federations.length > 1 && (
+        <div className="flex items-center gap-2">
+          <label htmlFor="clubs-federation" className="text-sm text-slate-600">Fédération</label>
+          <select
+            id="clubs-federation"
+            value={federationFilter ?? ''}
+            onChange={(e) => setFederationFilter(e.target.value)}
+            className="min-h-[44px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 md:min-h-0 md:py-1.5 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+          >
+            <option value="">Toutes</option>
+            {federations.map((f) => <option key={f.id} value={f.id}>{f.shortName}</option>)}
+          </select>
+        </div>
+      )}
       {archivedClubs.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
@@ -98,7 +138,7 @@ export function ClubsPage() {
           <thead className="bg-slate-50">
             <tr>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
-                N° affiliation
+                Affiliations
               </th>
               <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                 Nom
@@ -114,8 +154,18 @@ export function ClubsPage() {
           <tbody className="divide-y divide-slate-200 bg-white">
             {visibleClubs.map((club) => (
               <tr key={club.id} className={`hover:bg-slate-50/50 ${club.isArchived ? 'opacity-50' : ''}`}>
-                <td className="px-4 py-3 text-sm text-slate-900 font-mono">
-                  {club.affiliationNumber}
+                <td className="px-4 py-3 text-sm text-slate-900">
+                  {/* One line per federation, each tagged (#643). */}
+                  {clubAffiliations(club).map((a) => (
+                    <span key={a.federationId} className="block whitespace-nowrap">
+                      {federations.length > 1 && (
+                        <span className="mr-1.5 inline-block w-11 rounded bg-slate-100 py-0.5 text-center text-xs font-medium text-slate-600">
+                          {shortName(a.federationId)}
+                        </span>
+                      )}
+                      <span className="font-mono">{a.affiliationNumber || '—'}</span>
+                    </span>
+                  ))}
                 </td>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {club.displayName}
@@ -155,6 +205,13 @@ export function ClubsPage() {
                 </td>
               </tr>
             ))}
+            {visibleClubs.length === 0 && federationFilter && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
+                  Aucun club affilié à la {shortName(federationFilter)}.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -169,12 +226,33 @@ export function ClubsPage() {
               Ajouter un club
             </h2>
             <div className="mt-4 space-y-4">
+              {federations.length > 1 && (
+                <div>
+                  <label htmlFor="create-federation" className="block text-sm font-medium text-slate-700">
+                    Fédération
+                  </label>
+                  <select
+                    id="create-federation"
+                    value={form.federationId}
+                    onChange={(e) => setForm((f) => ({ ...f, federationId: e.target.value }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    {federations.map((f) => (
+                      <option key={f.id} value={f.id}>{federationOptionLabel(f)}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Les autres fédérations du club s'ajoutent ensuite, sur sa fiche.
+                  </p>
+                </div>
+              )}
               <div>
                 <label
                   htmlFor="create-affiliationNumber"
                   className="block text-sm font-medium text-slate-700"
                 >
                   N° affiliation
+                  {federations.length > 1 && ` ${federations.find((f) => f.id === form.federationId)?.shortName ?? ''}`}
                 </label>
                 <input
                   id="create-affiliationNumber"

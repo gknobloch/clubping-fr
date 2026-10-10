@@ -27,9 +27,61 @@ export interface ClubChannel {
   sortOrder: number
 }
 
+/**
+ * A federation that runs championships (#643): the FFTT, and the AGR (Section
+ * du Haut-Rhin). Federation → competition → division → poule.
+ */
+export interface Federation {
+  /** 'fftt' | 'agr' — seeded by migration 0061. */
+  id: string
+  displayName: string
+  /** What the screens print beside a club or a competition: "FFTT", "AGR". */
+  shortName: string
+  /**
+   * Whether its data comes from an import (the FFTT's API). False means typed
+   * in by hand or read off its documents — which is what lets a club admin
+   * build its competitions (#647).
+   */
+  isImported: boolean
+  sortOrder: number
+}
+
+/**
+ * A club's affiliation to a federation other than the FFTT (#643) — the FFTT
+ * number stays `Club.affiliationNumber`. Read both together through
+ * `clubAffiliations` (src/lib/federations.ts), never one or the other.
+ */
+export interface ClubAffiliation {
+  federationId: string
+  /** That federation's number for the club ("680036"); may be blank. */
+  affiliationNumber: string
+  /**
+   * The club's name in that federation's documents ("KEMBS ASL TT"), what its
+   * calendars are matched against. Absent when it is the club's own name.
+   */
+  name?: string
+}
+
+/**
+ * A member's licence in a federation other than the FFTT (#644) — the FFTT
+ * licence stays `User.licenseNumber`. Read both through `licencesOf`
+ * (src/lib/licences.ts), never one or the other.
+ */
+export interface FederationLicence {
+  federationId: string
+  number: string
+}
+
 export interface Club {
   id: string
+  /** The FFTT affiliation number; blank for a club outside the FFTT (#643). */
   affiliationNumber: string
+  /**
+   * Affiliations to every federation but the FFTT (#643). The payload always
+   * fills it; absent — an older cache, a fixture — means none, which is what
+   * every club was until a second federation existed.
+   */
+  affiliations?: ClubAffiliation[]
   displayName: string
   isArchived: boolean
   addresses: Address[]
@@ -112,6 +164,12 @@ export interface Division {
 export interface Competition {
   id: string
   displayName: string
+  /**
+   * The federation that runs it (#643). Always in the payload; absent — a
+   * cache or fixture predating it — means the FFTT, which every competition
+   * was. Read through `federationOfCompetition`.
+   */
+  federationId?: string
   /**
    * The categories admitted by default. **Empty means every category** — the
    * senior championship does not enumerate seventeen codes to say "anyone".
@@ -445,6 +503,8 @@ export interface GameSelection {
  * still go missing from the payload without a type error — see #292.
  */
 export interface DataState {
+  /** The federations (#643), ordered — reference data, the same for everyone. */
+  federations: Federation[]
   divisions: Division[]
   competitions: Competition[]
   /**
@@ -491,7 +551,14 @@ export interface DataState {
  * (admins) are not players. Person fields are populated when isPlayer is true.
  */
 export interface User {
+  /** The club profile — one per (person, club) since #655. */
   id: string
+  /**
+   * The person behind this club profile (#655): Gilles is one person with a
+   * Rixheim and a Landser profile. Absent on a cache predating it, or on a
+   * profile written in the deploy window — each is then its own person.
+   */
+  personId?: string
   /**
    * Absent when the member has no address on file (#315). E-mail is also the
    * sign-in identifier, so such a member cannot log in — which was already
@@ -502,7 +569,13 @@ export interface User {
   isPlayer: boolean
   firstName?: string
   lastName?: string
+  /** The FFTT licence; blank for a member who holds none (#644). */
   licenseNumber?: string
+  /**
+   * Licences in every federation but the FFTT (#644). The payload always
+   * fills it for a player; absent — an older cache, a fixture — means none.
+   */
+  licences?: FederationLicence[]
   phone?: string
   birthDate?: string
   birthPlace?: string
@@ -550,6 +623,23 @@ export interface DevUser extends User {
   clubName?: string
   /** Numbers of the teams this member captains, ascending. Absent if none. */
   captainOf?: number[]
+}
+
+/** A person as a delegation names them (#655). */
+export interface DelegationPerson {
+  id: string
+  firstName?: string
+  lastName?: string
+  email?: string
+}
+
+/**
+ * A person's delegations (#655): who may open their profiles, and whose
+ * profiles they may open.
+ */
+export interface Delegations {
+  delegates: DelegationPerson[]
+  represents: DelegationPerson[]
 }
 
 /**

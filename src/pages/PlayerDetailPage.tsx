@@ -15,16 +15,22 @@ import { clubLicences } from '@/lib/seasonLicences'
 import { LicenceBadge } from '@/components/LicenceBadge'
 import { ChecklistDialog } from '@/components/ChecklistDialog'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@/lib/memberGroups'
+import { licenceLabel, licencesOf } from '@/lib/licences'
+import { clubsToAddTo, linkedProfiles } from '@/lib/linkedProfiles'
+import { AddToClubDialog } from '@/components/AddToClubDialog'
+import { PersonDelegates } from '@/components/PersonDelegates'
+import { LicenceNumbers } from '@/components/LicenceNumbers'
 
 export function PlayerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { user } = useAuth()
   const {
-    players, clubs, playerSeasonCategories, playerSeasonLicences, seasons,
+    players, clubs, federations = [], playerSeasonCategories, playerSeasonLicences, seasons,
     memberGroups, setGroupsOfMember,
   } = useAppData()
   const [zoom, setZoom] = useState(false)
   const [editingGroups, setEditingGroups] = useState(false)
+  const [addingToClub, setAddingToClub] = useState(false)
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
@@ -46,6 +52,10 @@ export function PlayerDetailPage() {
   const clubGroups = clubMemberGroups(memberGroups, player?.clubId)
   const memberOf = groupsOfMember(clubGroups, player?.id)
   const canFileGroups = mayManageMemberGroups(user, player?.clubId)
+  // Their profiles in other clubs, linked by the address (#640), and the clubs
+  // this viewer may add them to (#644).
+  const otherProfiles = player ? linkedProfiles(player, players) : []
+  const addableClubs = player ? clubsToAddTo(player, user, clubs, players) : []
 
   if (!player) {
     return (
@@ -101,7 +111,10 @@ export function PlayerDetailPage() {
           Informations
         </h2>
         <dl className="divide-y divide-slate-100">
-          {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+          {/* One row per federation (#644): Gilles holds an FFTT and an AGR licence. */}
+          {licencesOf(player).map((l) => (
+            <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+          ))}
           <InfoRow
             label="Catégorie"
             value={categoryDisplay(category) || 'Inconnue'}
@@ -149,6 +162,66 @@ export function PlayerDetailPage() {
             </ul>
           )}
         </section>
+      )}
+
+      {/* Other clubs (#644): Gilles plays the FFTT at Rixheim and the AGR at
+          Landser — one profile in each, linked by the address. */}
+      {(otherProfiles.length > 0 || addableClubs.length > 0) && (
+        <section
+          aria-labelledby="player-clubs-title"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 id="player-clubs-title" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Autres clubs
+            </h2>
+            {addableClubs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAddingToClub(true)}
+                className={`text-sm font-medium text-accent-600 hover:text-accent-800 ${TEXT_TARGET_CLASS}`}
+              >
+                Ajouter à un autre club
+              </button>
+            )}
+          </div>
+          {otherProfiles.length === 0 ? (
+            <p className="text-sm text-slate-400">Licencié dans ce seul club.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {otherProfiles.map((p) => (
+                <li key={p.id}>
+                  <Link
+                    to={`/joueurs/${encodeURIComponent(p.id)}`}
+                    className="flex min-h-11 items-center justify-between gap-2 text-sm text-slate-800 hover:text-accent-700 md:min-h-0 md:py-1.5"
+                  >
+                    <span className="font-medium">{clubs.find((c) => c.id === p.clubId)?.displayName ?? p.clubId}</span>
+                    <span className="text-slate-500"><LicenceNumbers member={p} /></span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* Delegations (#655) — the general admin's, for someone who cannot ask
+          for themselves (Sacha, no address). The person manages their own
+          from « Mon compte ». */}
+      {user?.role === 'general_admin' && player.personId && (
+        <section
+          aria-labelledby="player-delegates-title"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <h2 id="player-delegates-title" className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Délégations
+          </h2>
+          <PersonDelegates personId={player.personId} mode="admin" idPrefix="player" />
+        </section>
+      )}
+
+      {addingToClub && (
+        <AddToClubDialog player={player} clubs={addableClubs} onClose={() => setAddingToClub(false)} />
       )}
 
       <PlayerPhaseHistory playerId={player.id} />

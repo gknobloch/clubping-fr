@@ -19,6 +19,7 @@ import {
   mockGameSelections,
   mockUsers,
   mockCompetitions,
+  mockFederations,
   mockPlayerSeasonCategories,
   mockPlayerSeasonLicences,
   mockMemberGroups,
@@ -28,6 +29,7 @@ import {
 } from '@/mock/data'
 
 const testData = {
+  federations: mockFederations,
   divisions: mockDivisions,
   competitions: mockCompetitions,
   competitionGroups: [], competitionEligibilities: [],

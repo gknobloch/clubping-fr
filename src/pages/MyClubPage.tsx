@@ -11,10 +11,11 @@ import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
 import { HeaderAction, TEXT_TARGET_CLASS } from '@/components/Button'
 import { EditIcon } from '@/components/icons'
+import { affiliationsLine } from '@/lib/federations'
 
 export function MyClubPage() {
   const { user } = useAuth()
-  const { clubs } = useAppData()
+  const { clubs, federations } = useAppData()
   const [editing, setEditing] = useState(false)
 
   const clubId = user?.clubId ?? null
@@ -80,7 +81,10 @@ export function MyClubPage() {
           )
         }
       >
-        <p className="text-slate-500">N° {currentClub.affiliationNumber}</p>
+        {/* Every federation once there is more than one (#643). */}
+        <p className="text-slate-500">
+          {affiliationsLine(currentClub, (id) => federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase())}
+        </p>
       </IdentityCard>
 
       {/* Addresses */}

@@ -31,7 +31,7 @@ const detail = (numero: string, ville: string) =>
 
 function renderPage() {
   const data = {
-    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [],
+    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
     groups: [], teams: [], players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
     gameAvailabilities: [], gameSelections: [], users: [],

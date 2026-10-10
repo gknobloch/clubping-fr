@@ -36,7 +36,7 @@ const { HomePage } = await import('./HomePage')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-  competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [],
+  competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [], federations: [],
   groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
   games: mockGames, gameAvailabilities: mockGameAvailabilities,
   gameSelections: mockGameSelections, users: mockUsers,

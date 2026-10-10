@@ -273,20 +273,36 @@ describe('competitionsOfClub (#604)', () => {
       { clubId: 'club-1', divisionId: 'd-old' },
       { clubId: 'club-2', divisionId: 'd-sen' },
     ]
-    const { played, others } = competitionsOfClub('club-1', all, teams, divisions, [])
+    const { played, others } = competitionsOfClub('club-1', all, teams, divisions, [], ['fftt'])
     expect(played.map((c) => c.id)).toEqual(['comp-seniors'])
     expect(others.map((c) => c.id)).toEqual(['comp-jeunes', 'comp-vet'])
   })
 
   it('ignores an archived team', () => {
     const teams = [{ clubId: 'club-1', divisionId: 'd-sen', isArchived: true }]
-    expect(competitionsOfClub('club-1', all, teams, divisions, []).played).toEqual([])
+    expect(competitionsOfClub('club-1', all, teams, divisions, [], ['fftt']).played).toEqual([])
   })
 
   // A choice the club made is never hidden, whatever its teams play.
   it('keeps a competition the club reserved to a group', () => {
     const links = [{ clubId: 'club-1', competitionId: 'comp-vet', groupId: 'g' }]
-    expect(competitionsOfClub('club-1', all, [], divisions, links).played.map((c) => c.id)).toEqual(['comp-vet'])
+    expect(competitionsOfClub('club-1', all, [], divisions, links, ['fftt']).played.map((c) => c.id)).toEqual(['comp-vet'])
+  })
+
+  // #643 — Landser, in the AGR alone, is offered none of the FFTT's.
+  it("folds only the competitions of the club's own federations", () => {
+    const agr = competition({ id: 'comp-agr', sortOrder: 5, federationId: 'agr' })
+    const withAgr = [...all, agr]
+    expect(competitionsOfClub('club-1', withAgr, [], divisions, [], ['agr']).others.map((c) => c.id))
+      .toEqual(['comp-agr'])
+    expect(competitionsOfClub('club-1', withAgr, [], divisions, [], ['fftt']).others.map((c) => c.id))
+      .toEqual(['comp-seniors', 'comp-jeunes', 'comp-vet'])
+  })
+
+  it('still lists what the club plays, whatever its affiliations say', () => {
+    const teams = [{ clubId: 'club-1', divisionId: 'd-sen' }]
+    expect(competitionsOfClub('club-1', all, teams, divisions, [], ['agr']).played.map((c) => c.id))
+      .toEqual(['comp-seniors'])
   })
 })
 

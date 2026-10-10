@@ -6,15 +6,17 @@ import { useConfirm } from '@/components/useConfirm'
 import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { ProfileList } from '@/components/ProfileSwitcher'
+import { PersonDelegates } from '@/components/PersonDelegates'
 import { hasOtherProfiles } from '@/lib/profiles'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
 import { pointsFor } from '@/lib/phasePoints'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { licenceLabel, licencesOf } from '@/lib/licences'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
-  const { players, clubs, teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, clubs, federations = [], teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
@@ -161,7 +163,9 @@ export function ComptePage() {
             {me.phone && <InfoRow label="Téléphone" value={me.phone} />}
             {me.birthDate && <InfoRow label="Date de naissance" value={me.birthDate} />}
             {me.birthPlace && <InfoRow label="Lieu de naissance" value={me.birthPlace} />}
-            {me.licenseNumber && <InfoRow label="Licence" value={me.licenseNumber} />}
+            {licencesOf(me).map((l) => (
+              <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+            ))}
           </dl>
         )}
       </section>
@@ -187,16 +191,29 @@ export function ComptePage() {
         </section>
       )}
 
-      {/* Profils — a parent and a child on one address (#640) */}
+      {/* Profils — one person in several clubs, the people they manage (#655),
+          and #640's shared addresses until they are cleaned up */}
       {hasOtherProfiles(profiles, user?.id) && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mes profils</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Votre adresse e-mail donne accès à plusieurs profils. Touchez-en un pour l’ouvrir.
+            Votre compte donne accès à plusieurs profils : vos clubs, et ceux des personnes
+            que vous gérez. Touchez-en un pour l’ouvrir.
           </p>
           <div className="mt-3">
             <ProfileList />
           </div>
+        </section>
+      )}
+
+      {/* Délégations (#655): who may open my profiles, and whose I may open */}
+      {user?.personId && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Délégations</h2>
+          <p className="mt-1 mb-3 text-sm text-slate-500">
+            Un délégué ouvre vos profils avec son propre compte — un parent pour son enfant.
+          </p>
+          <PersonDelegates personId={user.personId} mode="self" idPrefix="compte" />
         </section>
       )}
 

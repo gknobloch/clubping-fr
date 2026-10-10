@@ -18,10 +18,12 @@ import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
+import { mayEditPerson } from '@shared/lib/linkedProfiles'
 import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { ChecklistSheet } from '@/components/ChecklistSheet'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -54,7 +56,7 @@ export function PlayerDetail({
 }) {
   const id = playerId
   const {
-    players, teams, clubs, phases, seasons, playerPhasePoints,
+    players, teams, clubs, federations, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
     updatePlayer, memberGroups, setGroupsOfMember,
   } = useAppData()
@@ -73,7 +75,10 @@ export function PlayerDetail({
   // Qui administre le club du licencié, et personne d'autre — la même question
   // que `administers` côté API, qui refuse déjà le reste depuis #558. Un
   // coéquipier qui lit la fiche ne voit donc pas le déclencheur.
+  // Et sur une personne qui joue aussi dans un autre club, ni l'un ni l'autre
+  // de ses administrateurs : ses coordonnées sont à elle (#655).
   const mayEditContact = !!user && !!player && canManageClub(user, player.clubId)
+    && mayEditPerson(player, user, players)
 
   // The club's groups (#602), and which of them this member is in. The payload
   // only carries the viewer's own club's, so another club's fiche shows none.
@@ -178,7 +183,10 @@ export function PlayerDetail({
         {/* Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informations</Text>
-          {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+          {/* One row per federation (#644): an FFTT and an AGR licence, say. */}
+          {licencesOf(player).map((l) => (
+            <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+          ))}
           <InfoRow label="Catégorie" value={category || 'Inconnue'} />
           {phasePoints && <InfoRow label="Points" value={phasePoints} />}
           {/* Same badge as the quick view, `danger` and all: the two screens

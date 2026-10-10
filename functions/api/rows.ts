@@ -127,6 +127,32 @@ export interface CompetitionRow {
   fftt_contest_identifier: string | null
   /** FFTT's own name for it — the identifier alone is not unique (0048). */
   fftt_contest_name: string | null
+  /** The federation that runs it (0061); 'fftt' for every row predating it. */
+  federation_id: string
+}
+
+/** A federation (0061, #643) — seeded, never written by the API. */
+export interface FederationRow {
+  id: string
+  display_name: string
+  short_name: string
+  is_imported: number
+  sort_order: number
+}
+
+/** A member's licence in a federation other than the FFTT (0062, #644). */
+export interface FederationLicenceRow {
+  user_id: string
+  federation_id: string
+  number: string
+}
+
+/** A club's affiliation to a federation other than the FFTT (0061, #643). */
+export interface ClubFederationRow {
+  club_id: string
+  federation_id: string
+  affiliation_number: string
+  name: string | null
 }
 
 export interface ClubRow {
@@ -258,6 +284,12 @@ export interface UserRow {
   birth_place: string | null
   status: PlayerStatus
   club_id: string | null
+  /**
+   * The person this club profile belongs to (0063, #655). Optional because a
+   * row written in the window between that migration and the new worker has
+   * none; such a profile is simply its own person until the next backfill.
+   */
+  person_id?: string | null
   /** Unix epoch ms of the member's first ever sign-in; NULL = never (#406). */
   first_login_at: number | null
   /** Unix epoch ms, refreshed at most hourly while the member uses the app. */

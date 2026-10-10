@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Team } from '@/types'
+import type { Club, Team } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { sortByName } from '@/lib/sortByName'
@@ -16,10 +16,16 @@ import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
 import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
+import { FederationSelect } from '@/components/FederationSelect'
+import {
+  FFTT_FEDERATION_ID, clubIsIn, divisionsOfFederation, federationChoices, federationOfDivision,
+} from '@/lib/federations'
 import { poolLabel } from '@/lib/poolLabel'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { withSeasonCategory } from '@/lib/seasonCategories'
+import { licenceOf } from '@/lib/licences'
+import { federationOfCompetition } from '@/lib/federations'
 
 export function TeamsPage() {
   const { user } = useAuth()
@@ -36,6 +42,7 @@ export function TeamsPage() {
     competitions,
     competitionGroups,
     memberGroups,
+    federations,
     updateTeam,
     moveTeamToGroup,
     addTeam,
@@ -49,6 +56,14 @@ export function TeamsPage() {
   const isAdmin = user?.role === 'general_admin' || isClubAdmin
   const hasClubScope = (user?.role === 'club_admin' || user?.role === 'player') && !!user?.clubId
   const scopedClub = hasClubScope ? clubs.find((c) => c.id === user?.clubId) : undefined
+
+  /** A general admin imports for any club; a club, only from a federation it is in. */
+  const offersFfttImport = !scopedClub || clubIsIn(scopedClub, FFTT_FEDERATION_ID)
+  /** The FFTT calendar import, offered on a team whose division the FFTT runs. */
+  const isFfttTeam = (team: Team) => {
+    const division = divisions.find((d) => d.id === team.divisionId)
+    return !division || federationOfDivision(division, competitions) === FFTT_FEDERATION_ID
+  }
 
   const [showArchived, setShowArchived] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -88,6 +103,8 @@ export function TeamsPage() {
     clubId: '',
     phaseId: '',
     number: 1,
+    /** Chooses which divisions are offered; not stored — a team reaches it through its division. */
+    federationId: '',
     divisionId: '',
     groupId: '',
     gameLocationId: '',
@@ -129,9 +146,22 @@ export function TeamsPage() {
     return p ? `${p.firstName} ${p.lastName}` : captainId
   }
 
-  const divisionsInPhase = form.phaseId
-    ? divisions.filter((d) => d.phaseId === form.phaseId)
-    : []
+  // The club's federations, and one federation's divisions (#660): a club of
+  // the AGR alone was offered every GE and Nationale, and a club in two picks
+  // the federation first — the same order as everywhere else in #642.
+  const dialogClub = form.clubId ? clubs.find((c) => c.id === form.clubId) : undefined
+  const federationOptions = federationChoices(federations, dialogClub)
+  const firstFederationOf = (club: Club | undefined) =>
+    federationChoices(federations, club)[0]?.id ?? FFTT_FEDERATION_ID
+  const divisionsIn = (inPhaseId: string, federationId: string) =>
+    inPhaseId ? divisionsOfFederation(divisions, competitions, federationId).filter((d) => d.phaseId === inPhaseId) : []
+  const divisionsInPhase = divisionsIn(form.phaseId, form.federationId)
+  /** A division and its first poule, so a picker never shows one the form does not hold. */
+  const firstPlacement = (inPhaseId: string, federationId: string) => {
+    const div = divisionsIn(inPhaseId, federationId)[0]
+    const group = div ? groups.find((g) => g.divisionId === div.id && !g.isArchived) : undefined
+    return { divisionId: div?.id ?? '', groupId: group?.id ?? '' }
+  }
   const groupsInDivision = form.divisionId
     ? groups.filter((g) => g.divisionId === form.divisionId && (!g.isArchived || g.id === editing?.groupId))
     : []
@@ -222,10 +252,12 @@ export function TeamsPage() {
     setEditing(team)
     setCreating(false)
     const rosterIds = team.playerIds ?? []
+    const teamDivision = divisions.find((d) => d.id === team.divisionId)
     setForm({
       clubId: team.clubId,
       phaseId: team.phaseId,
       number: team.number,
+      federationId: teamDivision ? federationOfDivision(teamDivision, competitions) : FFTT_FEDERATION_ID,
       divisionId: team.divisionId,
       groupId: team.groupId,
       gameLocationId: team.gameLocationId,
@@ -242,16 +274,16 @@ export function TeamsPage() {
     setEditing(null)
     setCreating(true)
     const firstClub = clubsForSelect[0]
-    const firstPhase = phases[0]
-    const firstDiv = divisions.find((d) => d.phaseId === firstPhase?.id)
-    const firstGroup = firstDiv ? groups.find((g) => g.divisionId === firstDiv.id) : undefined
+    // The phase on screen, not the first one ever created.
+    const firstPhase = phase ?? phases[0]
+    const federationId = firstFederationOf(firstClub)
     const defaultAddr = firstClub?.addresses?.find((a) => a.isDefault) ?? firstClub?.addresses?.[0]
     setForm({
       clubId: firstClub?.id ?? '',
       phaseId: firstPhase?.id ?? '',
       number: 1,
-      divisionId: firstDiv?.id ?? '',
-      groupId: firstGroup?.id ?? '',
+      federationId,
+      ...firstPlacement(firstPhase?.id ?? '', federationId),
       gameLocationId: defaultAddr?.id ?? '',
       defaultDay: 'Jeudi',
       defaultTime: '20h00',
@@ -364,9 +396,18 @@ export function TeamsPage() {
         actions={
           isAdmin && (
             <>
-              {/* Manual add is the fallback; FFTT import is the default path (#229). */}
-              <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une équipe" onClick={openCreate} />
-              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+              {/* Manual add is the fallback; FFTT import is the default path (#229)
+                  — for a club in the FFTT. A club of the AGR alone has nothing
+                  there to import, and its manual add is the only path (#660). */}
+              <HeaderAction
+                variant={offersFfttImport ? 'secondary' : 'primary'}
+                icon={<PlusIcon />}
+                label="Ajouter une équipe"
+                onClick={openCreate}
+              />
+              {offersFfttImport && (
+                <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+              )}
             </>
           )
         }
@@ -485,7 +526,7 @@ export function TeamsPage() {
                       label={`Actions — ${getClubName(team.clubId)} ${team.number}`}
                       actions={[
                         !team.isArchived && { label: 'Modifier', onClick: () => openEdit(team) },
-                        !team.isArchived && team.groupId && {
+                        !team.isArchived && team.groupId && isFfttTeam(team) && {
                           label: 'Importer les matchs',
                           onClick: () => setImportGamesFor(team),
                           desktopOnly: true,
@@ -528,9 +569,15 @@ export function TeamsPage() {
                   <select
                     id="team-clubId"
                     value={form.clubId}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, clubId: e.target.value, gameLocationId: '', captainId: '', playerIds: [] }))
-                    }
+                    onChange={(e) => {
+                      const clubId = e.target.value
+                      const federationId = firstFederationOf(clubs.find((c) => c.id === clubId))
+                      setForm((f) => ({
+                        ...f, clubId, gameLocationId: '', captainId: '', playerIds: [],
+                        // Another club may not be in the federation picked for the first.
+                        ...(f.federationId === federationId ? {} : { federationId, ...firstPlacement(f.phaseId, federationId) }),
+                      }))
+                    }}
                     disabled={!!editing}
                     className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100"
                   >
@@ -573,6 +620,21 @@ export function TeamsPage() {
                 </div>
               </div>
 
+              {/* The federation comes first, and only for a club in more than
+                  one; it is fixed once the team exists — moving a team from
+                  the FFTT to the AGR is not a repêchage (#660). */}
+              {creating && (
+                <FederationSelect
+                  id="team-federationId"
+                  options={federationOptions}
+                  value={form.federationId}
+                  onChange={(federationId) =>
+                    setForm((f) => ({ ...f, federationId, ...firstPlacement(f.phaseId, federationId) }))
+                  }
+                  wide
+                />
+              )}
+
               {/* Phase, Division, Groupe. Division and groupe stay editable on an
                   existing team (#422): a repêchage moves a team mid-season, and
                   deleting/recreating it to follow was losing its roster and its
@@ -585,7 +647,10 @@ export function TeamsPage() {
                     id="team-phaseId"
                     value={form.phaseId}
                     disabled={!creating}
-                    onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, divisionId: '', groupId: '' }))}
+                    onChange={(e) => {
+                      const nextPhaseId = e.target.value
+                      setForm((f) => ({ ...f, phaseId: nextPhaseId, ...firstPlacement(nextPhaseId, f.federationId) }))
+                    }}
                     className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 disabled:bg-slate-100 disabled:text-slate-500"
                   >
                     {phases.map((p) => (
@@ -722,7 +787,8 @@ export function TeamsPage() {
                               {p.firstName} {p.lastName}
                             </td>
                             <td className="px-3 py-2 text-slate-500 text-xs">
-                              {p.licenseNumber}
+                              {/* The team's federation's licence (#644). */}
+                              {licenceOf(p, federationOfCompetition(teamCompetition))}
                             </td>
                             {/* Read-only since #384: points come from the FFTT
                                 import and belong to the phase, so they are shown

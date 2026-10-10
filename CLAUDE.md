@@ -485,6 +485,175 @@ invisible dans le diff comme dans la revue.
   minuit et 2 h. `src/lib/weeks.spec.ts` épingle une horloge française, sans
   quoi le défaut est invisible sur une CI en UTC.
 
+### Fédérations (#643, suivi dans #642)
+- **Fédération → compétition → division → poule.** La FFTT et l'AGR (Section
+  du Haut-Rhin), semées par 0061. La fédération pend à la **compétition**,
+  jamais à la division ni à l'équipe, pour la raison de #482 : une équipe dit
+  déjà sa division, une division sa compétition, et un championnat est d'une
+  seule fédération. Une division sans compétition est à la FFTT — ce qu'elle a
+  toujours été. `federationOfDivision` est la seule façon de le demander.
+- **Le numéro FFTT reste `clubs.affiliation_number`**, et `club_federations` ne
+  porte que les *autres* fédérations. Les imports, la salle (#613),
+  l'onboarding et la feuille de match lisent déjà la colonne : une ligne FFTT
+  à côté serait une seconde copie, que chacun des quatre chemins de création
+  d'un club devrait penser à écrire. `clubAffiliations` réunit les deux, et
+  **rien ne lit l'un sans l'autre**. L'API refuse une ligne `fftt`.
+- Un club **hors FFTT** n'a pas de numéro FFTT du tout et prend un id de sa
+  fédération : `club-agr-680036` (`clubIdForAffiliation`).
+- **Le nom d'un club dans une fédération** (`ClubAffiliation.name`) : l'AGR
+  imprime « KEMBS ASL TT », et c'est contre lui que ses calendriers seront
+  rapprochés (#647). Vide, c'est le nom du club (`clubNameIn`).
+- **Une compétition ne change de fédération que vide** : avec une seule
+  division rattachée, archivée comprise, l'API répond 409 — ses équipes, ses
+  poules et ses rencontres changeraient de championnat avec elle.
+- Déclarer ou retirer une affiliation suit `administers` (#558) : c'est la
+  décision du club. La retirer ne touche à rien de ce qu'il joue — les équipes
+  sont aux poules, pas à cette ligne — et la confirmation le dit comme un fait.
+- **Un club ne se voit proposer que les championnats de ses fédérations** :
+  la liste repliée de la section Compétitions de `/club` (`competitionsOfClub`,
+  web et app) ne garde que ceux-là — Landser, à l'AGR seule, n'a que faire des
+  compétitions FFTT. Ce que le club joue ou a réservé reste listé quoi qu'en
+  disent ses affiliations, pour la raison qui ne cache jamais un choix fait.
+- **Sur `/clubs`, chaque affiliation porte son étiquette**, la FFTT comprise,
+  dès qu'il existe une seconde fédération, et un filtre par fédération vit dans
+  l'URL (`?federation=agr`). Kembs est dans les deux listes.
+- `Club.affiliations` et `Competition.federationId` sont **optionnels dans le
+  type**, toujours présents dans le payload : leur absence (un cache, une
+  fixture) veut dire « FFTT seule », ce qu'était toute donnée avant. Lus
+  seulement par `src/lib/federations.ts`.
+- **Un sélecteur de division ne liste qu'une fédération** (#660) : celle
+  qu'on a choisie avant — `FederationSelect`, qui ne s'affiche que s'il y a un
+  choix à faire. `federationChoices` dit lesquelles : toutes pour un
+  administrateur général, celles du club sinon (Landser : l'AGR seule, sans
+  sélecteur ; Kembs : les deux, la FFTT d'abord). `divisionsOfFederation` est
+  le filtre. La fédération d'une équipe ou d'une poule existante se lit sur sa
+  division et ne se change pas.
+- **Les imports FFTT ne sont offerts que là où la FFTT a quelque chose** :
+  pas d'« Importer depuis la FFTT » pour un club sans numéro FFTT, ni d'import
+  de calendrier FFTT pour une poule d'une autre fédération (`importableGroupIds`,
+  « Importer les matchs » d'une équipe, « Importer les groupes FFTT »).
+
+### Une licence par fédération (#644)
+- **La licence FFTT reste `users.license_number`**, et `federation_licences`
+  (0062) ne porte que les *autres* — la même règle que les affiliations d'un
+  club (#643), pour la même raison : cinq chemins l'écrivent (imports,
+  onboarding, fiche) et l'import FFTT apparie dessus. Une copie dans la table
+  serait à tenir au pas par chacun ; le jour où l'un oublie, l'import apparie
+  sur un numéro et l'écran en imprime un autre. Y ramener la licence FFTT et
+  supprimer la colonne est un changement en deux déploiements (#410), pour le
+  jour où plus rien ne la lit.
+- `licencesOf` réunit les deux, FFTT d'abord ; `licenceOf(membre, fédération)`
+  répond pour une seule. **Un écran ne lit jamais `licenseNumber` pour
+  afficher une licence** : il demande celle de la fédération dont il parle.
+  Les imports FFTT, eux, continuent de lire `licenseNumber` — c'est la FFTT.
+- **La fédération d'une équipe décide de la licence imprimée**
+  (`federationOfTeam`, par sa division et sa compétition) : feuille de match,
+  effectif, ligne de licence de la matrice, web et app. Une équipe AGR imprime
+  le numéro AGR. Les « autres joueurs », sans équipe, prennent celle des
+  équipes du club dans la phase.
+- **« Sans licence » (#488) n'est dit que sous une équipe FFTT** : c'est la
+  liste de la FFTT, qui ne dit rien d'une équipe AGR — même pour Kembs, dont
+  l'import FFTT a bien tourné.
+- **Les licences voyagent avec `POST` / `PATCH /players`**, en
+  remplacement, sous les gardes de #558 ; jamais depuis « Mon compte » — le
+  champ n'est pas dans `OWN_PROFILE_FIELDS`, une licence décidant où l'on
+  joue. Une entrée FFTT, une fédération inconnue ou un numéro vide sont
+  écartés.
+- **Le formulaire offre une case par fédération du club du licencié** :
+  Landser demande une licence AGR et aucune FFTT, Kembs les deux. La case
+  FFTT reste offerte à qui en a déjà une, et une licence qu'aucune case ne
+  montre est gardée telle quelle (la règle des remplacements de #602).
+- Sur la fiche et dans « Mon compte », une ligne par licence : « Licence »
+  tant que la FFTT est seule, « Licence AGR » dès qu'il y en a une autre
+  (`licenceLabel`).
+- **Jouer pour un second club, c'est un second profil** (#640) : Gilles a un
+  profil à Rixheim (FFTT) et un à Landser (AGR), reliés par la seule adresse.
+  « Ajouter à un autre club », sur la fiche, le crée : `POST
+  /players/:id/profiles` **copie côté serveur** nom, adresse, téléphone et
+  naissance depuis la ligne source — ressaisie à la main, une faute de frappe
+  dans l'adresse et le sélecteur ne propose jamais l'autre profil. L'appelant
+  ne dit que ce qui est au nouveau club : lequel, et ses licences.
+- Suit `administers` du club **qui reçoit** (#558) ; rien n'est écrit sur
+  celui d'origine. Même nom et même adresse déjà dans ce club : 409
+  `already_in_club`, avec l'id du profil existant, que le dialogue propose
+  d'ouvrir. Sans adresse, le dialogue prévient que rien ne reliera les deux.
+- `linkedProfiles` (même adresse, comparée comme à la connexion) et
+  `clubsToAddTo` (`src/lib/linkedProfiles.ts`) sont la règle de la section
+  « Autres clubs » de la fiche.
+
+### Une personne, ses profils de club (#655)
+- **Une ligne `users` est un profil de club** ; la personne derrière — nom,
+  adresse, téléphone, naissance — est une ligne `people` (0063), et
+  `users.person_id` les relie. Gilles est une personne, avec un profil à
+  Rixheim et un à Landser.
+- **`users` n'est ni renommée ni reconstruite** : une trentaine de colonnes,
+  six clés en cascade et trois tableaux JSON pointent vers `users.id` (le
+  piège de 0036, #604, 0060). La personne s'ajoute **à côté**, et chaque id
+  reste ce qu'il est.
+- **Les champs de la personne restent sur `users`, en miroir** : l'API les y
+  lit à une centaine d'endroits. Une écriture va à `people` **et** à chaque
+  profil de la personne (`PATCH /players/:id`) ; les lectures migreront plus
+  tard, puis les colonnes partiront, chaque étape dans son déploiement (#410).
+- **Le rattrapage** : une personne par ligne, puis les lignes de même adresse
+  **et** de même nom fusionnées — la règle de #640. La personne gardée est celle
+  du profil **le plus ancien** (son orthographe), et elle reprend le téléphone
+  et la naissance que l'un de ses profils connaissait. Un parent et un enfant
+  qui partagent une adresse restent deux personnes : rien ne dit lequel est le
+  parent.
+- **Toute création de profil écrit sa personne d'abord** (`insertPerson`,
+  `personIdFor`) : `POST /players`, l'invitation d'un administrateur,
+  l'approbation d'une demande (#474). « Ajouter à un autre club » rattache le
+  nouveau profil à la personne de la source — c'est le lien, la copie n'est que
+  le miroir.
+- **Qui écrit la personne** : elle-même (les quatre champs de « Mon compte »,
+  depuis n'importe lequel de ses profils) et l'administrateur général. Un
+  administrateur de club **seulement s'il administre tous les clubs de la
+  personne** : quelqu'un d'un seul club reste à corriger par son club (#600),
+  Gilles ne l'est ni par Rixheim ni par Landser. `mayEditPerson`
+  (`src/lib/linkedProfiles.ts`) côté écrans, la même règle dans l'API.
+- **Seul ce qui change est jugé** : les formulaires renvoient tous les champs,
+  et un administrateur qui corrige une licence ne doit pas être refusé pour une
+  adresse laissée telle quelle.
+- `linkedProfiles` relie par la **personne**, jamais par l'adresse — un parent
+  et un enfant ne sont pas deux clubs d'une même personne. L'adresse ne sert
+  plus que pour un cache d'avant #655.
+- **L'anonymisation de la base dev** donne un pseudonyme par personne (sinon
+  les deux profils de Gilles se liraient comme deux inconnus), réécrit
+  `people`, et anonymise aussi les licences des autres fédérations (#644) et
+  les affiliations des clubs (#643) ; `refresh-dev-db.sh` vérifie les trois.
+- Un profil écrit entre la migration et la bascule du worker n'a pas de
+  personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
+  garde ses champs sur sa ligne, comme avant.
+- **Ce qu'un profil atteint est une seule relation, `reaches`**
+  (`functions/api/reach.ts`) : les profils de sa personne, ceux des personnes
+  qui lui ont délégué, et — le temps du nettoyage — ceux de la même adresse
+  (#640). Le sélecteur la liste, `/auth/switch` l'admet, la connexion ouvre le
+  plus récent de ce qu'elle atteint, et un appareil sonne pour elle
+  (`tokensByUser`). Un seul fragment SQL pour tous : un téléphone qui sonnerait
+  pour un profil que le sélecteur n'ouvre pas est le défaut qu'il empêche.
+- **La session reste un profil de club** : aucune règle d'autorisation ne
+  change. Ce que la personne ouvre au-delà, c'est `reaches`, relu à chaque
+  changement — une délégation retirée prend effet aussitôt.
+- **La délégation** (`person_delegates`, 0064) : Benjamin ouvre les profils de
+  Sacha, Sacha n'ouvre pas ceux de Benjamin. **Un seul niveau**, par
+  construction : un délégué n'atteint jamais les délégations de celui qui
+  délègue. Plusieurs délégués par personne, plusieurs personnes par délégué.
+- **Qui délègue** : la personne (dans « Mon compte », par l'adresse de son
+  délégué) et l'administrateur général (sur la fiche, en choisissant un membre —
+  pour qui ne peut pas se connecter). Un délégué peut **se retirer** (« Ne plus
+  gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Aucun
+  administrateur de club. Une adresse qu'aucun compte n'utilise, ou que
+  plusieurs personnes partagent encore, est refusée avec sa raison.
+- `householdIds` est le foyer **dans les deux sens** — qui le profil atteint
+  et qui l'atteint : l'alerte capitaine épargne le parent qui a agi depuis le
+  profil de son enfant (#640), délégation ou adresse partagée.
+- **Les tests de cette relation tournent sur un vrai SQLite migré**
+  (`migratedD1.testkit.ts` : toutes les migrations, dans l'ordre). Une
+  jointure écrite contre la mauvaise colonne s'enregistre parfaitement dans un
+  faux qui reconnaît les requêtes à leur forme, et ne rend rien en production.
+  `*.testkit.ts` est du côté des tests dans les deux tsconfig, et n'est pas une
+  suite.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a
@@ -770,10 +939,12 @@ invisible dans le diff comme dans la revue.
   *un* membre. Se connecter ouvre **le profil vu le plus récemment**
   (`last_seen_at`), décidé côté serveur pour valoir d'un appareil à l'autre.
 - **Changer de profil, c'est se reconnecter** (`POST /auth/switch`) : une
-  session neuve pour la cible, l'ancienne révoquée, et l'adresse est relue *au
+  session neuve pour la cible, l'ancienne révoquée, et la portée est relue *au
   moment du changement* — un enfant à qui l'on donne sa propre adresse sort de
-  la portée du parent aussitôt. Inconnu ou d'une autre adresse : le même 403.
-  Une adresse vide ne partage rien (`sameAddress`).
+  la portée du parent aussitôt, sauf délégation. Inconnu ou hors de portée : le
+  même 403. Une adresse vide ne partage rien. Depuis #655, la portée est
+  `reaches` : la personne, ses délégations, et l'adresse partagée en
+  transition.
 - **Ce n'est pas une déconnexion** : rien n'est vidé. Le cache refuse déjà
   l'entrée d'un autre membre (#387, #509) et le premier fetch réécrit ;
   `pp-club-user` est réécrit, sinon un démarrage sans réseau rouvrirait
