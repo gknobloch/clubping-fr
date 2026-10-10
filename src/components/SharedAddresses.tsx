@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { useConfirm } from '@/components/useConfirm'
 import { SecondaryButton } from '@/components/Button'
-import { sharedAddresses, type SharedAddress, type SharedAddressPerson } from '@/lib/sharedAddresses'
+import { GENERAL_ADMINISTRATION } from '@/lib/profiles'
+import { mergeTarget, sharedAddresses, type SharedAddress, type SharedAddressPerson } from '@/lib/sharedAddresses'
 
 const nameOf = (p: SharedAddressPerson) => [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Sans nom'
 
@@ -12,12 +13,14 @@ const nameOf = (p: SharedAddressPerson) => [p.firstName, p.lastName].filter(Bool
  * settle, one person keeping the address and becoming the delegate of the
  * others. Before #655 a shared address was how a parent opened a child's
  * profile; a delegation is the same access without the coincidence of strings.
+ * When there are two and they are one human — a general admin's profile
+ * written without a name, say —, « C'est la même personne » merges them.
  *
  * `personId` narrows it to the address of one person, on their fiche. Renders
  * nothing when there is nothing to settle.
  */
 export function SharedAddresses({ personId, onSettled }: { personId?: string; onSettled?: () => void }) {
-  const { users, clubs, addressToDelegate } = useAppData()
+  const { users, clubs, addressToDelegate, mergePeople } = useAppData()
   const groups = useMemo(() => {
     const all = sharedAddresses(users)
     return personId ? all.filter((g) => g.people.some((p) => p.personId === personId)) : all
@@ -30,19 +33,24 @@ export function SharedAddresses({ personId, onSettled }: { personId?: string; on
     <ul className="space-y-3">
       {groups.map((g) => (
         <li key={g.email.toLowerCase()}>
-          <SharedAddressCard group={g} clubName={clubName} settle={addressToDelegate} onSettled={onSettled} />
+          <SharedAddressCard
+            group={g} clubName={clubName} settle={addressToDelegate} merge={mergePeople} onSettled={onSettled}
+          />
         </li>
       ))}
     </ul>
   )
 }
 
+type Outcome = Promise<{ ok: true } | { ok: false; message: string }>
+
 function SharedAddressCard({
-  group, clubName, settle, onSettled,
+  group, clubName, settle, merge, onSettled,
 }: {
   group: SharedAddress
   clubName: (clubId?: string) => string | undefined
-  settle: (personId: string, delegateId: string) => Promise<{ ok: true } | { ok: false; message: string }>
+  settle: (personId: string, delegateId: string) => Outcome
+  merge: (personId: string, targetId: string) => Outcome
   onSettled?: () => void
 }) {
   const [confirm, confirmDialog] = useConfirm()
@@ -75,6 +83,32 @@ function SharedAddressCard({
     onSettled?.()
   }
 
+  const profileLabel = (pr: SharedAddressPerson['profiles'][number]) =>
+    pr.generalAdmin ? GENERAL_ADMINISTRATION : clubName(pr.clubId) ?? 'Sans club'
+
+  // Two people who are one: offered for a pair only — with three, which two
+  // would be ambiguous, and the hand-over above still settles everyone.
+  const target = group.people.length === 2 ? mergeTarget(group) : undefined
+  const joinAsOne = async () => {
+    if (!target) return
+    const other = group.people.find((p) => p.personId !== target.personId)!
+    const all = [...target.profiles, ...other.profiles].map(profileLabel)
+    const ok = await confirm({
+      title: 'Une seule personne ?',
+      message:
+        `${nameOf(other)} et ${nameOf(target)} deviennent une seule personne, ${nameOf(target)}, avec ` +
+        `ses ${all.length} profils : ${all.join(', ')}. Ils seront proposés ensemble au changement de profil.`,
+      confirmLabel: 'Confirmer',
+    })
+    if (!ok) return
+    setBusy(true)
+    setError(null)
+    const result = await merge(other.personId, target.personId)
+    if (!result.ok) setError(result.message)
+    setBusy(false)
+    onSettled?.()
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       {confirmDialog}
@@ -88,7 +122,7 @@ function SharedAddressCard({
                 {nameOf(p)}
               </Link>
               <p className="text-xs text-slate-500">
-                {p.profiles.map((pr) => clubName(pr.clubId) ?? 'Sans club').join(' · ')}
+                {p.profiles.map(profileLabel).join(' · ')}
               </p>
             </div>
             <SecondaryButton disabled={busy} onClick={() => void keep(p)}>
@@ -97,6 +131,13 @@ function SharedAddressCard({
           </li>
         ))}
       </ul>
+      {target && (
+        <div className="mt-2 border-t border-slate-100 pt-3">
+          <SecondaryButton disabled={busy} onClick={() => void joinAsOne()}>
+            C’est la même personne
+          </SecondaryButton>
+        </div>
+      )}
       {error && (
         <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
       )}

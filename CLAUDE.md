@@ -665,6 +665,19 @@ invisible dans le diff comme dans la revue.
 - La route **relit l'adresse** plutôt que de croire l'écran (409 `not_shared`
   si elle a changé depuis), et vide l'adresse et crée la délégation **dans un
   seul batch** : entre les deux, l'enfant serait hors de portée du parent.
+- **Ou ce sont deux fiches d'une même personne** : « C'est la même personne »
+  (deux personnes seulement — à trois, lesquelles ?) fusionne l'une dans
+  l'autre (`POST /people/:personId/merge-into`) : ses profils, ses
+  délégations, et ce qu'elle savait là où l'autre n'avait rien. Celle qui reste
+  est celle qui a un nom, puis celle qui a le plus de profils
+  (`mergeTarget`). Même garde que la passation : administrateur général,
+  adresse relue, un seul batch.
+- **L'administration générale est un rôle de la personne** : c'est par cette
+  fusion qu'un profil d'administrateur général — souvent écrit sans nom, donc
+  laissé à part par 0063 — rejoint la personne qui joue à Rixheim et à
+  Landser. Le sélecteur le range sous « Administration générale », jamais sous
+  « Sans club » (`profilesByClub`) : Gilles passe de Rixheim à Landser à
+  l'administration sans se déconnecter.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
