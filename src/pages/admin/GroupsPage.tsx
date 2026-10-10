@@ -14,7 +14,8 @@ import { FederationSelect } from '@/components/FederationSelect'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
-import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision, activePhaseOf } from '@/lib/federations'
+import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision } from '@/lib/federations'
+import { phaseScope } from '@/lib/phaseScope'
 
 export function GroupsPage() {
   const { user } = useAuth()
@@ -26,16 +27,6 @@ export function GroupsPage() {
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
 
-  // Phase switcher — defaults to the active phase, chronological order (#237).
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = activePhaseOf(phases, seasons)
-  const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
-  const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
-
   // Federation — first, because everything below it is one federation's: a
   // general admin picks among all of them, a club admin among their club's
   // (#660). Without it the division picker mixed "GE 3" with "Excellence".
@@ -46,6 +37,14 @@ export function GroupsPage() {
     ? chosenFederationId
     : federationOptions[0]?.id ?? FFTT_FEDERATION_ID
   const isFftt = federationId === FFTT_FEDERATION_ID
+
+  // Phase switcher — that federation's phases (#645), its active one by
+  // default, chronological order (#237).
+  const scope = phaseScope({ federations, seasons, phases, club: viewerClub, chosen: federationId })
+  const orderedPhases = scope.phases
+  const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
+  const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
+  const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   // Organization — optional filter narrowing the division picker to one FFTT
   // championship (#237). Best-effort: it never blocks browsing when the FFTT
@@ -124,9 +123,14 @@ export function GroupsPage() {
    * listed every division of every phase and federation, so "GE 3" appeared
    * once per season beside the AGR's (#660).
    */
+  // A federation's phase is its own (#645): the page's when the dialog is on
+  // the page's federation, that federation's default otherwise.
+  const phaseOfFederation = (fedId: string) => (fedId === federationId
+    ? phase?.id
+    : phaseScope({ federations, seasons, phases, chosen: fedId }).defaultPhase?.id)
   const dialogPhaseId = editing
     ? divisions.find((d) => d.id === editing.divisionId)?.phaseId
-    : phase?.id
+    : phaseOfFederation(form.federationId)
   const dialogDivisions = useMemo(
     () =>
       divisionsOfFederation(divisions, competitions, form.federationId)
@@ -157,7 +161,7 @@ export function GroupsPage() {
   /** A federation picked in the dialog starts over on its first division. */
   const pickDialogFederation = (fedId: string) => {
     const first = divisionsOfFederation(divisions, competitions, fedId)
-      .filter((d) => d.phaseId === phase?.id && !d.isArchived)
+      .filter((d) => d.phaseId === phaseOfFederation(fedId) && !d.isArchived)
       .sort((a, b) => a.rank - b.rank)[0]
     setForm({ federationId: fedId, divisionId: first?.id ?? '', number: nextGroupNumber(first?.id ?? '') })
   }
@@ -244,7 +248,7 @@ export function GroupsPage() {
           id="groups-federation"
           options={federationOptions}
           value={federationId}
-          onChange={(id) => { setChosenFederationId(id); setOrganizationId('') }}
+          onChange={(id) => { setChosenFederationId(id); setOrganizationId(''); setPhaseId(undefined) }}
         />
         {isFftt && (
         <div>

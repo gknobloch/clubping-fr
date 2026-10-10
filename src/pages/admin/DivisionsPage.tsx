@@ -12,13 +12,16 @@ import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, orderedCategoryPicks, type PlayerCategory } from '@/lib/playerCategories'
-import { activePhaseOf } from '@/lib/federations'
+import { FFTT_FEDERATION_ID } from '@/lib/federations'
+import { phaseScope } from '@/lib/phaseScope'
+import { FederationSwitch } from '@/components/FederationSwitch'
 
 export function DivisionsPage() {
   const {
     divisions: allDivisions,
     phases,
     seasons = [],
+    federations = [],
     competitions,
     updateDivision,
     addDivision,
@@ -31,15 +34,21 @@ export function DivisionsPage() {
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
 
-  // Phase switcher — defaults to the active phase, chronological order (#235).
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = activePhaseOf(phases, seasons)
+  // The federation, then its phases (#645) — its active one by default,
+  // chronological order (#235). Divisions belong to a phase, so the list is
+  // the federation's by the same stroke.
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
+  const scope = phaseScope({ federations, seasons, phases, chosen: chosenFederation })
+  const isFftt = scope.federationId === FFTT_FEDERATION_ID
+  const orderedPhases = scope.phases
   const [filterPhaseId, setFilterPhaseId] = useState<string | undefined>(undefined)
-  const filterPhase = orderedPhases.find((p) => p.id === filterPhaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
+  const filterPhase = orderedPhases.find((p) => p.id === filterPhaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === filterPhase?.id)
+  const changeFederation = (federationId: string) => {
+    setChosenFederation(federationId)
+    setFilterPhaseId(undefined)
+    setOrganizationId('')
+  }
 
   // Organization — optional filter narrowing the division list to one FFTT
   // championship, same mechanism as /groupes (#237). Best-effort: it never
@@ -57,7 +66,7 @@ export function DivisionsPage() {
 
   useEffect(() => {
     const ffttPhaseId = filterPhase ? ffttPhaseIdForName(filterPhase.name) : null
-    if (!organizationId || !filterPhase || !ffttPhaseId) {
+    if (!isFftt || !organizationId || !filterPhase || !ffttPhaseId) {
       setOrgDivisionIds(null)
       return
     }
@@ -71,7 +80,7 @@ export function DivisionsPage() {
       )
     })
     return () => { cancelled = true }
-  }, [organizationId, filterPhase, fetchDivisionsPreview])
+  }, [isFftt, organizationId, filterPhase, fetchDivisionsPreview])
 
   const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
 
@@ -217,7 +226,9 @@ export function DivisionsPage() {
           <>
             {/* Manual add is the fallback; FFTT import is the default path (#219). */}
             <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une division" onClick={openCreate} />
-            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            {isFftt && (
+              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            )}
           </>
         }
       />
@@ -228,7 +239,8 @@ export function DivisionsPage() {
           onImported={setOrganizationId}
         />
       )}
-      {/* Phase switcher (#235) */}
+      {/* Federation (#645), then the phase switcher (#235) */}
+      <FederationSwitch options={scope.options} value={scope.federationId} onChange={changeFederation} />
       {filterPhase && (
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
           <PhaseSwitchButton
@@ -244,26 +256,29 @@ export function DivisionsPage() {
           />
         </div>
       )}
-      <div>
-        <label htmlFor="divisions-org" className="block text-sm font-medium text-slate-700">
-          Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
-        </label>
-        <select
-          id="divisions-org"
-          value={organizationId}
-          onChange={(e) => setOrganizationId(e.target.value)}
-          className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-        >
-          <option value="">Toutes</option>
-          {orgGroups.map((g) => (
-            <optgroup key={g.type} label={g.label}>
-              {g.organizations.map((o) => (
-                <option key={o.id} value={o.id}>{o.name} ({o.identifier})</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
+      {/* The FFTT's organisations narrow the FFTT's divisions only. */}
+      {isFftt && (
+        <div>
+          <label htmlFor="divisions-org" className="block text-sm font-medium text-slate-700">
+            Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
+          </label>
+          <select
+            id="divisions-org"
+            value={organizationId}
+            onChange={(e) => setOrganizationId(e.target.value)}
+            className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+          >
+            <option value="">Toutes</option>
+            {orgGroups.map((g) => (
+              <optgroup key={g.type} label={g.label}>
+                {g.organizations.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name} ({o.identifier})</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      )}
       {archivedDivisions.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
