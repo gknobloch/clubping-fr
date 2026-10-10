@@ -15,7 +15,9 @@ function world() {
   addMember(d1.exec, { id: 'benjamin', firstName: 'Benjamin', email: 'henaut@example.fr', clubId: 'club-a' })
   addMember(d1.exec, { id: 'g-rix', firstName: 'Gilles', email: 'g@example.fr', clubId: 'club-a', personId: 'person-g' })
   addMember(d1.exec, { id: 'g-lan', firstName: 'Gilles', email: 'g@example.fr', clubId: 'club-b', personId: 'person-g' })
-  // A pair from before the rule, not yet settled by the general admin.
+  // A pair from before the rule, not yet settled by the general admin — data
+  // only a database from before 0068 holds, so the index is set aside for it.
+  d1.exec('DROP INDEX people_email_unique')
   addMember(d1.exec, { id: 'sacha', firstName: 'Sacha', email: 'henaut@example.fr', clubId: 'club-a' })
   addMember(d1.exec, { id: 'ga', firstName: 'Jade', email: 'jade@example.fr', clubId: null, role: 'general_admin' })
   return d1
