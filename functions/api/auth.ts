@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { UserRow } from './rows'
 import { sendEmail } from './email'
+import { profileReaches, reaches } from './reach'
 import { parsePreferences } from '../../src/lib/notificationPreferences'
 
 // Shared environment for the whole API. Secrets/vars are configured as
@@ -240,6 +241,9 @@ function serializeUser(r: UserRow) {
     ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
     ...(r.status ? { status: r.status } : {}),
     ...(r.club_id ? { clubId: r.club_id } : {}),
+    // The person behind this club profile (#655) — what « Mon compte » manages
+    // delegations for.
+    ...(r.person_id ? { personId: r.person_id } : {}),
     // Always sent, never omitted: the mobile switch has to draw itself before
     // the member has ever touched it, and `undefined` would read as off (#495).
     // It rides here rather than in GET /api/data because this is the endpoint
@@ -267,10 +271,13 @@ function serializeUser(r: UserRow) {
  * same address always opens on the same profile until one of them is used.
  */
 async function userByEmail(db: D1Database, email: string): Promise<UserRow | null> {
+  // Among every profile the address reaches (#655) — a delegate who last
+  // acted as their child reopens there, as a shared address did (#640).
   return db
     .prepare(
-      `SELECT * FROM users WHERE lower(email) = lower(?)
-        ORDER BY COALESCE(last_seen_at, 0) DESC, id
+      `SELECT u.* FROM users o JOIN users u ON ${reaches('o', 'u')}
+        WHERE lower(o.email) = lower(?)
+        ORDER BY COALESCE(u.last_seen_at, 0) DESC, u.id
         LIMIT 1`,
     )
     .bind(email)
@@ -302,20 +309,23 @@ function serializeProfile(r: ProfileRow) {
  * signed in.
  */
 async function profilesOf(db: D1Database, user: UserRow) {
-  const email = user.email?.trim() ?? ''
   let found: ProfileRow[] = []
   // A supplement to the session, never a condition of it: a list that cannot
   // be read leaves a switcher with nothing to offer, not a member signed out.
   try {
+    // Every profile this one reaches (#655): the person's own in other clubs,
+    // those of whoever delegated to them, and — until they are cleaned up —
+    // the profiles sharing the address (#640).
     const rows = await db
       .prepare(
-        `SELECT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
+        `SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
                 c.display_name AS club_name
-           FROM users u
+           FROM users o
+           JOIN users u ON ${reaches('o', 'u')}
            LEFT JOIN clubs c ON c.id = u.club_id
-          WHERE u.id = ? OR (? != '' AND lower(u.email) = lower(?))`,
+          WHERE o.id = ?`,
       )
-      .bind(user.id, email, email)
+      .bind(user.id)
       .all<ProfileRow>()
     found = rows?.results ?? []
   } catch (e) {
@@ -323,18 +333,6 @@ async function profilesOf(db: D1Database, user: UserRow) {
   }
   const self: ProfileRow = found.find((r) => r.id === user.id) ?? { ...user, club_name: null }
   return [self, ...found.filter((r) => r.id !== user.id)].map(serializeProfile)
-}
-
-/**
- * Whether two members sign in with the same address — which is what lets one
- * switch to the other without a second code (#640). Case aside, as at sign-in;
- * and no address shares nothing, or every member without one would reach
- * every other.
- */
-export function sameAddress(a: Pick<UserRow, 'email'>, b: Pick<UserRow, 'email'>): boolean {
-  const x = a.email?.trim().toLowerCase()
-  const y = b.email?.trim().toLowerCase()
-  return !!x && x === y
 }
 
 /**
@@ -723,8 +721,12 @@ authApp.post('/switch', async (c) => {
   if (typeof userId !== 'string' || !userId) return c.json({ error: 'invalid_request' }, 400)
   if (userId === current.id) return sessionResponse(c, token, current)
 
+  // Read now, not when the session opened: a delegation withdrawn, or a
+  // child given an address of their own, takes effect at once (#640, #655).
   const target = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first<UserRow>()
-  if (!target || !sameAddress(current, target)) return c.json({ error: 'not_allowed' }, 403)
+  if (!target || !(await profileReaches(c.env.DB, current.id, target.id))) {
+    return c.json({ error: 'not_allowed' }, 403)
+  }
 
   const fresh = await createSession(c.env.DB, target.id)
   await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(await sessionKey(token)).run()

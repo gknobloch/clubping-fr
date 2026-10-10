@@ -6,6 +6,7 @@ import { useConfirm } from '@/components/useConfirm'
 import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { ProfileList } from '@/components/ProfileSwitcher'
+import { PersonDelegates } from '@/components/PersonDelegates'
 import { hasOtherProfiles } from '@/lib/profiles'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
@@ -190,16 +191,29 @@ export function ComptePage() {
         </section>
       )}
 
-      {/* Profils — a parent and a child on one address (#640) */}
+      {/* Profils — one person in several clubs, the people they manage (#655),
+          and #640's shared addresses until they are cleaned up */}
       {hasOtherProfiles(profiles, user?.id) && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mes profils</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Votre adresse e-mail donne accès à plusieurs profils. Touchez-en un pour l’ouvrir.
+            Votre compte donne accès à plusieurs profils : vos clubs, et ceux des personnes
+            que vous gérez. Touchez-en un pour l’ouvrir.
           </p>
           <div className="mt-3">
             <ProfileList />
           </div>
+        </section>
+      )}
+
+      {/* Délégations (#655): who may open my profiles, and whose I may open */}
+      {user?.personId && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Délégations</h2>
+          <p className="mt-1 mb-3 text-sm text-slate-500">
+            Un délégué ouvre vos profils avec son propre compte — un parent pour son enfant.
+          </p>
+          <PersonDelegates personId={user.personId} mode="self" idPrefix="compte" />
         </section>
       )}
 
