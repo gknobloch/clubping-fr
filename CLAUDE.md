@@ -590,10 +590,17 @@ invisible dans le diff comme dans la revue.
   six clés en cascade et trois tableaux JSON pointent vers `users.id` (le
   piège de 0036, #604, 0060). La personne s'ajoute **à côté**, et chaque id
   reste ce qu'il est.
-- **Les champs de la personne restent sur `users`, en miroir** : l'API les y
-  lit à une centaine d'endroits. Une écriture va à `people` **et** à chaque
-  profil de la personne (`PATCH /players/:id`) ; les lectures migreront plus
-  tard, puis les colonnes partiront, chaque étape dans son déploiement (#410).
+- **L'API lit un profil par la vue `profiles`** (0065, étape 4) : la ligne de
+  `users`, avec les champs de la personne pris dans `people`. Toute lecture
+  passe par elle — `FROM profiles`, jamais `FROM users` ; écrire et supprimer
+  restent sur la table. Les champs de la personne ne s'écrivent plus que dans
+  `people` : les colonnes de `users` sont des copies **périmées**, qui partent
+  dans un déploiement ultérieur (#410, étape 5). Ne rien y lire.
+- **La vue nomme ses colonnes** : une colonne ajoutée à `users` doit l'être à
+  `profiles` aussi, et `profilesView.test.ts` casse le build sur la première
+  oubliée. Un champ de la personne vaut celui de la personne **même NULL** —
+  l'adresse vidée de Sacha ne doit pas laisser voir la copie (`CASE`, jamais
+  `COALESCE`).
 - **Le rattrapage** : une personne par ligne, puis les lignes de même adresse
   **et** de même nom fusionnées — la règle de #640. La personne gardée est celle
   du profil **le plus ancien** (son orthographe), et elle reprend le téléphone
@@ -618,9 +625,11 @@ invisible dans le diff comme dans la revue.
   et un enfant ne sont pas deux clubs d'une même personne. L'adresse ne sert
   plus que pour un cache d'avant #655.
 - **L'anonymisation de la base dev** donne un pseudonyme par personne (sinon
-  les deux profils de Gilles se liraient comme deux inconnus), réécrit
-  `people`, et anonymise aussi les licences des autres fédérations (#644) et
-  les affiliations des clubs (#643) ; `refresh-dev-db.sh` vérifie les trois.
+  les deux profils de Gilles se liraient comme deux inconnus) : elle réécrit
+  `people`, puis écrase les copies de `users` depuis la personne — périmées,
+  elles portent encore de vraies données. Une personne sans adresse le reste.
+  Elle anonymise aussi les licences des autres fédérations (#644) et les
+  affiliations des clubs (#643) ; `refresh-dev-db.sh` vérifie les trois.
 - Un profil écrit entre la migration et la bascule du worker n'a pas de
   personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
   garde ses champs sur sa ligne, comme avant.

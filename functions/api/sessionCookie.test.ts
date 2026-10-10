@@ -125,7 +125,7 @@ function db() {
                   ? { token: key, user_id: 'u1', expires_at: Date.now() + 60_000 }
                   : null
               }
-              if (sql.includes('FROM users')) return user
+              if (sql.includes('FROM profiles')) return user
               return null
             },
             async run() {

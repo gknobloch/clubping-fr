@@ -42,7 +42,7 @@ function fakeDb(users: UserRow[], viewerId: string | null) {
               ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ?')) {
+          if (sql.includes('FROM profiles WHERE id = ?')) {
             return users.find((u) => u.id === params[0]) ?? null
           }
           return null

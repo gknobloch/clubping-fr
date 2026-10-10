@@ -32,7 +32,7 @@ function dbWith(found: typeof user | null) {
         return {
           bind: () => ({
             first: async () => {
-              if (sql.includes('FROM users')) return found
+              if (sql.includes('FROM profiles')) return found
               // auth_otp lookup — empty, as request() never wrote a code here.
               return null
             },

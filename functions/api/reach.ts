@@ -32,7 +32,7 @@ export const reaches = (o: string, u: string) => `(
 /** Whether the profile `fromId` reaches the profile `toId`. */
 export async function profileReaches(db: D1Database, fromId: string, toId: string): Promise<boolean> {
   const row = await db.prepare(
-    `SELECT 1 AS ok FROM users o JOIN users u ON ${reaches('o', 'u')} WHERE o.id = ? AND u.id = ?`,
+    `SELECT 1 AS ok FROM profiles o JOIN profiles u ON ${reaches('o', 'u')} WHERE o.id = ? AND u.id = ?`,
   ).bind(fromId, toId).first<{ ok: number }>()
   return !!row
 }
@@ -44,7 +44,7 @@ export async function profileReaches(db: D1Database, fromId: string, toId: strin
  */
 export async function householdIds(db: D1Database, userId: string): Promise<Set<string>> {
   const r = await db.prepare(
-    `SELECT u.id AS id FROM users a JOIN users u ON ${reaches('a', 'u')} OR ${reaches('u', 'a')}
+    `SELECT u.id AS id FROM profiles a JOIN profiles u ON ${reaches('a', 'u')} OR ${reaches('u', 'a')}
       WHERE a.id = ?`,
   ).bind(userId).all<{ id: string }>()
   return new Set([userId, ...(r.results ?? []).map((x) => x.id)])

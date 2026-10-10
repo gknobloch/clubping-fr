@@ -151,10 +151,10 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
     // A person of their own (#655), written before the profile that names it.
     const person = writes.find((w) => /INSERT OR IGNORE INTO people/.test(w.sql))
     expect(writes.indexOf(person!)).toBeLessThan(writes.indexOf(insert!))
-    expect(person?.params.slice(1, 4)).toEqual(['Virginie', 'Barlinge', 'v@example.com'])
-    expect(insert?.params).toEqual([
-      expect.any(String), 'v@example.com', 'Virginie', 'Barlinge', '0686839957', CLUB, person?.params[0],
-    ])
+    expect(person?.params.slice(1, 5)).toEqual(['Virginie', 'Barlinge', 'v@example.com', '0686839957'])
+    // The profile carries the club and the person — the name and the address
+    // are the person's alone since 0065.
+    expect(insert?.params).toEqual([expect.any(String), CLUB, person?.params[0]])
   })
 
   it('refuses to invite again someone the address already names (#640)', async () => {
@@ -179,7 +179,7 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
       firstName: 'Benjamin', lastName: 'Henaut', email: 'henaut@example.com',
     })
     expect(res.status).toBe(200)
-    expect(writes.find((w) => /INSERT INTO users/.test(w.sql))?.params[1]).toBe('henaut@example.com')
+    expect(writes.find((w) => /INSERT OR IGNORE INTO people/.test(w.sql))?.params[3]).toBe('henaut@example.com')
   })
 
   it('demands a name and an address — the address is the way in', async () => {

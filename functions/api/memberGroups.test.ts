@@ -69,10 +69,10 @@ function fakeDb(viewerId: string | null) {
               ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ? AND club_id = ?')) {
+          if (sql.includes('FROM profiles WHERE id = ? AND club_id = ?')) {
             return USERS.find((u) => u.id === params[0] && u.club_id === params[1]) ?? null
           }
-          if (sql.includes('FROM users WHERE id = ?')) {
+          if (sql.includes('FROM profiles WHERE id = ?')) {
             return USERS.find((u) => u.id === params[0]) ?? null
           }
           if (sql.includes('FROM member_groups WHERE id = ? AND club_id = ?')) {
@@ -84,7 +84,7 @@ function fakeDb(viewerId: string | null) {
           if (sql.includes('FROM member_groups WHERE club_id = ?')) {
             return { results: GROUPS.filter((g) => g.club_id === params[0]) }
           }
-          if (sql.includes('SELECT id FROM users WHERE club_id = ?')) {
+          if (sql.includes('SELECT id FROM profiles WHERE club_id = ?')) {
             return { results: USERS.filter((u) => u.club_id === params[0]).map((u) => ({ id: u.id })) }
           }
           return { results: [] }
@@ -95,7 +95,7 @@ function fakeDb(viewerId: string | null) {
         bind: (...params: unknown[]) => ({ ...bound(params), __write: { sql, params } }),
         async first() { return null },
         async all() {
-          if (sql === 'SELECT * FROM users') return { results: USERS }
+          if (sql === 'SELECT * FROM profiles') return { results: USERS }
           if (sql === 'SELECT * FROM member_groups') return { results: GROUPS }
           if (sql === 'SELECT * FROM member_group_members') return { results: MEMBERS }
           if (sql === 'SELECT * FROM club_competition_groups') return { results: LINKS }

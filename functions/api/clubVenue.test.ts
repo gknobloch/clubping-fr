@@ -57,7 +57,7 @@ function fakeDb({ users, viewerId, clubs = [MINE, OPPONENT, FAR], addressed = []
               ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ?')) return users.find((u) => u.id === params[0]) ?? null
+          if (sql.includes('FROM profiles WHERE id = ?')) return users.find((u) => u.id === params[0]) ?? null
           if (sql.includes("role = 'club_admin' AND club_id = ?")) {
             return users.find((u) => u.role === 'club_admin' && u.club_id === params[0]) ?? null
           }

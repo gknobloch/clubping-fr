@@ -125,7 +125,7 @@ describe('switching profile', () => {
   it('reads the address now — a child given their own is out of reach', async () => {
     const { db, exec } = await world((build) => household(build))
     const { token } = await signIn(db)
-    exec("UPDATE users SET email = 'sacha@example.fr' WHERE id = 'sacha'")
+    exec("UPDATE people SET email = 'sacha@example.fr' WHERE id = (SELECT person_id FROM users WHERE id = 'sacha')")
     expect((await post(db, 'switch', { userId: 'sacha' }, token)).status).toBe(403)
   })
 

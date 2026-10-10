@@ -45,6 +45,8 @@ const SCHEMA = `
   );
   INSERT INTO users (id, email) VALUES ('u1', 'membre@example.invalid'),
                                        ('u2', 'autre@example.invalid');
+  -- What the API reads a member through since 0065; these rows have no person.
+  CREATE VIEW profiles AS SELECT * FROM users;
 `
 
 /** A real SQLite wearing D1's interface — enough of it for the auth paths. */

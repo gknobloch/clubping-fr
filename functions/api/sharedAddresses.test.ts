@@ -23,7 +23,7 @@ function world() {
   addMember(d1.exec, { id: 'ga', firstName: 'Jade', email: 'jade@example.fr', clubId: null, role: 'general_admin' })
   const addresses = () => ({
     people: d1.rows<{ id: string; email: string | null }>("SELECT id, email FROM people WHERE id IN ('person-benjamin', 'person-sacha') ORDER BY id"),
-    users: d1.rows<{ id: string; email: string | null }>("SELECT id, email FROM users WHERE id IN ('benjamin', 'sacha', 'sacha-b') ORDER BY id"),
+    users: d1.rows<{ id: string; email: string | null }>("SELECT id, email FROM profiles WHERE id IN ('benjamin', 'sacha', 'sacha-b') ORDER BY id"),
   })
   const delegations = () =>
     d1.rows<{ person_id: string; delegate_id: string }>('SELECT person_id, delegate_id FROM person_delegates ORDER BY 1, 2')
