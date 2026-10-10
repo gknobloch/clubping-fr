@@ -280,7 +280,7 @@ async function userByEmail(db: D1Database, email: string): Promise<(UserRow & { 
   // acted as their child reopens there, as a shared address did (#640).
   return db
     .prepare(
-      `SELECT u.*, o.id AS origin_id FROM users o JOIN users u ON ${reaches('o', 'u')}
+      `SELECT u.*, o.id AS origin_id FROM profiles o JOIN profiles u ON ${reaches('o', 'u')}
         WHERE lower(o.email) = lower(?)
         ORDER BY COALESCE(u.last_seen_at, 0) DESC, u.id
         LIMIT 1`,
@@ -329,8 +329,8 @@ async function profilesOf(db: D1Database, user: UserRow, rootId: string = user.i
       .prepare(
         `SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
                 c.display_name AS club_name
-           FROM users o
-           JOIN users u ON ${reaches('o', 'u')}
+           FROM profiles o
+           JOIN profiles u ON ${reaches('o', 'u')}
            LEFT JOIN clubs c ON c.id = u.club_id
           WHERE o.id = ?`,
       )
@@ -550,7 +550,7 @@ export async function userFromToken(
     return null
   }
   const user = await db
-    .prepare('SELECT * FROM users WHERE id = ?')
+    .prepare('SELECT * FROM profiles WHERE id = ?')
     .bind(session.user_id)
     .first<UserRow>()
   // Every authenticated request lands here, which makes it the one place that
@@ -683,7 +683,7 @@ authApp.post('/oauth', async (c) => {
   let user: UserRow | null = null
   let originId: string | undefined
   if (link) {
-    user = await db.prepare('SELECT * FROM users WHERE id = ?').bind(link.user_id).first<UserRow>()
+    user = await db.prepare('SELECT * FROM profiles WHERE id = ?').bind(link.user_id).first<UserRow>()
   } else if (claims.email) {
     const found = await userByEmail(db, claims.email)
     user = found
@@ -753,7 +753,7 @@ authApp.post('/switch', async (c) => {
 
   // Read now, not when the session opened: a delegation withdrawn, or a
   // child given an address of their own, takes effect at once (#640, #655).
-  const target = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first<UserRow>()
+  const target = await c.env.DB.prepare('SELECT * FROM profiles WHERE id = ?').bind(userId).first<UserRow>()
   if (!target || !(await profileReaches(c.env.DB, root, target.id))) {
     return c.json({ error: 'not_allowed' }, 403)
   }
@@ -844,7 +844,7 @@ authApp.get('/dev/users', async (c) => {
               WHERE t.captain_id = u.id
                 AND t.is_archived = 0
                 AND p.status = 'active') AS captain_team_numbers
-       FROM users u
+       FROM profiles u
        LEFT JOIN clubs c ON c.id = u.club_id
       ORDER BY CASE u.role
                  WHEN 'general_admin' THEN 0
@@ -862,7 +862,7 @@ authApp.post('/dev/login', async (c) => {
   if (!devLoginEnabled(c.env)) return c.json({ error: 'not_found' }, 404)
   const { userId } = await c.req.json<{ userId?: string }>()
   if (!userId) return c.json({ error: 'invalid_user' }, 400)
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
+  const user = await c.env.DB.prepare('SELECT * FROM profiles WHERE id = ?')
     .bind(userId)
     .first<UserRow>()
   if (!user) return c.json({ error: 'no_account' }, 403)

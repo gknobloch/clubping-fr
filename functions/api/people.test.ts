@@ -40,11 +40,11 @@ function fakeDb(viewerId: string) {
       const key = await sessionKey(TOKEN)
       return params.includes(key) ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR } : null
     }
-    if (sql.includes('FROM users WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
+    if (sql.includes('FROM profiles WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
     return null
   }
   const all = async (sql: string, params: unknown[]) => {
-    if (sql.includes('FROM users WHERE person_id = ?')) {
+    if (sql.includes('FROM profiles WHERE person_id = ?')) {
       const clubs = [...new Set(USERS.filter((u) => u.person_id === params[0]).map((u) => u.club_id))]
       return { results: clubs.map((club_id) => ({ club_id })) }
     }
@@ -82,14 +82,13 @@ const patch = (db: D1Database, id: string, body: unknown) =>
 const routeWrites = (writes: Write[]) => writes.filter((w) => !/last_seen_at/.test(w.sql))
 
 describe('PATCH /players/:id — the person behind the profile (#655)', () => {
-  it("writes a person's phone on the person and mirrors it on every profile", async () => {
+  it("writes a person's phone on the person alone — every profile reads it there (0065)", async () => {
     const { db, writes } = fakeDb('ca')
     expect((await patch(db, 'sam', { phone: '0633' })).status).toBe(200)
-    const [person, mirror] = routeWrites(writes)
-    expect(person.sql).toContain('UPDATE people SET phone = ? WHERE id = ?')
-    expect(person.params).toEqual(['0633', 'person-sam'])
-    expect(mirror.sql).toContain('UPDATE users SET phone = ? WHERE person_id = ?')
-    expect(mirror.params).toEqual(['0633', 'person-sam'])
+    const written = routeWrites(writes)
+    expect(written).toHaveLength(1)
+    expect(written[0].sql).toContain('UPDATE people SET phone = ? WHERE id = ?')
+    expect(written[0].params).toEqual(['0633', 'person-sam'])
   })
 
   it('refuses the admin of one club the person of a player in two', async () => {
@@ -114,10 +113,7 @@ describe('PATCH /players/:id — the person behind the profile (#655)', () => {
   it('lets the person change their own address from either profile', async () => {
     const { db, writes } = fakeDb('g-lan')
     expect((await patch(db, 'g-rix', { email: 'gilles.k@club.fr' })).status).toBe(200)
-    expect(routeWrites(writes).map((w) => w.params)).toEqual([
-      ['gilles.k@club.fr', 'person-g'],
-      ['gilles.k@club.fr', 'person-g'],
-    ])
+    expect(routeWrites(writes).map((w) => w.params)).toEqual([['gilles.k@club.fr', 'person-g']])
   })
 
   it('keeps a member to the four fields of « Mon compte », name excluded', async () => {

@@ -85,7 +85,7 @@ function fakeDb(w: World) {
           ? { token: key, user_id: w.viewerId, expires_at: Date.now() + HOUR }
           : null
       }
-      if (sql.includes('FROM users WHERE id = ?')) return users.find((u) => u.id === params[0]) ?? null
+      if (sql.includes('FROM profiles WHERE id = ?')) return users.find((u) => u.id === params[0]) ?? null
       if (sql.includes('FROM trainings WHERE id = ? AND club_id = ?')) {
         return trainings.find((t) => t.id === params[0] && t.club_id === params[1]) ?? null
       }
@@ -102,13 +102,13 @@ function fakeDb(w: World) {
       return null
     },
     async all() {
-      if (sql === 'SELECT * FROM users') return { results: users }
+      if (sql === 'SELECT * FROM profiles') return { results: users }
       if (sql === 'SELECT * FROM trainings') return { results: trainings }
       if (sql === 'SELECT * FROM training_sessions') return { results: sessions }
       if (sql.includes('FROM training_sessions WHERE training_id = ?')) {
         return { results: sessions.filter((x) => x.training_id === params[0]) }
       }
-      if (sql.includes('SELECT id FROM users WHERE club_id = ?')) {
+      if (sql.includes('SELECT id FROM profiles WHERE club_id = ?')) {
         return { results: users.filter((u) => u.club_id === params[0]).map((u) => ({ id: u.id })) }
       }
       if (sql.includes('FROM training_sessions WHERE date BETWEEN')) {
@@ -128,7 +128,7 @@ function fakeDb(w: World) {
           }),
         }
       }
-      if (sql.includes('FROM users WHERE club_id IN')) {
+      if (sql.includes('FROM profiles WHERE club_id IN')) {
         return { results: users.filter((u) => params.includes(u.club_id)) }
       }
       if (sql.includes('FROM club_addresses WHERE club_id IN')) {

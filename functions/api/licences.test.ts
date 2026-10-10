@@ -43,9 +43,9 @@ function fakeDb(viewerId: string, existingProfile?: string) {
       const key = await sessionKey(TOKEN)
       return params.includes(key) ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR } : null
     }
-    if (sql.includes('FROM users WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
+    if (sql.includes('FROM profiles WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
     if (sql.includes('FROM clubs WHERE id = ?')) return CLUBS.includes(params[0] as string) ? { id: params[0] } : null
-    if (sql.includes('FROM users WHERE club_id = ? AND email = ?')) return existingProfile ? { id: existingProfile } : null
+    if (sql.includes('FROM profiles WHERE club_id = ? AND email = ?')) return existingProfile ? { id: existingProfile } : null
     return null
   }
   const db = {
@@ -139,18 +139,18 @@ describe('POST /players/:id/profiles — a profile in another club (#644)', () =
   const body = { clubId: LANDSER, licences: [{ federationId: 'agr', number: '1251178' }] }
   const userInserts = (writes: Write[]) => writes.filter((w) => /INSERT INTO users/.test(w.sql))
 
-  it('copies the person from the source row, and writes only the new club and its licences', async () => {
+  it('joins the source\'s person, and writes only the new club and its licences', async () => {
     const { db, writes } = fakeDb('ca')
     const res = await send(db, '/players/p-gilles-rixheim/profiles', 'POST', body)
     expect(res.status).toBe(200)
     const { id } = await res.json() as { id: string }
     const [insert] = userInserts(writes)
-    // id, email, first, last, licence, phone, birth date, birth place, club,
-    // and the PERSON (#655): this source predates people, so it gets one now
-    // and both profiles share it.
-    expect(insert.params).toEqual([
-      id, 'gilles@club.fr', 'Gilles', 'Knobloch', '', '0799980001', '1980-01-01', 'Mulhouse', LANDSER,
-      'person-p-gilles-rixheim',
+    // id, licence, club, and the PERSON (#655) — nothing copied: the name and
+    // the address are the person's. This source predates people, so it gets
+    // one now, from its own row, and both profiles share it.
+    expect(insert.params).toEqual([id, '', LANDSER, 'person-p-gilles-rixheim'])
+    expect(writes.find((w) => /INSERT OR IGNORE INTO people/.test(w.sql))?.params).toEqual([
+      'person-p-gilles-rixheim', 'Gilles', 'Knobloch', 'gilles@club.fr', '0799980001', '1980-01-01', 'Mulhouse',
     ])
     expect(writes.find((w) => /UPDATE users SET person_id/.test(w.sql))?.params)
       .toEqual(['person-p-gilles-rixheim', 'p-gilles-rixheim'])
