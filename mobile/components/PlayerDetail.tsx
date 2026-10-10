@@ -1,4 +1,5 @@
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { addressOwner } from '@shared/lib/addressOwner'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -58,7 +59,7 @@ export function PlayerDetail({
 }) {
   const id = playerId
   const {
-    players, teams, clubs, federations, phases, seasons, playerPhasePoints,
+    players, users = [], teams, clubs, federations, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
     updatePlayer, memberGroups, setGroupsOfMember,
   } = useAppData()
@@ -354,6 +355,7 @@ export function PlayerDetail({
           title="Modifier les coordonnées"
           fields={CONTACT_FIELDS}
           subject={player}
+          addressOwner={(email) => addressOwner(email, users, { personId: player.personId, id: player.id })}
           onSave={(patch) => updatePlayer(player.id, patch)}
           onClose={() => setEditingContact(false)}
         />

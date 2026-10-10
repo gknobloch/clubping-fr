@@ -54,8 +54,21 @@ describe('naming a delegate (#655)', () => {
     expect(d1.delegations()).toEqual([{ person_id: 'person-nobody-email', delegate_id: 'person-benjamin' }])
   })
 
-  it("refuses a club admin, even for their own club's member", async () => {
+  it("lets a club admin name one for their own club's member — a child with no address (4 bis)", async () => {
     const d1 = world()
+    const ca = await as(d1, 'ca')
+    expect((await ca('/people/person-nobody-email/delegates', 'POST', { delegateId: 'benjamin' })).status).toBe(200)
+    expect(d1.delegations()).toEqual([{ person_id: 'person-nobody-email', delegate_id: 'person-benjamin' }])
+    expect((await ca('/people/person-nobody-email/delegations', 'GET')).status).toBe(200)
+  })
+
+  it("refuses the admin of another club, and one club's admin for a person who also plays elsewhere", async () => {
+    const d1 = world()
+    addMember(d1.exec, { id: 'cb', firstName: 'Cora', email: 'cora@example.fr', clubId: 'club-b', role: 'club_admin' })
+    const cb = await as(d1, 'cb')
+    expect((await cb('/people/person-sacha/delegates', 'POST', { delegateId: 'benjamin' })).status).toBe(403)
+    // Sacha also plays at club-b: not club-a's alone to decide.
+    addMember(d1.exec, { id: 'sacha-b', firstName: 'Sacha', email: 'sacha@example.fr', clubId: 'club-b', personId: 'person-sacha' })
     const ca = await as(d1, 'ca')
     expect((await ca('/people/person-sacha/delegates', 'POST', { delegateId: 'benjamin' })).status).toBe(403)
     expect(d1.delegations()).toEqual([])
@@ -119,10 +132,12 @@ describe('reading and withdrawing (#655)', () => {
     expect(d1.delegations()).toEqual([])
   })
 
-  it('refuses anybody else, club admin included', async () => {
+  it("lets the person's club admin withdraw it, and refuses anybody else", async () => {
     const d1 = await delegated()
-    const ca = await as(d1, 'ca')
-    expect((await ca('/people/person-sacha/delegates/person-benjamin', 'DELETE')).status).toBe(403)
+    addMember(d1.exec, { id: 'cb', firstName: 'Cora', email: 'cora@example.fr', clubId: 'club-b', role: 'club_admin' })
+    expect((await (await as(d1, 'cb'))('/people/person-sacha/delegates/person-benjamin', 'DELETE')).status).toBe(403)
     expect(d1.delegations()).toHaveLength(1)
+    expect((await (await as(d1, 'ca'))('/people/person-sacha/delegates/person-benjamin', 'DELETE')).status).toBe(200)
+    expect(d1.delegations()).toHaveLength(0)
   })
 })

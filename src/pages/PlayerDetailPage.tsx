@@ -16,7 +16,7 @@ import { LicenceBadge } from '@/components/LicenceBadge'
 import { ChecklistDialog } from '@/components/ChecklistDialog'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@/lib/memberGroups'
 import { licenceLabel, licencesOf } from '@/lib/licences'
-import { clubsToAddTo, linkedProfiles } from '@/lib/linkedProfiles'
+import { clubsToAddTo, linkedProfiles, mayEditPerson } from '@/lib/linkedProfiles'
 import { AddToClubDialog } from '@/components/AddToClubDialog'
 import { PersonDelegates } from '@/components/PersonDelegates'
 import { SharedAddresses } from '@/components/SharedAddresses'
@@ -208,10 +208,11 @@ export function PlayerDetailPage() {
         </section>
       )}
 
-      {/* Delegations (#655) — the general admin's, for someone who cannot ask
-          for themselves (Sacha, no address). The person manages their own
-          from « Mon compte ». */}
-      {user?.role === 'general_admin' && player.personId && (
+      {/* Delegations (#655) — for someone who cannot ask for themselves (a
+          child with no address, 4 bis): the general admin, and the admin of
+          every club the person plays in — the rule that guards their name and
+          address. The person manages their own from « Mon compte ». */}
+      {player.personId && player.id !== user?.id && mayEditPerson(player, user, players) && (
         <section
           aria-labelledby="player-delegates-title"
           className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -220,7 +221,9 @@ export function PlayerDetailPage() {
             Délégations
           </h2>
           <div className="space-y-4">
-            <SharedAddresses personId={player.personId} onSettled={() => setDelegatesVersion((v) => v + 1)} />
+            {user?.role === 'general_admin' && (
+              <SharedAddresses personId={player.personId} onSettled={() => setDelegatesVersion((v) => v + 1)} />
+            )}
             <PersonDelegates key={delegatesVersion} personId={player.personId} mode="admin" idPrefix="player" />
           </div>
         </section>

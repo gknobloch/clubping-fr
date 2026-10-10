@@ -12,6 +12,7 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
 import { currentRankings } from '@shared/lib/ranking'
+import { addressOwner } from '@shared/lib/addressOwner'
 import { setNotificationPreferences, setNotificationsEnabled } from '@/utils/push'
 import {
   LEAD_DAY_CHOICES, NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, hasChoosableLead,
@@ -41,7 +42,7 @@ export default function MonCompteScreen() {
   const canSwitch = hasOtherProfiles(profiles, user?.id)
   const [switching, setSwitching] = useState(false)
   const {
-    players, teams, clubs, federations, phases, seasons = [], playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
+    players, users = [], teams, clubs, federations, phases, seasons = [], playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
   } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -345,6 +346,7 @@ export default function MonCompteScreen() {
           title="Modifier mon profil"
           fields={OWN_FIELDS}
           subject={player}
+          addressOwner={(email) => addressOwner(email, users, { personId: player.personId, id: player.id })}
           onSave={(patch) => updatePlayer(player.id, patch)}
           onClose={() => setEditing(false)}
         />
