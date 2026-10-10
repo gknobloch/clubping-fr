@@ -10,7 +10,11 @@ import { app } from './[[path]]'
 // the columns it sees — omitting it would silently keep the old address. So the
 // conversion has to happen here, at the write.
 
-/** A database that records every statement and its bound parameters. */
+/**
+ * A database that records every statement and its bound parameters. Any
+ * member it is asked about exists, with a person of their own (#655) and an
+ * address to change: the address is the person's, and a PATCH writes it there.
+ */
 function recordingDb() {
   const statements: { sql: string; params: unknown[] }[] = []
   const result = { first: async () => null, run: async () => ({ success: true }), all: async () => ({ results: [] }) }
@@ -18,6 +22,9 @@ function recordingDb() {
     prepare: (sql: string) => ({
       bind: (...params: unknown[]) => {
         statements.push({ sql, params })
+        if (sql.includes('FROM profiles WHERE id = ?')) {
+          return { ...result, first: async () => ({ id: params[0], club_id: 'club-1', person_id: `person-${params[0]}`, email: 'avant@example.org' }) }
+        }
         return result
       },
       ...result,
@@ -38,9 +45,8 @@ const send = (db: D1Database, path: string, method: string, body: unknown) =>
   )
 
 /**
- * The parameter bound to `email` by the statement that wrote the address: the
- * new person on a creation (#655 — a profile carries no address of its own
- * since 0066), the member's row on a PATCH of a profile with no person.
+ * The parameter bound to `email` by the statement that wrote the address — on
+ * the person, whose field it is (#655): `users` carries none since 0067.
  */
 function boundEmail(statements: { sql: string; params: unknown[] }[]): unknown {
   const write = statements.filter((s) => /INSERT OR IGNORE INTO people|UPDATE (users|people)/.test(s.sql)).pop()
@@ -86,7 +92,7 @@ describe('player e-mail is stored as NULL when empty (#315)', () => {
   it('leaves the column alone when the key is absent', async () => {
     const { db, statements } = recordingDb()
     await send(db, '/players/p1', 'PATCH', { phone: '0600000000' })
-    const write = statements.filter((s) => /UPDATE users/.test(s.sql)).pop()
+    const write = statements.filter((s) => /UPDATE people/.test(s.sql)).pop()
     expect(write?.sql).toBeDefined()
     expect(write!.sql).not.toContain('email')
   })

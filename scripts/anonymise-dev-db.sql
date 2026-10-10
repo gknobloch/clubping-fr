@@ -18,10 +18,8 @@
 -- reach this database. The deletes at the foot of this file are a safety net
 -- for a load that bypassed that flag, not the primary mechanism (#359).
 
--- Since 0066 the person (#655) is the truth for name, address and phone: the
--- API reads them from `people`, and the copies on `users` are stale. So the
--- PERSON is pseudonymised, and every profile's copy is then overwritten from it
--- — the stale copies hold real data too, and must not survive either.
+-- The person (#655) holds name, address and phone — `users` has carried none
+-- since 0067 — so the PERSON is what is pseudonymised.
 
 -- People who share a real address (#640 — a parent and a child, until the
 -- general admin settles it) keep sharing one, so a preview can show the
@@ -75,19 +73,11 @@ UPDATE people SET
   birth_date = NULL,
   birth_place = NULL;
 
--- Every profile's copy, overwritten from its person; a profile with no person
--- (none should exist since 0066) is emptied rather than left holding real data.
 UPDATE users SET
-  first_name = (SELECT p.first_name FROM people p WHERE p.id = users.person_id),
-  last_name = (SELECT p.last_name FROM people p WHERE p.id = users.person_id),
-  email = (SELECT p.email FROM people p WHERE p.id = users.person_id),
-  phone = '0600000000',
   -- An FFTT licence number identifies a real person through the federation's
   -- public directory, so it goes even though the name is already fake. Cost:
   -- FFTT matching by licence will not line up on previews.
   license_number = printf('99%05d', rowid),
-  birth_date = NULL,
-  birth_place = NULL,
   -- When a real member last opened the app (#406). A pseudonym makes it
   -- harmless on its own, but it is a fact about someone's behaviour on a
   -- publicly reachable preview, and keeping it buys nothing: the dev login

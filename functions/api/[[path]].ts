@@ -4632,9 +4632,6 @@ app.patch('/players/:id', async (c) => {
   if ('licenseNumber' in p) { s.push('license_number = ?'); v.push(p.licenseNumber) }
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
-  // A profile with no person yet — written in the deploy window — keeps its
-  // fields on its own row, as every profile did before (#655).
-  if (!personId) { s.push(...ps); v.push(...pv) }
   if (s.length) { v.push(id); await db.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   // The person, which every profile of theirs reads through `profiles` (0066).
   if (personId && ps.length) await db.prepare(`UPDATE people SET ${ps.join(', ')} WHERE id = ?`).bind(...pv, personId).run()
