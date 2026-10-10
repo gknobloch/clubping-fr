@@ -86,6 +86,14 @@ export function AppShell() {
     links.push({ to: '/joueurs', label: 'Joueurs' })
   }
 
+  // Where the full bar starts. A general admin's eleven links, name and two
+  // icons need ~1060 px — more than a 1024 px window, which made every page
+  // scroll sideways and pushed « Se déconnecter » off-screen. Below xl: they get
+  // the drawer, like a phone. Literal classes: Tailwind only ships what it sees.
+  const bar = isGeneralAdmin
+    ? { show: 'hidden xl:flex', hide: 'xl:hidden' }
+    : { show: 'hidden md:flex', hide: 'md:hidden' }
+
   // Navigating is what closes the drawer — clicking the link the user is
   // already on has to close it too, so this keys on the location object.
   useEffect(() => { setMenuOpen(false) }, [location])
@@ -122,7 +130,7 @@ export function AppShell() {
 
           {/* Desktop: the full bar. Below md it would overflow the viewport —
               nine links do not fit on a phone (#304). */}
-          <nav className="hidden items-center gap-4 md:flex">
+          <nav className={`${bar.show} items-center gap-4`}>
             {links.map((link) => (
               <Link key={link.to} to={link.to} className={navLinkClass(location.pathname === link.to)}>
                 {link.label}
@@ -162,7 +170,7 @@ export function AppShell() {
             aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
             aria-expanded={menuOpen}
             aria-controls="menu-mobile"
-            className="-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 md:hidden"
+            className={`-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 ${bar.hide}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
               {menuOpen ? (
@@ -185,13 +193,13 @@ export function AppShell() {
           <>
             {/* Tapping anywhere outside closes, without trapping focus. */}
             <div
-              className="fixed inset-0 top-14 z-10 bg-slate-900/20 md:hidden"
+              className={`fixed inset-0 top-14 z-10 bg-slate-900/20 ${bar.hide}`}
               onClick={() => setMenuOpen(false)}
               aria-hidden
             />
             <nav
               id="menu-mobile"
-              className="relative z-20 border-t border-slate-200 bg-white px-3 py-2 shadow-lg md:hidden"
+              className={`relative z-20 border-t border-slate-200 bg-white px-3 py-2 shadow-lg ${bar.hide}`}
             >
               {links.map((link) => (
                 <Link key={link.to} to={link.to} className={drawerLinkClass(location.pathname === link.to)}>
