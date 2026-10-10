@@ -12,11 +12,13 @@ import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, orderedCategoryPicks, type PlayerCategory } from '@/lib/playerCategories'
+import { activePhaseOf } from '@/lib/federations'
 
 export function DivisionsPage() {
   const {
     divisions: allDivisions,
     phases,
+    seasons = [],
     competitions,
     updateDivision,
     addDivision,
@@ -34,7 +36,7 @@ export function DivisionsPage() {
     () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [phases],
   )
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activePhase = activePhaseOf(phases, seasons)
   const [filterPhaseId, setFilterPhaseId] = useState<string | undefined>(undefined)
   const filterPhase = orderedPhases.find((p) => p.id === filterPhaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
   const phaseIndex = orderedPhases.findIndex((p) => p.id === filterPhase?.id)

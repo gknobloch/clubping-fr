@@ -4,6 +4,7 @@ import { useAppData, type FfttCompetitionPreview } from '@/contexts/DataContext'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { ModalShell } from '@/components/ModalShell'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
+import { activeSeasonId } from '@/lib/season'
 
 type PreviewState = 'idle' | 'loading' | 'done' | 'error'
 
@@ -35,7 +36,7 @@ export function ImportCompetitionsModal({
   const selectableSeasons = seasons.filter((s) => s.status !== 'archived')
   const [organizationId, setOrganizationId] = useState(defaultOrganizationId)
   const [seasonId, setSeasonId] = useState(
-    seasons.find((s) => s.status === 'active')?.id ?? selectableSeasons[0]?.id ?? '',
+    activeSeasonId(seasons) ?? selectableSeasons[0]?.id ?? '',
   )
 
   const [preview, setPreview] = useState<FfttCompetitionPreview[] | null>(null)

@@ -11,7 +11,7 @@
 // (`Club.affiliationNumber`), and in any other federation when it carries an
 // affiliation to it (`Club.affiliations`): see migration 0061 for why the two
 // are stored apart, and `clubAffiliations` for the one place they meet.
-import type { Club, ClubAffiliation, Competition, Division, Federation } from '../types'
+import type { Club, ClubAffiliation, Competition, Division, Federation, Phase, Season } from '../types'
 import { clubIdFromAffiliation } from './entityIds'
 
 export const FFTT_FEDERATION_ID = 'fftt'
@@ -31,6 +31,41 @@ export function federationOfDivision(
     ? competitions.find((c) => c.id === division.competitionId)
     : undefined
   return federationOfCompetition(competition)
+}
+
+/** The federation whose calendar a season is (#645); the FFTT for one predating it. */
+export function federationOfSeason(season: Pick<Season, 'federationId'> | undefined): string {
+  return season?.federationId ?? FFTT_FEDERATION_ID
+}
+
+/** The federation a phase belongs to, through its season — the FFTT when the season is unknown. */
+export function federationOfPhase(
+  phase: Pick<Phase, 'seasonId'>,
+  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
+): string {
+  return federationOfSeason(seasons.find((s) => s.id === phase.seasonId))
+}
+
+/** One federation's phases: what a phase switcher pages through once the federation is chosen. */
+export function phasesOfFederation<P extends Pick<Phase, 'seasonId'>>(
+  phases: ReadonlyArray<P>,
+  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
+  federationId: string,
+): P[] {
+  return phases.filter((p) => federationOfPhase(p, seasons) === federationId)
+}
+
+/**
+ * The active phase of one federation — the FFTT's unless said otherwise.
+ * Since #645 each federation has its own, and `phases.find(active)` would
+ * answer with whichever came first.
+ */
+export function activePhaseOf<P extends Pick<Phase, 'seasonId' | 'status'>>(
+  phases: ReadonlyArray<P>,
+  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
+  federationId: string = FFTT_FEDERATION_ID,
+): P | undefined {
+  return phases.find((p) => p.status === 'active' && federationOfPhase(p, seasons) === federationId)
 }
 
 /**

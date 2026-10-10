@@ -37,6 +37,7 @@ import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
 import { federationOfTeam, licenceOf } from '@shared/lib/licences'
 import { FFTT_FEDERATION_ID } from '@shared/lib/federations'
+import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
 // Match card — consistent with the Accueil next-match header
@@ -121,7 +122,7 @@ export default function JourneesScreen() {
   const unlicensed = useMemo(
     () => unlicensedIds(
       playerSeasonLicences,
-      seasons.find((se) => se.status === 'active')?.id,
+      activeSeasonId(seasons),
       players.filter((p) => p.clubId === user?.clubId),
     ),
     [playerSeasonLicences, seasons, players, user?.clubId],
@@ -157,7 +158,7 @@ export default function JourneesScreen() {
   //
   // A category is a fact about a season, and the season being played is the one
   // that decides (#482).
-  const eligibilitySeasonId = seasons.find((se) => se.status === 'active')?.id
+  const eligibilitySeasonId = activeSeasonId(seasons)
   const categoryIndex = useMemo(
     () => seasonCategoryIndex(playerSeasonCategories),
     [playerSeasonCategories],

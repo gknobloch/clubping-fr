@@ -159,10 +159,10 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
   // keeps that ordering.
   const orderedSeasonIds: string[] = []
   for (const b of phaseBlocks) if (!orderedSeasonIds.includes(b.seasonId)) orderedSeasonIds.push(b.seasonId)
-  const activeSeasonId = seasons.find((s) => s.status === 'active')?.id
-  const fallbackSeasonId =
-    (activeSeasonId && orderedSeasonIds.includes(activeSeasonId) ? activeSeasonId : undefined) ??
-    orderedSeasonIds[orderedSeasonIds.length - 1]
+  // The active season among those the player's teams played in — whichever
+  // federation's it is (#645): an AGR profile's history is AGR seasons.
+  const activeSeasonId = seasons.find((s) => s.status === 'active' && orderedSeasonIds.includes(s.id))?.id
+  const fallbackSeasonId = activeSeasonId ?? orderedSeasonIds[orderedSeasonIds.length - 1]
   const currentSeasonId =
     selectedSeasonId && orderedSeasonIds.includes(selectedSeasonId) ? selectedSeasonId : fallbackSeasonId
   const seasonIndex = orderedSeasonIds.indexOf(currentSeasonId)

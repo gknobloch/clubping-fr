@@ -71,7 +71,8 @@ import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { fillVenuesFromFftt, type ClubVenue, type VenueFillResult } from '@/lib/clubVenues'
 import { fetchClubDetailXmlFromBrowser } from '@/lib/ffttClub'
 import { seasonIdFromName } from '@/lib/season'
-import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
+import { ffttPhaseIdForName, localPhaseId } from '@/lib/ffttPhases'
+import { withActivePhase, withActiveSeason, withPhaseAlignedToSeason } from '@/lib/seasonActivation'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { clubIdFromAffiliation, gameIdFor, teamIdFor } from '@/lib/entityIds'
 import { clubIdForAffiliation } from '@/lib/federations'
@@ -90,10 +91,6 @@ import {
   type TrainingDraft, type TrainingResult,
 } from '@/lib/trainings'
 
-// Chronology-aware demotion (#227): what stops being active is archived when
-// older than what becomes active, back to 'upcoming' when newer (rollback).
-const demotedSeasonStatus = (seasonId: string, newSeasonId: string): SeasonStatus =>
-  Number(seasonId) < Number(newSeasonId) ? 'archived' : 'upcoming'
 
 // DataState moved to src/types (#285): it is the GET /api/data contract, so
 // the API is annotated with the same declaration this file asserts against.
@@ -855,56 +852,31 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [initialData])
 
   // --- Seasons ---
-  // Mirrors the API's single-active invariant: activating a season demotes
-  // the previously active one (archived when older, 'upcoming' when newer).
-  const applySeasonPatch = (prev: Season[], id: string, patch: Partial<Season>): Season[] =>
-    prev.map((s) => {
-      if (s.id === id) return { ...s, ...patch }
-      if (patch.status === 'active' && s.status === 'active') return { ...s, status: demotedSeasonStatus(s.id, id) }
-      return s
-    })
-
-  // Season→phase cascade (#227), symmetric with the phase→season one: keep
-  // the active phase when it belongs to the newly activated season, otherwise
-  // switch to that season's most recent phase, Phase 2 over Phase 1 (or none
-  // when it has no phases).
-  const alignActivePhaseToSeason = useCallback((seasonId: string) => {
-    setPhases((prev) => {
-      const actives = prev.filter((p) => p.status === 'active')
-      if (actives.length > 0 && actives.every((p) => p.seasonId === seasonId)) return prev
-      const latest = prev
-        .filter((p) => p.seasonId === seasonId && p.status !== 'archived')
-        .sort((a, b) => b.name.localeCompare(a.name))[0]
-      const newKey = phaseOrderKey(seasonId, latest?.name ?? '')
-      return prev.map((p) => {
-        if (latest && p.id === latest.id) return { ...p, status: 'active' as const }
-        if (p.status !== 'active') return p
-        return { ...p, status: phaseOrderKey(p.seasonId, p.name) < newKey ? 'archived' as const : 'upcoming' as const }
-      })
-    })
-  }, [])
-
+  // Mirrors the API's rule (src/lib/seasonActivation.ts): one active season
+  // and phase in each federation (#645), the previous one archived when older
+  // and 'upcoming' when newer, and the (season · phase) pair kept coherent.
   const updateSeason = useCallback((id: string, patch: Partial<Season>) => {
-    setSeasons((prev) => applySeasonPatch(prev, id, patch))
-    if (patch.status === 'active') alignActivePhaseToSeason(id)
+    const next = (() => {
+      const patched = seasons.map((s) => (s.id === id ? { ...s, ...patch } : s))
+      return patch.status === 'active' ? withActiveSeason(patched, id) : patched
+    })()
+    setSeasons(next)
+    if (patch.status === 'active') setPhases((prev) => withPhaseAlignedToSeason(prev, next, id))
     if (persist) api(`/seasons/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
-  }, [persist, alignActivePhaseToSeason])
+  }, [persist, seasons])
 
   const addSeason = useCallback((data: Omit<Season, 'id'>): Season | null => {
-    // Season ids are derived from the name, aligned with FFTT (#217).
-    const id = seasonIdFromName(data.displayName)
+    // Season ids are derived from the name, aligned with FFTT (#217), and
+    // carry the federation outside it ("agr-27", #645).
+    const id = seasonIdFromName(data.displayName, data.federationId)
     if (!id) return null
     const season: Season = { ...data, displayName: data.displayName.trim(), id }
-    setSeasons((prev) => [
-      ...(season.status === 'active'
-        ? prev.map((s) => (s.status === 'active' ? { ...s, status: demotedSeasonStatus(s.id, id) } : s))
-        : prev),
-      season,
-    ])
-    if (season.status === 'active') alignActivePhaseToSeason(id)
+    const next = season.status === 'active' ? withActiveSeason([...seasons, season], id) : [...seasons, season]
+    setSeasons(next)
+    if (season.status === 'active') setPhases((prev) => withPhaseAlignedToSeason(prev, next, id))
     if (persist) api('/seasons', { method: 'POST', body: JSON.stringify(season) })
     return season
-  }, [persist, alignActivePhaseToSeason])
+  }, [persist, seasons])
 
   const archiveSeason = useCallback((id: string) => {
     setSeasons((prev) => prev.map((s) => (s.id === id ? { ...s, status: 'archived' } : s)))
@@ -930,17 +902,15 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       })
       if (!r.ok) return null
       const { season } = (await r.json()) as { season: Season }
-      setSeasons((prev) => [
-        ...prev.map((s) => (s.status === 'active' ? { ...s, status: demotedSeasonStatus(s.id, season.id) } : s)),
-        season,
-      ])
-      // A freshly imported season has no phases yet → no phase stays active.
-      alignActivePhaseToSeason(season.id)
+      const next = withActiveSeason([...seasons, season], season.id)
+      setSeasons(next)
+      // A freshly imported season has no phases yet → no FFTT phase stays active.
+      setPhases((prev) => withPhaseAlignedToSeason(prev, next, season.id))
       return season
     } catch {
       return null
     }
-  }, [alignActivePhaseToSeason])
+  }, [seasons])
 
   // --- FFTT divisions import (#219) ---
   const fetchOrganizations = useCallback(async (refresh = false): Promise<Organization[] | null> => {
@@ -1405,37 +1375,20 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [persist, phases, divisions, groups, teams, matchDays, games])
 
   // --- Phases ---
-  // Mirrors the API's single-active invariant (#221): activating a phase
-  // demotes the previously active one — archived when older, back to
-  // 'upcoming' when newer (rollback).
-  const demoteActivePhases = (prev: Phase[], exceptId: string, newKey: number) =>
-    prev.map((p) => {
-      if (p.id === exceptId || p.status !== 'active') return p
-      return { ...p, status: phaseOrderKey(p.seasonId, p.name) < newKey ? 'archived' as const : 'upcoming' as const }
-    })
-
-  // Cascade (#227): the active (season · phase) combination stays coherent —
-  // activating a phase also activates its season and demotes the other one.
-  const activatePhaseSeason = useCallback((seasonId: string) => {
-    setSeasons((prev) => prev.map((s) => {
-      if (s.id === seasonId) return s.status === 'active' ? s : { ...s, status: 'active' as const }
-      return s.status === 'active' ? { ...s, status: demotedSeasonStatus(s.id, seasonId) } : s
-    }))
-  }, [])
-
+  // The same rule as the seasons above (src/lib/seasonActivation.ts):
+  // activating a phase steps its federation's previous one down (#221, #645)
+  // and activates its season (#227).
   const updatePhase = useCallback((id: string, patch: Partial<Phase>) => {
     const target = phases.find((p) => p.id === id)
     if (patch.status === 'active' && target) {
-      activatePhaseSeason(target.seasonId)
+      setSeasons((prev) => withActiveSeason(prev, target.seasonId))
     }
     setPhases((prev) => {
-      const next = patch.status === 'active' && target
-        ? demoteActivePhases(prev, id, phaseOrderKey(target.seasonId, target.name))
-        : prev
-      return next.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      const patched = prev.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      return patch.status === 'active' && target ? withActivePhase(patched, seasons, id) : patched
     })
     if (persist) api(`/phases/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
-  }, [persist, phases, activatePhaseSeason])
+  }, [persist, phases, seasons])
 
   const addPhase = useCallback((data: Omit<Phase, 'id'>) => {
     // Deterministic FFTT-aligned id when the name is a known FFTT phase
@@ -1443,16 +1396,11 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     const ffttId = ffttPhaseIdForName(data.name)
     const id = ffttId ? localPhaseId(data.seasonId, ffttId) : nextId('phase')
     const phase: Phase = { ...data, id }
-    if (phase.status === 'active') activatePhaseSeason(phase.seasonId)
-    setPhases((prev) => [
-      ...(phase.status === 'active'
-        ? demoteActivePhases(prev, id, phaseOrderKey(phase.seasonId, phase.name))
-        : prev),
-      phase,
-    ])
+    if (phase.status === 'active') setSeasons((prev) => withActiveSeason(prev, phase.seasonId))
+    setPhases((prev) => (phase.status === 'active' ? withActivePhase([...prev, phase], seasons, id) : [...prev, phase]))
     if (persist) api('/phases', { method: 'POST', body: JSON.stringify(phase) })
     return phase
-  }, [persist, activatePhaseSeason])
+  }, [persist, seasons])
 
   const archivePhase = useCallback((id: string) => {
     setPhases((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'archived' } : p)))

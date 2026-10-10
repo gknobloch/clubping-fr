@@ -31,6 +31,7 @@ import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { activeSeasonId } from '@shared/lib/season'
 
 function openUrl(url: string) {
   Linking.openURL(url).catch(() => {
@@ -85,7 +86,7 @@ export function TeamDetail({
   const unlicensed = useMemo(
     () => unlicensedIds(
       playerSeasonLicences,
-      seasons.find((s) => s.status === 'active')?.id,
+      activeSeasonId(seasons),
       players.filter((p) => p.clubId === team?.clubId),
     ),
     [playerSeasonLicences, seasons, players, team?.clubId],
@@ -128,7 +129,7 @@ export function TeamDetail({
       memberGroups,
     })
     // The season being played decides: a category is a fact about a season.
-    const seasonId = seasons.find((se) => se.status === 'active')?.id
+    const seasonId = activeSeasonId(seasons)
     const categoryIndex = seasonCategoryIndex(playerSeasonCategories)
     return sortByName(
       selectablePlayers(

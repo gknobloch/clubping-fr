@@ -29,6 +29,7 @@ import {
 } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 import { NextTrainings } from '@/components/NextTrainings'
+import { activePhaseOf } from '@/lib/federations'
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -56,8 +57,8 @@ export function HomePage() {
   const me = myPlayerId ? players.find((p) => p.id === myPlayerId) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
 
-  const activeSeason = seasons.find((s) => s.status === 'active')
-  const activePhase = phases.find((p) => p.status === 'active')
+  const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
+  const activePhase = activePhaseOf(phases, seasons)
   const myActiveTeam = useMemo(
     () =>
       myPlayerId && activePhase
