@@ -5,13 +5,16 @@
 import type { Profile } from '../types'
 
 export interface ProfileClub {
-  /** Absent for a profile in no club — a general administrator, typically. */
+  /** Absent for the general administration, and for a profile in no club. */
   clubId?: string
   clubName: string
+  /** The general administration (#655): a role of the person, not a club. */
+  generalAdmin?: true
   profiles: Profile[]
 }
 
 const NO_CLUB = 'Sans club'
+export const GENERAL_ADMINISTRATION = 'Administration générale'
 
 const fullName = (p: Profile) => [p.firstName, p.lastName].filter(Boolean).join(' ')
 
@@ -22,7 +25,9 @@ export function profileName(p: Profile): string {
 
 /**
  * The switcher's sections: one per club, clubs by name, profiles by first
- * name inside each, and the profiles with no club last.
+ * name inside each; then « Administration générale » — a general admin's
+ * profile is the person's role across every club (#655), which is why it is
+ * not filed under « Sans club » — and the profiles with no club last.
  *
  * By club and not as one list, because a club is what tells two profiles of a
  * family apart at a glance once there are more than two — and a parent who
@@ -32,10 +37,12 @@ export function profileName(p: Profile): string {
 export function profilesByClub(profiles: Profile[]): ProfileClub[] {
   const byClub = new Map<string, ProfileClub>()
   for (const p of profiles) {
-    const key = p.clubId ?? ''
+    const generalAdmin = p.role === 'general_admin'
+    const key = generalAdmin ? '\u0000general-admin' : p.clubId ?? ''
     const club = byClub.get(key) ?? {
-      ...(p.clubId ? { clubId: p.clubId } : {}),
-      clubName: p.clubId ? (p.clubName || p.clubId) : NO_CLUB,
+      ...(p.clubId && !generalAdmin ? { clubId: p.clubId } : {}),
+      ...(generalAdmin ? { generalAdmin: true as const } : {}),
+      clubName: generalAdmin ? GENERAL_ADMINISTRATION : p.clubId ? (p.clubName || p.clubId) : NO_CLUB,
       profiles: [],
     }
     club.profiles.push(p)
@@ -47,8 +54,8 @@ export function profilesByClub(profiles: Profile[]): ProfileClub[] {
       (a.firstName ?? '').localeCompare(b.firstName ?? '', 'fr') ||
       (a.lastName ?? '').localeCompare(b.lastName ?? '', 'fr'))
   }
-  return clubs.sort((a, b) =>
-    Number(!a.clubId) - Number(!b.clubId) || a.clubName.localeCompare(b.clubName, 'fr'))
+  const rank = (c: ProfileClub) => (c.clubId ? 0 : c.generalAdmin ? 1 : 2)
+  return clubs.sort((a, b) => rank(a) - rank(b) || a.clubName.localeCompare(b.clubName, 'fr'))
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sharedAddressOf, sharedAddresses } from './sharedAddresses'
+import { mergeTarget, sharedAddressOf, sharedAddresses } from './sharedAddresses'
 
 // #655, step 3 — one address, several people: the cases 0063 could not settle.
 
@@ -42,5 +42,25 @@ describe('sharedAddresses', () => {
     ]
     expect(sharedAddressOf('p-sacha', members)?.people).toHaveLength(2)
     expect(sharedAddressOf('p-zoe', members)).toBeUndefined()
+  })
+})
+
+describe('mergeTarget', () => {
+  it('keeps the person with a name — an admin profile is often written without one', () => {
+    const [group] = sharedAddresses([
+      { id: 'ga', personId: 'p-ga', email: 'g@example.fr', firstName: '', lastName: '', clubId: undefined, role: 'general_admin' as const },
+      member('g-rix', 'p-g', 'g@example.fr', 'Gilles'),
+    ])
+    expect(mergeTarget(group).personId).toBe('p-g')
+    expect(group.people.find((p) => p.personId === 'p-ga')!.profiles[0].generalAdmin).toBe(true)
+  })
+
+  it('then the person with more profiles', () => {
+    const [group] = sharedAddresses([
+      member('a', 'p-a', 'x@example.fr', 'Anne'),
+      member('b1', 'p-b', 'x@example.fr', 'Bea'),
+      member('b2', 'p-b', 'x@example.fr', 'Bea', 'club-b'),
+    ])
+    expect(mergeTarget(group).personId).toBe('p-b')
   })
 })

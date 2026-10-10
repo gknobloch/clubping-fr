@@ -501,6 +501,8 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   removeDelegate: (personId: string, delegateId: string) => Promise<boolean>
   /** A shared address settled (#655): `delegateId` keeps it and becomes the delegate of `personId`, whose address is emptied. */
   addressToDelegate: (personId: string, delegateId: string) => Promise<{ ok: true } | { ok: false; message: string }>
+  /** Two people found to be one (#655): `personId` joins `targetId`, profiles and all. */
+  mergePeople: (personId: string, targetId: string) => Promise<{ ok: true } | { ok: false; message: string }>
   /**
    * Declare or correct the club's affiliation to a federation other than the
    * FFTT (#643) — the FFTT number goes through `updateClub`.
@@ -2091,6 +2093,36 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     [persist],
   )
 
+  const mergePeople = useCallback(
+    async (personId: string, targetId: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (persist) {
+        try {
+          const res = await fetch(`/api/people/${encodeURIComponent(personId)}/merge-into`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ targetId }),
+          })
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null
+            return { ok: false, message: body?.message ?? "L'opération a échoué." }
+          }
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // The merged profiles now read the target person's fields; blanks the
+      // target had are filled server side, and the next fetch brings them.
+      const join = <T extends { personId?: string; firstName?: string; lastName?: string; email?: string }>(list: T[]) => {
+        const target = list.find((x) => x.personId === targetId)
+        return list.map((x) => (x.personId === personId
+          ? { ...x, personId: targetId, ...(target ? { firstName: target.firstName, lastName: target.lastName, email: target.email } : {}) }
+          : x))
+      }
+      setUsers((prev) => join(prev))
+      setPlayers((prev) => join(prev))
+      return { ok: true }
+    },
+    [persist],
+  )
+
   // --- Club admins (#474) ---
   // Unlike every other mutation here, these wait for the API and report back:
   // the cap of 5 and the never-zero rule are enforced server-side, so an
@@ -2574,6 +2606,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       addDelegate,
       removeDelegate,
       addressToDelegate,
+      mergePeople,
       setClubAffiliation,
       removeClubAffiliation,
       archiveClub,
@@ -2676,7 +2709,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

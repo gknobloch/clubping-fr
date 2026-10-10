@@ -10,16 +10,20 @@
 // becomes the delegate of each other person, whose address is emptied. Nothing
 // is lost on the way: a delegate opens the same profiles the shared address
 // did, and the other can later sign in with an address of their own.
+//
+// Or the two are one human, created twice — typically a general admin's
+// profile written without a name beside the profiles they play under. Then the
+// answer is to merge them (`mergeTarget` says which one stays).
 import type { User } from '../types'
 
-type Member = Pick<User, 'id' | 'personId' | 'email' | 'firstName' | 'lastName' | 'clubId'>
+type Member = Pick<User, 'id' | 'personId' | 'email' | 'firstName' | 'lastName' | 'clubId'> & { role?: User['role'] }
 
 export interface SharedAddressPerson {
   personId: string
   firstName?: string
   lastName?: string
-  /** Their club profiles, in list order. */
-  profiles: Array<{ userId: string; clubId?: string }>
+  /** Their club profiles, in list order — a general admin's among them. */
+  profiles: Array<{ userId: string; clubId?: string; generalAdmin?: true }>
 }
 
 export interface SharedAddress {
@@ -49,7 +53,9 @@ export function sharedAddresses(members: readonly Member[]): SharedAddress[] {
     const person = entry.people.get(m.personId)
       ?? { personId: m.personId, firstName: m.firstName, lastName: m.lastName, profiles: [] }
     entry.people.set(m.personId, person)
-    person.profiles.push({ userId: m.id, clubId: m.clubId })
+    person.profiles.push({
+      userId: m.id, clubId: m.clubId, ...(m.role === 'general_admin' ? { generalAdmin: true as const } : {}),
+    })
   }
   return [...byAddress.entries()]
     .filter(([, e]) => e.people.size > 1)
@@ -60,4 +66,14 @@ export function sharedAddresses(members: readonly Member[]): SharedAddress[] {
 /** The shared address a person is part of, if any. */
 export function sharedAddressOf(personId: string, members: readonly Member[]): SharedAddress | undefined {
   return sharedAddresses(members).find((s) => s.people.some((p) => p.personId === personId))
+}
+
+/**
+ * Of two people found to be one, the one that stays: the one with a name — a
+ * general admin's profile is often written without one —, then the one with
+ * more profiles, then the first by name (#655).
+ */
+export function mergeTarget(group: SharedAddress): SharedAddressPerson {
+  const named = (p: SharedAddressPerson) => Number(!!(p.firstName?.trim() || p.lastName?.trim()))
+  return [...group.people].sort((a, b) => named(b) - named(a) || b.profiles.length - a.profiles.length)[0]
 }
