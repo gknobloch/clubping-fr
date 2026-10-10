@@ -4733,6 +4733,110 @@ app.post('/players/:id/profiles', async (c) => {
   return c.json({ ok: true, id })
 })
 
+// --- Delegation (#655) ---
+//
+// Benjamin manages Sacha: `person_delegates` (0064). What it opens is decided
+// in reach.ts, the one place the switcher, `/auth/switch` and the push fan-out
+// all read; these routes only say who may create and withdraw one.
+//
+// The person and the general admin, and nobody else (#655): a delegation hands
+// someone the profiles of another, so no club admin decides it for them. A
+// delegate may also step down — withdrawing what was given to them takes
+// nothing from anybody. A person with no account (Sacha, no address) cannot
+// ask for themselves, which is why the general admin can.
+
+interface DelegationPerson { id: string; firstName?: string; lastName?: string; email?: string }
+
+const serializePerson = (r: { id: string; first_name: string | null; last_name: string | null; email: string | null }): DelegationPerson => ({
+  id: r.id,
+  ...(r.first_name ? { firstName: r.first_name } : {}),
+  ...(r.last_name ? { lastName: r.last_name } : {}),
+  ...(r.email ? { email: r.email } : {}),
+})
+
+const DELEGATION_REFUSALS = {
+  no_account: "Aucun compte n'utilise cette adresse.",
+  ambiguous: "Plusieurs personnes partagent cette adresse : l'administrateur général peut désigner la bonne.",
+  self: 'On ne se délègue pas à soi-même.',
+} as const
+
+/** The session's person, or null — a profile written in the deploy window has none. */
+const sessionPersonId = (c: { get: (k: 'user') => UserRow | undefined }): string | null =>
+  c.get('user')?.person_id ?? null
+
+app.get('/people/:personId/delegations', async (c) => {
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  if (!isGeneralAdmin(c) && sessionPersonId(c) !== personId) return c.json(notAllowed, 403)
+  const [delegates, represents] = await Promise.all([
+    db.prepare(
+      `SELECT p.id, p.first_name, p.last_name, p.email FROM person_delegates d
+         JOIN people p ON p.id = d.delegate_id WHERE d.person_id = ? ORDER BY p.last_name, p.first_name`,
+    ).bind(personId).all<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>(),
+    db.prepare(
+      `SELECT p.id, p.first_name, p.last_name, p.email FROM person_delegates d
+         JOIN people p ON p.id = d.person_id WHERE d.delegate_id = ? ORDER BY p.last_name, p.first_name`,
+    ).bind(personId).all<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>(),
+  ])
+  return c.json({
+    delegates: delegates.results.map(serializePerson),
+    represents: represents.results.map(serializePerson),
+  })
+})
+
+/**
+ * Name a delegate: by person id (the general admin, picking a member), or by
+ * address (the person, from « Mon compte », typing their parent's).
+ */
+app.post('/people/:personId/delegates', async (c) => {
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  if (!isGeneralAdmin(c) && sessionPersonId(c) !== personId) return c.json(notAllowed, 403)
+  const person = await db.prepare('SELECT id FROM people WHERE id = ?').bind(personId).first<{ id: string }>()
+  if (!person) return c.json(notFound, 404)
+  const refuseDelegation = (reason: keyof typeof DELEGATION_REFUSALS, status: 400 | 404 | 409) =>
+    c.json({ error: reason, message: DELEGATION_REFUSALS[reason] }, status)
+
+  const d = await c.req.json<{ delegateId?: unknown; email?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  let delegateId: string | null = null
+  if (typeof d.delegateId === 'string' && d.delegateId) {
+    // A member's id is accepted as well as a person's: the screens list members.
+    const found = await db.prepare(
+      `SELECT id FROM people WHERE id = ?
+       UNION SELECT person_id AS id FROM users WHERE id = ? AND person_id IS NOT NULL`,
+    ).bind(d.delegateId, d.delegateId).all<{ id: string }>()
+    delegateId = found.results[0]?.id ?? null
+    if (!delegateId) return c.json(notFound, 404)
+  } else if (typeof d.email === 'string' && d.email.trim()) {
+    const found = await db.prepare(
+      'SELECT id FROM people WHERE lower(trim(email)) = lower(trim(?)) AND id != ?',
+    ).bind(d.email, personId).all<{ id: string }>()
+    if (found.results.length === 0) return refuseDelegation('no_account', 404)
+    if (found.results.length > 1) return refuseDelegation('ambiguous', 409)
+    delegateId = found.results[0].id
+  } else {
+    return c.json({ error: 'bad_request' }, 400)
+  }
+  if (delegateId === personId) return refuseDelegation('self', 400)
+
+  await db.prepare(
+    'INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at) VALUES (?, ?, ?)',
+  ).bind(personId, delegateId, Date.now()).run()
+  const delegate = await db.prepare('SELECT id, first_name, last_name, email FROM people WHERE id = ?')
+    .bind(delegateId).first<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>()
+  return c.json({ ok: true, delegate: delegate ? serializePerson(delegate) : { id: delegateId } })
+})
+
+app.delete('/people/:personId/delegates/:delegateId', async (c) => {
+  const personId = c.req.param('personId')
+  const delegateId = c.req.param('delegateId')
+  const mine = sessionPersonId(c)
+  if (!isGeneralAdmin(c) && mine !== personId && mine !== delegateId) return c.json(notAllowed, 403)
+  await c.env.DB.prepare('DELETE FROM person_delegates WHERE person_id = ? AND delegate_id = ?')
+    .bind(personId, delegateId).run()
+  return c.json({ ok: true })
+})
+
 // --- Club admins (#474) ---
 // A club admin is `users.role = 'club_admin'` + `users.club_id`, not a row of
 // its own — so these two routes are the whole feature. The rules they enforce

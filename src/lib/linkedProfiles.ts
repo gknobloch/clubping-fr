@@ -17,7 +17,7 @@ const addressOf = (p: Pick<Player, 'email'>) => p.email?.trim().toLowerCase() ??
 /**
  * The person's other club profiles, in the order of the list. A cache from
  * before #655 carries no person: the address stands in for it there, compared
- * as at sign-in (`sameAddress` in functions/api/auth.ts) — case aside, and no
+ * as at sign-in (`reaches` in functions/api/reach.ts) — case aside, and no
  * address shares nothing.
  */
 export function linkedProfiles<P extends Linkable>(player: P, players: readonly P[]): P[] {

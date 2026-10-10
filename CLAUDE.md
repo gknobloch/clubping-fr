@@ -613,6 +613,35 @@ invisible dans le diff comme dans la revue.
 - Un profil écrit entre la migration et la bascule du worker n'a pas de
   personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
   garde ses champs sur sa ligne, comme avant.
+- **Ce qu'un profil atteint est une seule relation, `reaches`**
+  (`functions/api/reach.ts`) : les profils de sa personne, ceux des personnes
+  qui lui ont délégué, et — le temps du nettoyage — ceux de la même adresse
+  (#640). Le sélecteur la liste, `/auth/switch` l'admet, la connexion ouvre le
+  plus récent de ce qu'elle atteint, et un appareil sonne pour elle
+  (`tokensByUser`). Un seul fragment SQL pour tous : un téléphone qui sonnerait
+  pour un profil que le sélecteur n'ouvre pas est le défaut qu'il empêche.
+- **La session reste un profil de club** : aucune règle d'autorisation ne
+  change. Ce que la personne ouvre au-delà, c'est `reaches`, relu à chaque
+  changement — une délégation retirée prend effet aussitôt.
+- **La délégation** (`person_delegates`, 0064) : Benjamin ouvre les profils de
+  Sacha, Sacha n'ouvre pas ceux de Benjamin. **Un seul niveau**, par
+  construction : un délégué n'atteint jamais les délégations de celui qui
+  délègue. Plusieurs délégués par personne, plusieurs personnes par délégué.
+- **Qui délègue** : la personne (dans « Mon compte », par l'adresse de son
+  délégué) et l'administrateur général (sur la fiche, en choisissant un membre —
+  pour qui ne peut pas se connecter). Un délégué peut **se retirer** (« Ne plus
+  gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Aucun
+  administrateur de club. Une adresse qu'aucun compte n'utilise, ou que
+  plusieurs personnes partagent encore, est refusée avec sa raison.
+- `householdIds` est le foyer **dans les deux sens** — qui le profil atteint
+  et qui l'atteint : l'alerte capitaine épargne le parent qui a agi depuis le
+  profil de son enfant (#640), délégation ou adresse partagée.
+- **Les tests de cette relation tournent sur un vrai SQLite migré**
+  (`migratedD1.testkit.ts` : toutes les migrations, dans l'ordre). Une
+  jointure écrite contre la mauvaise colonne s'enregistre parfaitement dans un
+  faux qui reconnaît les requêtes à leur forme, et ne rend rien en production.
+  `*.testkit.ts` est du côté des tests dans les deux tsconfig, et n'est pas une
+  suite.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
@@ -899,10 +928,12 @@ invisible dans le diff comme dans la revue.
   *un* membre. Se connecter ouvre **le profil vu le plus récemment**
   (`last_seen_at`), décidé côté serveur pour valoir d'un appareil à l'autre.
 - **Changer de profil, c'est se reconnecter** (`POST /auth/switch`) : une
-  session neuve pour la cible, l'ancienne révoquée, et l'adresse est relue *au
+  session neuve pour la cible, l'ancienne révoquée, et la portée est relue *au
   moment du changement* — un enfant à qui l'on donne sa propre adresse sort de
-  la portée du parent aussitôt. Inconnu ou d'une autre adresse : le même 403.
-  Une adresse vide ne partage rien (`sameAddress`).
+  la portée du parent aussitôt, sauf délégation. Inconnu ou hors de portée : le
+  même 403. Une adresse vide ne partage rien. Depuis #655, la portée est
+  `reaches` : la personne, ses délégations, et l'adresse partagée en
+  transition.
 - **Ce n'est pas une déconnexion** : rien n'est vidé. Le cache refuse déjà
   l'entrée d'un autre membre (#387, #509) et le premier fetch réécrit ;
   `pp-club-user` est réécrit, sinon un démarrage sans réseau rouvrirait

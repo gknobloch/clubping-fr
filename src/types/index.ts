@@ -625,6 +625,23 @@ export interface DevUser extends User {
   captainOf?: number[]
 }
 
+/** A person as a delegation names them (#655). */
+export interface DelegationPerson {
+  id: string
+  firstName?: string
+  lastName?: string
+  email?: string
+}
+
+/**
+ * A person's delegations (#655): who may open their profiles, and whose
+ * profiles they may open.
+ */
+export interface Delegations {
+  delegates: DelegationPerson[]
+  represents: DelegationPerson[]
+}
+
 /**
  * One of the members an e-mail address signs in as (#640) — a parent and a
  * child sharing the parent's address are two. The session is always ONE of

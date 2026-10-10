@@ -234,7 +234,7 @@ export default function MonCompteScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Mes profils</Text>
             <Text style={styles.switchHint}>
-              Votre adresse e-mail donne accès à plusieurs profils :{' '}
+              Votre compte donne accès à plusieurs profils :{' '}
               {profiles.filter((p) => p.id !== user?.id).map(profileName).join(', ')}.
             </Text>
             <TouchableOpacity
