@@ -639,11 +639,16 @@ invisible dans le diff comme dans la revue.
   construction : un délégué n'atteint jamais les délégations de celui qui
   délègue. Plusieurs délégués par personne, plusieurs personnes par délégué.
 - **Qui délègue** : la personne (dans « Mon compte », par l'adresse de son
-  délégué — sur le web comme dans l'app, `DelegationsSection`) et l'administrateur général (sur la fiche, en choisissant un membre —
-  pour qui ne peut pas se connecter). Un délégué peut **se retirer** (« Ne plus
-  gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Aucun
-  administrateur de club. Une adresse qu'aucun compte n'utilise, ou que
-  plusieurs personnes partagent encore, est refusée avec sa raison.
+  délégué — sur le web comme dans l'app, `DelegationsSection`), et, sur la
+  fiche en choisissant un membre, l'administrateur général **ou
+  l'administrateur de tous les clubs de la personne** (4 bis) — la règle qui
+  garde son nom et son adresse (`mayEditPerson`, `administersPerson`). Avec
+  une adresse par personne, un enfant n'en a pas et ne peut pas se connecter
+  pour nommer son parent : son club le fait. Quelqu'un qui joue aussi ailleurs
+  n'est pas l'affaire d'un seul club. Un délégué peut **se retirer** (« Ne
+  plus gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Une
+  adresse qu'aucun compte n'utilise, ou que plusieurs personnes partagent
+  encore, est refusée avec sa raison.
 - `householdIds` est le foyer **dans les deux sens** — qui le profil atteint
   et qui l'atteint : l'alerte capitaine épargne le parent qui a agi depuis le
   profil de son enfant (#640), délégation ou adresse partagée.

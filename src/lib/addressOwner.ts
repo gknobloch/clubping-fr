@@ -40,5 +40,5 @@ const nameOf = (m: { firstName?: string | null; lastName?: string | null }) =>
 /** What a form and the API say when an address is someone else's. */
 export function addressTakenMessage(owner: { firstName?: string | null; lastName?: string | null }): string {
   return `Cette adresse est déjà celle de ${nameOf(owner)} : une adresse ne sert qu’à une personne. `
-    + 'Laissez-la vide, ou indiquez l’adresse de la personne elle-même.'
+    + `Laissez-la vide et faites de ${nameOf(owner)} un délégué, ou indiquez l’adresse de la personne elle-même.`
 }

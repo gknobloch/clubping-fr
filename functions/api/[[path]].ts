@@ -4788,11 +4788,13 @@ app.post('/players/:id/profiles', async (c) => {
 // in reach.ts, the one place the switcher, `/auth/switch` and the push fan-out
 // all read; these routes only say who may create and withdraw one.
 //
-// The person and the general admin, and nobody else (#655): a delegation hands
-// someone the profiles of another, so no club admin decides it for them. A
+// The person, the general admin — and the administrator of the person's club,
+// when they administer EVERY club of the person (4 bis): with one address per
+// person, a child has none, cannot sign in to name their parent, and would
+// otherwise wait on the general admin. Someone who also plays elsewhere is not
+// one club's to decide, the rule that guards a person's name and address. A
 // delegate may also step down — withdrawing what was given to them takes
-// nothing from anybody. A person with no account (Sacha, no address) cannot
-// ask for themselves, which is why the general admin can.
+// nothing from anybody.
 
 interface DelegationPerson { id: string; firstName?: string; lastName?: string; email?: string }
 
@@ -4813,10 +4815,24 @@ const DELEGATION_REFUSALS = {
 const sessionPersonId = (c: { get: (k: 'user') => UserRow | undefined }): string | null =>
   c.get('user')?.person_id ?? null
 
+/** Whether the caller administers every club the person has a profile in — and they have one. */
+type DelegationContext = { get: (k: 'user') => UserRow | undefined; env: { DB: D1Database } }
+
+async function administersPerson(c: DelegationContext, personId: string): Promise<boolean> {
+  const viewer = managingViewer(c)
+  const clubs = (await c.env.DB.prepare('SELECT DISTINCT club_id FROM users WHERE person_id = ?')
+    .bind(personId).all<{ club_id: string | null }>()).results.map((r) => r.club_id)
+  return clubs.length > 0 && clubs.every((club) => !!club && administers(viewer, club))
+}
+
+/** Who may see and change a person's delegations: themselves, the general admin, or their club's admin. */
+const managesDelegations = async (c: DelegationContext, personId: string) =>
+  isGeneralAdmin(c) || sessionPersonId(c) === personId || await administersPerson(c, personId)
+
 app.get('/people/:personId/delegations', async (c) => {
   const db = c.env.DB
   const personId = c.req.param('personId')
-  if (!isGeneralAdmin(c) && sessionPersonId(c) !== personId) return c.json(notAllowed, 403)
+  if (!(await managesDelegations(c, personId))) return c.json(notAllowed, 403)
   const [delegates, represents] = await Promise.all([
     db.prepare(
       `SELECT p.id, p.first_name, p.last_name, p.email FROM person_delegates d
@@ -4840,7 +4856,7 @@ app.get('/people/:personId/delegations', async (c) => {
 app.post('/people/:personId/delegates', async (c) => {
   const db = c.env.DB
   const personId = c.req.param('personId')
-  if (!isGeneralAdmin(c) && sessionPersonId(c) !== personId) return c.json(notAllowed, 403)
+  if (!(await managesDelegations(c, personId))) return c.json(notAllowed, 403)
   const person = await db.prepare('SELECT id FROM people WHERE id = ?').bind(personId).first<{ id: string }>()
   if (!person) return c.json(notFound, 404)
   const refuseDelegation = (reason: keyof typeof DELEGATION_REFUSALS, status: 400 | 404 | 409) =>
@@ -4880,7 +4896,7 @@ app.delete('/people/:personId/delegates/:delegateId', async (c) => {
   const personId = c.req.param('personId')
   const delegateId = c.req.param('delegateId')
   const mine = sessionPersonId(c)
-  if (!isGeneralAdmin(c) && mine !== personId && mine !== delegateId) return c.json(notAllowed, 403)
+  if (mine !== delegateId && !(await managesDelegations(c, personId))) return c.json(notAllowed, 403)
   await c.env.DB.prepare('DELETE FROM person_delegates WHERE person_id = ? AND delegate_id = ?')
     .bind(personId, delegateId).run()
   return c.json({ ok: true })

@@ -16,8 +16,9 @@ const nameOf = (p: DelegationPerson) => [p.firstName, p.lastName].filter(Boolean
  * own « Mon compte » — whose profiles they may open.
  *
  * Two hands, the two the API admits: the person, naming a delegate by their
- * address (a parent's), and the general admin, picking a member for someone who
- * cannot sign in at all (Sacha, no address). A delegate gives up a delegation
+ * address (a parent's), and an administrator — the general admin, or the admin
+ * of every club the person plays in (4 bis) — picking a member for someone who
+ * cannot sign in at all (a child with no address). A delegate gives up a delegation
  * from their side with « Ne plus gérer ».
  */
 export function PersonDelegates({
