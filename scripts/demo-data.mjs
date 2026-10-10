@@ -684,12 +684,9 @@ function main(argv) {
     // which lists upcoming journées from every club in the database — so the
     // first screenshot showed four other clubs' fixtures. See #522.
     `UPDATE users SET is_player = 1 WHERE id = ${sqlStr(DEMO_USER)}`,
-    // A name, not a label — see DEMO_IDENTITY.
-    `UPDATE users SET first_name = ${sqlStr(DEMO_IDENTITY.firstName)}, ` +
-      `last_name = ${sqlStr(DEMO_IDENTITY.lastName)}, ` +
-      `license_number = ${sqlStr(DEMO_IDENTITY.licenseNumber)} ` +
-      `WHERE id = ${sqlStr(DEMO_USER)}`,
-    // The name is the PERSON's (#655); `users` only mirrors it.
+    // A name, not a label — see DEMO_IDENTITY. The licence is the profile's…
+    `UPDATE users SET license_number = ${sqlStr(DEMO_IDENTITY.licenseNumber)} WHERE id = ${sqlStr(DEMO_USER)}`,
+    // …and the name the PERSON's (#655): `users` has carried none since 0067.
     `UPDATE people SET first_name = ${sqlStr(DEMO_IDENTITY.firstName)}, ` +
       `last_name = ${sqlStr(DEMO_IDENTITY.lastName)} ` +
       `WHERE id = (SELECT person_id FROM users WHERE id = ${sqlStr(DEMO_USER)})`,
@@ -842,7 +839,6 @@ function main(argv) {
     ),
     // What the player screens show — see DEMO_PROFILE.
     ...Object.entries(DEMO_PROFILE).flatMap(([playerId, { category, phone }]) => [
-      `UPDATE users SET phone = ${sqlStr(phone)} WHERE id = ${sqlStr(playerId)}`,
       `UPDATE people SET phone = ${sqlStr(phone)} WHERE id = (SELECT person_id FROM users WHERE id = ${sqlStr(playerId)})`,
       // Keyed (season_id, player_id) since 0050 — upserted, so re-running is
       // a no-op rather than a duplicate the PRIMARY KEY would reject.
