@@ -777,6 +777,23 @@ invisible dans le diff comme dans la revue.
   dans ce cas. Les fixtures de test sont trois vrais calendriers, **le
   contact du pied remplacé** (nom, adresse et e-mail d'un officiel).
 
+### Liste des joueurs d'une fédération sans API (#648)
+- L'AGR publie la liste d'un club en PDF (« Liste des joueurs » : licence,
+  NOM Prénom, classement). `src/lib/agrPlayerList.ts` la lit en
+  **enregistrements de licence FFTT** (`FfttLicence`) : la revue de #384 /
+  #566 la sert telle quelle, sans seconde copie.
+- **La revue prend la fédération** (`ImportFederation`, dernier argument de
+  `buildImportRows`, `importCandidates`, `federationId` de
+  `playerImportWrites`) : un membre est apparié sur **sa licence AGR**
+  (`federation_licences`), jamais sur un numéro FFTT ; la licence écrite va
+  dans `licences` ; la valeur s'appelle « Classement » et va dans la phase
+  AGR active ; et **le nom d'une personne existante n'est jamais proposé** —
+  la FFTT et l'AGR l'écrivent différemment (#655). Un homonyme reste une
+  question, jamais une fusion.
+- Une liste d'un autre club est refusée (numéro d'affiliation). Entrée :
+  « Importer la liste AGR » sur Joueurs, pour un club de cette fédération
+  (web ; pas encore dans l'app).
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

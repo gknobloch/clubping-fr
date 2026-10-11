@@ -3,7 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { ImportIcon, PlusIcon } from '@/components/icons'
+import { FileIcon, ImportIcon, PlusIcon } from '@/components/icons'
+import { clubIsIn } from '@/lib/federations'
+import { ImportFederationPlayersModal } from '@/components/ImportFederationPlayersModal'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
@@ -194,6 +196,12 @@ export function PlayersPage() {
   // Back on this list since #604: it brings the roster in, and this is where
   // a club checks what it brought.
   const canImport = canEditPlayers && !!scopedClub?.affiliationNumber
+  // A federation without an API publishes its player lists as PDFs (#648):
+  // one import per such federation the club is in — the AGR for Landser and Kembs.
+  const listFederations = canEditPlayers && scopedClub
+    ? federations.filter((f) => !f.isImported && clubIsIn(scopedClub, f.id))
+    : []
+  const [importingList, setImportingList] = useState<string | null>(null)
 
   // Adoption (#406). `lastSeenAt` only reaches people who administer these
   // members, so the column and the count are theirs alone — for anyone else the
@@ -320,7 +328,7 @@ export function PlayersPage() {
                   alone: `adaptive` gives it the filled look back at that width
                   rather than leaving the page with no filled action. */}
               <HeaderAction
-                variant={canImport ? 'adaptive' : 'primary'}
+                variant={canImport || listFederations.length > 0 ? 'adaptive' : 'primary'}
                 icon={<PlusIcon />}
                 label="Ajouter un joueur"
                 onClick={openCreate}
@@ -333,6 +341,15 @@ export function PlayersPage() {
                   onClick={() => setImporting(true)}
                 />
               )}
+              {listFederations.map((f) => (
+                <HeaderAction
+                  key={f.id}
+                  desktopOnly
+                  icon={<FileIcon />}
+                  label={`Importer la liste ${f.shortName}`}
+                  onClick={() => setImportingList(f.id)}
+                />
+              ))}
             </>
           )
         }
@@ -578,6 +595,13 @@ export function PlayersPage() {
       </div>
 
 
+      {importingList && scopedClub && (
+        <ImportFederationPlayersModal
+          clubId={scopedClub.id}
+          federationId={importingList}
+          onClose={() => setImportingList(null)}
+        />
+      )}
       {importing && scopedClub && (
         <ImportPlayersModal clubId={scopedClub.id} onClose={() => setImporting(false)} />
       )}
