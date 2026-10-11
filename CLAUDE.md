@@ -793,8 +793,26 @@ invisible dans le diff comme dans la revue.
   la FFTT et l'AGR l'écrivent différemment (#655). Un homonyme reste une
   question, jamais une fusion.
 - Une liste d'un autre club est refusée (numéro d'affiliation). Entrée :
-  « Importer la liste AGR » sur Joueurs, pour un club de cette fédération
-  (web ; pas encore dans l'app).
+  « Importer la liste AGR » sur Joueurs, pour un club de cette fédération,
+  sur le web comme dans l'app (#681).
+- **Dans l'app, c'est l'API qui lit le PDF** (#681) : Hermes ne fait pas
+  tourner pdf.js (pas de `ReadableStream`). Le fichier choisi part à
+  `POST /pdf/lines` (octets bruts ou `file` en multipart, 4 Mo au plus,
+  administrateurs seulement) ; l'API rend ses lignes, rebâties par **le code
+  du navigateur** (`src/lib/pdfLines.ts`, sans DOM, partagé), et l'app passe
+  ces lignes au même analyseur et à la même revue — l'écran d'import des
+  licenciés avec `?federation=agr`. Rien n'est gardé côté serveur.
+- **pdf.js dans un Worker** : la build minifiée, importée au premier appel ;
+  pas de web worker, donc son « fake worker » reçoit le module directement
+  (`globalThis.pdfjsWorker`) ; `isEvalSupported: false` ; et des classes
+  inertes pour `DOMMatrix` / `Path2D` / `ImageData`, qu'il construit au
+  chargement sans jamais dessiner pour lire du texte. Le worker passe de
+  395 Ko à 3,4 Mo (741 Ko compressés).
+- **Le sélecteur de fichier est un module natif** (`expo-document-picker`,
+  livré à partir de 1.8.0) : une mise à jour OTA atteint aussi les binaires
+  qui ne l'ont pas, et le module lève à l'import. Il ne s'importe donc que
+  depuis `utils/documentPicker.ts`, dans un `try` comme
+  `expoNotifications.ts` ; un vieux binaire dit « mettez l'app à jour ».
 
 ### Phase retour (#649)
 - Une division AGR joue sa phase 2 de deux façons : **les mêmes poules,

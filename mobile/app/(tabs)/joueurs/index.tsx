@@ -28,6 +28,7 @@ import { Avatar } from '@/components/Avatar'
 import { PlayerDetail } from '@/components/PlayerDetail'
 import { fonts } from '@/constants/typography'
 import { GroupMatchSwitch, MemberGroupFilter } from '@/components/MemberGroupFilter'
+import { clubAffiliations } from '@shared/lib/federations'
 import { canManageClub } from '@/utils/roles'
 import { PLAYER_SEARCH_LABEL } from '@shared/lib/playerSearch'
 import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@shared/lib/memberGroups'
@@ -50,7 +51,7 @@ const STATUS_LABELS = {
 // what the search box at the top says this tab is for.
 // ---------------------------------------------------------------------------
 export default function JoueursScreen() {
-  const { players, clubs, memberGroups } = useAppData()
+  const { players, clubs, memberGroups, federations } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -67,6 +68,11 @@ export default function JoueursScreen() {
   const ownClub = user?.clubId ? clubs.find((c) => c.id === user.clubId) : undefined
   const canImport =
     !!user && !!ownClub && canManageClub(user, ownClub.id) && !!ownClub.affiliationNumber
+  // The club's federations without an API, whose list it imports from a PDF (#681).
+  const listFederations = !!user && !!ownClub && canManageClub(user, ownClub.id)
+    ? (federations ?? []).filter((f) => !f.isImported
+      && clubAffiliations(ownClub).some((a) => a.federationId === f.id))
+    : []
   // The fiche beside the list rather than pushed over it (#466).
   const { isTwoPane } = useLayout()
   const listRef = useRef<FlatList<Player>>(null)
@@ -169,6 +175,19 @@ export default function JoueursScreen() {
             <Ionicons name="cloud-download-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
         )}
+        {/* A federation without an API: its list is a PDF (#681). */}
+        {listFederations.map((f) => (
+          <TouchableOpacity
+            key={f.id}
+            testID={`import-players-${f.id}`}
+            style={styles.importButton}
+            onPress={() => router.push({ pathname: '/joueurs/import', params: { federation: f.id } })}
+            accessibilityRole="button"
+            accessibilityLabel={`Importer la liste ${f.shortName}`}
+          >
+            <Ionicons name="document-text-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
+        ))}
         </View>
         <MemberGroupFilter
           groups={filterGroups}

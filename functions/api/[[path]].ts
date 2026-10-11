@@ -24,6 +24,7 @@ import {
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt, seasonNumber } from '../../src/lib/season'
 import { addressTakenMessage } from '../../src/lib/addressOwner'
 import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
+import { pdfTextLines } from '../../src/lib/pdfLines'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -3442,6 +3443,71 @@ app.post('/federation-schedules/import', async (c) => {
     created: { division: !existingDivision, group: !group, clubs: createdClubs.length, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
     updatedGames,
   })
+})
+
+// ── Reading a PDF for the app (#681) ─────────────────────────────────────────
+//
+// The web reads a PDF in the browser (pdfScheduleText.ts). The mobile app
+// cannot: Hermes runs no pdf.js — it has no ReadableStream —, so the phone
+// sends the file here and gets its text lines back, rebuilt by the code the
+// browser uses (`pdfTextLines`). Nothing is stored: the bytes are read and
+// dropped, and the app runs the same parser and review on the lines.
+//
+// pdf.js is imported on the first call only, and in-process: a Worker has no
+// web workers, so its "fake worker" is handed the worker module directly.
+// Administrators only — it is an import step, and reading a PDF is the most
+// CPU this API spends on one request.
+const PDF_MAX_BYTES = 4 * 1024 * 1024
+
+let pdfjsForWorker: Promise<import('../../src/lib/pdfLines').PdfjsLike> | null = null
+function loadPdfjsForWorker() {
+  pdfjsForWorker ??= (async () => {
+    // pdf.js builds a few drawing objects when it loads; reading text never
+    // draws, so inert stand-ins for the browser classes a Worker lacks do.
+    const g = globalThis as Record<string, unknown>
+    class Inert {
+      a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
+      multiplySelf() { return this }
+      preMultiplySelf() { return this }
+      translate() { return this }
+      scale() { return this }
+      invertSelf() { return this }
+    }
+    for (const name of ['DOMMatrix', 'Path2D', 'ImageData']) g[name] ??= Inert
+    const worker = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs')
+    ;(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.min.mjs')
+    return pdfjs as unknown as import('../../src/lib/pdfLines').PdfjsLike
+  })()
+  return pdfjsForWorker
+}
+
+app.post('/pdf/lines', async (c) => {
+  const viewer = managingViewer(c)
+  if (viewer.role !== 'general_admin' && viewer.role !== 'club_admin') return c.json(notAllowed, 403)
+  // The raw bytes, or a multipart `file` — what React Native's fetch uploads
+  // a picked document as.
+  let data: Uint8Array
+  if ((c.req.header('Content-Type') ?? '').startsWith('multipart/form-data')) {
+    const file = (await c.req.parseBody())['file']
+    if (!(file instanceof File)) return c.json({ error: 'empty' }, 400)
+    data = new Uint8Array(await file.arrayBuffer())
+  } else {
+    data = new Uint8Array(await c.req.arrayBuffer())
+  }
+  if (data.byteLength === 0) return c.json({ error: 'empty' }, 400)
+  if (data.byteLength > PDF_MAX_BYTES) return c.json({ error: 'too_large', message: 'Ce fichier dépasse 4 Mo.' }, 413)
+  // « %PDF- » within the first bytes: anything else is not ours to parse.
+  if (!new TextDecoder().decode(data.slice(0, 1024)).includes('%PDF-')) {
+    return c.json({ error: 'not_pdf', message: 'Ce fichier n’est pas un PDF.' }, 400)
+  }
+  try {
+    const lines = await pdfTextLines(await loadPdfjsForWorker(), data)
+    return c.json({ lines })
+  } catch (err) {
+    console.error('pdf/lines failed', err)
+    return c.json({ error: 'unreadable', message: 'Impossible de lire ce fichier.' }, 422)
+  }
 })
 
 // ── Phase retour (#649) ─────────────────────────────────────────────────────
