@@ -19,6 +19,7 @@ import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportPreviousPhaseRosterModal } from '@/components/ImportPreviousPhaseRosterModal'
 import { PlayerPicker } from '@/components/PlayerPicker'
 import { useConfirm } from '@/components/useConfirm'
+import { nextPhaseOf, returnLegToPrepare } from '@/lib/returnLeg'
 import { FederationSelect } from '@/components/FederationSelect'
 import {
   FFTT_FEDERATION_ID, clubIsIn, divisionsOfFederation, federationChoices, federationOfDivision,
@@ -52,8 +53,11 @@ export function TeamsPage() {
     updateGroup,
     archiveTeam,
     deleteTeam,
+    prepareReturnLeg,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
+  /** What the last « Préparer la phase retour » said (#649). */
+  const [returnLegNotice, setReturnLegNotice] = useState<{ ok: boolean; text: string } | null>(null)
 
   const isClubAdmin = user?.role === 'club_admin'
   const isAdmin = user?.role === 'general_admin' || isClubAdmin
@@ -403,6 +407,25 @@ export function TeamsPage() {
     closeModal()
   }
 
+  // The whole poule is mirrored, not this team alone: the return leg is the
+  // same pairings reversed, and every club of the poule plays it (#649).
+  const handlePrepareReturnLeg = async (team: Team) => {
+    const next = nextPhaseOf(phases, phases.find((p) => p.id === team.phaseId))
+    const ok = await confirm({
+      title: 'Préparer la phase retour ?',
+      message: `Les équipes et les rencontres de la poule sont recréées en ${next?.displayName ?? 'phase 2'}, réception inversée, `
+        + 'dates à confirmer. Le calendrier de la phase 2, une fois importé, les datera.',
+      confirmLabel: 'Préparer',
+      tone: 'accent',
+    })
+    if (!ok) return
+    setReturnLegNotice(null)
+    const result = await prepareReturnLeg(team.groupId)
+    setReturnLegNotice(result.ok
+      ? { ok: true, text: `Phase retour préparée : ${result.created.matchDays} journée(s) et ${result.created.games} rencontre(s) en ${next?.displayName ?? 'phase 2'}, dates à confirmer.` }
+      : { ok: false, text: result.message })
+  }
+
   const handleArchive = async (team: Team) => {
     if (await confirm({ title: `Archiver l'équipe "${getClubName(team.clubId)} ${team.number}" ?`, message: `Elle ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveTeam(team.id)
@@ -465,6 +488,14 @@ export function TeamsPage() {
           </>
         }
       />
+      {returnLegNotice && (
+        <p
+          role={returnLegNotice.ok ? 'status' : 'alert'}
+          className={`rounded-lg border px-4 py-3 text-sm ${returnLegNotice.ok ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-700'}`}
+        >
+          {returnLegNotice.text}
+        </p>
+      )}
       {calendarOpen && (
         <ImportFederationCalendarModal
           federationId={scope.federationId}
@@ -571,6 +602,10 @@ export function TeamsPage() {
                           label: 'Importer les matchs',
                           onClick: () => setImportGamesFor(team),
                           desktopOnly: true,
+                        },
+                        returnLegToPrepare(team, { divisions, phases, teams: allTeams }) && {
+                          label: 'Préparer la phase retour',
+                          onClick: () => void handlePrepareReturnLeg(team),
                         },
                         !team.isArchived && {
                           label: 'Archiver',

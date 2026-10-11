@@ -116,6 +116,8 @@ export interface DivisionRow {
    * alone — that would turn "inherit" into "everyone".
    */
   categories: string | null
+  /** Phase 2 of a phase-1 division (#649): 'return_leg' | 'new_groups' | NULL (not known). */
+  second_phase: string | null
 }
 
 export interface CompetitionRow {

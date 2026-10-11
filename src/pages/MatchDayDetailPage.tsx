@@ -5,7 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
-import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, isProvisionalSlot, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
@@ -219,6 +219,7 @@ export function MatchDayDetailPage() {
               <MatchDate
                 label={dateLabel}
                 confirmed={isSlotConfirmed(game, matchDay, homeTeam)}
+                provisional={isProvisionalSlot(game)}
               />
               {time ? ` · ${time}` : ''}
             </p>

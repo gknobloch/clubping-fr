@@ -794,6 +794,36 @@ invisible dans le diff comme dans la revue.
   « Importer la liste AGR » sur Joueurs, pour un club de cette fédération
   (web ; pas encore dans l'app).
 
+### Phase retour (#649)
+- Une division AGR joue sa phase 2 de deux façons : **les mêmes poules,
+  réception inversée** (« phase retour »), ou **de nouvelles poules** tirées du
+  classement de la phase 1. La division le dit (`divisions.second_phase`,
+  `Division.secondPhase` ; absent = pas encore connu), demandé à l'import du
+  calendrier de la phase 1 — prérempli par ce que la division dit déjà, sinon
+  par une note de la poule qui parle de « retour » — et modifiable sur
+  Divisions.
+- **En phase retour, tout est connu sauf les dates** : la poule est
+  **recopiée** dans la phase suivante dès que les deux phases existent — à
+  l'import si la phase 2 existe, sinon à sa création (`POST /phases`), ou à la
+  demande (« Préparer la phase retour » sur Équipes, `POST
+  /groups/:id/return-leg`). Division et poule retrouvées par nom et numéro,
+  équipes par (club, phase, numéro) avec capitaine, effectif et créneau,
+  journées numérotées à la suite (8 à 14, comme l'AGR), rencontres **inversées**.
+  Idempotent : rejoué, rien n'est recréé.
+- **Une rencontre recopiée n'a pas de date** : `source = 'mirror'`, `date`
+  nulle. Sa journée porte une date **provisoire** — celle de la journée aller,
+  décalée de la durée de la phase 1 plus trois semaines, ce qui tombe sur la
+  vraie première journée retour du calendrier AGR 2026/2027 —, et
+  `gameSchedule` n'en montre que la semaine, quel que soit le jour habituel du
+  club recevant : personne n'a annoncé ce jour-là. `isProvisionalSlot`, et un
+  libellé à lui (« Date provisoire »), parce que la raison n'est pas celle d'un
+  adversaire au jour inconnu.
+- **Le PDF de la phase 2 date ce qui existe** : son import retrouve les
+  journées par numéro et les rencontres par leurs deux équipes, écrit les
+  dates, et **prend aussi qui reçoit** sur une rencontre recopiée — l'inversion
+  est une supposition, le calendrier publié tranche. Il ne crée rien à côté.
+- Fédérations sans API seulement : la FFTT importe sa phase 2 comme le reste.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

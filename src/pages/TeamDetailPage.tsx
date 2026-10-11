@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { teamPhaseEntries } from '@/lib/teamPhases'
-import { gameDate, gameSchedule, isSlotConfirmed } from '@/lib/matchdays'
+import { gameDate, gameSchedule, isProvisionalSlot, isSlotConfirmed } from '@/lib/matchdays'
 import { getTeamName } from '@/lib/teamName'
 import { ClubLogo } from '@/components/ClubLogo'
 import { GameQuickView } from '@/components/GameQuickView'
@@ -194,7 +194,7 @@ export function TeamDetailPage() {
                         phone: "19 sept. 16h00" is 110px, and set beside a
                         truncating opponent name it eats the name instead. */}
                     <span className="text-right text-sm text-slate-500">
-                      <MatchDate label={dateLabel} confirmed={confirmed} />
+                      <MatchDate label={dateLabel} confirmed={confirmed} provisional={isProvisionalSlot(g)} />
                       {time && (
                         <span className="block text-xs text-slate-400 md:ml-1 md:inline md:text-sm md:text-slate-500">
                           {time}

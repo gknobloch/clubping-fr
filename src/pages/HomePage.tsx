@@ -24,7 +24,7 @@ import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
 import {
-  formatRoundDates, gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere,
+  formatRoundDates, gameDate, gameTime, isProvisionalSlot, isSlotConfirmed, playersCommittedElsewhere,
   upcomingRounds, upcomingTeamGames,
 } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
@@ -271,7 +271,7 @@ export function HomePage() {
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <div className="min-w-0 space-y-1">
                             <p className="text-sm text-slate-500">
-                              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
+                              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} provisional={isProvisionalSlot(g)} />
                               {time ? ` · ${time}` : ''}
                             </p>
                             {/* Where, in full and one tap from the route (#611) —

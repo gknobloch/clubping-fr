@@ -126,6 +126,14 @@ describe('gameSchedule', () => {
       .toEqual({ date: '2026-11-05', time: '19h30', week: null })
   })
 
+  it('keeps a mirrored return-leg fixture to its week, whatever the home club’s day (#649)', () => {
+    expect(gameSchedule({ date: undefined, time: undefined, source: 'mirror' }, md, known))
+      .toEqual({ date: null, time: '', week: { start: '2026-11-02', end: '2026-11-08' } })
+    // Dated by the phase-2 calendar, it is a fixture like any other.
+    expect(gameSchedule({ date: '2026-11-06', time: '20h00', source: 'mirror' }, md, known))
+      .toEqual({ date: '2026-11-06', time: '20h00', week: null })
+  })
+
   it('falls back to the journée date for a game that has none of its own', () => {
     // Manually created fixtures carry no date; they must not be treated as
     // unconfirmed just for that.

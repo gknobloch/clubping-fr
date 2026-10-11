@@ -33,7 +33,7 @@ export function ImportFederationCalendarModal({
   viewerClubId?: string
   onClose: () => void
 }) {
-  const { clubs, phases, seasons, competitions, federations = [], importFederationSchedule } = useAppData()
+  const { clubs, phases, seasons, competitions, divisions, federations = [], importFederationSchedule } = useAppData()
   const federation = federations.find((f) => f.id === federationId)
   const [doc, setDoc] = useState<AgrScheduleDocument | null>(null)
   const [reading, setReading] = useState(false)
@@ -41,6 +41,7 @@ export function ImportFederationCalendarModal({
   const [phaseId, setPhaseId] = useState('')
   const [competitionId, setCompetitionId] = useState('')
   const [playersPerGame, setPlayersPerGame] = useState(4)
+  const [secondPhase, setSecondPhase] = useState<'' | 'return_leg' | 'new_groups'>('')
   const [clubIds, setClubIds] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState<FederationScheduleImportSummary | null>(null)
@@ -79,6 +80,10 @@ export function ImportFederationCalendarModal({
       const championship = key(parsed.championship.replace(/^championnat\s*/i, ''))
       setCompetitionId((fedCompetitions.find((c) => championship && key(c.displayName).includes(championship)) ?? fedCompetitions[0])?.id ?? '')
       setPlayersPerGame(/division\s*2\b/i.test(parsed.division) ? 3 : 4)
+      // What phase 2 is (#649): what the division already says, else what the
+      // calendar's notes say — the AGR writes « phase retour » when it is one.
+      const known = divisions.find((d) => d.phaseId === named?.id && key(d.displayName) === key(parsed.division))?.secondPhase
+      setSecondPhase(known ?? (parsed.notes.some((n) => /\bretour\b/i.test(n)) ? 'return_leg' : ''))
       setClubIds(Object.fromEntries(parsed.clubs.map((name) => [name, matchFederationClub(name, clubs, federationId)?.id ?? ''])))
     } catch {
       setError('Impossible de lire ce fichier.')
@@ -98,6 +103,7 @@ export function ImportFederationCalendarModal({
     const result = await importFederationSchedule({
       federationId, phaseId, competitionId, division: doc.division, poolNumber: doc.poolNumber,
       playersPerGame, notes: doc.notes,
+      ...(doc.phaseNumber === 1 && secondPhase ? { secondPhase } : {}),
       clubs: doc.clubs.map((name) => ({ name, clubId: clubIds[name] || null })),
       journees: doc.journees,
     })
@@ -123,6 +129,14 @@ export function ImportFederationCalendarModal({
             {!done.created.teams && !done.created.games && !done.updatedGames && (
               <p className="text-slate-500">Rien de nouveau : ce calendrier était déjà importé.</p>
             )}
+            {done.returnLeg ? (
+              <p>
+                Phase retour préparée en phase 2 : {done.returnLeg.matchDays} journée(s) et {done.returnLeg.games} rencontre(s)
+                ajoutées, dates à confirmer jusqu’au calendrier de la phase 2.
+              </p>
+            ) : secondPhase === 'return_leg' && doc?.phaseNumber === 1 ? (
+              <p className="text-slate-500">La phase retour sera préparée dès que la phase 2 sera créée.</p>
+            ) : null}
             <div className="flex justify-end">
               <button type="button" onClick={onClose} className={PRIMARY_BUTTON_CLASS}>Fermer</button>
             </div>
@@ -187,6 +201,26 @@ export function ImportFederationCalendarModal({
                 </select>
               </div>
             </div>
+            {doc.phaseNumber === 1 && (
+              <div>
+                <label htmlFor="fed-cal-second-phase" className="block text-sm font-medium text-slate-700">Phase 2</label>
+                <select
+                  id="fed-cal-second-phase"
+                  value={secondPhase}
+                  onChange={(e) => setSecondPhase(e.target.value as typeof secondPhase)}
+                  className={SELECT_CLASS}
+                >
+                  <option value="">Pas encore connue</option>
+                  <option value="return_leg">Phase retour : mêmes poules, réception inversée</option>
+                  <option value="new_groups">Nouvelles poules</option>
+                </select>
+                {secondPhase === 'return_leg' && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Les matchs retour sont préparés en phase 2, dates à confirmer ; le calendrier de la phase 2 les datera.
+                  </p>
+                )}
+              </div>
+            )}
             {(fedPhases.length === 0 || fedCompetitions.length === 0) && (
               <p role="alert" className="text-sm text-red-600">
                 {fedPhases.length === 0 ? 'Aucune phase de cette fédération : ' : 'Aucune compétition de cette fédération : '}
