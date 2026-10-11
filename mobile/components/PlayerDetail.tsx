@@ -61,7 +61,7 @@ export function PlayerDetail({
   const {
     players, users = [], teams, clubs, federations, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
-    updatePlayer, memberGroups, setGroupsOfMember,
+    updatePlayer, memberGroups, setGroupsOfMember, divisions, competitions,
   } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
@@ -128,21 +128,27 @@ export function PlayerDetail({
   //
   // Over the whole phase, with no `asOfMatchDayId`: a fiche is not being read
   // from inside one match-day, so the question is simply where they stand now.
-  // The FFTT's rule, in the FFTT's active phase: the AGR's brûlage is #651.
-  const activePhase = activePhaseOf(phases, seasons)
+  // Each federation of the club in its own active phase, by its own rule — the
+  // AGR's counts the season (#651); the first that says something is shown.
   const brulageTeam = (() => {
-    if (!player || !activePhase) return null
-    const clubTeamsInPhase = teams.filter(
-      (t) => t.phaseId === activePhase.id && t.clubId === player.clubId,
-    )
-    // Defaulted: an offline cache written before these rode in `DataState`
-    // has none of them, and a fiche that cannot answer "burned?" should say
-    // nothing rather than fail to render at all (same rule as #498).
-    const info = computeBrulage(
-      player.id, clubTeamsInPhase, matchDays ?? [], games ?? [], gameSelections ?? [],
-    )
-    if (!info.burnedIntoTeamId) return null
-    return teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
+    if (!player) return null
+    for (const federationId of playerFederations) {
+      const activePhase = activePhaseOf(phases, seasons, federationId)
+      if (!activePhase) continue
+      const clubTeamsInPhase = teams.filter(
+        (t) => t.phaseId === activePhase.id && t.clubId === player.clubId,
+      )
+      // Defaulted: an offline cache written before these rode in `DataState`
+      // has none of them, and a fiche that cannot answer "burned?" should say
+      // nothing rather than fail to render at all (same rule as #498).
+      const info = computeBrulage(
+        player.id, clubTeamsInPhase, matchDays ?? [], games ?? [], gameSelections ?? [], null,
+        { teams, phases, divisions: divisions ?? [], competitions: competitions ?? [] },
+      )
+      const team = info.burnedIntoTeamId ? teams.find((t) => t.id === info.burnedIntoTeamId) : undefined
+      if (team) return team
+    }
+    return null
   })()
 
   // And whether the federation listed their licence at all this season (#488).

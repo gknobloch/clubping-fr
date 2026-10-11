@@ -18,7 +18,7 @@ import { LicenceTag } from '@/components/LicenceTag'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
 import type {
   AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection, PlayerSeasonLicence,
-  Division, Competition, CompetitionGroup, MemberGroup, PlayerSeasonCategory,
+  Division, Competition, CompetitionGroup, MemberGroup, PlayerSeasonCategory, Phase,
 } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -44,6 +44,9 @@ export interface SelectionData {
   competitionGroups?: CompetitionGroup[]
   memberGroups?: MemberGroup[]
   playerSeasonCategories?: PlayerSeasonCategory[]
+  /** Every team and phase: the AGR's brûlage counts the whole season (#651). */
+  teams?: Team[]
+  phases?: Phase[]
 }
 
 // Bottom-sheet line-up picker for captains: this team's roster plus other
@@ -78,8 +81,9 @@ export function CaptainSelectionSheet({
     matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections,
     playerSeasonLicences = [], seasonId,
     divisions = [], competitions = [], competitionGroups = [], memberGroups = [],
-    playerSeasonCategories = [],
+    playerSeasonCategories = [], teams = [], phases = [],
   } = selectionData
+  const brulageCtx = useMemo(() => ({ teams, phases, divisions, competitions }), [teams, phases, divisions, competitions])
 
   // Not a filter: an unvalidated licence is usually a renewal in flight, so the
   // sheet flags it beside the name rather than hiding the player (#488).
@@ -133,10 +137,10 @@ export function CaptainSelectionSheet({
         id: p.id,
         category: categoryFromIndex(categoryIndex, seasonId, p.id),
       })) return false
-      return isPlayerEligibleForTeam(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId)
+      return isPlayerEligibleForTeam(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId, brulageCtx)
     })
   }, [allClubPlayers, teamPlayers, initialSelection, team, clubTeams, matchDays, games,
-      gameSelections, matchDayId, eligibility, categoryIndex, seasonId])
+      gameSelections, matchDayId, eligibility, categoryIndex, seasonId, brulageCtx])
 
   // The filter earns its row of screen and its keyboard only on a long list,
   // so it is the whole sheet that is counted, not one section (#454).

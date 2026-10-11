@@ -15,7 +15,7 @@ import type { AvailabilityStatus } from '@/types'
 export function useMatchDayEditing(phaseId: string | null) {
   const { user } = useAuth()
   const {
-    teams, clubs, games, matchDays, divisions, groups, players,
+    teams, clubs, games, matchDays, divisions, groups, players, phases, competitions,
     gameAvailabilities, gameSelections,
     getGameSelectionPlayerIds, setGameAvailability, clearGameAvailability, setGameSelectionBatch,
   } = useAppData()
@@ -28,6 +28,8 @@ export function useMatchDayEditing(phaseId: string | null) {
       .filter((t) => t.phaseId === phaseId && t.clubId === userClubId)
       .sort((a, b) => a.number - b.number)
   }, [teams, phaseId, userClubId])
+  // The federation decides the rule — the AGR's counts the season (#651).
+  const brulageCtx = useMemo(() => ({ teams, phases, divisions, competitions }), [teams, phases, divisions, competitions])
 
   /** Group IDs belonging to this phase (via divisions). */
   const phaseGroupIds = useMemo(() => {
@@ -143,7 +145,7 @@ export function useMatchDayEditing(phaseId: string | null) {
       all = all.filter((tid) => {
         const t = teams.find((x) => x.id === tid)
         return t
-          ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId)
+          ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId, brulageCtx)
           : false
       })
     }
@@ -161,7 +163,7 @@ export function useMatchDayEditing(phaseId: string | null) {
   const isEligibleForTeam = (playerId: string, teamId: string, matchDayId: string) => {
     const t = teams.find((x) => x.id === teamId)
     return t
-      ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId)
+      ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId, brulageCtx)
       : false
   }
 

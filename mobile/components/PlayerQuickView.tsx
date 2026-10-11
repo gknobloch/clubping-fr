@@ -46,6 +46,7 @@ export function PlayerQuickView({
 }) {
   const {
     players, teams, clubs, phases, seasons = [], matchDays, games, gameSelections, playerPhasePoints,
+    divisions = [], competitions = [],
   } = useAppData()
 
   const player = players.find((p) => p.id === playerId)
@@ -68,7 +69,8 @@ export function PlayerQuickView({
   })
 
   const burnedIntoId = computeBrulage(
-    player.id, clubTeamsInPhase, matchDays, games, gameSelections,
+    player.id, clubTeamsInPhase, matchDays, games, gameSelections, null,
+    { teams, phases, divisions, competitions },
   ).burnedIntoTeamId
 
   const today = todayIso()

@@ -52,7 +52,7 @@ type PhaseBlock = {
 export function PlayerPhaseHistory({ playerId, title }: { playerId: string; title?: string }) {
   const {
     players, teams, clubs, phases, seasons, matchDays, games, gameSelections,
-    playerPhasePoints, playerSeasonCategories,
+    playerPhasePoints, playerSeasonCategories, divisions, competitions,
   } = useAppData()
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined)
@@ -79,7 +79,10 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           (t) => t.clubId === player.clubId && t.phaseId === ph.id,
         )
         const rosterTeam = clubTeamsInPhase.find((t) => t.playerIds?.includes(playerId))
-        const info = computeBrulage(playerId, clubTeamsInPhase, matchDays, games, gameSelections)
+        // The federation's own rule: at the AGR, the season's titularity (#651).
+        const info = computeBrulage(playerId, clubTeamsInPhase, matchDays, games, gameSelections, null, {
+          teams, phases, divisions, competitions,
+        })
         const brulageTeam = info.burnedIntoTeamId
           ? teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
           : null
@@ -153,7 +156,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           history: rows.sort((a, b) => a.raw.localeCompare(b.raw)).map((r) => r.e),
         }
       })
-  }, [player, playerId, teams, phases, seasons, matchDays, games, gameSelections, playerPhasePoints, clubs, today])
+  }, [player, playerId, teams, phases, seasons, matchDays, games, gameSelections, playerPhasePoints, clubs, today, divisions, competitions])
 
   if (phaseBlocks.length === 0) return null
 

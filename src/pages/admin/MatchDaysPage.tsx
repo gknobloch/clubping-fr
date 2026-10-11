@@ -248,6 +248,8 @@ export function MatchDaysPage() {
   /** All teams of the user's club in the selected phase (one block per team; each team has its own group's match-days). */
   const userClubId = user?.clubId
 
+  // The federation decides the brûlage rule — the AGR's counts the season (#651).
+  const brulageCtx = useMemo(() => ({ teams, phases, divisions, competitions }), [teams, phases, divisions, competitions])
   const myClubTeamsInPhase = useMemo(() => {
     if (!selectedPhaseId || !userClubId) return []
     return teams
@@ -469,7 +471,7 @@ export function MatchDaysPage() {
     if (playerId && matchDayId) {
       all = all.filter((tid) => {
         const t = teams.find((x) => x.id === tid)
-        return t ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId) : false
+        return t ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId, brulageCtx) : false
       })
     }
     if (playerId) {
@@ -1366,6 +1368,8 @@ export function MatchDaysPage() {
                           matchDays,
                           games,
                           gameSelections,
+                          null,
+                          brulageCtx,
                         )
                         const brulageColor = brulage.burnedIntoTeamId
                           ? getTeamColor(brulage.burnedIntoTeamId)
@@ -1732,7 +1736,7 @@ export function MatchDaysPage() {
                     <td className="whitespace-nowrap px-3 py-2 text-center text-slate-400">—</td>
                     <td className="whitespace-nowrap px-3 py-2 text-center text-slate-600 text-xs">
                       {(() => {
-                        const b = computeBrulage(player.id, myClubTeamsInPhase, matchDays, games, gameSelections)
+                        const b = computeBrulage(player.id, myClubTeamsInPhase, matchDays, games, gameSelections, null, brulageCtx)
                         if (!b.burnedIntoTeamId) return '—'
                         const bTeam = teams.find((t) => t.id === b.burnedIntoTeamId)
                         const bColor = getTeamColor(b.burnedIntoTeamId)
