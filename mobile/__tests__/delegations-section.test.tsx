@@ -14,15 +14,17 @@ import type { Delegations } from '@shared/types'
 // ---------------------------------------------------------------------------
 const mockAuth = { refreshProfiles: jest.fn(async () => {}) }
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
+const mockData = { users: [] as Array<Record<string, unknown>> }
+jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
 
 const mockApi = {
   fetchDelegations: jest.fn<Promise<Delegations>, [string]>(),
-  addDelegateByEmail: jest.fn(),
+  addDelegate: jest.fn(),
   removeDelegate: jest.fn(),
 }
 jest.mock('@/utils/api', () => ({
   fetchDelegations: (...a: [string]) => mockApi.fetchDelegations(...a),
-  addDelegateByEmail: (...a: [string, string]) => mockApi.addDelegateByEmail(...a),
+  addDelegate: (...a: [string, unknown]) => mockApi.addDelegate(...a),
   removeDelegate: (...a: [string, string]) => mockApi.removeDelegate(...a),
 }))
 
@@ -50,18 +52,18 @@ describe('DelegationsSection', () => {
   })
 
   it('names a delegate by address, and lists them once the API agreed', async () => {
-    mockApi.addDelegateByEmail.mockResolvedValue({ ok: true })
+    mockApi.addDelegate.mockResolvedValue({ ok: true })
     render(<DelegationsSection personId="person-sacha" />)
     fireEvent.press(await screen.findByTestId('delegate-add'))
     fireEvent.changeText(screen.getByTestId('delegate-email'), ' henaut@example.fr ')
     mockApi.fetchDelegations.mockResolvedValue({ delegates: [benjamin], represents: [] })
     fireEvent.press(screen.getByTestId('delegate-save'))
     expect(await screen.findByText('Benjamin Henaut')).toBeTruthy()
-    expect(mockApi.addDelegateByEmail).toHaveBeenCalledWith('person-sacha', 'henaut@example.fr')
+    expect(mockApi.addDelegate).toHaveBeenCalledWith('person-sacha', { email: 'henaut@example.fr' })
   })
 
   it("shows the API's refusal as written, and keeps the form open", async () => {
-    mockApi.addDelegateByEmail.mockResolvedValue({ ok: false, message: "Aucun compte n'utilise cette adresse." })
+    mockApi.addDelegate.mockResolvedValue({ ok: false, message: "Aucun compte n'utilise cette adresse." })
     render(<DelegationsSection personId="person-sacha" />)
     fireEvent.press(await screen.findByTestId('delegate-add'))
     fireEvent.changeText(screen.getByTestId('delegate-email'), 'inconnu@example.fr')
@@ -95,3 +97,35 @@ describe('DelegationsSection', () => {
     expect(await screen.findByText('Les délégations n’ont pas pu être lues.')).toBeTruthy()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Sur la fiche d'un licencié (#682) : l'administrateur choisit un membre,
+// pour quelqu'un qui ne peut pas se connecter (un enfant sans adresse).
+// ---------------------------------------------------------------------------
+describe('DelegationsSection on a fiche (admin)', () => {
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+    mockData.users = [
+      { id: 'u-benjamin', personId: 'person-benjamin', firstName: 'Benjamin', lastName: 'Henaut', email: 'henaut@example.fr' },
+      { id: 'u-benjamin-2', personId: 'person-benjamin', firstName: 'Benjamin', lastName: 'Henaut', email: 'henaut@example.fr' },
+      { id: 'u-sacha', personId: 'person-sacha', firstName: 'Sacha', lastName: 'Henaut' },
+    ]
+  })
+
+  it('picks a member — once per person, never the person themselves — and lists them once the API agreed', async () => {
+    mockApi.addDelegate.mockResolvedValue({ ok: true })
+    render(<DelegationsSection personId="person-sacha" mode="admin" />)
+    expect(await screen.findByText('Peuvent ouvrir ses profils')).toBeTruthy()
+    fireEvent.press(screen.getByTestId('delegate-add'))
+    fireEvent.changeText(screen.getByTestId('delegate-search'), 'henaut')
+    expect(screen.getAllByText('Benjamin Henaut')).toHaveLength(1)
+    expect(screen.queryByText('Sacha Henaut')).toBeNull()
+    mockApi.fetchDelegations.mockResolvedValue({ delegates: [benjamin], represents: [sacha] })
+    fireEvent.press(screen.getByTestId('delegate-pick-u-benjamin'))
+    await waitFor(() => expect(mockApi.addDelegate).toHaveBeenCalledWith('person-sacha', { delegateId: 'person-benjamin' }))
+    expect(await screen.findByTestId('delegate-remove-person-benjamin')).toBeTruthy()
+    // An administrator manages someone else's delegations: no « Vous gérez ».
+    expect(screen.queryByText('Vous gérez')).toBeNull()
+  })
+})
+

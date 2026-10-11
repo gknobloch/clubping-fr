@@ -646,7 +646,9 @@ invisible dans le diff comme dans la revue.
   garde son nom et son adresse (`mayEditPerson`, `administersPerson`). Avec
   une adresse par personne, un enfant n'en a pas et ne peut pas se connecter
   pour nommer son parent : son club le fait. Quelqu'un qui joue aussi ailleurs
-  n'est pas l'affaire d'un seul club. Un délégué peut **se retirer** (« Ne
+  n'est pas l'affaire d'un seul club. Sur la fiche, **dans l'app aussi**
+  (#682) : `DelegationsSection` en mode `admin`, un membre choisi par
+  recherche, une entrée par personne — la liste et la condition du web. Un délégué peut **se retirer** (« Ne
   plus gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Une
   adresse qu'aucun compte n'utilise, ou que plusieurs personnes partagent
   encore, est refusée avec sa raison.
