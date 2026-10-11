@@ -157,6 +157,11 @@ export default function JourneesScreen() {
     () => (phase ? teams.filter((t) => t.clubId === myClubId && t.phaseId === phase.id) : []),
     [phase, teams, myClubId],
   )
+  // The federation decides the brûlage rule — the AGR's counts the season (#651).
+  const brulageCtx = useMemo(
+    () => ({ teams, phases, divisions: divisions ?? [], competitions: competitions ?? [] }),
+    [teams, phases, divisions, competitions],
+  )
 
   // --- Competition eligibility (#498) ----------------------------------------
   //
@@ -362,7 +367,7 @@ export default function JourneesScreen() {
     // The team's federation decides which licence the row prints (#644).
     const federationId = federationOfTeam(team, divisions, competitions)
     return roster.map((player) => {
-      const brulageInfo = computeBrulage(player.id, clubTeamsInPhase, matchDays, games, gameSelections)
+      const brulageInfo = computeBrulage(player.id, clubTeamsInPhase, matchDays, games, gameSelections, null, brulageCtx)
       const burnedInto = brulageInfo.burnedIntoTeamId
         ? teams.find((t) => t.id === brulageInfo.burnedIntoTeamId)
         : undefined
@@ -447,7 +452,7 @@ export default function JourneesScreen() {
     // Nobody's team: the club's teams of this phase decide (#644).
     const federationId = federationOfTeam(clubTeams[0], divisions, competitions)
     return shownOtherPlayers.map((player) => {
-      const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
+      const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections, null, brulageCtx)
       const burnedInto = brulageInfo.burnedIntoTeamId
         ? teams.find((t) => t.id === brulageInfo.burnedIntoTeamId)
         : undefined
@@ -515,7 +520,7 @@ export default function JourneesScreen() {
         // before an exclusion stays undoable rather than becoming a dead end.
         const eligible =
           t.id === current ||
-          (isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id)
+          (isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id, brulageCtx)
             && eligibility.mayField(t.id, asEligible(playerId)))
         if (!eligible) return []
         const isHome = game.homeTeamId === t.id

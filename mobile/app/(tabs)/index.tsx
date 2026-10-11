@@ -508,6 +508,9 @@ export default function HomeScreen() {
             competitionGroups,
             memberGroups,
             playerSeasonCategories,
+            // The AGR's brûlage counts the season (#651).
+            teams,
+            phases,
           }}
           onSave={(ids) => setGameSelection(myActiveTeam.id, composeGame.id, ids)}
           onClose={() => setComposeGameId(null)}

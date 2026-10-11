@@ -413,6 +413,9 @@ export function MatchDetail({
             competitionGroups,
             memberGroups,
             playerSeasonCategories,
+            // The AGR's brûlage counts the season (#651).
+            teams,
+            phases,
           }}
           onSave={(ids) => setGameSelection(team.id, game.id, ids)}
           onClose={() => setShowCompose(false)}

@@ -839,6 +839,33 @@ invisible dans le diff comme dans la revue.
 - **Le N° club est celui de la fédération du match** (`affiliationNumberIn`) :
   Kembs est 06680140 à la FFTT et 680021 à l'AGR.
 
+### Brûlage AGR (#651)
+- **L'AGR ne brûle pas comme la FFTT** (règlement CRTT, art. 26, 29, 92). Un
+  joueur est **titulaire** d'une équipe : celle que le club déclare — l'effectif
+  de l'équipe dans l'app —, à défaut celle de sa **première feuille de
+  rencontre**. Il ne joue **jamais en dessous** de son équipe (art. 92 :
+  parties perdues par pénalité). Au-dessus, **trois rencontres sur la saison**
+  gardent sa titularité ; la **quatrième** le rend titulaire de la plus basse
+  des équipes supérieures où il a joué (art. 29 : titulaire en 4, deux fois en
+  1, une en 2, une en 3 → titulaire en 3), et le compte continue au-dessus de
+  celle-là.
+- **La saison, pas la phase** : les rencontres de la phase 1 comptent en
+  phase 2. Une équipe est son numéro d'une phase à l'autre ; les journées se
+  rangent par phase puis par numéro.
+- `computeBrulage` / `isPlayerEligibleForTeam` restent la seule entrée, avec
+  un dernier argument `BrulageContext` (équipes, phases, divisions,
+  compétitions) : la fédération de l'équipe choisit la règle, et sans contexte
+  c'est celle de la FFTT — ce que faisait tout appelant avant. Tous les
+  appelants du web et de l'app le passent. `agrTitularity` dit où en est un
+  joueur, `agrPickConsequence` ce que ferait un choix au-dessus (la quatrième).
+- **Le brûlage affiché à l'AGR ne montre que ce que les matchs ont décidé** :
+  une titularité déclarée est l'effectif que le club a écrit lui-même, pas une
+  nouvelle.
+- La règle FFTT « deux équipes d'une même poule » ne s'applique pas à l'AGR.
+  **Une rencontre par journée** reste la règle de l'app pour toutes les
+  fédérations (`playersCommittedElsewhere`) : l'art. 30 ne l'impose qu'aux trois
+  premières journées, l'app la garde partout — plus stricte, jamais fausse.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a
