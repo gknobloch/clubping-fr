@@ -879,6 +879,12 @@ invisible dans le diff comme dans la revue.
   composition d'une journée se fait depuis la feuille du match. Changer
   l'équipe dans la matrice **garde** une composition que l'art. 30 permet à
   côté, plutôt que de la défaire sans le dire ; « — » les retire toutes.
+- **La quatrième se dit avant d'enregistrer** (#683) : dans les feuilles de
+  composition (web et app), un joueur qui jouerait au-dessus de son équipe
+  porte « 2/3 au-dessus » à côté de son nom, et la quatrième « Titulaire en
+  éq. 3 » ; une fois cochée, une phrase la nomme en tête de la feuille
+  (`agrPickNote`, `agrTitularityWarning`). Un fait, jamais un refus : la
+  quatrième est permise, elle déplace la titularité.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →

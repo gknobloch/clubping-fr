@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { agrPickNote } from '@/lib/brulage'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
@@ -443,6 +444,10 @@ export function HomePage() {
                         availabilityOf={(playerId) => statusOf(g.id, playerId)}
                         committedElsewhere={composeCommittedElsewhere}
                         unlicensed={unlicensedInMyClub}
+                        pickNote={(playerId) => agrPickNote(
+                          playerId, myActiveTeam, clubTeamsInActivePhase, matchDays, games, gameSelections, md.id,
+                          { teams, phases, divisions, competitions },
+                        )}
                         onSave={(playerIds) => setGameSelection(g.id, myActiveTeam.id, playerIds)}
                         onClose={() => setComposing(false)}
                       />

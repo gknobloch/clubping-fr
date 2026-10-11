@@ -22,6 +22,7 @@ import { LicenceBadge } from '@/components/LicenceBadge'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
 import { federationOfTeam, licenceOf } from '@/lib/licences'
+import { agrPickNote } from '@/lib/brulage'
 import { affiliationNumberIn } from '@/lib/federations'
 
 /**
@@ -43,7 +44,7 @@ export function MatchDayDetailPage() {
   const {
     teams, players, clubs, matchDays, games, divisions, groups = [], gameSelections, playerPhasePoints,
     competitions, competitionGroups, memberGroups, setGameSelection,
-    playerSeasonCategories, playerSeasonLicences, seasons,
+    playerSeasonCategories, playerSeasonLicences, seasons, phases,
   } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
@@ -385,6 +386,10 @@ export function MatchDayDetailPage() {
           availabilityOf={(playerId) => getAvailability(game.id, playerId)}
           committedElsewhere={committedElsewhere}
           unlicensed={unlicensed}
+          pickNote={(playerId) => agrPickNote(
+            playerId, team, myClubTeamsInPhase, matchDays, games, gameSelections, matchDay.id,
+            { teams, phases, divisions, competitions },
+          )}
           onSave={(playerIds) => setGameSelection(game.id, team.id, playerIds)}
           onClose={() => setComposing(false)}
         />
