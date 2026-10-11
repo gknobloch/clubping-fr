@@ -8,7 +8,7 @@ import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
-import { isPlayerEligibleForTeam } from '@shared/lib/brulage'
+import { agrPickNote, agrTitularityWarning, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { clubLicences } from '@shared/lib/seasonLicences'
@@ -157,6 +157,19 @@ export function CaptainSelectionSheet({
     return playersCommittedElsewhere(team.id, round, clubTeams, games, matchDays, gameSelections, { divisions, competitions })
   }, [team.id, clubTeams, games, matchDays, gameSelections, matchDayId, divisions, competitions])
 
+  // At the AGR, how many times each player would now have played above their
+  // team this season — and, for the fourth, the titularity it moves (#683).
+  const pickNotes = useMemo(() => new Map(allClubPlayers.map((p) => [
+    p.id,
+    agrPickNote(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId, brulageCtx),
+  ])), [allClubPlayers, team, clubTeams, matchDays, games, gameSelections, matchDayId, brulageCtx])
+  const titularityWarning = agrTitularityWarning(allClubPlayers
+    .filter((p) => selection.includes(p.id))
+    .flatMap((p) => {
+      const to = pickNotes.get(p.id)?.becomesTitularOf
+      return to ? [{ name: `${p.firstName} ${p.lastName}`, team: to }] : []
+    }))
+
   function toggle(pid: string) {
     if (committedElsewhere.has(pid) && !selection.includes(pid)) return
     setSelection((prev) => {
@@ -175,6 +188,7 @@ export function CaptainSelectionSheet({
     const cfg = avail ? AVAIL[avail] : null
     const lockedTeam = !picked ? committedElsewhere.get(p.id) : undefined
     const locked = lockedTeam !== undefined
+    const note = locked ? null : pickNotes.get(p.id)
     return (
       // Two targets, not one (#585). The box alone picks; the name opens the
       // aperçu, as a name does everywhere else in the app. The row used to be
@@ -203,6 +217,11 @@ export function CaptainSelectionSheet({
               {p.firstName} {p.lastName}
             </Text>
             {unlicensed.has(p.id) && <LicenceTag />}
+            {note && (
+              <Text style={[sel.pickNote, note.becomesTitularOf !== null && sel.pickNoteFourth]} numberOfLines={1}>
+                {note.label}
+              </Text>
+            )}
           </View>
           {locked ? (
             <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
@@ -231,6 +250,7 @@ export function CaptainSelectionSheet({
           {' '}Vérifiez avant la rencontre.
         </Text>
       )}
+      {titularityWarning && <Text style={sel.licenceWarning}>{titularityWarning}</Text>}
       {searchable && <SelectionSearch value={query} onChangeText={setQuery} />}
       <SelectionList>
         {shownRoster.length > 0 && (
@@ -289,4 +309,6 @@ const sel = StyleSheet.create({
   noAvail: { fontSize: 12, color: colors.border },
   playerRowLocked: { opacity: 0.45 },
   lockedTxt: { fontSize: 11, fontStyle: 'italic', color: colors.textSecondary },
+  pickNote: { fontSize: 11, color: colors.textSecondary, flexShrink: 0 },
+  pickNoteFourth: { color: '#92400e', fontFamily: fonts.semiBold },
 })

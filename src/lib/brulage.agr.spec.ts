@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { agrPickConsequence, computeBrulage, isPlayerEligibleForTeam, type BrulageContext } from './brulage'
+import { agrPickConsequence, agrPickNote, agrTitularityWarning, computeBrulage, isPlayerEligibleForTeam, type BrulageContext } from './brulage'
 import type { Game, GameSelection, MatchDay, Phase, Team } from '@/types'
 
 // #651 — the AGR's rule (art. 26, 29, 92): a player is titulaire of one team,
@@ -81,5 +81,17 @@ describe('AGR titularity (#651)', () => {
     const two = [played('p1', 1, 1), played('p1', 1, 2)]
     expect(computeBrulage('leo', phase1, matchDays, games, two, null, ffttCtx).burnedIntoTeamNumber).toBe(1)
     expect(computeBrulage('leo', phase1, matchDays, games, two, null, ctx).burnedIntoTeamNumber).toBeNull()
+  })
+
+  it('labels the pick for a line-up picker, and names the fourth (#683)', () => {
+    const three = [played('p1', 1, 1), played('p1', 1, 2), played('p1', 2, 3)]
+    expect(agrPickNote('leo', phase1[0], phase1, matchDays, games, three.slice(0, 1), md('p1', 1, 4), ctx))
+      .toEqual({ label: '2/3 au-dessus', becomesTitularOf: null })
+    expect(agrPickNote('leo', phase1[2], phase1, matchDays, games, three, md('p1', 3, 4), ctx))
+      .toEqual({ label: 'Titulaire en éq. 3', becomesTitularOf: 3 })
+    expect(agrPickNote('leo', phase1[3], phase1, matchDays, games, three, md('p1', 4, 4), ctx)).toBeNull()
+    expect(agrTitularityWarning([{ name: 'Léo Martin', team: 3 }]))
+      .toBe('Léo Martin deviendra titulaire de l’équipe 3 : quatrième rencontre au-dessus de son équipe cette saison (art. 29).')
+    expect(agrTitularityWarning([])).toBeNull()
   })
 })

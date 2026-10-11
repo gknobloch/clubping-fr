@@ -297,3 +297,40 @@ export function agrPickConsequence(
   // The fourth: the lowest higher team among those played, this one included.
   return { superiorGames: t.superiorGames + 1, becomesTitularOf: Math.max(targetTeam.number, ...t.superiorTeamNumbers) }
 }
+
+/**
+ * What a line-up picker prints beside a player fielded above their team at the
+ * AGR (#683) — « 2/3 au-dessus », then, for the fourth, the team it makes them
+ * titulaire of. A fact, never a refusal: the fourth is allowed, it only moves
+ * the titularity. null when the pick is not above their team.
+ */
+export interface AgrPickNote {
+  /** Short, beside the name: « 2/3 au-dessus », « Titulaire en éq. 3 ». */
+  label: string
+  /** The fourth: what the sheet says above the list, by name. */
+  becomesTitularOf: number | null
+}
+
+export function agrPickNote(
+  playerId: string,
+  targetTeam: Team,
+  clubTeams: Team[],
+  matchDays: MatchDay[],
+  games: Game[],
+  gameSelections: GameSelection[],
+  matchDayId: string,
+  ctx?: BrulageContext,
+): AgrPickNote | null {
+  const c = agrPickConsequence(playerId, targetTeam, clubTeams, matchDays, games, gameSelections, matchDayId, ctx)
+  if (!c) return null
+  return c.becomesTitularOf !== null
+    ? { label: `Titulaire en éq. ${c.becomesTitularOf}`, becomesTitularOf: c.becomesTitularOf }
+    : { label: `${c.superiorGames}/${AGR_SUPERIOR_LIMIT} au-dessus`, becomesTitularOf: null }
+}
+
+/** The sentence for the players a line-up would make titulaire elsewhere, by name. */
+export function agrTitularityWarning(changes: Array<{ name: string; team: number }>): string | null {
+  if (changes.length === 0) return null
+  const what = changes.map((c) => `${c.name} deviendra titulaire de l’équipe ${c.team}`).join(' ; ')
+  return `${what} : quatrième rencontre au-dessus de son équipe cette saison (art. 29).`
+}
