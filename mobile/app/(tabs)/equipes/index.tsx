@@ -40,7 +40,7 @@ import { fonts } from '@/constants/typography'
 // way out.
 // ---------------------------------------------------------------------------
 export default function EquipesScreen() {
-  const { teams, clubs, phases, seasons = [], federations = [], divisions, groups, refreshing, refresh } = useAppData()
+  const { teams, clubs, phases, seasons = [], federations = [], divisions, competitions = [], groups, refreshing, refresh } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const { isTwoPane } = useLayout()
@@ -159,7 +159,7 @@ export default function EquipesScreen() {
       }}
       renderItem={({ item: team }) => {
         const division = divisions.find((d) => d.id === team.divisionId)
-        const pool = poolLabel(team, groups)
+        const pool = poolLabel(team, groups, { divisions, competitions })
         const isSelected = team.id === selectedTeam?.id
         return (
           <TouchableOpacity

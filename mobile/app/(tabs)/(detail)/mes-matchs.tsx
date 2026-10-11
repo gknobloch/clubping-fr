@@ -32,7 +32,7 @@ export default function MesMatchsScreen() {
   const { playerId } = useLocalSearchParams<{ playerId?: string }>()
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, seasons = [], divisions, groups, gameSelections, refreshing, refresh,
+    clubs, teams, players, matchDays, games, phases, seasons = [], divisions, competitions = [], groups, gameSelections, refreshing, refresh,
   } = useAppData()
 
   // The player whose matches we show — the param, else the logged-in player.
@@ -170,7 +170,7 @@ export default function MesMatchsScreen() {
                     <MatchHeader
                       matchDayNumber={md.number}
                       divisionLabel={divMap.get(team.divisionId)?.displayName}
-                      poolLabel={poolLabel(team, groups)}
+                      poolLabel={poolLabel(team, groups, { divisions, competitions })}
                       teamColor={team.color}
                       teamNumber={team.number}
                       isHome={game.homeTeamId === team.id}

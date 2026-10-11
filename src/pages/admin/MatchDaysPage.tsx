@@ -639,7 +639,7 @@ export function MatchDaysPage() {
         opponentName: getTeamLabel(opponentId),
         teamName: getTeamLabel(team.id),
         divisionName: divisions.find((d) => d.id === team.divisionId)?.displayName,
-        poolLabel: poolLabel(team, groups),
+        poolLabel: poolLabel(team, groups, { divisions, competitions }),
         isMine: !!user?.id && roster.includes(user.id),
         isHome,
         dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),

@@ -23,6 +23,7 @@ import {
 } from '../../src/lib/teamAuthority'
 import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt, seasonNumber } from '../../src/lib/season'
 import { addressTakenMessage } from '../../src/lib/addressOwner'
+import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -497,6 +498,7 @@ app.get('/data', async (c) => {
       id: r.id, divisionId: r.division_id, number: r.number, teamIds: jsonParseIds(r.team_ids),
       isArchived: bool(r.is_archived),
       ...(r.group_id ? { groupId: r.group_id } : {}),
+      ...(r.note ? { note: r.note } : {}),
     })),
     // Players are the projection of users where is_player = 1.
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
@@ -3169,6 +3171,256 @@ app.post('/schedule-documents/import', async (c) => {
     updatedGameSlots: updatedGameSlots.length,
     skippedMatches,
     skippedMatchDetails,
+  })
+})
+
+// --- A calendar of a federation without an API (#647) ---
+//
+// The AGR publishes a poule's calendar as a PDF and nothing else. The browser
+// reads it (src/lib/agrScheduleDocument.ts), the admin reviews it — which
+// existing club each name is, the phase, the competition —, and this writes
+// it: the division and the poule (found again when they exist: Landser and
+// Kembs import the same Promotion Honneur, and the second must not double it),
+// the bare clubs it does not know, their teams, the journées and the matches,
+// each with its own date and time.
+//
+// WHO. For a federation the app does not import from, there is no general
+// admin's import to wait for: the admin of a club affiliated to it may build
+// the poule their club plays in — which is why their club must be one the
+// calendar names. Then #577's rule holds as everywhere: one club or the other.
+//
+// IDEMPOTENT. Run twice, it creates nothing the second time: division by
+// (phase, name), poule by (division, number), team by (club, phase, number),
+// journée by (poule, number), match by its two teams. A match found again
+// takes the document's date and time unless someone set them by hand.
+
+interface FederationScheduleInput {
+  federationId: string
+  phaseId: string
+  competitionId: string
+  division: string
+  poolNumber: number
+  playersPerGame: number
+  notes: string[]
+  clubs: Array<{ name: string; clubId: string | null }>
+  journees: Array<{
+    number: number
+    matches: Array<{ date: string; time: string; home: { club: string; number: number }; away: { club: string; number: number } }>
+  }>
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const TIME_RE = /^\d{2}h\d{2}$/
+
+function parseFederationScheduleInput(b: Record<string, unknown>): FederationScheduleInput | null {
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+  const side = (v: unknown) => {
+    const o = v as { club?: unknown; number?: unknown } | null
+    const club = str(o?.club)
+    const number = Number(o?.number)
+    return club && Number.isInteger(number) && number > 0 ? { club, number } : null
+  }
+  const journees = (Array.isArray(b.journees) ? b.journees : []).slice(0, 30).map((j) => {
+    const o = j as { number?: unknown; matches?: unknown }
+    const matches = (Array.isArray(o.matches) ? o.matches : []).slice(0, 20).map((m) => {
+      const mm = m as { date?: unknown; time?: unknown; home?: unknown; away?: unknown }
+      const home = side(mm.home), away = side(mm.away)
+      const date = str(mm.date), time = str(mm.time)
+      return home && away && DATE_RE.test(date) && (!time || TIME_RE.test(time)) ? { date, time, home, away } : null
+    })
+    return { number: Number(o.number), matches: matches.filter((m): m is NonNullable<typeof m> => m !== null), complete: matches.every(Boolean) }
+  })
+  const input = {
+    federationId: str(b.federationId), phaseId: str(b.phaseId), competitionId: str(b.competitionId),
+    division: str(b.division), poolNumber: Number(b.poolNumber),
+    playersPerGame: Number(b.playersPerGame) === 3 ? 3 : 4,
+    notes: (Array.isArray(b.notes) ? b.notes : []).map(str).filter(Boolean).slice(0, 10),
+    clubs: (Array.isArray(b.clubs) ? b.clubs : []).map((c) => {
+      const o = c as { name?: unknown; clubId?: unknown }
+      return { name: str(o.name), clubId: str(o.clubId) || null }
+    }).filter((c) => c.name),
+    journees: journees.map(({ number, matches }) => ({ number, matches })),
+  }
+  const valid = input.federationId && input.phaseId && input.competitionId && input.division
+    && Number.isInteger(input.poolNumber) && input.poolNumber > 0
+    && journees.length > 0 && journees.every((j) => Number.isInteger(j.number) && j.number > 0 && j.complete)
+  return valid ? input : null
+}
+
+app.post('/federation-schedules/import', async (c) => {
+  const db = c.env.DB
+  const input = parseFederationScheduleInput(await c.req.json<Record<string, unknown>>().catch(() => ({})))
+  if (!input) return c.json({ error: 'invalid_params' }, 400)
+
+  const federation = await db.prepare('SELECT id, is_imported FROM federations WHERE id = ?')
+    .bind(input.federationId).first<{ id: string; is_imported: number }>()
+  if (!federation) return c.json({ error: 'unknown_federation' }, 400)
+  if (federation.is_imported) {
+    return c.json({ error: 'imported_federation', message: 'Cette fédération s’importe depuis son API.' }, 400)
+  }
+  const phase = await db.prepare(
+    'SELECT p.id FROM phases p JOIN seasons s ON s.id = p.season_id WHERE p.id = ? AND s.federation_id = ?',
+  ).bind(input.phaseId, input.federationId).first()
+  if (!phase) return c.json({ error: 'unknown_phase', message: 'Cette phase n’est pas une phase de la fédération.' }, 400)
+  const competition = await db.prepare('SELECT id FROM competitions WHERE id = ? AND federation_id = ?')
+    .bind(input.competitionId, input.federationId).first()
+  if (!competition) return c.json({ error: 'unknown_competition', message: 'Cette compétition n’est pas une compétition de la fédération.' }, 400)
+
+  // Every name the matches use must be in the club list, resolved or to create.
+  const named = new Map(input.clubs.map((cl) => [cl.name, cl.clubId]))
+  for (const j of input.journees) {
+    for (const m of j.matches) {
+      if (!named.has(m.home.club) || !named.has(m.away.club)) return c.json({ error: 'invalid_params' }, 400)
+    }
+  }
+  const resolvedIds = [...new Set([...named.values()].filter((id): id is string => !!id))]
+  if (resolvedIds.length) {
+    const found = await db.prepare(`SELECT id FROM clubs WHERE id IN (${resolvedIds.map(() => '?').join(',')})`)
+      .bind(...resolvedIds).all<{ id: string }>()
+    if (found.results.length !== resolvedIds.length) return c.json({ error: 'unknown_club' }, 400)
+  }
+
+  // Who: the general admin, or the admin of a club of this federation that
+  // the calendar names (see the note above).
+  const viewer = managingViewer(c)
+  if (!isGeneralAdmin(c)) {
+    const ownClub = viewer.clubId
+    const affiliated = ownClub
+      ? await db.prepare('SELECT 1 FROM club_federations WHERE club_id = ? AND federation_id = ?')
+        .bind(ownClub, input.federationId).first()
+      : null
+    if (viewer.role !== 'club_admin' || !ownClub || !affiliated || !resolvedIds.includes(ownClub)) {
+      return c.json(notAllowed, 403)
+    }
+  }
+
+  // Division by (phase, name), poule by (division, number).
+  const key = (name: string) => name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?')
+    .bind(input.phaseId).all<{ id: string; display_name: string; rank: number }>()
+  const existingDivision = divisions.results.find((d) => key(d.display_name) === key(input.division))
+  const divisionId = existingDivision?.id ?? newId('div')
+  const stmts: D1PreparedStatement[] = []
+  if (!existingDivision) {
+    const rank = Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
+    stmts.push(db.prepare(
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id) VALUES (?, ?, ?, ?, ?, 0, NULL, ?)',
+    ).bind(divisionId, input.phaseId, input.division, rank, input.playersPerGame, input.competitionId))
+  }
+  const group = existingDivision
+    ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
+      .bind(divisionId, input.poolNumber).first<{ id: string; team_ids: string }>()
+    : null
+  const groupId = group?.id ?? newId('group')
+  const teamIds = new Set(group ? jsonParseIds(group.team_ids) : [])
+  const note = input.notes.length ? input.notes.join('\n') : null
+
+  // Clubs: those resolved keep their id and gain the federation's name for
+  // the next import (never overwriting one); the others are created bare.
+  const clubIdOf = new Map<string, string>()
+  const createdClubs: string[] = []
+  for (const cl of input.clubs) {
+    if (cl.clubId) {
+      clubIdOf.set(cl.name, cl.clubId)
+      stmts.push(db.prepare(
+        `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES (?, ?, '', ?)
+         ON CONFLICT(club_id, federation_id) DO UPDATE SET name = COALESCE(club_federations.name, excluded.name)`,
+      ).bind(cl.clubId, input.federationId, cl.name))
+      continue
+    }
+    const id = newId('club')
+    clubIdOf.set(cl.name, id)
+    createdClubs.push(id)
+    stmts.push(
+      db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, \'\', ?, 0)').bind(id, cl.name),
+      db.prepare("INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES (?, ?, '', ?)")
+        .bind(id, input.federationId, cl.name),
+    )
+  }
+
+  // Teams by (club, phase, number) — a club may have two in one poule.
+  const sides = new Map<string, { clubId: string; number: number; name: string }>()
+  for (const j of input.journees) {
+    for (const m of j.matches) {
+      for (const sd of [m.home, m.away]) sides.set(`${sd.club}|${sd.number}`, { clubId: clubIdOf.get(sd.club)!, number: sd.number, name: sd.club })
+    }
+  }
+  const existingTeams = await db.prepare('SELECT id, club_id, number FROM teams WHERE phase_id = ?')
+    .bind(input.phaseId).all<{ id: string; club_id: string; number: number }>()
+  const teamIdOf = new Map<string, string>()
+  let createdTeams = 0
+  for (const [k, sd] of sides) {
+    const existing = existingTeams.results.find((t) => t.club_id === sd.clubId && t.number === sd.number)
+    const id = existing?.id ?? teamIdFor(sd.clubId, input.phaseId, sd.number)
+    teamIdOf.set(k, id)
+    teamIds.add(id)
+    if (!existing) {
+      createdTeams++
+      const slot = usualHomeSlot({ journees: input.journees }, sd.name, sd.number)
+      stmts.push(db.prepare(
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
+         VALUES (?, ?, ?, ?, ?, '', ?, ?, '', '[]', 0)`,
+      ).bind(id, sd.clubId, input.phaseId, sd.number, groupId, slot?.day ?? '', slot?.time ?? ''))
+    }
+  }
+  stmts.push(group
+    ? db.prepare('UPDATE groups SET team_ids = ?, note = ? WHERE id = ?').bind(jsonStr([...teamIds]), note, groupId)
+    : db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived, note) VALUES (?, ?, ?, ?, 0, ?)')
+      .bind(groupId, divisionId, input.poolNumber, jsonStr([...teamIds]), note))
+
+  // Journées and matches.
+  const matchDays = group
+    ? (await db.prepare('SELECT id, number FROM match_days WHERE group_id = ?').bind(groupId).all<{ id: string; number: number }>()).results
+    : []
+  const games = matchDays.length
+    ? (await db.prepare(
+      `SELECT id, match_day_id, home_team_id, away_team_id, date, time, source FROM games
+        WHERE match_day_id IN (${matchDays.map(() => '?').join(',')})`,
+    ).bind(...matchDays.map((m) => m.id)).all<{ id: string; match_day_id: string; home_team_id: string; away_team_id: string; date: string | null; time: string | null; source: string | null }>()).results
+    : []
+  let createdMatchDays = 0, createdGames = 0, updatedGames = 0
+  const touched: string[] = []
+  for (const j of input.journees) {
+    let md = matchDays.find((m) => m.number === j.number)
+    if (!md) {
+      md = { id: newId('md'), number: j.number }
+      matchDays.push(md)
+      createdMatchDays++
+      stmts.push(db.prepare('INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+        .bind(md.id, groupId, j.number, j.matches.map((m) => m.date).sort()[0] ?? null))
+    }
+    touched.push(md.id)
+    for (const m of j.matches) {
+      const home = teamIdOf.get(`${m.home.club}|${m.home.number}`)!
+      const away = teamIdOf.get(`${m.away.club}|${m.away.number}`)!
+      const existing = games.find((g) => g.match_day_id === md!.id
+        && ((g.home_team_id === home && g.away_team_id === away) || (g.home_team_id === away && g.away_team_id === home)))
+      if (existing) {
+        if ((existing.date !== m.date || (m.time && existing.time !== m.time)) && existing.source !== 'manual') {
+          updatedGames++
+          stmts.push(db.prepare("UPDATE games SET date = ?, time = coalesce(?, time), source = 'document' WHERE id = ?")
+            .bind(m.date, m.time || null, existing.id))
+        }
+        continue
+      }
+      createdGames++
+      stmts.push(db.prepare(
+        "INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, source) VALUES (?, ?, ?, ?, ?, ?, 'document')",
+      ).bind(gameIdFor(md.id, home, away), md.id, home, away, m.time || null, m.date))
+    }
+  }
+  stmts.push(...touched.map((id) => matchDayDateRecomputeStmt(db, id)))
+
+  try {
+    for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  } catch (err) {
+    console.error('federation-schedules/import failed', err)
+    return c.json({ error: 'import_failed' }, 500)
+  }
+  return c.json({
+    ok: true, divisionId, groupId,
+    created: { division: !existingDivision, group: !group, clubs: createdClubs.length, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
+    updatedGames,
   })
 })
 

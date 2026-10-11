@@ -231,7 +231,7 @@ export function MatchDetail({
             <MatchHeader
               matchDayNumber={matchDay.number}
               divisionLabel={div?.displayName}
-              poolLabel={poolLabel(team, groups)}
+              poolLabel={poolLabel(team, groups, { divisions, competitions })}
               teamColor={team.color}
               teamNumber={team.number}
               isHome={isHome}
@@ -244,6 +244,16 @@ export function MatchDetail({
               onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
             />
           </View>
+
+          {/* What the federation's calendar says about the poule (#647): where a
+              club plays when not at home, the deadline for postponements. */}
+          {grp?.note ? (
+            <View style={styles.card} accessibilityLabel="À savoir sur la poule">
+              {grp.note.split('\n').map((line) => (
+                <Text key={line} style={styles.poolNote}>{line}</Text>
+              ))}
+            </View>
+          ) : null}
 
           {/* Under the card, where the accueil's carousel puts its own dots —
               they belong to the header they page, not to the availabilities
@@ -455,6 +465,7 @@ const styles = StyleSheet.create({
   // only claimed once it is clearly sideways (see usePagerSwipe).
   pan: { flex: 1 },
   licenceWarning: { fontSize: 13, color: '#92400E' },
+  poolNote: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
   notFound: { padding: 24, color: colors.textSecondary, textAlign: 'center' },
 
   card: {

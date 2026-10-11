@@ -73,6 +73,7 @@ import { fetchClubDetailXmlFromBrowser } from '@/lib/ffttClub'
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, localPhaseId } from '@/lib/ffttPhases'
 import { withActivePhase, withActiveSeason, withPhaseAlignedToSeason } from '@/lib/seasonActivation'
+import type { AgrScheduleJournee } from '@/lib/agrScheduleDocument'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { clubIdFromAffiliation, gameIdFor, teamIdFor } from '@/lib/entityIds'
 import { clubIdForAffiliation } from '@/lib/federations'
@@ -364,6 +365,32 @@ export interface ScheduleDocImportInput {
   journees: ScheduleDocImportJournee[]
 }
 
+/** What POST /api/federation-schedules/import takes (#647): the reviewed calendar. */
+export interface FederationScheduleImportInput {
+  federationId: string
+  phaseId: string
+  competitionId: string
+  division: string
+  poolNumber: number
+  playersPerGame: number
+  notes: string[]
+  /** Each name of the calendar: an existing club, or null to create it bare. */
+  clubs: Array<{ name: string; clubId: string | null }>
+  journees: AgrScheduleJournee[]
+}
+
+/** What it answers: what was created, and what was found again. */
+export interface FederationScheduleImportSummary {
+  divisionId: string
+  groupId: string
+  created: { division: boolean; group: boolean; clubs: number; teams: number; matchDays: number; games: number }
+  updatedGames: number
+}
+
+export type FederationScheduleImportResult =
+  | { ok: true; summary: FederationScheduleImportSummary }
+  | { ok: false; message: string }
+
 /** Response of POST /api/schedule-documents/import (#260). */
 export interface ScheduleDocImportResult {
   createdPhases: Phase[]
@@ -561,6 +588,8 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   importFfttGroups: (divisionId: string) => Promise<FfttGroupsImportResult | null>
   /** Import schedule documents (PDF/image, #260) confirmed by the admin; null on failure. */
   importScheduleDocuments: (schedules: ScheduleDocImportInput[], updateSlots?: boolean, removeObsolete?: boolean) => Promise<ScheduleDocImportResult | null>
+  /** A poule calendar of a federation without an API (#647); the data is fetched again once written. */
+  importFederationSchedule: (input: FederationScheduleImportInput) => Promise<FederationScheduleImportResult>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
@@ -1356,6 +1385,28 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       return null
     }
   }, [applyImportDeletions, fillMissingClubVenues])
+
+  // --- A federation's calendar read off its PDF (#647) ---
+  // Awaited, never optimistic: one call writes a whole poule — clubs, teams,
+  // journées —, and only the server knows what it found again rather than
+  // created. So the data is fetched again once it lands.
+  const importFederationSchedule = useCallback(
+    async (input: FederationScheduleImportInput): Promise<FederationScheduleImportResult> => {
+      if (!persist) return { ok: false, message: 'Import indisponible hors connexion au serveur.' }
+      try {
+        const r = await fetch('/api/federation-schedules/import', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify(input),
+        })
+        const body = (await r.json().catch(() => null)) as (FederationScheduleImportSummary & { message?: string }) | null
+        if (!r.ok || !body) return { ok: false, message: body?.message ?? "L'import a échoué." }
+        setRetryNonce((n) => n + 1)
+        return { ok: true, summary: body }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
 
   const deleteSeason = useCallback((id: string) => {
     // Cascade: find phases → divisions → groups → teams, match days, games, avail, selections
@@ -2586,6 +2637,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       fetchGroupsPreview,
       importFfttGroups,
       importScheduleDocuments,
+      importFederationSchedule,
       updatePhase,
       archivePhase,
       deletePhase,
@@ -2660,7 +2712,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, importFederationSchedule, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       users, updatePlayer, addPlayer, addClubAdmin, removeClubAdmin,

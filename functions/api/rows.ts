@@ -195,6 +195,8 @@ export interface GroupRow {
   is_archived: number
   /** FFTT pool id (#278); null for groups created by hand or read off a PDF. */
   group_id: string | null
+  /** 0069 (#647): the calendar's notes about the poule, NULL when it said none. */
+  note?: string | null
 }
 
 export interface TeamRow {

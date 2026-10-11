@@ -181,7 +181,7 @@ describe('Équipes — the club’s federations only', () => {
     expect(within(federation).getAllByRole('radio').map((r) => r.textContent)).toEqual(['FFTT', 'AGR'])
     expect(screen.getByText('GE 3 · P. 1')).toBeInTheDocument()
     fireEvent.click(within(federation).getByRole('radio', { name: 'AGR' }))
-    expect(screen.getByText('Excellence · P. 1')).toBeInTheDocument()
+    expect(screen.getByText('Excellence · Poule A')).toBeInTheDocument()
     expect(screen.queryByText('GE 3 · P. 1')).not.toBeInTheDocument()
   })
 
@@ -189,6 +189,6 @@ describe('Équipes — the club’s federations only', () => {
     as('club_admin', landser.id)
     renderPage(<TeamsPage />)
     expect(screen.queryByRole('radiogroup', { name: 'Fédération' })).not.toBeInTheDocument()
-    expect(screen.getByText('Honneur · P. 1')).toBeInTheDocument()
+    expect(screen.getByText('Honneur · Poule A')).toBeInTheDocument()
   })
 })

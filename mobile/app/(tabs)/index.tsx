@@ -135,7 +135,7 @@ export default function HomeScreen() {
     return grp ? divMap.get(grp.divisionId)?.displayName : undefined
   }
   function getPoolLabel(team: Team): string | undefined {
-    return poolLabel(team, groups)
+    return poolLabel(team, groups, { divisions, competitions })
   }
   function getPlayersPerGame(team: Team): number {
     const grp = groupMap.get(team.groupId)

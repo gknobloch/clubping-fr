@@ -745,6 +745,38 @@ invisible dans le diff comme dans la revue.
   nom de la fédération quand il y en a deux). Les équipes « de cette phase »
   sont celles de la phase active de chaque fédération (`activePhaseIdsOf`).
 
+### Calendrier d'une fédération sans API (#647)
+- **L'AGR n'a pas d'API** : le calendrier d'une poule est un PDF à couche
+  texte propre. `src/lib/agrScheduleDocument.ts` le lit (en-tête, « Journée
+  N », une ligne par rencontre, notes de pied) à côté de l'analyseur FFTT,
+  sans rien en partager : pas de tableau d'effectif ni de numéro
+  d'affiliation, un club est son **nom AGR** suivi du numéro d'équipe.
+- **Chaque rencontre a sa date et son heure** (une journée s'étale du
+  mercredi au vendredi) ; **la phase 2 garde sa numérotation** (journées 8 à
+  14). **Les poules sont des lettres** : un numéro stocké, « Poule A »
+  affiché (`poolLabel` avec son contexte divisions / compétitions).
+- Les lignes de pied sont **la note de la poule** (`groups.note`, 0069),
+  affichée sur l'écran du match — « RIEDISHEIM 1 JOUE DANS LA SALLE DU
+  MTT ».
+- **La revue décide, l'API vérifie** (`POST /federation-schedules/import`) :
+  phase et compétition de la fédération, joueurs par rencontre (3 en
+  Division 2), et chaque nom rattaché à un club existant ou créé nu
+  (`matchFederationClub` : nom AGR, puis nom affiché). Le nom AGR est retenu
+  sur le club (`club_federations.name`, jamais écrasé), donc le second
+  calendrier retrouve tout.
+- **Qui** : l'administrateur général, ou l'administrateur d'un club **de la
+  fédération que le calendrier nomme** — il construit la poule où son club
+  joue. Ensuite la règle de #577 vaut comme partout.
+- **Idempotent** : division par (phase, nom), poule par (division, numéro),
+  équipe par (club, phase, numéro), journée par (poule, numéro), rencontre par
+  ses deux équipes. Landser puis Kembs importent la même Promotion Honneur :
+  le second ne crée rien. Une rencontre retrouvée prend la date et l'heure du
+  document, sauf si quelqu'un les a posées à la main.
+- Entrées : « Importer un calendrier » sur Équipes quand la fédération à
+  l'écran n'a pas d'import, et « Importer depuis un fichier » sur Groupes
+  dans ce cas. Les fixtures de test sont trois vrais calendriers, **le
+  contact du pied remplacé** (nom, adresse et e-mail d'un officiel).
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a
