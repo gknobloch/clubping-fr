@@ -108,6 +108,19 @@ export function clubAffiliations(club: Pick<Club, 'affiliationNumber' | 'affilia
   return [...fftt, ...others]
 }
 
+/**
+ * The club's number in one federation — what a match sheet of that
+ * federation asks for (#650): Kembs is 06680140 at the FFTT and 680021 at the
+ * AGR. '' when it has none there.
+ */
+export function affiliationNumberIn(
+  club: Pick<Club, 'affiliationNumber' | 'affiliations'> | undefined, federationId: string | undefined,
+): string {
+  if (!club) return ''
+  const fed = federationId ?? FFTT_FEDERATION_ID
+  return clubAffiliations(club).find((a) => a.federationId === fed)?.affiliationNumber ?? ''
+}
+
 /** The ids of every federation a club belongs to, the FFTT first. */
 export function clubFederationIds(club: Pick<Club, 'affiliationNumber' | 'affiliations'>): string[] {
   return clubAffiliations(club).map((a) => a.federationId)
