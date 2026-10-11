@@ -153,8 +153,9 @@ export function CaptainSelectionSheet({
   const committedElsewhere = useMemo(() => {
     const round = matchDays.find((md) => md.id === matchDayId)?.number
     if (round === undefined) return new Map<string, number>()
-    return playersCommittedElsewhere(team.id, round, clubTeams, games, matchDays, gameSelections)
-  }, [team.id, clubTeams, games, matchDays, gameSelections, matchDayId])
+    // The AGR lets a player play twice in one journée from the fourth (#651).
+    return playersCommittedElsewhere(team.id, round, clubTeams, games, matchDays, gameSelections, { divisions, competitions })
+  }, [team.id, clubTeams, games, matchDays, gameSelections, matchDayId, divisions, competitions])
 
   function toggle(pid: string) {
     if (committedElsewhere.has(pid) && !selection.includes(pid)) return

@@ -10,6 +10,8 @@ import {
   isSlotConfirmed,
   isoWeekRange,
   playersCommittedElsewhere,
+  mayPlayBothInRound,
+  isAgrDepartmentalDivision,
   upcomingRounds,
   formatRoundDates,
   upcomingTeamGames,
@@ -55,6 +57,46 @@ describe('playersCommittedElsewhere', () => {
       'team-2', 1, clubTeams, [...games, otherRoundGame], [...matchDays, otherRoundMd], selections,
     )
     expect(committed.has('p1')).toBe(false)
+  })
+})
+
+describe('one match per journée at the AGR (art. 30, #651)', () => {
+  const div = (id: string, displayName: string) => ({ id, displayName, competitionId: 'c-agr' })
+  const ctx = {
+    divisions: [div('exc', 'EXCELLENCE'), div('pe', 'Prom. EXCELLENCE'), div('ph', 'Prom. HONNEUR'), div('d1', 'DIVISION I')],
+    competitions: [{ id: 'c-agr', federationId: 'agr' }],
+  }
+  const t = (id: string, number: number, divisionId: string): Team => ({ ...team(id, number), divisionId })
+  const exc = t('t1', 1, 'exc'), pe = t('t2', 2, 'pe'), ph = t('t3', 3, 'ph'), ph2 = t('t4', 4, 'ph')
+
+  it('reads the department’s divisions from their names (art. 22)', () => {
+    expect(['EXCELLENCE', 'Prom. EXCELLENCE', 'HONNEUR'].map(isAgrDepartmentalDivision)).toEqual([true, true, true])
+    expect(['Prom. HONNEUR', 'DIVISION I', 'DIVISION II'].map(isAgrDepartmentalDivision)).toEqual([false, false, false])
+  })
+
+  it('refuses two departmental divisions, or one division twice, over the first three journées', () => {
+    expect(mayPlayBothInRound(pe, exc, 2, ctx)).toBe(false)
+    expect(mayPlayBothInRound(ph, ph2, 3, ctx)).toBe(false)
+    // The article's own example: Promotion d'Honneur, then Promotion d'Excellence, journée 3.
+    expect(mayPlayBothInRound(ph, pe, 3, ctx)).toBe(true)
+  })
+
+  it('allows a second match of the journée from the fourth', () => {
+    expect(mayPlayBothInRound(pe, exc, 4, ctx)).toBe(true)
+    expect(mayPlayBothInRound(ph, ph2, 9, ctx)).toBe(true)
+  })
+
+  it('never at the FFTT, nor without a context', () => {
+    expect(mayPlayBothInRound(pe, exc, 5, { ...ctx, competitions: [{ id: 'c-agr', federationId: 'fftt' }] })).toBe(false)
+    expect(mayPlayBothInRound(pe, exc, 5, undefined)).toBe(false)
+  })
+
+  it('leaves a player free for the current team when the rule allows it', () => {
+    const md5: MatchDay = { id: 'md-5', groupId: 'group-1', number: 5, date: '2026-01-01' }
+    const g: Game = { id: 'g5', matchDayId: 'md-5', homeTeamId: 't1', awayTeamId: 'opp' }
+    const sels: GameSelection[] = [{ gameId: 'g5', teamId: 't1', playerIds: ['p1'] }]
+    expect(playersCommittedElsewhere('t2', 5, [exc, pe], [g], [md5], sels, ctx).has('p1')).toBe(false)
+    expect(playersCommittedElsewhere('t2', 5, [exc, pe], [g], [md5], sels).get('p1')).toBe(1)
   })
 })
 

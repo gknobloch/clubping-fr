@@ -105,7 +105,7 @@ export function HomePage() {
     if (!myPlayerId || !myActiveTeam) return undefined
     const md = mdMap.get(games.find((g) => g.id === gameId)?.matchDayId ?? '')
     if (!md) return undefined
-    return playersCommittedElsewhere(myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections).get(myPlayerId)
+    return playersCommittedElsewhere(myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections, { divisions, competitions }).get(myPlayerId)
   }
 
   const { canEditAvailability, canEditGameSelection, isEligibleForTeam, isOverride } =
@@ -244,6 +244,7 @@ export function HomePage() {
                 )
                 const composeCommittedElsewhere = playersCommittedElsewhere(
                   myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections,
+                  { divisions, competitions },
                 )
                 return (
                   <>

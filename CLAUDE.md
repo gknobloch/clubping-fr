@@ -862,9 +862,23 @@ invisible dans le diff comme dans la revue.
   une titularité déclarée est l'effectif que le club a écrit lui-même, pas une
   nouvelle.
 - La règle FFTT « deux équipes d'une même poule » ne s'applique pas à l'AGR.
-  **Une rencontre par journée** reste la règle de l'app pour toutes les
-  fédérations (`playersCommittedElsewhere`) : l'art. 30 ne l'impose qu'aux trois
-  premières journées, l'app la garde partout — plus stricte, jamais fausse.
+- **Une rencontre par journée, à l'AGR, seulement là où l'art. 30 l'exige** :
+  sur les trois premières journées, deux rencontres d'une même journée sont
+  refusées si les deux équipes jouent en division **départementale**
+  (Excellence, Promotion d'Excellence, Honneur — art. 22 ; la Promotion
+  d'Honneur et les Divisions I à III sont du secteur), ou dans **la même
+  division**. À partir de la quatrième, jamais. `mayPlayBothInRound` est la
+  règle, lue sur le nom de la division (`isAgrDepartmentalDivision`) ; la
+  FFTT garde une rencontre par journée, toujours.
+- `playersCommittedElsewhere` ne l'applique que si on lui passe un contexte :
+  les écrans qui demandent « qui peut encore jouer ici ? » (feuilles de
+  composition, état « joue en équipe N » de l'accueil, aperçu d'un match) le
+  passent ; le **planning de la phase** ne le passe pas — il montre où chacun
+  joue, ce qui reste vrai.
+- **La matrice des journées choisit une équipe par journée** : la seconde
+  composition d'une journée se fait depuis la feuille du match. Changer
+  l'équipe dans la matrice **garde** une composition que l'art. 30 permet à
+  côté, plutôt que de la défaire sans le dire ; « — » les retire toutes.
 
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →

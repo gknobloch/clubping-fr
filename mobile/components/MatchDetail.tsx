@@ -193,6 +193,8 @@ export function MatchDetail({
 
   const committed = playersCommittedElsewhere(
     team.id, matchDay.number, clubTeamsInPhase, games, matchDays, gameSelections,
+    // The AGR's art. 30 (#651).
+    { divisions: divisions ?? [], competitions: competitions ?? [] },
   )
 
   const canManage = !!(user && mayManageTeam(user, team))
