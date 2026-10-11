@@ -30,6 +30,7 @@ import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
 import { federationOfTeam, licenceOf } from '@shared/lib/licences'
+import { affiliationNumberIn } from '@shared/lib/federations'
 import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
@@ -448,8 +449,9 @@ export function MatchDetail({
           <MatchSheet
             matchup={matchup}
             clubName={club?.displayName ?? ''}
-            affiliationNumber={club?.affiliationNumber ?? ''}
+            affiliationNumber={affiliationNumberIn(club, federationOfTeam(team, divisions, competitions))}
             players={sheetPlayers}
+            isHome={isHome}
             federationId={federationOfTeam(team, divisions, competitions)}
             onClose={() => setShowSheet(false)}
           />

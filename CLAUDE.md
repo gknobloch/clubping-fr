@@ -824,6 +824,21 @@ invisible dans le diff comme dans la revue.
   est une supposition, le calendrier publié tranche. Il ne crée rien à côté.
 - Fédérations sans API seulement : la FFTT importe sa phase 2 comme le reste.
 
+### Feuille de match AGR (#650)
+- **Les lettres sont celles de la fédération** (`src/lib/matchSheet.ts`,
+  partagé par `MatchSheetView` et `MatchSheet`) : la FFTT finit l'extérieur à
+  Z (W X Y Z, X Y Z à trois) ; l'AGR part d'une lettre fixe des deux côtés —
+  A B C(D) à domicile, **U V W(X)** à l'extérieur.
+- **À quatre, l'AGR place le mieux classé** — le plus bas classement, ou l'un
+  d'eux à égalité (`compareRanking`, #646) — **en A à domicile et en V à
+  l'extérieur** : la *deuxième* ligne dehors. La feuille s'ouvre en l'y
+  plaçant (`placeBestRanked`, un seul échange), refuse un déplacement qui y
+  mettrait quelqu'un d'autre (`sheetOrderRefusal`, la phrase dit pourquoi ;
+  dans l'app, la ligne glissée revient à sa place), et changer de côté l'y
+  replace. À trois, et sans aucun classement connu, l'ordre est libre.
+- **Le N° club est celui de la fédération du match** (`affiliationNumberIn`) :
+  Kembs est 06680140 à la FFTT et 680021 à l'AGR.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a

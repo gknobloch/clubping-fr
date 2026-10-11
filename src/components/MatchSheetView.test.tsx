@@ -100,4 +100,38 @@ describe('MatchSheetView (#383)', () => {
     expect(screen.getByText(/Aucun joueur sélectionné/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'ABC' })).not.toBeInTheDocument()
   })
+
+  describe('at the AGR (#650)', () => {
+    const four: MatchSheetPlayer[] = [
+      { id: 'a', firstName: 'Léa', lastName: 'Arnold', points: '45' },
+      { id: 'b', firstName: 'Marc', lastName: 'Bauer', points: '25' },
+      { id: 'c', firstName: 'Noé', lastName: 'Christ', points: '60' },
+      { id: 'd', firstName: 'Ugo', lastName: 'Dietrich', points: '30' },
+    ]
+
+    it('letters the away side from U, and opens with the best ranked in V', () => {
+      setup({ federationId: 'agr', isHome: false, players: four })
+      expect(letters()).toEqual(['U', 'V', 'W', 'X'])
+      expect(names()[1]).toContain('Marc')
+      expect(screen.getByText('Le mieux classé joue en A à domicile, en V à l’extérieur.')).toBeInTheDocument()
+    })
+
+    it('refuses a move that takes the best ranked off their line, and says why', async () => {
+      setup({ federationId: 'agr', isHome: true, players: four })
+      expect(names()[0]).toContain('Marc')
+      await userEvent.click(screen.getByRole('button', { name: /Descendre Marc/ }))
+      expect(names()[0]).toContain('Marc')
+      expect(screen.getByRole('alert')).toHaveTextContent('En A, le mieux classé de l’équipe (classement 25)')
+      // The rest moves freely.
+      await userEvent.click(screen.getByRole('button', { name: /Descendre Noé/ }))
+      expect(names()[3]).toContain('Noé')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('re-places the best ranked when the side changes', async () => {
+      setup({ federationId: 'agr', isHome: true, players: four })
+      await userEvent.click(screen.getByRole('button', { name: 'UVWX' }))
+      expect(names()[1]).toContain('Marc')
+    })
+  })
 })

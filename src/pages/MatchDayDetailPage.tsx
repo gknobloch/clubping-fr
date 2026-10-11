@@ -22,6 +22,7 @@ import { LicenceBadge } from '@/components/LicenceBadge'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
 import { federationOfTeam, licenceOf } from '@/lib/licences'
+import { affiliationNumberIn } from '@/lib/federations'
 
 /**
  * One team's view of one game: the roster laid out vertically with its
@@ -364,7 +365,7 @@ export function MatchDayDetailPage() {
         <MatchSheetView
           matchup={isHome ? `${getTeamLabel(team.id)} – ${getTeamLabel(opponentId)}` : `${getTeamLabel(opponentId)} – ${getTeamLabel(team.id)}`}
           clubName={clubs.find((c) => c.id === team.clubId)?.displayName ?? ''}
-          affiliationNumber={clubs.find((c) => c.id === team.clubId)?.affiliationNumber}
+          affiliationNumber={affiliationNumberIn(clubs.find((c) => c.id === team.clubId), federationOfTeam(team, divisions, competitions))}
           players={lineUp}
           isHome={isHome}
           federationId={federationOfTeam(team, divisions, competitions)}
