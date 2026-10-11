@@ -6,6 +6,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { ImportGroupsModal } from '@/components/ImportGroupsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportScheduleDocumentModal } from '@/components/ImportScheduleDocumentModal'
+import { ImportFederationCalendarModal } from '@/components/ImportFederationCalendarModal'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
@@ -99,6 +100,7 @@ export function GroupsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [importGamesFor, setImportGamesFor] = useState<Group | null>(null)
   const [importDocOpen, setImportDocOpen] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [importDocForGroup, setImportDocForGroup] = useState<Group | null>(null)
   const [form, setForm] = useState({ federationId: '', divisionId: '', number: 1 })
   const [showArchived, setShowArchived] = useState(false)
@@ -213,7 +215,16 @@ export function GroupsPage() {
           <>
             <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter un groupe" onClick={openCreate} />
             {isAdmin && (
-              <HeaderAction variant="secondary" icon={<FileIcon />} label="Importer depuis un fichier" onClick={() => setImportDocOpen(true)} />
+              <HeaderAction
+                variant="secondary"
+                icon={<FileIcon />}
+                label="Importer depuis un fichier"
+                // The FFTT's PDF export, or a poule calendar of a federation
+                // without an API — the AGR's (#647).
+                onClick={() => (federations.find((f) => f.id === federationId)?.isImported === false
+                  ? setCalendarOpen(true)
+                  : setImportDocOpen(true))}
+              />
             )}
             {isAdmin && division && isFftt && (
               <HeaderAction icon={<ImportIcon />} label="Importer les groupes FFTT" onClick={() => setImportOpen(true)} />
@@ -407,6 +418,14 @@ export function GroupsPage() {
         <ImportScheduleDocumentModal
           onClose={() => setImportDocForGroup(null)}
           lockedGroupId={importDocForGroup.id}
+        />
+      )}
+
+      {calendarOpen && (
+        <ImportFederationCalendarModal
+          federationId={federationId}
+          viewerClubId={user?.role === 'general_admin' ? undefined : user?.clubId}
+          onClose={() => setCalendarOpen(false)}
         />
       )}
 

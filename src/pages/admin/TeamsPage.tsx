@@ -8,7 +8,8 @@ import { pointsFor } from '@/lib/phasePoints'
 import { phaseScope } from '@/lib/phaseScope'
 import { rankingLabel } from '@/lib/ranking'
 import { FederationSwitch } from '@/components/FederationSwitch'
-import { CaptainIcon, ClockIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
+import { CaptainIcon, ClockIcon, FileIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
+import { ImportFederationCalendarModal } from '@/components/ImportFederationCalendarModal'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { RowActions } from '@/components/RowActions'
@@ -59,8 +60,6 @@ export function TeamsPage() {
   const hasClubScope = (user?.role === 'club_admin' || user?.role === 'player') && !!user?.clubId
   const scopedClub = hasClubScope ? clubs.find((c) => c.id === user?.clubId) : undefined
 
-  /** A general admin imports for any club; a club, only from a federation it is in. */
-  const offersFfttImport = !scopedClub || clubIsIn(scopedClub, FFTT_FEDERATION_ID)
   /** The FFTT calendar import, offered on a team whose division the FFTT runs. */
   const isFfttTeam = (team: Team) => {
     const division = divisions.find((d) => d.id === team.divisionId)
@@ -96,6 +95,15 @@ export function TeamsPage() {
     setChosenFederation(federationId)
     setPhaseId(undefined)
   }
+
+  // What can be imported depends on the federation on screen: the FFTT's API
+  // (#229) for a club in it — a general admin imports for any club —, a
+  // poule's PDF calendar for a federation without an API (the AGR, #647).
+  const pageFederation = federations.find((f) => f.id === scope.federationId)
+  const offersFfttImport = scope.federationId === FFTT_FEDERATION_ID
+    && (!scopedClub || clubIsIn(scopedClub, FFTT_FEDERATION_ID))
+  const offersCalendarImport = !!pageFederation && !pageFederation.isImported
+  const [calendarOpen, setCalendarOpen] = useState(false)
 
   const teams = useMemo(
     () => teamsInScope.filter((t) => t.phaseId === phase?.id).sort((a, b) => a.number - b.number),
@@ -420,13 +428,16 @@ export function TeamsPage() {
                   — for a club in the FFTT. A club of the AGR alone has nothing
                   there to import, and its manual add is the only path (#660). */}
               <HeaderAction
-                variant={offersFfttImport ? 'secondary' : 'primary'}
+                variant={offersFfttImport || offersCalendarImport ? 'secondary' : 'primary'}
                 icon={<PlusIcon />}
                 label="Ajouter une équipe"
                 onClick={openCreate}
               />
               {offersFfttImport && (
                 <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+              )}
+              {offersCalendarImport && (
+                <HeaderAction icon={<FileIcon />} label="Importer un calendrier" onClick={() => setCalendarOpen(true)} />
               )}
             </>
           )
@@ -454,6 +465,13 @@ export function TeamsPage() {
           </>
         }
       />
+      {calendarOpen && (
+        <ImportFederationCalendarModal
+          federationId={scope.federationId}
+          viewerClubId={user?.role === 'general_admin' ? undefined : user?.clubId}
+          onClose={() => setCalendarOpen(false)}
+        />
+      )}
       {importOpen && (
         <ImportTeamsModal
           onClose={() => setImportOpen(false)}
