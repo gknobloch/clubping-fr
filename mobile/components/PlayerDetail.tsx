@@ -18,6 +18,7 @@ import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
+import { DelegationsSection } from '@/components/DelegationsSection'
 import { mayEditPerson } from '@shared/lib/linkedProfiles'
 import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
@@ -292,6 +293,14 @@ export function PlayerDetail({
               </View>
             )}
           </View>
+        )}
+
+        {/* Délégations (#682) — pour qui ne peut pas le demander lui-même (un
+            enfant sans adresse) : l'administrateur général, ou celui de tous
+            les clubs de la personne — la règle du web (`mayEditPerson`).
+            Chacun gère les siennes depuis « Mon compte ». */}
+        {!!player.personId && player.id !== user?.id && !!user && mayEditPerson(player, user, players) && (
+          <DelegationsSection personId={player.personId} mode="admin" />
         )}
 
         {/* Active phase teams — list style, aligned with the team detail roster */}

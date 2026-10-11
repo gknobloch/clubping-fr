@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
 import { useAuth } from '@/contexts/AuthContext'
-import { addDelegateByEmail, fetchDelegations, removeDelegate } from '@/utils/api'
+import { useAppData } from '@/contexts/DataContext'
+import { addDelegate, fetchDelegations, removeDelegate } from '@/utils/api'
+import { matchesSearch } from '@shared/lib/playerSearch'
 import type { DelegationPerson, Delegations } from '@shared/types'
 
 const nameOf = (p: DelegationPerson) => [p.firstName, p.lastName].filter(Boolean).join(' ') || p.email || 'Sans nom'
@@ -17,9 +19,16 @@ const nameOf = (p: DelegationPerson) => [p.firstName, p.lastName].filter(Boolean
  * Every write waits for the API and reloads, never optimistic: a parent told
  * their child's profiles will open, when the server refused, would find out
  * at the gymnasium. Offline it says so instead.
+ *
+ * `admin` is the same section on a licensee's fiche (#682), the web's `admin`
+ * mode: for someone who cannot sign in to ask — a child with no address —
+ * whoever administers every club of theirs picks a member instead of typing
+ * an address, and there is no « Vous gérez » side to show.
  */
-export function DelegationsSection({ personId }: { personId: string }) {
+export function DelegationsSection({ personId, mode = 'self' }: { personId: string; mode?: 'self' | 'admin' }) {
   const { refreshProfiles } = useAuth()
+  const { users = [] } = useAppData()
+  const admin = mode === 'admin'
   const [delegations, setDelegations] = useState<Delegations | null>(null)
   const [failed, setFailed] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -38,11 +47,24 @@ export function DelegationsSection({ personId }: { personId: string }) {
 
   useEffect(() => { void load() }, [load])
 
-  async function name() {
-    if (!email.trim()) return
+  // Members to pick from: one entry per person, never the person themselves
+  // nor someone already named — the web's list, from the same rule.
+  const candidates = useMemo(() => {
+    if (!admin || !email.trim()) return []
+    const taken = new Set([personId, ...(delegations?.delegates ?? []).map((d) => d.id)])
+    const seen = new Set<string>()
+    return users
+      .filter((u) => u.personId && !taken.has(u.personId))
+      .filter((u) => matchesSearch(`${u.firstName ?? ''} ${u.lastName ?? ''} ${u.email ?? ''}`, email))
+      .filter((u) => (seen.has(u.personId!) ? false : (seen.add(u.personId!), true)))
+      .slice(0, 8)
+  }, [admin, email, users, personId, delegations])
+
+  async function name(target?: { delegateId: string }) {
+    if (!target && !email.trim()) return
     setSaving(true)
     setRefusal(null)
-    const result = await addDelegateByEmail(personId, email.trim())
+    const result = await addDelegate(personId, target ?? { email: email.trim() })
     setSaving(false)
     if (!result.ok) {
       setRefusal(result.message)
@@ -54,7 +76,9 @@ export function DelegationsSection({ personId }: { personId: string }) {
   }
 
   function withdraw(delegate: DelegationPerson) {
-    Alert.alert(`Retirer ${nameOf(delegate)} ?`, 'Cette personne ne pourra plus ouvrir vos profils.', [
+    Alert.alert(`Retirer ${nameOf(delegate)} ?`, admin
+      ? 'Cette personne ne pourra plus ouvrir ses profils.'
+      : 'Cette personne ne pourra plus ouvrir vos profils.', [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Retirer',
@@ -99,7 +123,7 @@ export function DelegationsSection({ personId }: { personId: string }) {
       ) : (
         <>
           <View style={styles.header}>
-            <Text style={styles.subTitle}>Peuvent ouvrir vos profils</Text>
+            <Text style={styles.subTitle}>{admin ? 'Peuvent ouvrir ses profils' : 'Peuvent ouvrir vos profils'}</Text>
             {!adding && (
               <TouchableOpacity
                 testID="delegate-add"
@@ -131,7 +155,53 @@ export function DelegationsSection({ personId }: { personId: string }) {
             </View>
           ))}
 
-          {adding && (
+          {adding && admin && (
+            <View style={styles.form}>
+              <Text style={styles.label}>Choisir un membre</Text>
+              <Text style={styles.hint}>
+                Il ouvrira ses profils depuis son propre compte, sans code.
+              </Text>
+              <TextInput
+                testID="delegate-search"
+                value={email}
+                onChangeText={setEmail}
+                autoCorrect={false}
+                placeholder="Rechercher un membre"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.input}
+              />
+              {candidates.map((u) => (
+                <TouchableOpacity
+                  key={u.personId}
+                  testID={`delegate-pick-${u.id}`}
+                  onPress={() => void name({ delegateId: u.personId! })}
+                  disabled={saving}
+                  style={styles.row}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.rowText}>
+                    <Text style={styles.rowName}>{[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}</Text>
+                    {u.email ? <Text style={styles.hint} numberOfLines={1}>{u.email}</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {email.trim() !== '' && candidates.length === 0 && (
+                <Text style={styles.hint}>Aucun membre ne correspond.</Text>
+              )}
+              {refusal ? <Text style={styles.refusal} accessibilityRole="alert">{refusal}</Text> : null}
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  onPress={() => { setAdding(false); setRefusal(null); setEmail('') }}
+                  style={[styles.button, styles.neutral]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.neutralText}>Annuler</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {adding && !admin && (
             <View style={styles.form}>
               <Text style={styles.label}>Adresse e-mail du délégué</Text>
               <Text style={styles.hint}>
@@ -170,7 +240,7 @@ export function DelegationsSection({ personId }: { personId: string }) {
             </View>
           )}
 
-          {delegations.represents.length > 0 && (
+          {!admin && delegations.represents.length > 0 && (
             <>
               <Text style={[styles.subTitle, styles.spaced]}>Vous gérez</Text>
               {delegations.represents.map((p) => (

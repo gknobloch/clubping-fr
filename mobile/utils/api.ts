@@ -183,11 +183,22 @@ export type DelegateOutcome = { ok: true } | { ok: false; message: string }
 
 /** Name a delegate by the address they sign in with — the person's own gesture. */
 export async function addDelegateByEmail(personId: string, email: string): Promise<DelegateOutcome> {
+  return addDelegate(personId, { email })
+}
+
+/**
+ * Name a delegate — by address (the person), or by picking a member (an
+ * administrator, for someone who cannot sign in: #682). The API accepts a
+ * member's id as well as a person's.
+ */
+export async function addDelegate(
+  personId: string, target: { email: string } | { delegateId: string },
+): Promise<DelegateOutcome> {
   try {
     const res = await fetch(apiUrl(`/people/${encodeURIComponent(personId)}/delegates`), {
       method: 'POST',
       headers: dataHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(target),
     })
     if (res.ok) return { ok: true }
     const body = (await res.json().catch(() => null)) as { message?: string } | null
