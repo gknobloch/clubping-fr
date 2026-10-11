@@ -502,7 +502,7 @@ export function TeamsPage() {
                       </p>
                       {division && (
                         <p className="truncate text-xs font-medium text-slate-500">
-                          {division.displayName}{poolLabel(team, groups) ? ` · ${poolLabel(team, groups)}` : ''}
+                          {division.displayName}{poolLabel(team, groups, { divisions, competitions }) ? ` · ${poolLabel(team, groups, { divisions, competitions })}` : ''}
                         </p>
                       )}
                       {team.isArchived && (

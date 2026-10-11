@@ -250,6 +250,12 @@ export interface Group {
    * FFTT identity of the group itself.
    */
   groupId?: string
+  /**
+   * What the federation's calendar says about the poule (#647): where a club
+   * plays, who the match sheets go to, the deadline for postponements — one
+   * line each. Shown on the match screen.
+   */
+  note?: string
 }
 
 /**

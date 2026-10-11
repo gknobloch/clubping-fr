@@ -231,7 +231,7 @@ export function MatchDetail({
             <MatchHeader
               matchDayNumber={matchDay.number}
               divisionLabel={div?.displayName}
-              poolLabel={poolLabel(team, groups)}
+              poolLabel={poolLabel(team, groups, { divisions, competitions })}
               teamColor={team.color}
               teamNumber={team.number}
               isHome={isHome}

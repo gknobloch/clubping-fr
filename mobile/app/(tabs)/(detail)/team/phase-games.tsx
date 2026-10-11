@@ -48,7 +48,7 @@ function shortDate(iso: string): string {
 
 export default function PhaseGamesScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>()
-  const { teams, players, clubs, phases, divisions, groups, matchDays, games, gameSelections } = useAppData()
+  const { teams, players, clubs, phases, divisions, competitions = [], groups, matchDays, games, gameSelections } = useAppData()
   const navigation = useNavigation()
   const router = useRouter()
   const openTeam = useOpenTeam()
@@ -293,7 +293,7 @@ export default function PhaseGamesScreen() {
                 <MatchHeader
                   matchDayNumber={md.number}
                   divisionLabel={divisions.find((d) => d.id === team.divisionId)?.displayName}
-                  poolLabel={poolLabel(team, groups)}
+                  poolLabel={poolLabel(team, groups, { divisions, competitions })}
                   teamColor={team.color}
                   teamNumber={team.number}
                   isHome={isHome}

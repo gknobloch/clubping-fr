@@ -78,7 +78,7 @@ export function TeamDetail({
   const team = teams.find((t) => t.id === id)
   const club = clubs.find((c) => c.id === team?.clubId)
   const division = divisions.find((d) => d.id === team?.divisionId)
-  const pool = team ? poolLabel(team, groups) : undefined
+  const pool = team ? poolLabel(team, groups, { divisions, competitions }) : undefined
   const isCaptain = !!(user && team && mayManageTeam(user, team))
 
   // The FFTT did not list these licences this season (#488): a squad list is

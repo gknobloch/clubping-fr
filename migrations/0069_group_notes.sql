@@ -1,0 +1,11 @@
+-- 0069 — a poule's notes (#647)
+--
+--   groups.note   what the federation's calendar says about the poule
+--
+-- An AGR calendar ends on a few lines that belong to the poule rather than to
+-- any match: « RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT », who the match sheets
+-- go to, the deadline for postponements. The import keeps them here, and the
+-- match screen shows them — the venue line is what a visiting captain needs on
+-- the evening. Free text, NULL when the calendar says nothing; the next import
+-- of the same poule replaces it, the document being the authority.
+ALTER TABLE groups ADD COLUMN note TEXT;
