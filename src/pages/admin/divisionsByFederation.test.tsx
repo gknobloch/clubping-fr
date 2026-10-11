@@ -14,6 +14,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 const { GroupsPage } = await import('./GroupsPage')
 const { TeamsPage } = await import('./TeamsPage')
+const { DivisionsPage } = await import('./DivisionsPage')
 
 // #660 — a division picker offers one federation's divisions: the general
 // admin chooses which, a club is held to its own, and the FFTT imports are
@@ -42,6 +43,7 @@ const landser = club('club-agr-680036', 'Landser ASL', {
 
 const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat AGR', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },
+  { id: 'c-fftt', displayName: 'Championnat de France', categories: [], federationId: 'fftt', sortOrder: 1, isArchived: false },
 ]
 const division = (id: string, displayName: string, rank: number, competitionId?: string): Division => ({
   id, phaseId: competitionId ? agrPhase.id : phase.id, displayName, rank, playersPerGame: 4, isArchived: false, competitionId,
@@ -189,5 +191,30 @@ describe('Équipes — the club’s federations only', () => {
     renderPage(<TeamsPage />)
     expect(screen.queryByRole('radiogroup', { name: 'Fédération' })).not.toBeInTheDocument()
     expect(screen.getByText('Honneur · Poule A')).toBeInTheDocument()
+  })
+})
+
+describe('Divisions — a division is its phase’s federation’s (#645)', () => {
+  it('offers the AGR’s phases and competitions only, on the AGR — and no « Aucune », which is the FFTT', () => {
+    as('general_admin')
+    renderPage(<DivisionsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
+    expect(screen.getByText('Excellence')).toBeInTheDocument()
+    expect(screen.queryByText('GE 3')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une division' }))
+    const dialog = screen.getByRole('dialog')
+    expect(optionsOf(within(dialog).getByLabelText('Phase'))).toEqual(['2026/2027 Phase 1'])
+    const competition = within(dialog).getByLabelText('Compétition') as HTMLSelectElement
+    expect(optionsOf(competition)).toEqual(['Championnat AGR'])
+    expect(competition.value).toBe('c-agr')
+  })
+
+  it('offers the FFTT’s competitions on the FFTT, « Aucune » first', () => {
+    as('general_admin')
+    renderPage(<DivisionsPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une division' }))
+    const dialog = screen.getByRole('dialog')
+    expect(optionsOf(within(dialog).getByLabelText('Compétition')))
+      .toEqual(['Aucune (aucune restriction de catégorie)', 'Championnat de France'])
   })
 })

@@ -3839,9 +3839,33 @@ app.delete('/phases/:id', async (c) => {
 })
 
 // --- Divisions ---
+/**
+ * Why a division cannot sit in this phase with this competition, or null:
+ * both are one federation's (#645), and an AGR championship filed in the
+ * FFTT's phase is a division no AGR page would list. No competition is the
+ * FFTT's (#643). An unknown phase is left to the insert to refuse.
+ */
+async function divisionFederationRefusal(
+  db: Env['Bindings']['DB'], phaseId: string, competitionId: string | null,
+): Promise<string | null> {
+  const phase = await db.prepare("SELECT COALESCE(federation_id, 'fftt') AS f FROM phases WHERE id = ?")
+    .bind(phaseId).first<{ f: string }>()
+  if (!phase) return null
+  const competition = competitionId
+    ? await db.prepare("SELECT COALESCE(federation_id, 'fftt') AS f FROM competitions WHERE id = ?")
+      .bind(competitionId).first<{ f: string }>()
+    : null
+  const competitionFederation = competition?.f ?? 'fftt'
+  return phase.f === competitionFederation
+    ? null
+    : 'Cette compétition n’est pas de la fédération de cette phase.'
+}
+
 app.post('/divisions', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
+  const refusal = await divisionFederationRefusal(c.env.DB, d.phaseId, d.competitionId || null)
+  if (refusal) return c.json({ error: 'federation_mismatch', message: refusal }, 400)
   await c.env.DB.prepare(
     'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null).run()
@@ -3852,6 +3876,18 @@ app.patch('/divisions/:id', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
+  if ('phaseId' in p || 'competitionId' in p) {
+    const row = await c.env.DB.prepare('SELECT phase_id, competition_id FROM divisions WHERE id = ?')
+      .bind(id).first<{ phase_id: string; competition_id: string | null }>()
+    if (row) {
+      const refusal = await divisionFederationRefusal(
+        c.env.DB,
+        'phaseId' in p ? p.phaseId : row.phase_id,
+        'competitionId' in p ? (p.competitionId || null) : row.competition_id,
+      )
+      if (refusal) return c.json({ error: 'federation_mismatch', message: refusal }, 400)
+    }
+  }
   const s: string[] = [], v: unknown[] = []
   if ('phaseId' in p) { s.push('phase_id = ?'); v.push(p.phaseId) }
   if ('displayName' in p) { s.push('display_name = ?'); v.push(p.displayName) }

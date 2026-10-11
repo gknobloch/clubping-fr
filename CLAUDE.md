@@ -734,6 +734,14 @@ invisible dans le diff comme dans la revue.
 - L'administrateur général crée une saison sans fédération, puis ses phases
   en choisissant la fédération (`/phases`) ; elle ne change plus ensuite —
   l'id la porte.
+- **Une division est de la fédération de sa phase** : sa compétition doit
+  l'être aussi (aucune compétition = la FFTT, #643). Le formulaire de
+  Divisions n'offre que les phases et les compétitions de la fédération à
+  l'écran, et l'API refuse le reste (400 `federation_mismatch`,
+  `divisionFederationRefusal`). Sans cela, un championnat AGR créé dans la
+  phase de la FFTT — avant qu'une phase AGR existe — n'apparaissait sur aucune
+  page AGR. 0072 range ceux déjà mal classés dans la phase de leur fédération
+  (même saison, même nom), tant qu'aucune poule n'y pend.
 - **La fédération d'abord, puis la phase** : Journées, Équipes, Groupes et
   Divisions passent par `phaseScope` — les fédérations proposées (celles du
   club, toutes pour l'administrateur général), celle en vigueur, ses phases
