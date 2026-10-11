@@ -12,7 +12,7 @@ import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, orderedCategoryPicks, type PlayerCategory } from '@/lib/playerCategories'
-import { FFTT_FEDERATION_ID } from '@/lib/federations'
+import { FFTT_FEDERATION_ID, federationOfCompetition, federationOfPhase } from '@/lib/federations'
 import { phaseScope } from '@/lib/phaseScope'
 import { FederationSwitch } from '@/components/FederationSwitch'
 
@@ -88,6 +88,18 @@ export function DivisionsPage() {
     () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
     [competitions],
   )
+  // A division is in one phase and one competition, and both are one
+  // federation's (#645): the form offers the competitions of its phase's
+  // federation only — an AGR championship filed in the FFTT's phase is a
+  // division no AGR page lists. One already chosen stays offered, so editing
+  // never swaps it silently. The API holds the same rule.
+  const federationOfPhaseId = (phaseId: string) => {
+    const p = phases.find((x) => x.id === phaseId)
+    return p ? federationOfPhase(p) : scope.federationId
+  }
+  const competitionsFor = (phaseId: string, current: string) => activeCompetitions.filter(
+    (c) => federationOfCompetition(c) === federationOfPhaseId(phaseId) || c.id === current,
+  )
   const competitionName = (id: string | undefined) =>
     competitions.find((c) => c.id === id)?.displayName ?? '—'
   const competitionCategories = (id: string) => {
@@ -152,13 +164,16 @@ export function DivisionsPage() {
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    const phaseId = filterPhase?.id || phases[0]?.id || ''
+    const phaseId = filterPhase?.id || orderedPhases[0]?.id || ''
     setForm({
       phaseId,
       displayName: '',
       parentId: '',
       playersPerGame: 4,
-      competitionId: '',
+      // Outside the FFTT a division needs its competition — none would file
+      // it under the FFTT (#643) —, so the federation's first is preset.
+      competitionId: federationOfPhaseId(phaseId) === FFTT_FEDERATION_ID
+        ? '' : competitionsFor(phaseId, '')[0]?.id ?? '',
       restrictCategories: false,
       categories: [],
       secondPhase: '',
@@ -415,7 +430,8 @@ export function DivisionsPage() {
                     onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, parentId: '' }))}
                     className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
-                    {phases.map((p) => (
+                    {/* The phases of the federation on screen (#645). */}
+                    {orderedPhases.map((p) => (
                       <option key={p.id} value={p.id}>{p.displayName}</option>
                     ))}
                   </select>
@@ -464,8 +480,11 @@ export function DivisionsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, competitionId: e.target.value }))}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 >
-                  <option value="">Aucune (aucune restriction de catégorie)</option>
-                  {activeCompetitions.map((c) => (
+                  {/* No competition means the FFTT (#643): only an FFTT phase offers it. */}
+                  {(federationOfPhaseId(form.phaseId) === FFTT_FEDERATION_ID || !form.competitionId) && (
+                    <option value="">Aucune (aucune restriction de catégorie)</option>
+                  )}
+                  {competitionsFor(form.phaseId, form.competitionId).map((c) => (
                     <option key={c.id} value={c.id}>{c.displayName}</option>
                   ))}
                 </select>
