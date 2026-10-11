@@ -113,7 +113,7 @@ test.describe('General admin — Saisons', () => {
     await page.getByRole('link', { name: 'Phases' }).click()
     for (const phaseName of ['Phase 1', 'Phase 2']) {
       await page.getByRole('button', { name: 'Ajouter une phase' }).click()
-      await page.getByLabel('Saison').selectOption({ label: '2026/2027' })
+      await page.getByLabel('Saison').selectOption({ label: '2026/2027 · FFTT' })
       await page.getByLabel('Phase', { exact: true }).selectOption(phaseName)
       await page.getByRole('button', { name: 'Enregistrer' }).click()
       await expect(page.getByRole('cell', { name: `2026/2027 ${phaseName}` })).toBeVisible()
