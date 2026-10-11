@@ -102,7 +102,7 @@ export function PlayerDetail({
 
   // Each federation of the club has its active phase (#645).
   const playerFederations = club ? clubFederationIds(club) : ['fftt']
-  const activePhaseIds = activePhaseIdsOf(phases, seasons, playerFederations)
+  const activePhaseIds = activePhaseIdsOf(phases, playerFederations)
   const playerTeams = teams.filter(
     (t) => activePhaseIds.includes(t.phaseId) && t.playerIds?.includes(id ?? ''),
   )
@@ -111,7 +111,7 @@ export function PlayerDetail({
   // phase still has them. One per federation, each under its own name: points
   // at the FFTT, a classement at the AGR (#646).
   const rankings = currentRankings({
-    playerId: id, federationIds: playerFederations, phases, seasons, rows: playerPhasePoints,
+    playerId: id, federationIds: playerFederations, phases, rows: playerPhasePoints,
   })
   const rankingRowLabel = (r: { federationId: string; label: string }) =>
     rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
@@ -134,7 +134,7 @@ export function PlayerDetail({
   const brulageTeam = (() => {
     if (!player) return null
     for (const federationId of playerFederations) {
-      const activePhase = activePhaseOf(phases, seasons, federationId)
+      const activePhase = activePhaseOf(phases, federationId)
       if (!activePhase) continue
       const clubTeamsInPhase = teams.filter(
         (t) => t.phaseId === activePhase.id && t.clubId === player.clubId,

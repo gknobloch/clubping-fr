@@ -223,9 +223,9 @@ export function MatchDaysPage() {
   // active phases. A link naming a phase opens on that phase's federation.
   const [chosenFederation, setChosenFederation] = useState<string | undefined>(() => {
     const opened = openedPhaseId ? phases.find((p) => p.id === openedPhaseId) : undefined
-    return opened ? federationOfPhase(opened, seasons) : undefined
+    return opened ? federationOfPhase(opened) : undefined
   })
-  const scope = phaseScope({ federations, seasons, phases, club: scopedClub, chosen: chosenFederation })
+  const scope = phaseScope({ federations, phases, club: scopedClub, chosen: chosenFederation })
 
   // Opens on the federation's active phase, or the one a link names; a deep
   // link to a fixture overrides it below.
@@ -778,7 +778,7 @@ export function MatchDaysPage() {
   // Another federation is another set of phases: open on its own default.
   const handleFederationChange = (federationId: string) => {
     setChosenFederation(federationId)
-    const next = phaseScope({ federations, seasons, phases, club: scopedClub, chosen: federationId }).defaultPhase
+    const next = phaseScope({ federations, phases, club: scopedClub, chosen: federationId }).defaultPhase
     if (next) handlePhaseChange(next.id)
     else setSelectedPhaseId('')
   }
@@ -832,7 +832,7 @@ export function MatchDaysPage() {
 
     setSelectedPhaseId(team.phaseId)
     const teamPhase = phases.find((p) => p.id === team.phaseId)
-    if (teamPhase) setChosenFederation(federationOfPhase(teamPhase, seasons))
+    if (teamPhase) setChosenFederation(federationOfPhase(teamPhase))
     // Claim the phase so the smart-offset effect does not re-centre on the
     // current week and undo the positioning below.
     autoPositionedPhaseRef.current = team.phaseId

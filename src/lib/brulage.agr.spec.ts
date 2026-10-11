@@ -6,9 +6,12 @@ import type { Game, GameSelection, MatchDay, Phase, Team } from '@/types'
 // never plays below it, and the fourth match above it in the SEASON — both
 // phases — makes them titulaire of the lowest higher team they played in.
 
+// The shared season 2026/2027 (#645): the AGR's two phases, and the FFTT's
+// Phase 1, whose matches the AGR's count must never see.
 const phases: Phase[] = [
-  { id: 'p1', seasonId: 'agr-27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active' },
-  { id: 'p2', seasonId: 'agr-27', name: 'Phase 2', displayName: '2026/2027 Phase 2', status: 'upcoming' },
+  { id: 'p1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active', federationId: 'agr' },
+  { id: 'p2', seasonId: '27', name: 'Phase 2', displayName: '2026/2027 Phase 2', status: 'upcoming', federationId: 'agr' },
+  { id: 'f1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active' },
 ]
 const team = (phaseId: string, number: number, playerIds: string[] = []): Team => ({
   id: `${phaseId}-t${number}`, clubId: 'landser', phaseId, number, divisionId: `div-${number}`,
@@ -93,5 +96,18 @@ describe('AGR titularity (#651)', () => {
     expect(agrTitularityWarning([{ name: 'Léo Martin', team: 3 }]))
       .toBe('Léo Martin deviendra titulaire de l’équipe 3 : quatrième rencontre au-dessus de son équipe cette saison (art. 29).')
     expect(agrTitularityWarning([])).toBeNull()
+  })
+
+  it('never counts the FFTT’s matches of the same season (#645)', () => {
+    // Kembs plays both: Léo fielded four times in the FFTT's team 1.
+    const ffttTeam = { ...team('f1', 1), id: 'f1-t1', groupId: 'f1-g1' }
+    const withFftt = { ...ctx, teams: [...teams, ffttTeam], divisions: [...ctx.divisions, { id: 'div-f', competitionId: 'c-fftt' }],
+      competitions: [...ctx.competitions, { id: 'c-fftt', federationId: 'fftt' }] }
+    ffttTeam.divisionId = 'div-f'
+    const ffttDays = [1, 2, 3, 4].map((j) => ({ id: `f1-g1-j${j}`, groupId: 'f1-g1', number: j, date: '2026-10-01' }))
+    const ffttGames = ffttDays.map((m) => ({ id: `g-${m.id}`, matchDayId: m.id, homeTeamId: 'x', awayTeamId: 'y' }))
+    const sels = ffttDays.map((m) => ({ gameId: `g-${m.id}`, teamId: 'f1-t1', playerIds: ['leo'] }))
+    expect(computeBrulage('leo', phase1, [...matchDays, ...ffttDays], [...games, ...ffttGames], sels, null, withFftt).burnedIntoTeamNumber)
+      .toBeNull()
   })
 })

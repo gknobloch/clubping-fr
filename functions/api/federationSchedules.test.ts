@@ -22,10 +22,10 @@ function world() {
     ('${LANDSER}', '', 'Landser ASL', 0), ('${KEMBS}', '06680140', 'Kembs TT', 0), ('${RIXHEIM}', '06680011', 'Rixheim PPA', 0)`)
   d1.exec(`INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES
     ('${LANDSER}', 'agr', '680036', NULL), ('${KEMBS}', 'agr', '680021', 'KEMBS ASL TT')`)
-  d1.exec("INSERT INTO seasons (id, display_name, status, federation_id) VALUES ('agr-27', '2026/2027', 'active', 'agr')")
-  d1.exec(`INSERT INTO phases (id, season_id, name, display_name, status) VALUES
-    ('phase-agr-27-1', 'agr-27', 'Phase 1', '2026/2027 Phase 1', 'active'),
-    ('phase-agr-27-2', 'agr-27', 'Phase 2', '2026/2027 Phase 2', 'upcoming')`)
+  d1.exec("INSERT INTO seasons (id, display_name, status) VALUES ('27', '2026/2027', 'active')")
+  d1.exec(`INSERT INTO phases (id, season_id, name, display_name, status, federation_id) VALUES
+    ('phase-agr-27-1', '27', 'Phase 1', '2026/2027 Phase 1', 'active', 'agr'),
+    ('phase-agr-27-2', '27', 'Phase 2', '2026/2027 Phase 2', 'upcoming', 'agr')`)
   d1.exec("INSERT INTO competitions (id, display_name, federation_id) VALUES ('comp-agr', 'Championnat Messieurs', 'agr')")
   addMember(d1.exec, { id: 'ga', firstName: 'Jade', email: 'jade@example.fr', clubId: null, role: 'general_admin' })
   addMember(d1.exec, { id: 'landser-admin', firstName: 'Lou', email: 'lou@example.fr', clubId: LANDSER, role: 'club_admin' })
@@ -113,8 +113,8 @@ describe('importing an AGR calendar (#647)', () => {
 
   it('refuses a phase or competition of another federation, and a federation the app imports from', async () => {
     const d1 = world()
-    d1.exec("INSERT INTO seasons (id, display_name, status) VALUES ('27', '2026/2027', 'active')")
-    d1.exec("INSERT INTO phases (id, season_id, name, display_name, status) VALUES ('phase-27-1', '27', 'Phase 1', 'x', 'active')")
+    // The FFTT's Phase 1 of the same, shared season (#645).
+    d1.exec("INSERT INTO phases (id, season_id, name, display_name, status, federation_id) VALUES ('phase-27-1', '27', 'Phase 1', 'x', 'active', 'fftt')")
     const ga = await as(d1, 'ga')
     const body = payload(doc(PROM_HONNEUR_A_PHASE_1), 'phase-agr-27-1', { 'LANDSER ASL': LANDSER })
     expect((await ga({ ...body, phaseId: 'phase-27-1' })).status).toBe(400)

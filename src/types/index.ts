@@ -108,26 +108,26 @@ export type LifecycleStatus = 'active' | 'upcoming' | 'archived'
 export type SeasonStatus = LifecycleStatus
 
 export interface Season {
-  /**
-   * FFTT-aligned numeric id as text: endYear − 2000 (e.g. "26" for 2025/2026);
-   * another federation's carries it as a prefix ("agr-27", #645).
-   */
+  /** Numeric id as text: endYear − 2000 (e.g. "26" for 2025/2026). Shared by every federation (#645). */
   id: string
   displayName: string
-  /** At most one season is 'active' at a time in each federation (#645). */
+  /** At most one season is 'active' at a time — for every federation (#645). */
   status: SeasonStatus
-  /** The federation whose calendar this is (#645); absent means the FFTT. */
-  federationId?: string
 }
 
 export interface Phase {
-  /** "phase-{seasonId}-{ffttPhaseId}", e.g. "phase-27-1" (2026/2027 Phase 1). */
+  /**
+   * "phase-{seasonId}-{n}", e.g. "phase-27-1" (2026/2027 Phase 1); another
+   * federation's carries its prefix, "phase-agr-27-1" (`phaseIdFor`, #645).
+   */
   id: string
   seasonId: string
   name: string
   displayName: string
   /** At most one phase is 'active' at a time in each federation, across its seasons (#645). */
   status: LifecycleStatus
+  /** The federation whose calendar this phase is (#645); absent means the FFTT. */
+  federationId?: string
 }
 
 export interface Division {

@@ -40,7 +40,7 @@ import { fonts } from '@/constants/typography'
 // way out.
 // ---------------------------------------------------------------------------
 export default function EquipesScreen() {
-  const { teams, clubs, phases, seasons = [], federations = [], divisions, competitions = [], groups, refreshing, refresh } = useAppData()
+  const { teams, clubs, phases, federations = [], divisions, competitions = [], groups, refreshing, refresh } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const { isTwoPane } = useLayout()
@@ -55,7 +55,7 @@ export default function EquipesScreen() {
   // switcher (chronological by name), its active one by default.
   const viewerClub = user?.role === 'general_admin' ? undefined : clubs.find((c) => c.id === user?.clubId)
   const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
-  const scope = phaseScope({ federations, seasons, phases, club: viewerClub, chosen: chosenFederation })
+  const scope = phaseScope({ federations, phases, club: viewerClub, chosen: chosenFederation })
   const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
@@ -85,7 +85,7 @@ export default function EquipesScreen() {
       const team = visibleTeams.find((t) => t.id === id)
       if (team) {
         const teamPhase = phases.find((p) => p.id === team.phaseId)
-        if (teamPhase) setChosenFederation(federationOfPhase(teamPhase, seasons))
+        if (teamPhase) setChosenFederation(federationOfPhase(teamPhase))
         setPhaseId(team.phaseId)
       }
       setPendingScroll(id)

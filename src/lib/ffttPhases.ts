@@ -21,6 +21,18 @@ export function localPhaseId(seasonId: string | number, ffttPhaseId: string | nu
   return `phase-${seasonId}-${ffttPhaseId}`
 }
 
+/**
+ * A phase's id in any federation (#645): the FFTT's is `localPhaseId`'s
+ * ("phase-27-1"), another federation's carries its prefix ("phase-agr-27-1")
+ * — two federations play a Phase 1 in the same season, and team ids derive
+ * from the phase (#282).
+ */
+export function phaseIdFor(federationId: string | undefined, seasonId: string | number, phaseNumber: string | number): string {
+  return !federationId || federationId === 'fftt'
+    ? localPhaseId(seasonId, phaseNumber)
+    : `phase-${federationId}-${seasonId}-${phaseNumber}`
+}
+
 /** FFTT phase id for a phase name ("Phase 2" → "2"), or null when unknown. */
 export function ffttPhaseIdForName(name: string): string | null {
   return FFTT_PHASES.find((p) => p.name === name)?.id ?? null

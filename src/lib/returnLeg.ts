@@ -1,4 +1,5 @@
 import type { Division, Phase, Team } from '@/types'
+import { federationOfPhase } from '@/lib/federations'
 
 /**
  * Phase retour (#649) — what the screens need to offer preparing one. The
@@ -9,11 +10,15 @@ import type { Division, Phase, Team } from '@/types'
 /** The number in a phase's name: « Phase 2 » → 2. */
 const phaseNumber = (p: Pick<Phase, 'name'>) => Number(/(\d+)/.exec(p.name)?.[1])
 
-/** The phase after this one in its season — « Phase 2 » after « Phase 1 ». */
+/**
+ * The phase after this one in its season and its federation — the AGR's
+ * « Phase 2 » after its « Phase 1 », never the FFTT's in the same season (#645).
+ */
 export function nextPhaseOf(phases: readonly Phase[], phase: Phase | undefined): Phase | undefined {
   const n = phase ? phaseNumber(phase) : NaN
   if (!phase || !Number.isInteger(n)) return undefined
-  return phases.find((p) => p.seasonId === phase.seasonId && phaseNumber(p) === n + 1)
+  return phases.find((p) => p.seasonId === phase.seasonId
+    && federationOfPhase(p) === federationOfPhase(phase) && phaseNumber(p) === n + 1)
 }
 
 /**

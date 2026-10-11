@@ -18,8 +18,8 @@ const landser: Club = {
   id: 'landser', affiliationNumber: '', displayName: 'Landser ASL', isArchived: false, addresses: [], channels: [],
   affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }],
 }
-const seasons: Season[] = [{ id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' }]
-const phases: Phase[] = [{ id: 'phase-agr-27-1', seasonId: 'agr-27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active' }]
+const seasons: Season[] = [{ id: '27', displayName: '2026/2027', status: 'active' }]
+const phases: Phase[] = [{ id: 'phase-agr-27-1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active', federationId: 'agr' }]
 const lucas: Player = {
   id: 'lucas', firstName: 'Lucas', lastName: 'Martin', licenseNumber: '', phone: '', status: 'active', clubId: 'landser',
   licences: [{ federationId: 'agr', number: '1251100' }],

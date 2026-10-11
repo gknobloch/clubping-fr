@@ -32,7 +32,7 @@ export default function MesMatchsScreen() {
   const { playerId } = useLocalSearchParams<{ playerId?: string }>()
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, seasons = [], divisions, competitions = [], groups, gameSelections, refreshing, refresh,
+    clubs, teams, players, matchDays, games, phases, divisions, competitions = [], groups, gameSelections, refreshing, refresh,
   } = useAppData()
 
   // The player whose matches we show — the param, else the logged-in player.
@@ -88,7 +88,7 @@ export default function MesMatchsScreen() {
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [phases, participated],
   )
-  const activePhase = activePhaseOf(phases, seasons)
+  const activePhase = activePhaseOf(phases)
   const fallbackPhase =
     activePhase && participated.has(activePhase.id)
       ? activePhase

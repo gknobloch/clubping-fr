@@ -144,10 +144,10 @@ export default function JourneesScreen() {
   const myClub = clubs.find((c) => c.id === user?.clubId)
   const [chosenFederation, setChosenFederation] = useState<string | undefined>(() => {
     const openedPhase = opened.phase ? phases.find((p) => p.id === opened.phase) : undefined
-    return openedPhase ? federationOfPhase(openedPhase, seasons) : undefined
+    return openedPhase ? federationOfPhase(openedPhase) : undefined
   })
   const scope = phaseScope({
-    federations, seasons, phases, club: user?.role === 'general_admin' ? undefined : myClub, chosen: chosenFederation,
+    federations, phases, club: user?.role === 'general_admin' ? undefined : myClub, chosen: chosenFederation,
   })
   const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(opened.phase || undefined)

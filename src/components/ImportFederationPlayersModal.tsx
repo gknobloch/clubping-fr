@@ -30,14 +30,14 @@ export function ImportFederationPlayersModal({
   onClose: () => void
 }) {
   const {
-    clubs, phases, seasons = [], federations = [], players, users = [], playerPhasePoints,
+    clubs, phases, federations = [], players, users = [], playerPhasePoints,
     addPlayer, updatePlayer, setPlayerPhasePoints,
   } = useAppData()
   const club = clubs.find((c) => c.id === clubId)
   const federation = federations.find((f) => f.id === federationId)
   const importFederation: ImportFederation = { id: federationId, shortName: federation?.shortName ?? federationId }
   const affiliation = club ? clubAffiliations(club).find((a) => a.federationId === federationId) : undefined
-  const phase = activePhaseOf(phases, seasons, federationId)
+  const phase = activePhaseOf(phases, federationId)
 
   const [licences, setLicences] = useState<FfttLicence[]>([])
   const [unread, setUnread] = useState<string[]>([])

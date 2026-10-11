@@ -22,7 +22,7 @@ export function GroupsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
-    groups: allGroups, divisions, phases, seasons = [], teams, clubs, competitions = [], federations = [],
+    groups: allGroups, divisions, phases, teams, clubs, competitions = [], federations = [],
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
@@ -41,7 +41,7 @@ export function GroupsPage() {
 
   // Phase switcher — that federation's phases (#645), its active one by
   // default, chronological order (#237).
-  const scope = phaseScope({ federations, seasons, phases, club: viewerClub, chosen: federationId })
+  const scope = phaseScope({ federations, phases, club: viewerClub, chosen: federationId })
   const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
@@ -129,7 +129,7 @@ export function GroupsPage() {
   // the page's federation, that federation's default otherwise.
   const phaseOfFederation = (fedId: string) => (fedId === federationId
     ? phase?.id
-    : phaseScope({ federations, seasons, phases, chosen: fedId }).defaultPhase?.id)
+    : phaseScope({ federations, phases, chosen: fedId }).defaultPhase?.id)
   const dialogPhaseId = editing
     ? divisions.find((d) => d.id === editing.divisionId)?.phaseId
     : phaseOfFederation(form.federationId)

@@ -13,7 +13,7 @@
 // The rule is a table here rather than columns on `federations`: there are two
 // federations and both are known, and a third would add one line. What every
 // screen must not do is guess — read the label and the direction from here.
-import type { Phase, PlayerPhasePoints, Season } from '../types'
+import type { Phase, PlayerPhasePoints } from '../types'
 import { FFTT_FEDERATION_ID, activePhaseOf } from './federations'
 import { pointsFor } from './phasePoints'
 
@@ -72,16 +72,15 @@ export function compareRanking(federationId: string | undefined, a: string | und
  * both; Landser's holds the AGR's alone.
  */
 export function currentRankings({
-  playerId, federationIds, phases, seasons, rows,
+  playerId, federationIds, phases, rows,
 }: {
   playerId: string | undefined
   federationIds: readonly string[]
   phases: Phase[]
-  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>
   rows: PlayerPhasePoints[]
 }): Array<{ federationId: string; label: string; value: string }> {
   return federationIds.flatMap((federationId) => {
-    const value = pointsFor(rows, activePhaseOf(phases, seasons, federationId)?.id, playerId)
+    const value = pointsFor(rows, activePhaseOf(phases, federationId)?.id, playerId)
     return value ? [{ federationId, label: rankingLabel(federationId), value }] : []
   })
 }
