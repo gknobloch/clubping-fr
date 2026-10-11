@@ -115,10 +115,16 @@ export interface GameSchedule {
  * that, only the journée's week is known.
  */
 export function gameSchedule(
-  game: Pick<Game, 'date' | 'time'> | undefined,
+  game: Pick<Game, 'date' | 'time'> & { source?: Game['source'] } | undefined,
   matchDay: Pick<MatchDay, 'date'>,
   homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
 ): GameSchedule {
+  // A return-leg fixture prepared before its calendar is published (#649)
+  // sits on a provisional journée date nobody announced: its week, never a
+  // day — whatever the home club's usual day.
+  if (isProvisionalSlot(game)) {
+    return { date: null, time: '', week: isoWeekRange(matchDay.date) }
+  }
   // A game without its own date sits on the journée's — that has always been
   // the fallback, and it must stay one: requiring game.date would push every
   // manually created fixture into the "unconfirmed" branch.
@@ -137,7 +143,7 @@ export function gameSchedule(
  * date should mark it, and none should offer to put it in a calendar.
  */
 export function isSlotConfirmed(
-  game: Pick<Game, 'date' | 'time'> | undefined,
+  game: Pick<Game, 'date' | 'time'> & { source?: Game['source'] } | undefined,
   matchDay: Pick<MatchDay, 'date'>,
   homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
 ): boolean {
@@ -147,6 +153,18 @@ export function isSlotConfirmed(
 /** What to tell someone hovering an unconfirmed date, in both apps. */
 export const UNCONFIRMED_SLOT_HINT =
   'Date et heure non confirmées : le jour de jeu du club recevant n’est pas connu.'
+
+/**
+ * A return-leg fixture prepared before its calendar exists (#649): mirrored
+ * from phase 1, undated, on a journée whose date is an estimate.
+ */
+export function isProvisionalSlot(game: { date?: Game['date']; source?: Game['source'] } | undefined): boolean {
+  return game?.source === 'mirror' && !game.date
+}
+
+/** Its hint: the reason differs, so the sentence does too. */
+export const PROVISIONAL_SLOT_HINT =
+  'Date provisoire : le calendrier de la phase retour n’est pas encore publié.'
 
 /**
  * Just the time from `gameSchedule` — the one every screen needs and the only

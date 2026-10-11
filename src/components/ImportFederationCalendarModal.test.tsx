@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { DataProvider } from '@/contexts/DataContext'
 import { mockFederations } from '@/mock/data'
-import type { Club, Competition, Phase, Season } from '@/types'
+import type { Club, Competition, Division, Phase, Season } from '@/types'
 import { PROM_HONNEUR_A_PHASE_1 } from '@/lib/__fixtures__/agrSchedules'
 
 // #647 — the review of an AGR calendar: phase, competition, and which club
@@ -30,12 +30,12 @@ const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat Messieurs', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },
 ]
 
-function open(viewerClubId?: string) {
+function open(viewerClubId?: string, divisions: Division[] = []) {
   extract.lines = PROM_HONNEUR_A_PHASE_1
   render(
     <DataProvider
       initialData={{
-        divisions: [], clubs, seasons, phases, competitions, competitionGroups: [], competitionEligibilities: [],
+        divisions, clubs, seasons, phases, competitions, competitionGroups: [], competitionEligibilities: [],
         federations: mockFederations, groups: [], teams: [], players: [], playerSeasonCategories: [],
         playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
         playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [], users: [],
@@ -64,6 +64,16 @@ describe('ImportFederationCalendarModal', () => {
     expect(clubSelect('SPECHBACH MJC').value).toBe('')
     expect(screen.getByText('KIRCHBERG/NIEDERBRUCK 4 JOUE A NIEDERBRUCK')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Importer' })).toBeEnabled()
+  })
+
+  it('asks what phase 2 is, and starts from what the division already says (#649)', async () => {
+    open('landser', [{
+      id: 'd1', phaseId: 'phase-agr-27-1', displayName: 'Prom. Honneur', rank: 1, playersPerGame: 4,
+      isArchived: false, secondPhase: 'return_leg',
+    }])
+    const select = await screen.findByLabelText('Phase 2') as HTMLSelectElement
+    expect(select.value).toBe('return_leg')
+    expect(screen.getByText(/le calendrier de la phase 2 les datera/)).toBeInTheDocument()
   })
 
   it('will not let a club admin import a poule their club is not in', async () => {

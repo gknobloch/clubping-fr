@@ -1,4 +1,4 @@
-import { UNCONFIRMED_SLOT_HINT } from '@/lib/matchdays'
+import { PROVISIONAL_SLOT_HINT, UNCONFIRMED_SLOT_HINT } from '@/lib/matchdays'
 
 /**
  * A fixture's date, marked when nobody has confirmed it (#429).
@@ -15,18 +15,21 @@ import { UNCONFIRMED_SLOT_HINT } from '@/lib/matchdays'
 export function MatchDate({
   label,
   confirmed,
+  provisional = false,
   className = '',
 }: {
   /** The date, already formatted for its screen. */
   label: string
   confirmed: boolean
+  /** A return-leg fixture not yet on a calendar (#649) — `isProvisionalSlot`. */
+  provisional?: boolean
   className?: string
 }) {
   if (confirmed) return <span className={className}>{label}</span>
   return (
-    <span className={`text-amber-700 ${className}`} title={UNCONFIRMED_SLOT_HINT}>
+    <span className={`text-amber-700 ${className}`} title={provisional ? PROVISIONAL_SLOT_HINT : UNCONFIRMED_SLOT_HINT}>
       <span aria-hidden="true">⚠ </span>
-      <span className="sr-only">Date à confirmer, </span>
+      <span className="sr-only">{provisional ? 'Date provisoire, ' : 'Date à confirmer, '}</span>
       {label}
     </span>
   )

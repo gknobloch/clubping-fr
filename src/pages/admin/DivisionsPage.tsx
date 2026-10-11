@@ -104,6 +104,8 @@ export function DivisionsPage() {
     /** Off = inherit the competition's categories; on = this division decides. */
     restrictCategories: false,
     categories: [] as PlayerCategory[],
+    /** What phase 2 is, for a federation without an API (#649); '' = not known. */
+    secondPhase: '' as '' | 'return_leg' | 'new_groups',
   })
 
   const activeDivisions = useMemo(() => allDivisions.filter((d) => !d.isArchived), [allDivisions])
@@ -143,6 +145,7 @@ export function DivisionsPage() {
       competitionId: div.competitionId ?? '',
       restrictCategories: div.categories !== undefined,
       categories: div.categories ?? [],
+      secondPhase: div.secondPhase ?? '',
     })
   }
 
@@ -158,6 +161,7 @@ export function DivisionsPage() {
       competitionId: '',
       restrictCategories: false,
       categories: [],
+      secondPhase: '',
     })
   }
 
@@ -179,6 +183,9 @@ export function DivisionsPage() {
         // null is "inherit"; an array — even empty, meaning every category — is
         // the division speaking for itself (#482).
         categories: form.restrictCategories ? orderedCategoryPicks(form.categories) : undefined,
+        // '' rather than undefined for the same reason as competitionId: the
+        // API reads it as « not known » (#649).
+        ...(!isFftt ? { secondPhase: (form.secondPhase || '') as Division['secondPhase'] } : {}),
       })
       closeModal()
     } else if (creating && form.phaseId) {
@@ -522,6 +529,23 @@ export function DivisionsPage() {
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
+              {editing && !isFftt && (
+                <div>
+                  <label htmlFor="edit-secondPhase" className="block text-sm font-medium text-slate-700">
+                    Phase 2
+                  </label>
+                  <select
+                    id="edit-secondPhase"
+                    value={form.secondPhase}
+                    onChange={(e) => setForm((f) => ({ ...f, secondPhase: e.target.value as typeof f.secondPhase }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    <option value="">Pas encore connue</option>
+                    <option value="return_leg">Phase retour : mêmes poules, réception inversée</option>
+                    <option value="new_groups">Nouvelles poules</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button

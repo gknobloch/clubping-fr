@@ -465,6 +465,7 @@ app.get('/data', async (c) => {
       // Explicit null check: jsonParseCategories(null) is [], which would turn
       // "inherit the competition" into "admit everyone" (#482).
       ...(r.categories !== null ? { categories: jsonParseCategories(r.categories) } : {}),
+      ...(r.second_phase === 'return_leg' || r.second_phase === 'new_groups' ? { secondPhase: r.second_phase } : {}),
     })),
     // Pre-sorted by sort_order in the query above (#482).
     competitions: competitionsR.results.map(r => ({
@@ -3201,6 +3202,8 @@ interface FederationScheduleInput {
   division: string
   poolNumber: number
   playersPerGame: number
+  /** What phase 2 of this division is (#649); absent leaves what is stored. */
+  secondPhase?: 'return_leg' | 'new_groups'
   notes: string[]
   clubs: Array<{ name: string; clubId: string | null }>
   journees: Array<{
@@ -3234,6 +3237,7 @@ function parseFederationScheduleInput(b: Record<string, unknown>): FederationSch
     federationId: str(b.federationId), phaseId: str(b.phaseId), competitionId: str(b.competitionId),
     division: str(b.division), poolNumber: Number(b.poolNumber),
     playersPerGame: Number(b.playersPerGame) === 3 ? 3 : 4,
+    ...(b.secondPhase === 'return_leg' || b.secondPhase === 'new_groups' ? { secondPhase: b.secondPhase as 'return_leg' | 'new_groups' } : {}),
     notes: (Array.isArray(b.notes) ? b.notes : []).map(str).filter(Boolean).slice(0, 10),
     clubs: (Array.isArray(b.clubs) ? b.clubs : []).map((c) => {
       const o = c as { name?: unknown; clubId?: unknown }
@@ -3304,8 +3308,10 @@ app.post('/federation-schedules/import', async (c) => {
   if (!existingDivision) {
     const rank = Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
     stmts.push(db.prepare(
-      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id) VALUES (?, ?, ?, ?, ?, 0, NULL, ?)',
-    ).bind(divisionId, input.phaseId, input.division, rank, input.playersPerGame, input.competitionId))
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, second_phase) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)',
+    ).bind(divisionId, input.phaseId, input.division, rank, input.playersPerGame, input.competitionId, input.secondPhase ?? null))
+  } else if (input.secondPhase) {
+    stmts.push(db.prepare('UPDATE divisions SET second_phase = ? WHERE id = ?').bind(input.secondPhase, divisionId))
   }
   const group = existingDivision
     ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
@@ -3398,8 +3404,12 @@ app.post('/federation-schedules/import', async (c) => {
       if (existing) {
         if ((existing.date !== m.date || (m.time && existing.time !== m.time)) && existing.source !== 'manual') {
           updatedGames++
-          stmts.push(db.prepare("UPDATE games SET date = ?, time = coalesce(?, time), source = 'document' WHERE id = ?")
-            .bind(m.date, m.time || null, existing.id))
+          // A mirrored fixture (#649) is a guess at who receives, too: the
+          // published calendar settles it.
+          const swap = existing.source === 'mirror' && existing.home_team_id !== home
+          stmts.push(db.prepare(
+            `UPDATE games SET date = ?, time = coalesce(?, time), source = 'document'${swap ? ', home_team_id = ?, away_team_id = ?' : ''} WHERE id = ?`,
+          ).bind(m.date, m.time || null, ...(swap ? [home, away] : []), existing.id))
         }
         continue
       }
@@ -3417,11 +3427,242 @@ app.post('/federation-schedules/import', async (c) => {
     console.error('federation-schedules/import failed', err)
     return c.json({ error: 'import_failed' }, 500)
   }
+  // A return leg is prepared as soon as both phases exist (#649) — here when
+  // phase 2 already does, otherwise when it is created.
+  let returnLeg: MirrorResult | null = null
+  if (input.secondPhase === 'return_leg') {
+    returnLeg = await mirrorReturnLeg(db, groupId).catch((err) => {
+      console.error('return leg after import failed', err)
+      return null
+    })
+  }
   return c.json({
+    ...(returnLeg?.ok ? { returnLeg: returnLeg.created } : {}),
     ok: true, divisionId, groupId,
     created: { division: !existingDivision, group: !group, clubs: createdClubs.length, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
     updatedGames,
   })
+})
+
+// ── Phase retour (#649) ─────────────────────────────────────────────────────
+//
+// An AGR division plays its phase 2 one of two ways: the same poules again,
+// home and away swapped (« phase retour »), or new poules drawn from phase 1's
+// standings. The division says which (`second_phase`), set when its phase-1
+// calendar is imported.
+//
+// For a return leg everything about phase 2 is known but the dates: the same
+// teams, the same pairings, reversed. Waiting for the AGR's PDF would leave a
+// captain with nothing to plan in December, so the poule is MIRRORED into the
+// next phase as soon as that phase exists: division, poule, teams (captain,
+// roster, slot carried over) and one journée per phase-1 journée, numbered on
+// from the last as the AGR numbers them (8 to 14).
+//
+// The fixtures carry `source = 'mirror'` and NO date: nobody announced one.
+// Each journée gets a provisional date — its phase-1 counterpart shifted by
+// phase 1's length plus three weeks, which lands on the real AGR calendar's
+// first return journée — so the screens can place it in a week and say it is
+// to be confirmed (`gameSchedule`). When the phase-2 PDF arrives, its import
+// finds these journées by number and these fixtures by their two teams and
+// writes the real dates over them.
+//
+// IDEMPOTENT, like the import: run twice, it creates nothing the second time;
+// a journée still holding only undated mirrored fixtures gets its provisional
+// date recomputed, so a phase-1 calendar moved since is followed.
+
+/** Phase 1's length plus three weeks — the AGR's winter break, measured on its 2026/2027 calendars. */
+function returnLegShiftDays(phase1Dates: string[]): number {
+  const sorted = phase1Dates.filter(Boolean).sort()
+  if (!sorted.length) return 0
+  const span = Math.round((Date.parse(`${sorted[sorted.length - 1]}T12:00:00Z`) - Date.parse(`${sorted[0]}T12:00:00Z`)) / 86_400_000)
+  return span + 21
+}
+
+function shiftIsoDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/** The phase that follows this one in its season — « Phase 2 » after « Phase 1 ». */
+async function nextPhaseOf(db: D1Database, phaseId: string): Promise<{ id: string } | null> {
+  const phase = await db.prepare('SELECT id, season_id, name FROM phases WHERE id = ?')
+    .bind(phaseId).first<{ id: string; season_id: string; name: string }>()
+  const n = phase ? Number(/(\d+)/.exec(phase.name)?.[1]) : NaN
+  if (!phase || !Number.isInteger(n)) return null
+  const siblings = await db.prepare('SELECT id, name FROM phases WHERE season_id = ?')
+    .bind(phase.season_id).all<{ id: string; name: string }>()
+  return siblings.results.find((p) => Number(/(\d+)/.exec(p.name)?.[1]) === n + 1) ?? null
+}
+
+type MirrorResult =
+  | { ok: true; groupId: string; created: { division: boolean; group: boolean; teams: number; matchDays: number; games: number } }
+  | { ok: false; error: 'not_found' | 'not_return_leg' | 'imported_federation' | 'no_next_phase' }
+
+async function mirrorReturnLeg(db: D1Database, groupId: string): Promise<MirrorResult> {
+  const group = await db.prepare('SELECT id, division_id, number, team_ids, note FROM groups WHERE id = ?')
+    .bind(groupId).first<{ id: string; division_id: string; number: number; team_ids: string; note: string | null }>()
+  if (!group) return { ok: false, error: 'not_found' }
+  const division = await db.prepare(
+    `SELECT d.id, d.phase_id, d.display_name, d.rank, d.players_per_game, d.competition_id, d.categories, d.second_phase, f.is_imported
+       FROM divisions d JOIN phases p ON p.id = d.phase_id JOIN seasons s ON s.id = p.season_id
+       JOIN federations f ON f.id = s.federation_id WHERE d.id = ?`,
+  ).bind(group.division_id).first<{
+    id: string; phase_id: string; display_name: string; rank: number; players_per_game: number
+    competition_id: string | null; categories: string | null; second_phase: string | null; is_imported: number
+  }>()
+  if (!division) return { ok: false, error: 'not_found' }
+  if (division.is_imported) return { ok: false, error: 'imported_federation' }
+  if (division.second_phase !== 'return_leg') return { ok: false, error: 'not_return_leg' }
+  const next = await nextPhaseOf(db, division.phase_id)
+  if (!next) return { ok: false, error: 'no_next_phase' }
+
+  const stmts: D1PreparedStatement[] = []
+  const key = (name: string) => name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+  // Division by (phase, name) — the name the phase-2 PDF will carry too.
+  const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?')
+    .bind(next.id).all<{ id: string; display_name: string; rank: number }>()
+  const existingDivision = divisions.results.find((d) => key(d.display_name) === key(division.display_name))
+  const divisionId = existingDivision?.id ?? newId('div')
+  if (!existingDivision) {
+    const rank = divisions.results.some((d) => d.rank === division.rank)
+      ? Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
+      : division.rank
+    stmts.push(db.prepare(
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, categories) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)',
+    ).bind(divisionId, next.id, division.display_name, rank, division.players_per_game, division.competition_id, division.categories))
+  }
+  const existingGroup = existingDivision
+    ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
+      .bind(divisionId, group.number).first<{ id: string; team_ids: string }>()
+    : null
+  const group2Id = existingGroup?.id ?? newId('group')
+
+  // Teams by (club, phase, number), carrying what a captain set up in phase 1.
+  const sourceTeamIds = jsonParseIds(group.team_ids)
+  const sourceTeams = sourceTeamIds.length
+    ? (await db.prepare(
+      `SELECT id, club_id, number, game_location_id, default_day, default_time, captain_id, player_ids, color, whatsapp_link
+         FROM teams WHERE id IN (${sourceTeamIds.map(() => '?').join(',')})`,
+    ).bind(...sourceTeamIds).all<{
+      id: string; club_id: string; number: number; game_location_id: string; default_day: string; default_time: string
+      captain_id: string; player_ids: string; color: string | null; whatsapp_link: string | null
+    }>()).results
+    : []
+  const phase2Teams = await db.prepare('SELECT id, club_id, number FROM teams WHERE phase_id = ?')
+    .bind(next.id).all<{ id: string; club_id: string; number: number }>()
+  const teamOf = new Map<string, string>()
+  const team2Ids = new Set(existingGroup ? jsonParseIds(existingGroup.team_ids) : [])
+  let createdTeams = 0
+  for (const t of sourceTeams) {
+    const existing = phase2Teams.results.find((p) => p.club_id === t.club_id && p.number === t.number)
+    const id = existing?.id ?? teamIdFor(t.club_id, next.id, t.number)
+    teamOf.set(t.id, id)
+    team2Ids.add(id)
+    if (existing) continue
+    createdTeams++
+    stmts.push(db.prepare(
+      `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, color, whatsapp_link, is_archived)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    ).bind(id, t.club_id, next.id, t.number, group2Id, t.game_location_id, t.default_day, t.default_time,
+      t.captain_id, t.player_ids, t.color, t.whatsapp_link))
+  }
+  stmts.push(existingGroup
+    ? db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr([...team2Ids]), group2Id)
+    : db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived, note) VALUES (?, ?, ?, ?, 0, ?)')
+      .bind(group2Id, divisionId, group.number, jsonStr([...team2Ids]), group.note))
+
+  // Journées: n + the last phase-1 number, on a provisional date.
+  const matchDays = (await db.prepare('SELECT id, number, date FROM match_days WHERE group_id = ? ORDER BY number')
+    .bind(group.id).all<{ id: string; number: number; date: string | null }>()).results
+  const games = matchDays.length
+    ? (await db.prepare(
+      `SELECT match_day_id, home_team_id, away_team_id FROM games WHERE match_day_id IN (${matchDays.map(() => '?').join(',')})`,
+    ).bind(...matchDays.map((m) => m.id)).all<{ match_day_id: string; home_team_id: string; away_team_id: string }>()).results
+    : []
+  const last = Math.max(0, ...matchDays.map((m) => m.number))
+  const shift = returnLegShiftDays(matchDays.map((m) => m.date ?? ''))
+  const matchDays2 = existingGroup
+    ? (await db.prepare('SELECT id, number FROM match_days WHERE group_id = ?').bind(group2Id).all<{ id: string; number: number }>()).results
+    : []
+  const games2 = matchDays2.length
+    ? (await db.prepare(
+      `SELECT match_day_id, home_team_id, away_team_id, date, source FROM games WHERE match_day_id IN (${matchDays2.map(() => '?').join(',')})`,
+    ).bind(...matchDays2.map((m) => m.id)).all<{ match_day_id: string; home_team_id: string; away_team_id: string; date: string | null; source: string | null }>()).results
+    : []
+  let createdMatchDays = 0, createdGames = 0
+  for (const md of matchDays) {
+    const provisional = md.date ? shiftIsoDate(md.date, shift) : null
+    let md2 = matchDays2.find((m) => m.number === md.number + last)
+    if (!md2) {
+      md2 = { id: newId('md'), number: md.number + last }
+      createdMatchDays++
+      stmts.push(db.prepare('INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+        .bind(md2.id, group2Id, md2.number, provisional))
+    } else {
+      const own = games2.filter((g) => g.match_day_id === md2!.id)
+      if (own.length && own.every((g) => g.source === 'mirror' && !g.date)) {
+        stmts.push(db.prepare('UPDATE match_days SET date = ? WHERE id = ?').bind(provisional, md2.id))
+      }
+    }
+    for (const g of games.filter((x) => x.match_day_id === md.id)) {
+      // Reversed: phase 1's visitor receives.
+      const home = teamOf.get(g.away_team_id), away = teamOf.get(g.home_team_id)
+      if (!home || !away) continue
+      const found = games2.some((x) => x.match_day_id === md2!.id
+        && ((x.home_team_id === home && x.away_team_id === away) || (x.home_team_id === away && x.away_team_id === home)))
+      if (found) continue
+      createdGames++
+      stmts.push(db.prepare(
+        "INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, source) VALUES (?, ?, ?, ?, NULL, NULL, 'mirror')",
+      ).bind(gameIdFor(md2.id, home, away), md2.id, home, away))
+    }
+  }
+
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  return {
+    ok: true, groupId: group2Id,
+    created: { division: !existingDivision, group: !existingGroup, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
+  }
+}
+
+/** Mirror every return-leg poule of `phaseId`'s previous phase — when its phase 2 is created. */
+async function mirrorReturnLegsInto(db: D1Database, phaseId: string): Promise<void> {
+  const phase = await db.prepare('SELECT season_id, name FROM phases WHERE id = ?')
+    .bind(phaseId).first<{ season_id: string; name: string }>()
+  const n = phase ? Number(/(\d+)/.exec(phase.name)?.[1]) : NaN
+  if (!phase || !Number.isInteger(n) || n < 2) return
+  const groups = await db.prepare(
+    `SELECT g.id, d.phase_id FROM groups g JOIN divisions d ON d.id = g.division_id JOIN phases p ON p.id = d.phase_id
+      WHERE p.season_id = ? AND d.second_phase = 'return_leg' AND g.is_archived = 0`,
+  ).bind(phase.season_id).all<{ id: string; phase_id: string }>()
+  for (const g of groups.results) {
+    if ((await nextPhaseOf(db, g.phase_id))?.id !== phaseId) continue
+    await mirrorReturnLeg(db, g.id)
+  }
+}
+
+// POST /groups/:id/return-leg — prepare a poule's return leg on demand: the
+// general admin, or the admin of a club that plays in it (#577's rule).
+app.post('/groups/:id/return-leg', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const clubs = await db.prepare(
+    `SELECT DISTINCT t.club_id FROM teams t JOIN groups g ON g.id = ? WHERE t.id IN (SELECT value FROM json_each(g.team_ids))`,
+  ).bind(id).all<{ club_id: string }>()
+  if (!administersAny(managingViewer(c), clubs.results.map((r) => r.club_id))) return c.json(notAllowed, 403)
+  const result = await mirrorReturnLeg(db, id)
+  if (!result.ok) {
+    const messages: Record<string, string> = {
+      not_found: 'Poule introuvable.',
+      not_return_leg: 'Cette division ne joue pas sa phase 2 en phase retour.',
+      imported_federation: 'Cette fédération s’importe depuis son API.',
+      no_next_phase: 'La phase suivante n’existe pas encore : l’administrateur général la crée d’abord.',
+    }
+    return c.json({ error: result.error, message: messages[result.error] }, result.error === 'not_found' ? 404 : 409)
+  }
+  return c.json(result)
 })
 
 app.delete('/seasons/:id', async (c) => {
@@ -3466,6 +3707,9 @@ app.post('/phases', async (c) => {
   await c.env.DB.prepare(
     'INSERT INTO phases (id, season_id, name, display_name, status) VALUES (?, ?, ?, ?, ?)'
   ).bind(d.id, d.seasonId, d.name, d.displayName, status).run()
+  // Phase 2 of a federation without an API: its return-leg poules are known
+  // already (#649). Never fails the creation — the Équipes page offers it again.
+  await mirrorReturnLegsInto(c.env.DB, d.id).catch((err) => console.error('return legs on phase creation failed', err))
   return c.json({ ok: true })
 })
 
@@ -3542,6 +3786,11 @@ app.patch('/divisions/:id', async (c) => {
   if ('categories' in p) {
     s.push('categories = ?')
     v.push(Array.isArray(p.categories) ? categoriesJson(p.categories) : null)
+  }
+  // What its phase 2 is (#649); anything else — '' from the form — is « not known ».
+  if ('secondPhase' in p) {
+    s.push('second_phase = ?')
+    v.push(p.secondPhase === 'return_leg' || p.secondPhase === 'new_groups' ? p.secondPhase : null)
   }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE divisions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })

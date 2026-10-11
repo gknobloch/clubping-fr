@@ -373,6 +373,8 @@ export interface FederationScheduleImportInput {
   division: string
   poolNumber: number
   playersPerGame: number
+  /** What phase 2 of this division is (#649) — asked when importing phase 1. */
+  secondPhase?: 'return_leg' | 'new_groups'
   notes: string[]
   /** Each name of the calendar: an existing club, or null to create it bare. */
   clubs: Array<{ name: string; clubId: string | null }>
@@ -385,7 +387,16 @@ export interface FederationScheduleImportSummary {
   groupId: string
   created: { division: boolean; group: boolean; clubs: number; teams: number; matchDays: number; games: number }
   updatedGames: number
+  /** The return leg built into phase 2 alongside (#649), when phase 2 exists. */
+  returnLeg?: ReturnLegCreated
 }
+
+/** What preparing a return leg created (#649). */
+export interface ReturnLegCreated {
+  division: boolean; group: boolean; teams: number; matchDays: number; games: number
+}
+
+export type ReturnLegResult = { ok: true; created: ReturnLegCreated } | { ok: false; message: string }
 
 export type FederationScheduleImportResult =
   | { ok: true; summary: FederationScheduleImportSummary }
@@ -590,6 +601,8 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   importScheduleDocuments: (schedules: ScheduleDocImportInput[], updateSlots?: boolean, removeObsolete?: boolean) => Promise<ScheduleDocImportResult | null>
   /** A poule calendar of a federation without an API (#647); the data is fetched again once written. */
   importFederationSchedule: (input: FederationScheduleImportInput) => Promise<FederationScheduleImportResult>
+  /** Mirror a phase-1 poule into phase 2, home and away swapped (#649); the data is fetched again once written. */
+  prepareReturnLeg: (groupId: string) => Promise<ReturnLegResult>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
@@ -1401,6 +1414,25 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         if (!r.ok || !body) return { ok: false, message: body?.message ?? "L'import a échoué." }
         setRetryNonce((n) => n + 1)
         return { ok: true, summary: body }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
+
+  // Awaited for the same reason: a whole poule's return leg at once (#649).
+  const prepareReturnLeg = useCallback(
+    async (groupId: string): Promise<ReturnLegResult> => {
+      if (!persist) return { ok: false, message: 'Indisponible hors connexion au serveur.' }
+      try {
+        const r = await fetch(`/api/groups/${encodeURIComponent(groupId)}/return-leg`, {
+          method: 'POST', headers: authHeaders(), body: '{}',
+        })
+        const body = (await r.json().catch(() => null)) as { created?: ReturnLegCreated; message?: string } | null
+        if (!r.ok || !body?.created) return { ok: false, message: body?.message ?? 'La préparation a échoué.' }
+        setRetryNonce((n) => n + 1)
+        return { ok: true, created: body.created }
       } catch {
         return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
       }
@@ -2638,6 +2670,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       importFfttGroups,
       importScheduleDocuments,
       importFederationSchedule,
+      prepareReturnLeg,
       updatePhase,
       archivePhase,
       deletePhase,
@@ -2712,7 +2745,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, importFederationSchedule, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, importFederationSchedule, prepareReturnLeg, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       users, updatePlayer, addPlayer, addClubAdmin, removeClubAdmin,

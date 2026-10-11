@@ -156,6 +156,12 @@ export interface Division {
    * restricts nobody, since there is no place for a club's derogations to hang.
    */
   categories?: PlayerCategory[]
+  /**
+   * What phase 2 of this (phase-1) division is (#649): the same poules
+   * mirrored, home and away swapped — or new poules, known after phase 1.
+   * Absent: not known yet, and nothing is prepared.
+   */
+  secondPhase?: 'return_leg' | 'new_groups'
 }
 
 /**
@@ -488,7 +494,7 @@ export interface Game {
    * for an import, 'manual' once a human set the slot — which no import then
    * overwrites. Absent for games predating the field.
    */
-  source?: 'fftt' | 'document' | 'manual'
+  source?: 'fftt' | 'document' | 'manual' | 'mirror'
   /** FFTT match id, when this game came from FFTT (#282). */
   gameId?: string
 }
