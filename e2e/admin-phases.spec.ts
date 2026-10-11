@@ -93,7 +93,7 @@ test.describe('General admin — Phases (#221, #227)', () => {
     // Create its Phase 1 as active: the note announces the season swap.
     await page.getByRole('link', { name: 'Phases' }).click()
     await page.getByRole('button', { name: 'Ajouter une phase' }).click()
-    await page.getByLabel('Saison').selectOption({ label: '2026/2027 · FFTT' })
+    await page.getByLabel('Saison').selectOption({ label: '2026/2027' })
     await page.getByRole('radio', { name: 'Active' }).check()
     await expect(page.getByText('2026/2027 · Phase 1')).toBeVisible()
     await expect(page.getByText(/La saison 2025\/2026 sera archivée/)).toBeVisible()

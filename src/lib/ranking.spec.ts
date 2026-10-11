@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Phase, Season } from '@/types'
+import type { Phase } from '@/types'
 import { compareRanking, currentRankings, formatRanking, rankingLabel, rankingRule } from './ranking'
 
 // #646 — the FFTT's points (higher is better) and the AGR's classement (lower is better).
@@ -41,13 +41,9 @@ describe('compareRanking', () => {
 })
 
 describe('currentRankings', () => {
-  const seasons: Season[] = [
-    { id: '27', displayName: '2026/2027', status: 'active' },
-    { id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' },
-  ]
   const phases: Phase[] = [
     { id: 'phase-27-1', seasonId: '27', name: 'Phase 1', displayName: '', status: 'active' },
-    { id: 'phase-agr-27-1', seasonId: 'agr-27', name: 'Phase 1', displayName: '', status: 'active' },
+    { id: 'phase-agr-27-1', seasonId: '27', name: 'Phase 1', displayName: '', status: 'active', federationId: 'agr' },
   ]
   const rows = [
     { phaseId: 'phase-27-1', playerId: 'kembs', points: '1520' },
@@ -55,14 +51,14 @@ describe('currentRankings', () => {
   ]
 
   it('gives a member of both federations both values, each with its label', () => {
-    expect(currentRankings({ playerId: 'kembs', federationIds: ['fftt', 'agr'], phases, seasons, rows })).toEqual([
+    expect(currentRankings({ playerId: 'kembs', federationIds: ['fftt', 'agr'], phases, rows })).toEqual([
       { federationId: 'fftt', label: 'Points', value: '1520' },
       { federationId: 'agr', label: 'Classement', value: '45' },
     ])
   })
 
   it('gives a member of the AGR alone the classement alone', () => {
-    expect(currentRankings({ playerId: 'kembs', federationIds: ['agr'], phases, seasons, rows }))
+    expect(currentRankings({ playerId: 'kembs', federationIds: ['agr'], phases, rows }))
       .toEqual([{ federationId: 'agr', label: 'Classement', value: '45' }])
   })
 })

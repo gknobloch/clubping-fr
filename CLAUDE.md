@@ -698,28 +698,42 @@ invisible dans le diff comme dans la revue.
   « Sans club » (`profilesByClub`) : Gilles passe de Rixheim à Landser à
   l'administration sans se déconnecter.
 
-### Saisons et phases par fédération (#645)
-- **Une saison appartient à une fédération** (`seasons.federation_id`, 0065) ;
-  une phase y arrive par sa saison (`federationOfPhase`), comme une division
-  par sa compétition. Tout ce qui existait est à la FFTT, ce que le défaut dit
-  sans réécrire une ligne.
-- **Les ids d'une autre fédération portent son préfixe** : `agr-27`, donc
-  `phase-agr-27-1`. Kembs 1 FFTT et Kembs 1 AGR sont dans deux phases, et les
-  ids d'équipe (club, phase, numéro — #282) restent uniques sans rien changer.
-  `seasonNumber` lit le numéro quelle que soit la fédération : c'est lui que
-  compare la chronologie (`phaseOrderKey`, la rétrogradation).
-- **Une saison et une phase actives par fédération.** Activer l'une ne
-  rétrograde que celles de sa fédération : la phase 2 de l'AGR peut commencer
-  à une autre date que celle de la FFTT. `src/lib/seasonActivation.ts` est la
-  règle côté écrans (le `DataContext` l'applique d'avance), et l'API la même
-  en SQL (`demoteActiveSeasons`, `demoteActivePhases`,
-  `alignActivePhaseToSeason`, tous clavés sur la fédération).
+### Saisons communes, phases par fédération (#645)
+- **Une saison est à tout le monde ; une phase est à une fédération**
+  (`phases.federation_id`, 0071). 2026/2027 est la saison de la FFTT comme de
+  l'AGR — mêmes mois, mêmes catégories, même jeu de licences —, et ce qui
+  diffère, ce sont les phases que chacune y joue, et quand. Une division
+  arrive à sa fédération par sa compétition, une phase la porte elle-même
+  (`federationOfPhase`). Tout ce qui existait est à la FFTT, ce que le défaut
+  dit sans réécrire une ligne.
+- **Une première version donnait la fédération à la saison** (0065,
+  « agr-27 » à côté de « 27 ») : une même saison s'y retrouvait en deux
+  lignes. 0071 déplace la colonne sur la phase, fusionne la saison d'une
+  fédération dans la saison commune de même numéro et supprime
+  `seasons.federation_id` — sans risque dans le même déploiement : le worker
+  de production qu'il remplace ne l'a jamais lue.
+- **Les ids de phase d'une autre fédération portent son préfixe** :
+  `phase-agr-27-1`, dans la saison `27` (`phaseIdFor`). Deux fédérations
+  jouent une Phase 1 dans la même saison, et Kembs 1 FFTT et Kembs 1 AGR
+  restent deux équipes : leurs ids (club, phase, numéro — #282) ne changent
+  pas. Une phase est unique par (fédération, saison, nom).
+- **Une saison active, une phase active par fédération.** Activer une phase
+  ne rétrograde que celles de sa fédération : la phase 2 de l'AGR peut
+  commencer à une autre date que celle de la FFTT. **Toute phase active est
+  dans la saison active** : activer une phase active sa saison, et activer
+  une saison y amène la phase active de chaque fédération (sa plus récente
+  non archivée, ou aucune). `src/lib/seasonActivation.ts` est la règle côté
+  écrans (le `DataContext` l'applique d'avance), et l'API la même en SQL
+  (`demoteActiveSeasons`, `demoteActivePhases`, `alignActivePhasesToSeason`).
 - **« La phase active » se demande avec sa fédération** : `activePhaseOf`
   (la FFTT par défaut), jamais `phases.find(active)`, qui rendrait la première
-  des deux. **`activeSeasonId` est celle de la FFTT** par défaut : les
-  catégories et le jeu de licences (#482, #488) sont des faits de la FFTT.
-- L'administrateur général choisit la fédération en créant une saison ; elle
-  ne change plus ensuite — l'id la porte.
+  des deux. `activeSeasonId` est la saison active, tout court.
+- **« La phase suivante » aussi** : la phase 2 d'une poule AGR (#649) et le
+  compte du brûlage AGR sur la saison (#651) ne lisent que les phases de la
+  même fédération — la phase 2 de la FFTT est dans la même saison.
+- L'administrateur général crée une saison sans fédération, puis ses phases
+  en choisissant la fédération (`/phases`) ; elle ne change plus ensuite —
+  l'id la porte.
 - **La fédération d'abord, puis la phase** : Journées, Équipes, Groupes et
   Divisions passent par `phaseScope` — les fédérations proposées (celles du
   club, toutes pour l'administrateur général), celle en vigueur, ses phases

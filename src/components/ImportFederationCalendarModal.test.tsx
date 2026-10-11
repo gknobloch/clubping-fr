@@ -21,10 +21,10 @@ const clubs = [
   club('kembs', 'Kembs TT', { affiliationNumber: '06680140', affiliations: [{ federationId: 'agr', affiliationNumber: '680021', name: 'KEMBS ASL TT' }] }),
   club('rixheim', 'Rixheim PPA', { affiliationNumber: '06680011' }),
 ]
-const seasons: Season[] = [{ id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' }]
+const seasons: Season[] = [{ id: '27', displayName: '2026/2027', status: 'active' }]
 const phases: Phase[] = [
-  { id: 'phase-agr-27-1', seasonId: 'agr-27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active' },
-  { id: 'phase-agr-27-2', seasonId: 'agr-27', name: 'Phase 2', displayName: '2026/2027 Phase 2', status: 'upcoming' },
+  { id: 'phase-agr-27-1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active', federationId: 'agr' },
+  { id: 'phase-agr-27-2', seasonId: '27', name: 'Phase 2', displayName: '2026/2027 Phase 2', status: 'upcoming', federationId: 'agr' },
 ]
 const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat Messieurs', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },

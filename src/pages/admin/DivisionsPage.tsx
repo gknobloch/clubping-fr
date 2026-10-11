@@ -20,7 +20,7 @@ export function DivisionsPage() {
   const {
     divisions: allDivisions,
     phases,
-    seasons = [],
+    
     federations = [],
     competitions,
     updateDivision,
@@ -38,7 +38,7 @@ export function DivisionsPage() {
   // chronological order (#235). Divisions belong to a phase, so the list is
   // the federation's by the same stroke.
   const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
-  const scope = phaseScope({ federations, seasons, phases, chosen: chosenFederation })
+  const scope = phaseScope({ federations, phases, chosen: chosenFederation })
   const isFftt = scope.federationId === FFTT_FEDERATION_ID
   const orderedPhases = scope.phases
   const [filterPhaseId, setFilterPhaseId] = useState<string | undefined>(undefined)

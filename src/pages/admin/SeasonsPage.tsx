@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Season, SeasonStatus } from '@/types'
 import { useAppData, type FfttCurrentSeason } from '@/contexts/DataContext'
 import { seasonIdFromName, seasonNumber } from '@/lib/season'
-import { FFTT_FEDERATION_ID, activePhaseOf, federationChoices, federationOfSeason } from '@/lib/federations'
-import { FederationSelect } from '@/components/FederationSelect'
+import { FFTT_FEDERATION_ID, activePhaseOf, federationOfPhase } from '@/lib/federations'
 import { phaseOrderKey } from '@/lib/ffttPhases'
 import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
@@ -19,15 +18,13 @@ export function SeasonsPage() {
     seasons: allSeasons, phases, federations = [], updateSeason, addSeason, archiveSeason, deleteSeason,
     checkFfttSeason, importFfttSeason,
   } = useAppData()
-  // Each federation has its seasons (#645); the tag says whose once there is a choice.
-  const federationOptions = federationChoices(federations)
+  // A season is every federation's (#645); each has its own phases in it.
   const shortNameOf = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id
   const [editing, setEditing] = useState<Season | null>(null)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState<{ displayName: string; status: SeasonStatus; federationId: string }>({
+  const [form, setForm] = useState<{ displayName: string; status: SeasonStatus }>({
     displayName: '',
     status: 'upcoming',
-    federationId: FFTT_FEDERATION_ID,
   })
   const [showArchived, setShowArchived] = useState(false)
   // FFTT check is on demand (#217): idle until the admin clicks « Vérifier ».
@@ -74,7 +71,7 @@ export function SeasonsPage() {
   }
 
   // Manual creation follows the FFTT convention: the id derives from the name.
-  const derivedId = seasonIdFromName(form.displayName, form.federationId)
+  const derivedId = seasonIdFromName(form.displayName)
   const nameInvalid = form.displayName.trim() !== '' && !derivedId
   const duplicate = !!derivedId && allSeasons.some((s) => s.id === derivedId && s.id !== editing?.id)
   const canSave = !!derivedId && !duplicate
@@ -82,19 +79,18 @@ export function SeasonsPage() {
   const openEdit = (season: Season) => {
     setEditing(season)
     setCreating(false)
-    setForm({ displayName: season.displayName, status: season.status, federationId: federationOfSeason(season) })
+    setForm({ displayName: season.displayName, status: season.status })
   }
 
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    setForm({ displayName: '', status: 'upcoming', federationId: FFTT_FEDERATION_ID })
+    setForm({ displayName: '', status: 'upcoming' })
   }
 
   const handleSave = () => {
     if (!canSave) return
     if (editing) {
-      // The federation is fixed at creation: the id carries it (#645).
       updateSeason(editing.id, { displayName: form.displayName, status: form.status })
       setEditing(null)
     } else if (creating) {
@@ -224,11 +220,6 @@ export function SeasonsPage() {
               <tr key={season.id} className={`hover:bg-slate-50/50 ${season.status === 'archived' ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {season.displayName}
-                  {federationOptions.length > 1 && (
-                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
-                      {shortNameOf(federationOfSeason(season))}
-                    </span>
-                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -273,15 +264,6 @@ export function SeasonsPage() {
               {creating ? 'Ajouter une saison' : 'Modifier la saison'}
             </h2>
             <div className="mt-4 space-y-4">
-              {creating && (
-                <FederationSelect
-                  id="season-federation"
-                  options={federationOptions}
-                  value={form.federationId}
-                  onChange={(federationId) => setForm((f) => ({ ...f, federationId }))}
-                  wide
-                />
-              )}
               <div>
                 <label htmlFor="edit-displayName" className="block text-sm font-medium text-slate-700">
                   Nom (ex. 2026/2027)
@@ -310,27 +292,29 @@ export function SeasonsPage() {
                   onChange={(status) => setForm((f) => ({ ...f, status }))}
                 />
                 {form.status === 'active' && editing?.status !== 'active' && (() => {
-                  // Resulting active (season · phase) combination (#227): the
+                  // Resulting active combination (#227): each federation's
                   // active phase follows the season — kept when it belongs to
-                  // it, otherwise switched to the season's most recent phase.
-                  // Within the season's federation only (#645): the other's
-                  // active pair is untouched.
+                  // it, otherwise switched to its most recent phase there, or
+                  // none (#645: one season, one active phase per federation).
                   const targetId = editing?.id ?? derivedId
-                  const activePhase = activePhaseOf(phases, allSeasons, form.federationId)
-                  const coherent = !!activePhase && activePhase.seasonId === targetId
-                  const resulting = coherent
-                    ? activePhase
-                    : phases
-                        .filter((p) => p.seasonId === targetId && p.status !== 'archived')
-                        .sort((a, b) => b.name.localeCompare(a.name))[0]
-                  const currentActive = allSeasons.find(
-                    (s) => s.status === 'active' && s.id !== editing?.id && federationOfSeason(s) === form.federationId,
-                  )
+                  const feds = [...new Set([FFTT_FEDERATION_ID, ...phases.map(federationOfPhase)])]
+                  const outcomes = feds.map((fed) => {
+                    const activePhase = activePhaseOf(phases, fed)
+                    const coherent = !!activePhase && activePhase.seasonId === targetId
+                    const resulting = coherent
+                      ? activePhase
+                      : phases
+                          .filter((p) => p.seasonId === targetId && federationOfPhase(p) === fed && p.status !== 'archived')
+                          .sort((a, b) => b.name.localeCompare(a.name))[0]
+                    const phaseDemotion = activePhase && targetId
+                      && phaseOrderKey(activePhase.seasonId, activePhase.name) < phaseOrderKey(targetId, resulting?.name ?? '')
+                      ? 'sera archivée'
+                      : 'repassera à « À venir »'
+                    return { fed, activePhase, coherent, resulting, phaseDemotion }
+                  }).filter((o, i) => i === 0 || o.activePhase || o.resulting)
+                  const several = outcomes.length > 1
+                  const currentActive = allSeasons.find((s) => s.status === 'active' && s.id !== editing?.id)
                   const seasonDemotion = currentActive && targetId && seasonNumber(currentActive.id) < seasonNumber(targetId)
-                    ? 'sera archivée'
-                    : 'repassera à « À venir »'
-                  const phaseDemotion = activePhase && targetId
-                    && phaseOrderKey(activePhase.seasonId, activePhase.name) < phaseOrderKey(targetId, resulting?.name ?? '')
                     ? 'sera archivée'
                     : 'repassera à « À venir »'
                   return (
@@ -338,16 +322,17 @@ export function SeasonsPage() {
                       <p>
                         Après enregistrement, la combinaison active sera :{' '}
                         <span className="font-semibold">
-                          {form.displayName || '…'} · {resulting ? resulting.name : 'aucune phase active'}
+                          {form.displayName || '…'} ·{' '}
+                          {outcomes.map((o) => `${several ? `${shortNameOf(o.fed)} ` : ''}${o.resulting ? o.resulting.name : 'aucune phase active'}`).join(' · ')}
                         </span>.
                         {currentActive && ` La saison ${currentActive.displayName} ${seasonDemotion}.`}
                       </p>
-                      {!coherent && activePhase && (
-                        <p className="mt-1">
-                          La phase {activePhase.displayName} {phaseDemotion}
-                          {resulting ? ` et ${resulting.displayName} sera activée` : ''}.
+                      {outcomes.filter((o) => !o.coherent && o.activePhase).map((o) => (
+                        <p key={o.fed} className="mt-1">
+                          La phase {o.activePhase!.displayName}{several ? ` (${shortNameOf(o.fed)})` : ''} {o.phaseDemotion}
+                          {o.resulting ? ` et ${o.resulting.displayName} sera activée` : ''}.
                         </p>
-                      )}
+                      ))}
                     </div>
                   )
                 })()}

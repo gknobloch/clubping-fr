@@ -148,7 +148,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           // Points follow the phase, not the roster (#384), so a phase where
           // the player had no team still shows what they were worth.
           points: pointsFor(playerPhasePoints, ph.id, playerId),
-          pointsLabel: rankingLabel(federationOfPhase(ph, seasons)),
+          pointsLabel: rankingLabel(federationOfPhase(ph)),
           brulageTeam,
           played,
           total,

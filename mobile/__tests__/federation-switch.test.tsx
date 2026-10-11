@@ -71,11 +71,9 @@ beforeEach(() => {
     { id: 'fftt', displayName: 'Fédération française de tennis de table', shortName: 'FFTT', isImported: true, sortOrder: 0 },
     { id: 'agr', displayName: 'AGR Tennis de table — Section du Haut-Rhin', shortName: 'AGR', isImported: false, sortOrder: 1 },
   ]
-  mockData.seasons = [
-    { id: '27', displayName: '2026/2027', status: 'active' },
-    { id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' },
-  ]
-  mockData.phases = [phase('phase-27-1', '27'), phase('phase-agr-27-1', 'agr-27')]
+  // One season; each federation's phase in it (#645).
+  mockData.seasons = [{ id: '27', displayName: '2026/2027', status: 'active' }]
+  mockData.phases = [phase('phase-27-1', '27'), { ...phase('phase-agr-27-1', '27'), federationId: 'agr' }]
   mockData.clubs = [kembs, landser]
   mockData.teams = [
     team('kembs-fftt', 'kembs', 'phase-27-1'),

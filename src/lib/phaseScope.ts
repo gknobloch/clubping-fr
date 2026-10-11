@@ -4,11 +4,11 @@
 // mobile app (@shared/lib/phaseScope). Keep this module free of any
 // browser/RN/Node deps.
 //
-// Each federation has its seasons and its active phase, so a page that pages
+// Each federation has its own phases in the shared season, so a page that pages
 // through phases first needs the federation: Kembs's FFTT phase 1 and its AGR
 // phase 1 are two phases, with two Kembs 1. The federation comes first, then
 // the phase — and a club of one federation is never asked.
-import type { Club, Federation, Phase, Season } from '../types'
+import type { Club, Federation, Phase } from '../types'
 import { FFTT_FEDERATION_ID, federationChoices, phasesOfFederation } from './federations'
 import { defaultPhase, orderPhases } from './phases'
 
@@ -24,10 +24,9 @@ export interface PhaseScope<F> {
 }
 
 export function phaseScope<F extends Pick<Federation, 'id'>>({
-  federations, seasons, phases, club, chosen,
+  federations, phases, club, chosen,
 }: {
   federations: ReadonlyArray<F>
-  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>
   phases: Phase[]
   /** The club in view — absent for a general admin, who sees every federation. */
   club?: Pick<Club, 'affiliationNumber' | 'affiliations'>
@@ -37,6 +36,6 @@ export function phaseScope<F extends Pick<Federation, 'id'>>({
   const federationId = chosen && options.some((f) => f.id === chosen)
     ? chosen
     : options[0]?.id ?? FFTT_FEDERATION_ID
-  const own = phasesOfFederation(phases, seasons, federationId)
+  const own = phasesOfFederation(phases, federationId)
   return { options, federationId, phases: orderPhases(own), defaultPhase: defaultPhase(own) }
 }

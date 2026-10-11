@@ -27,8 +27,8 @@ const lucas = {
 } as Player
 const mockData = {
   clubs: [landser],
-  phases: [{ id: 'phase-agr-27-1', seasonId: 'agr-27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active' }] as Phase[],
-  seasons: [{ id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' }] as Season[],
+  phases: [{ id: 'phase-agr-27-1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active', federationId: 'agr' }] as Phase[],
+  seasons: [{ id: '27', displayName: '2026/2027', status: 'active' }] as Season[],
   federations: [{ id: 'agr', shortName: 'AGR', displayName: 'AGR', isImported: false }] as Federation[],
   players: [lucas],
   users: [{ ...lucas, role: 'player', isPlayer: true }] as User[],

@@ -42,7 +42,7 @@ export default function MonCompteScreen() {
   const canSwitch = hasOtherProfiles(profiles, user?.id)
   const [switching, setSwitching] = useState(false)
   const {
-    players, users = [], teams, clubs, federations, phases, seasons = [], playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
+    players, users = [], teams, clubs, federations, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
   } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -69,12 +69,12 @@ export default function MonCompteScreen() {
   // Each federation of the club has its active phase (#645) and its own
   // ranking — points at the FFTT, a classement at the AGR (#646).
   const myFederations = club ? clubFederationIds(club) : ['fftt']
-  const activePhaseIds = activePhaseIdsOf(phases, seasons, myFederations)
+  const activePhaseIds = activePhaseIdsOf(phases, myFederations)
   const playerTeams = player
     ? teams.filter((t) => activePhaseIds.includes(t.phaseId) && t.playerIds?.includes(player.id))
     : []
   const rankings = currentRankings({
-    playerId: player?.id, federationIds: myFederations, phases, seasons, rows: playerPhasePoints,
+    playerId: player?.id, federationIds: myFederations, phases, rows: playerPhasePoints,
   })
   const rankingRowLabel = (r: { federationId: string; label: string }) =>
     rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label

@@ -127,9 +127,9 @@ export default function ImportPlayersScreen() {
   // but the handful of days around a phase change. It is named on screen, and
   // whoever needs the other one has the web.
   const phase = useMemo(() => {
-    if (fromPdf) return activePhaseOf(phases, seasons, federationParam)
+    if (fromPdf) return activePhaseOf(phases, federationParam)
     const ordered = [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName))
-    return activePhaseOf(phases, seasons) ?? ordered[ordered.length - 1]
+    return activePhaseOf(phases) ?? ordered[ordered.length - 1]
   }, [phases, seasons, fromPdf, federationParam])
 
   const [status, setStatus] = useState<Status>(fromPdf ? { kind: 'pick' } : { kind: 'loading' })

@@ -90,7 +90,7 @@ export function TeamsPage() {
   // The federation first, then its phases (#645) — defaults to its active
   // phase, chronological order (#432). A club of one federation is not asked.
   const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
-  const scope = phaseScope({ federations, seasons, phases, club: scopedClub, chosen: chosenFederation })
+  const scope = phaseScope({ federations, phases, club: scopedClub, chosen: chosenFederation })
   const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
@@ -179,13 +179,13 @@ export function TeamsPage() {
     federationChoices(federations, club).some((f) => f.id === preferred) ? preferred : firstFederationOf(club)
   /** One federation's phases for the dialog — a team's phase is its federation's (#645). */
   const phasesIn = (federationId: string) =>
-    phaseScope({ federations, seasons, phases, chosen: federationId }).phases
+    phaseScope({ federations, phases, chosen: federationId }).phases
   /** Federation, phase, division and poule together: the phase kept when it is that federation's. */
   const placementIn = (federationId: string, preferredPhaseId: string) => {
     const own = phasesIn(federationId)
     const nextPhaseId = own.some((p) => p.id === preferredPhaseId)
       ? preferredPhaseId
-      : phaseScope({ federations, seasons, phases, chosen: federationId }).defaultPhase?.id ?? ''
+      : phaseScope({ federations, phases, chosen: federationId }).defaultPhase?.id ?? ''
     return { federationId, phaseId: nextPhaseId, ...firstPlacement(nextPhaseId, federationId) }
   }
   const divisionsIn = (inPhaseId: string, federationId: string) =>

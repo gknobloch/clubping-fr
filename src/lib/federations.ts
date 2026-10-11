@@ -11,7 +11,7 @@
 // (`Club.affiliationNumber`), and in any other federation when it carries an
 // affiliation to it (`Club.affiliations`): see migration 0061 for why the two
 // are stored apart, and `clubAffiliations` for the one place they meet.
-import type { Club, ClubAffiliation, Competition, Division, Federation, Phase, Season } from '../types'
+import type { Club, ClubAffiliation, Competition, Division, Federation, Phase } from '../types'
 import { clubIdFromAffiliation } from './entityIds'
 
 export const FFTT_FEDERATION_ID = 'fftt'
@@ -33,26 +33,21 @@ export function federationOfDivision(
   return federationOfCompetition(competition)
 }
 
-/** The federation whose calendar a season is (#645); the FFTT for one predating it. */
-export function federationOfSeason(season: Pick<Season, 'federationId'> | undefined): string {
-  return season?.federationId ?? FFTT_FEDERATION_ID
-}
-
-/** The federation a phase belongs to, through its season — the FFTT when the season is unknown. */
-export function federationOfPhase(
-  phase: Pick<Phase, 'seasonId'>,
-  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
-): string {
-  return federationOfSeason(seasons.find((s) => s.id === phase.seasonId))
+/**
+ * The federation a phase belongs to (#645) — the FFTT for one predating it.
+ * A season is everybody's: 2026/2027 is the FFTT's and the AGR's alike; what
+ * differs is the phases each federation plays in it, and when.
+ */
+export function federationOfPhase(phase: Pick<Phase, 'federationId'>): string {
+  return phase.federationId ?? FFTT_FEDERATION_ID
 }
 
 /** One federation's phases: what a phase switcher pages through once the federation is chosen. */
-export function phasesOfFederation<P extends Pick<Phase, 'seasonId'>>(
+export function phasesOfFederation<P extends Pick<Phase, 'federationId'>>(
   phases: ReadonlyArray<P>,
-  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
   federationId: string,
 ): P[] {
-  return phases.filter((p) => federationOfPhase(p, seasons) === federationId)
+  return phases.filter((p) => federationOfPhase(p) === federationId)
 }
 
 /**
@@ -60,12 +55,11 @@ export function phasesOfFederation<P extends Pick<Phase, 'seasonId'>>(
  * Since #645 each federation has its own, and `phases.find(active)` would
  * answer with whichever came first.
  */
-export function activePhaseOf<P extends Pick<Phase, 'seasonId' | 'status'>>(
+export function activePhaseOf<P extends Pick<Phase, 'federationId' | 'status'>>(
   phases: ReadonlyArray<P>,
-  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
   federationId: string = FFTT_FEDERATION_ID,
 ): P | undefined {
-  return phases.find((p) => p.status === 'active' && federationOfPhase(p, seasons) === federationId)
+  return phases.find((p) => p.status === 'active' && federationOfPhase(p) === federationId)
 }
 
 /**
@@ -73,11 +67,10 @@ export function activePhaseOf<P extends Pick<Phase, 'seasonId' | 'status'>>(
  * the FFTT's and in the AGR's at the same time (#645).
  */
 export function activePhaseIdsOf(
-  phases: ReadonlyArray<Pick<Phase, 'id' | 'seasonId' | 'status'>>,
-  seasons: ReadonlyArray<Pick<Season, 'id' | 'federationId'>>,
+  phases: ReadonlyArray<Pick<Phase, 'id' | 'federationId' | 'status'>>,
   federationIds: readonly string[],
 ): string[] {
-  return federationIds.flatMap((f) => activePhaseOf(phases, seasons, f)?.id ?? [])
+  return federationIds.flatMap((f) => activePhaseOf(phases, f)?.id ?? [])
 }
 
 /**

@@ -18,7 +18,7 @@ import { activePhaseIdsOf, clubFederationIds } from '@/lib/federations'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
-  const { players, users = [], clubs, federations = [], teams, phases, seasons = [], playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, users = [], clubs, federations = [], teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
@@ -28,10 +28,10 @@ export function ComptePage() {
   // Each federation of the club has its active phase (#645), and its own
   // ranking — points at the FFTT, a classement at the AGR (#646).
   const myFederations = myClub ? clubFederationIds(myClub) : ['fftt']
-  const activePhaseIds = activePhaseIdsOf(phases, seasons, myFederations)
+  const activePhaseIds = activePhaseIdsOf(phases, myFederations)
   const myTeams = me ? teams.filter((t) => activePhaseIds.includes(t.phaseId) && t.playerIds.includes(me.id)) : []
   const rankings = currentRankings({
-    playerId: me?.id, federationIds: myFederations, phases, seasons, rows: playerPhasePoints,
+    playerId: me?.id, federationIds: myFederations, phases, rows: playerPhasePoints,
   })
   const rankingRowLabel = (r: { federationId: string; label: string }) =>
     rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label

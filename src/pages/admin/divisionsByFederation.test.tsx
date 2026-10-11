@@ -19,16 +19,15 @@ const { TeamsPage } = await import('./TeamsPage')
 // admin chooses which, a club is held to its own, and the FFTT imports are
 // not offered where the FFTT has nothing.
 
-// Each federation has its season and its active phase (#645).
+// One season, and each federation's active phase in it (#645).
 const seasons: Season[] = [
   { id: '27', displayName: '2026/2027', status: 'active' },
-  { id: 'agr-27', displayName: '2026/2027', status: 'active', federationId: 'agr' },
 ]
 const phase: Phase = {
   id: 'phase-27-1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active',
 }
 const agrPhase: Phase = {
-  id: 'phase-agr-27-1', seasonId: 'agr-27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active',
+  id: 'phase-agr-27-1', seasonId: '27', name: 'Phase 1', displayName: '2026/2027 Phase 1', status: 'active', federationId: 'agr',
 }
 const club = (id: string, displayName: string, over: Partial<Club> = {}): Club => ({
   id, affiliationNumber: '', displayName, isArchived: false, addresses: [], channels: [], ...over,

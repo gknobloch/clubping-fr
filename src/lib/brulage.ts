@@ -203,7 +203,11 @@ function agrSeason(clubTeams: Team[], ctx: BrulageContext | undefined): AgrSeaso
   const phase = ctx.phases.find((p) => p.id === clubTeams[0].phaseId)
   if (!phase) return null
   const phaseNumber = (p: Phase) => Number(/(\d+)/.exec(p.name)?.[1] ?? 0)
-  const seasonPhases = ctx.phases.filter((p) => p.seasonId === phase.seasonId).sort((a, b) => phaseNumber(a) - phaseNumber(b))
+  // The season is everybody's (#645): only the AGR's own phases in it count —
+  // Kembs's FFTT matches of the same season are another federation's rule.
+  const seasonPhases = ctx.phases
+    .filter((p) => p.seasonId === phase.seasonId && (p.federationId ?? 'fftt') === (phase.federationId ?? 'fftt'))
+    .sort((a, b) => phaseNumber(a) - phaseNumber(b))
   const phaseRank = new Map(seasonPhases.map((p, i) => [p.id, i]))
   const clubId = clubTeams[0].clubId
   return { teams: ctx.teams.filter((t) => t.clubId === clubId && phaseRank.has(t.phaseId)), phaseRank }

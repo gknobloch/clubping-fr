@@ -45,7 +45,7 @@ export function PlayerQuickView({
   showProfile?: boolean
 }) {
   const {
-    players, teams, clubs, phases, seasons = [], matchDays, games, gameSelections, playerPhasePoints,
+    players, teams, clubs, phases, matchDays, games, gameSelections, playerPhasePoints,
     divisions = [], competitions = [],
   } = useAppData()
 
@@ -90,7 +90,7 @@ export function PlayerQuickView({
       player={player}
       phaseLabel={phaseLabel ?? (phase ? `Saison ${phase.displayName}` : undefined)}
       phasePoints={inPhase ? pointsFor(playerPhasePoints, inPhase, player.id) || undefined : undefined}
-      pointsLabel={rankingLabel(phase ? federationOfPhase(phase, seasons) : undefined)}
+      pointsLabel={rankingLabel(phase ? federationOfPhase(phase) : undefined)}
       gamesPlayed={history.filter((e) => e.isPast).length}
       gamesTotal={gamesTotal}
       team={team}

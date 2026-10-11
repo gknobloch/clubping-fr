@@ -59,7 +59,7 @@ export function HomePage() {
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
 
   const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
-  const activePhase = activePhaseOf(phases, seasons)
+  const activePhase = activePhaseOf(phases)
   const myActiveTeam = useMemo(
     () =>
       myPlayerId && activePhase

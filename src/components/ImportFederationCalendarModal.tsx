@@ -6,7 +6,7 @@ import { extractPdfScheduleLines } from '@/lib/pdfScheduleText'
 import { isAgrScheduleDocument, parseAgrScheduleLines, type AgrScheduleDocument } from '@/lib/agrScheduleDocument'
 import { matchFederationClub } from '@/lib/federationClubMatch'
 import { phasesOfFederation } from '@/lib/federations'
-import { localPhaseId, ffttPhaseIdForName } from '@/lib/ffttPhases'
+import { phaseIdFor, ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { orderPhases } from '@/lib/phases'
 
 const SELECT_CLASS =
@@ -46,7 +46,7 @@ export function ImportFederationCalendarModal({
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState<FederationScheduleImportSummary | null>(null)
 
-  const fedPhases = useMemo(() => orderPhases(phasesOfFederation(phases, seasons, federationId)), [phases, seasons, federationId])
+  const fedPhases = useMemo(() => orderPhases(phasesOfFederation(phases, federationId)), [phases, seasons, federationId])
   const fedCompetitions = useMemo(
     () => competitions.filter((c) => c.federationId === federationId && !c.isArchived),
     [competitions, federationId],
@@ -74,7 +74,7 @@ export function ImportFederationCalendarModal({
       if ('error' in parsed) { setError(parsed.error); return }
       setDoc(parsed)
       // The phase its header names, when the general admin has created it.
-      const named = fedPhases.find((p) => p.id === localPhaseId(`${federationId}-${parsed.seasonEndYear - 2000}`, parsed.phaseNumber))
+      const named = fedPhases.find((p) => p.id === phaseIdFor(federationId, parsed.seasonEndYear - 2000, parsed.phaseNumber))
         ?? fedPhases.find((p) => ffttPhaseIdForName(p.name) === String(parsed.phaseNumber))
       setPhaseId(named?.id ?? fedPhases[fedPhases.length - 1]?.id ?? '')
       const championship = key(parsed.championship.replace(/^championnat\s*/i, ''))
