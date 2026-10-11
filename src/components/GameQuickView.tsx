@@ -31,7 +31,7 @@ export function GameQuickView({
 }) {
   const { user } = useAuth()
   const {
-    clubs, teams, players, groups, divisions, matchDays, games,
+    clubs, teams, players, groups, divisions, competitions, matchDays, games,
     gameAvailabilities, gameSelections, playerSeasonLicences, seasons,
     setGameAvailability, clearGameAvailability,
   } = useAppData()
@@ -58,8 +58,9 @@ export function GameQuickView({
   const committed = useMemo(() => {
     if (!team || !matchDay) return new Map<string, number>()
     const clubTeams = teams.filter((t) => t.clubId === team.clubId && t.phaseId === team.phaseId)
-    return playersCommittedElsewhere(team.id, matchDay.number, clubTeams, games, matchDays, gameSelections)
-  }, [team, matchDay, teams, games, matchDays, gameSelections])
+    // The AGR lets a player play twice in one journée from the fourth (#651).
+    return playersCommittedElsewhere(team.id, matchDay.number, clubTeams, games, matchDays, gameSelections, { divisions, competitions })
+  }, [team, matchDay, teams, games, matchDays, gameSelections, divisions, competitions])
 
   if (!game || !team || !matchDay) return null
 

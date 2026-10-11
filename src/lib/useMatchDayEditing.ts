@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { isPlayerEligibleForTeam } from '@/lib/brulage'
+import { mayPlayBothInRound } from '@/lib/matchdays'
 import { answerOverride, mayAnswerFor, mayManageTeam } from '@/lib/teamAuthority'
 import type { AvailabilityStatus } from '@/types'
 
@@ -112,10 +113,21 @@ export function useMatchDayEditing(phaseId: string | null) {
     // and the API now refuses it, which would have taken the whole batch with
     // it. A player can only be picked for their own club's teams anyway.
     const mine = new Set(myClubTeamsInPhase.map((t) => t.id))
+    // The matrix picks one team per journée. At the AGR a player may hold a
+    // second line-up of the same journée from the fourth (art. 30, #651) —
+    // made from the match's sheet; picking a team here keeps it rather than
+    // undoing it behind the captain's back. « — » still clears them all.
+    const target = teamId ? myClubTeamsInPhase.find((t) => t.id === teamId) : undefined
+    const round = matchDays.find((md) => md.id === matchDayId)?.number ?? 0
+    const keeps = (side: string) => {
+      const other = myClubTeamsInPhase.find((t) => t.id === side)
+      return !!target && !!other && side !== teamId
+        && mayPlayBothInRound(target, other, round, { divisions, competitions })
+    }
     const updates: Array<{ gameId: string; teamId: string; playerIds: string[] }> = []
     for (const game of allDayGames) {
       for (const side of [game.homeTeamId, game.awayTeamId]) {
-        if (!mine.has(side)) continue
+        if (!mine.has(side) || keeps(side)) continue
         const ids = getGameSelectionPlayerIds(game.id, side).filter((id) => id !== playerId)
         if (teamId === side) ids.push(playerId)
         updates.push({ gameId: game.id, teamId: side, playerIds: ids })

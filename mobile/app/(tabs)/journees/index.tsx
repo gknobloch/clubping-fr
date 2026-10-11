@@ -8,6 +8,7 @@ import { phaseScope } from '@shared/lib/phaseScope'
 import { FederationSwitch } from '@/components/FederationSwitch'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { mayPlayBothInRound } from '@shared/lib/matchdays'
 import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
@@ -554,9 +555,15 @@ export default function JourneesScreen() {
    */
   async function compose(group: MatchDayGroup, playerId: string, targetTeamId: string | null) {
     setComposing(null)
+    // At the AGR a second line-up of the same journée may be allowed (art. 30,
+    // #651) — made from the match's sheet; picking a team here keeps it, as on
+    // the web. Choosing none still clears them all.
+    const target = clubTeams.find((t) => t.id === targetTeamId)
+    const roundCtx = { divisions: divisions ?? [], competitions: competitions ?? [] }
     for (const t of clubTeams) {
       const { game } = teamGame(t, group.matchDays)
       if (!game) continue
+      if (target && t.id !== target.id && mayPlayBothInRound(target, t, group.number, roundCtx)) continue
       const current = selectionOf(t.id, game.id)
       const next =
         t.id === targetTeamId

@@ -151,6 +151,8 @@ export function MatchDayDetailPage() {
     games,
     matchDays,
     gameSelections,
+    // The AGR's art. 30 (#651).
+    { divisions, competitions },
   )
 
   // Points belong to the phase, not to the fielding team (#384), so a renfort
