@@ -220,3 +220,24 @@ export async function removeDelegate(personId: string, delegateId: string): Prom
     return false
   }
 }
+
+// --- Reading a PDF (#681) -----------------------------------------------------
+// Hermes runs no pdf.js, so a picked PDF is sent to the API, which returns its
+// text lines — the very lines the web reads in the browser. Nothing is kept
+// server-side.
+
+export type PdfLinesOutcome = { ok: true; lines: string[] } | { ok: false; message: string }
+
+export async function readPdfLines(file: { uri: string; name: string; mimeType?: string }): Promise<PdfLinesOutcome> {
+  try {
+    const form = new FormData()
+    // React Native's FormData takes a file as { uri, name, type }.
+    form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/pdf' } as unknown as Blob)
+    const res = await fetch(apiUrl('/pdf/lines'), { method: 'POST', headers: dataHeaders(), body: form })
+    const body = (await res.json().catch(() => null)) as { lines?: string[]; message?: string } | null
+    if (res.ok && body?.lines) return { ok: true, lines: body.lines }
+    return { ok: false, message: body?.message ?? 'Impossible de lire ce fichier.' }
+  } catch {
+    return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+  }
+}

@@ -14,6 +14,6 @@
   },
   // *.testkit.ts: helpers the tests share (a migrated SQLite, #655) — under
   // Node like the tests, never in the worker, and not suites of their own.
-  "include": ["functions/**/*.test.ts", "functions/**/*.spec.ts", "functions/**/*.testkit.ts"],
+  "include": ["functions/**/*.test.ts", "functions/**/*.spec.ts", "functions/**/*.testkit.ts", "functions/**/*.d.ts"],
   "exclude": []
 }

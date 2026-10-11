@@ -616,6 +616,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           phone: '',
           status: 'active',
           clubId: c.clubId,
+          // A list of a federation without an API carries its licence here (#681).
+          ...(c.licences ? { licences: c.licences } : {}),
         })
       }
       for (const u of writes.updates) await write(`/players/${u.id}`, 'PATCH', u.patch)
