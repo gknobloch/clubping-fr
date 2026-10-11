@@ -18,7 +18,9 @@ export function FederationSwitch({
     <div
       role="radiogroup"
       aria-label="Fédération"
-      className="inline-flex h-11 overflow-hidden rounded-lg border border-slate-200 bg-white text-sm md:h-9"
+      // A ring, not a border: a border takes 2px off the 44 the buttons must
+      // fill on a phone (#372), and the switch stays the phase pager's height.
+      className="inline-flex h-11 overflow-hidden rounded-lg bg-white text-sm ring-1 ring-slate-200 md:h-9"
     >
       {options.map((f) => (
         <button
