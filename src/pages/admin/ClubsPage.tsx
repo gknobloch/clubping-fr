@@ -108,11 +108,11 @@ export function ClubsPage() {
             )}
           </>
         }
-        // The switch of every other list (#700), with « Toutes » first: Kembs
+        // The switch of every other list (#700), with « Tous » first: Kembs
         // is in both federations, and the list starts on every club.
         controls={federations.length > 1 && (
           <FederationSwitch
-            options={[{ id: '', shortName: 'Toutes' }, ...federations]}
+            options={[{ id: '', shortName: 'Tous' }, ...federations]}
             value={federationFilter ?? ''}
             onChange={setFederationFilter}
           />

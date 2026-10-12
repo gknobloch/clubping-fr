@@ -1,4 +1,5 @@
 import type { Federation } from '@/types'
+import { TOOLBAR_PILL_CLASS } from '@/components/Button'
 
 /**
  * « FFTT | AGR » — the federation a page is about, before its phase (#645).
@@ -18,9 +19,9 @@ export function FederationSwitch({
     <div
       role="radiogroup"
       aria-label="Fédération"
-      // A ring, not a border: a border takes 2px off the 44 the buttons must
-      // fill on a phone (#372), and the switch stays the phase pager's height.
-      className="inline-flex h-11 overflow-hidden rounded-lg bg-white text-sm ring-1 ring-slate-200 md:h-9"
+      // The phase pager's outline and height (#706); the border sits outside
+      // the 44px the buttons fill on a phone (#372).
+      className={`inline-flex overflow-hidden text-sm ${TOOLBAR_PILL_CLASS}`}
     >
       {options.map((f) => (
         <button
