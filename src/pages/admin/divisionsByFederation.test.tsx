@@ -138,6 +138,27 @@ describe('Groupes — one federation at a time', () => {
     expect(optionsOf(screen.getByLabelText('Division'))).toEqual(['Choisir une division…', 'Excellence', 'Honneur'])
     expect(screen.queryByRole('button', { name: 'Importer les groupes FFTT' })).not.toBeInTheDocument()
   })
+
+  it('names an AGR poule by its letter, and picks it by letter (#696)', () => {
+    as('general_admin')
+    renderPage(<GroupsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
+    fireEvent.change(screen.getByLabelText('Division'), { target: { value: 'd-exc' } })
+    expect(screen.getByRole('columnheader', { name: 'Poule' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'A' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter un groupe' }))
+    const poule = within(screen.getByRole('dialog')).getByLabelText('Poule')
+    expect((poule as HTMLSelectElement).selectedOptions[0].textContent).toBe('B')
+  })
+
+  it('keeps numbering an FFTT poule', () => {
+    as('general_admin')
+    renderPage(<GroupsPage />)
+    fireEvent.change(screen.getByLabelText('Division'), { target: { value: 'd-ge3' } })
+    expect(screen.getByRole('columnheader', { name: 'N° groupe' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: '1' })).toBeInTheDocument()
+  })
 })
 
 describe('Équipes — the club’s federations only', () => {

@@ -19,6 +19,8 @@ import { divisionIdsOfOrganization, filtersLocally, localOrganizationOptions } f
 import { useConfirm } from '@/components/useConfirm'
 import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision } from '@/lib/federations'
 import { phaseScope } from '@/lib/phaseScope'
+import { isLetteredDivision, poolName, poolTitle } from '@/lib/poolLabel'
+import { poolLetterOf } from '@/lib/agrScheduleDocument'
 
 export function GroupsPage() {
   const { user } = useAuth()
@@ -165,6 +167,12 @@ export function GroupsPage() {
         .sort((a, b) => a.rank - b.rank),
     [divisions, competitions, form.federationId, form.divisionId, dialogPhaseId],
   )
+  // « Poule A » at the AGR, « Groupe 3 » at the FFTT (#696): the number is
+  // stored either way.
+  const nameOf = (g: Pick<Group, 'number' | 'divisionId'>) => poolName(g, { divisions, competitions })
+  const titleOf = (g: Pick<Group, 'number' | 'divisionId'>) => poolTitle(g, { divisions, competitions })
+  const lettered = !!division && isLetteredDivision(division, competitions)
+  const dialogLettered = form.federationId !== FFTT_FEDERATION_ID
   const nextGroupNumber = (divId: string) => allGroups.filter((g) => g.divisionId === divId).length + 1
 
   const openEdit = (group: Group) => {
@@ -214,19 +222,19 @@ export function GroupsPage() {
   }
 
   const handleArchive = async (group: Group) => {
-    if (await confirm({ title: `Archiver le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
+    if (await confirm({ title: `Archiver le groupe "${division?.displayName ?? ''} - ${titleOf(group)}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveGroup(group.id)
     }
   }
 
   const handleDelete = async (group: Group) => {
-    if (await confirm({ title: `Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
+    if (await confirm({ title: `Supprimer définitivement le groupe "${division?.displayName ?? ''} - ${titleOf(group)}" ?`, message: `Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteGroup(group.id)
     }
   }
 
   const handleResetGames = async (group: Group) => {
-    if (await confirm({ title: `Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`, confirmLabel: 'Réinitialiser' })) {
+    if (await confirm({ title: `Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - ${titleOf(group)}" ?`, message: `Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`, confirmLabel: 'Réinitialiser' })) {
       resetGroupGames(group.id)
     }
   }
@@ -353,7 +361,7 @@ export function GroupsPage() {
             <thead className="bg-slate-50">
               <tr>
                 <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
-                  N° groupe
+                  {lettered ? 'Poule' : 'N° groupe'}
                 </th>
                 <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                   Équipes
@@ -367,7 +375,7 @@ export function GroupsPage() {
               {groups.map((group) => (
                 <tr key={group.id} className={`hover:bg-slate-50/50 ${group.isArchived ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                    {group.number}
+                    {nameOf(group)}
                     {group.isArchived && (
                       <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">
                         Archivé
@@ -379,7 +387,7 @@ export function GroupsPage() {
                   </td>
                   <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
                     <RowActions
-                      label={`Actions — groupe ${group.number}`}
+                      label={`Actions — ${titleOf(group).toLowerCase()}`}
                       actions={[
                         !group.isArchived && { label: 'Modifier', onClick: () => openEdit(group) },
                         !group.isArchived && isAdmin && {
@@ -434,7 +442,7 @@ export function GroupsPage() {
         <ImportGamesModal
           onClose={() => setImportGamesFor(null)}
           groupIds={[importGamesFor.id]}
-          context={`${division?.displayName ?? ''} · Groupe ${importGamesFor.number} — calendrier de cette poule`}
+          context={`${division?.displayName ?? ''} · ${titleOf(importGamesFor)} — calendrier de cette poule`}
         />
       )}
 
@@ -497,16 +505,30 @@ export function GroupsPage() {
               </div>
               <div>
                 <label htmlFor="group-number" className="block text-sm font-medium text-slate-700">
-                  N° groupe
+                  {dialogLettered ? 'Poule' : 'N° groupe'}
                 </label>
-                <input
-                  id="group-number"
-                  type="number"
-                  min={1}
-                  value={form.number}
-                  onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                />
+                {dialogLettered ? (
+                  // A letter is picked, its number stored (#696).
+                  <select
+                    id="group-number"
+                    value={form.number}
+                    onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    {Array.from({ length: Math.max(26, form.number) }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>{poolLetterOf(n)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="group-number"
+                    type="number"
+                    min={1}
+                    value={form.number}
+                    onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  />
+                )}
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">

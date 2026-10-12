@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { poolLabel } from '@/lib/poolLabel'
+import { poolLabel, poolTitle } from '@/lib/poolLabel'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
 import { federationOfTeam, licenceOf } from '@/lib/licences'
 import { FFTT_FEDERATION_ID } from '@/lib/federations'
@@ -488,7 +488,9 @@ export function MatchDaysPage() {
     const g = groups.find((x) => x.id === groupId)
     if (!g) return groupId
     const div = divisions.find((d) => d.id === g.divisionId)
-    return div ? `${div.displayName} – Groupe ${g.number}` : `Groupe ${g.number}`
+    // « Poule A » at the AGR (#696).
+    const name = poolTitle(g, { divisions, competitions })
+    return div ? `${div.displayName} – ${name}` : name
   }
 
   const getAvailability = (gameId: string, playerId: string): AvailabilityStatus | undefined => {
