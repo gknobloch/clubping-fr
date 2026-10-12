@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { DataProvider } from '@/contexts/DataContext'
 import { mockFederations } from '@/mock/data'
 import type { Club, Competition, Division, Phase, Season } from '@/types'
-import { PROM_HONNEUR_A_PHASE_1 } from '@/lib/__fixtures__/agrSchedules'
+import { PROM_HONNEUR_A_PHASE_1, PROM_HONNEUR_A_PHASE_2 } from '@/lib/__fixtures__/agrSchedules'
 
 // #647 — the review of an AGR calendar: phase, competition, and which club
 // each name is, before anything is written.
@@ -30,12 +30,12 @@ const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat Messieurs', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },
 ]
 
-function open(viewerClubId?: string, divisions: Division[] = []) {
-  extract.lines = PROM_HONNEUR_A_PHASE_1
+function open(viewerClubId?: string, divisions: Division[] = [], lines = PROM_HONNEUR_A_PHASE_1, phaseList = phases) {
+  extract.lines = lines
   render(
     <DataProvider
       initialData={{
-        divisions, clubs, seasons, phases, competitions, competitionGroups: [], competitionEligibilities: [],
+        divisions, clubs, seasons, phases: phaseList, competitions, competitionGroups: [], competitionEligibilities: [],
         federations: mockFederations, groups: [], teams: [], players: [], playerSeasonCategories: [],
         playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
         playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [], users: [],
@@ -97,5 +97,27 @@ describe('ImportFederationCalendarModal', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     fireEvent.change(input, { target: { files: [new File(['x'], 'scan.pdf', { type: 'application/pdf' })] } })
     expect(await screen.findByRole('alert')).toHaveTextContent('pas de texte lisible')
+  })
+
+  it('proposes the phase’s division the calendar means — « Prom. HONNEUR » is « Promotion Honneur » (#647)', async () => {
+    open('landser', [
+      { id: 'd-exc', phaseId: 'phase-agr-27-1', displayName: 'Excellence', rank: 1, playersPerGame: 4, isArchived: false, competitionId: 'c-agr' },
+      { id: 'd-ph', phaseId: 'phase-agr-27-1', displayName: 'Promotion Honneur', rank: 4, playersPerGame: 4, isArchived: false, competitionId: 'c-agr' },
+    ])
+    const division = await screen.findByLabelText('Division') as HTMLSelectElement
+    expect(division.value).toBe('d-ph')
+    // Changeable, and « create » stays offered.
+    expect(within(division).getAllByRole('option').map((o) => o.textContent))
+      .toEqual(['Créer « Prom. HONNEUR »', 'Excellence', 'Promotion Honneur'])
+  })
+
+  it('chooses no phase for a phase-2 calendar when the AGR has no phase 2, and says so', async () => {
+    open('landser', [], PROM_HONNEUR_A_PHASE_2, phases.slice(0, 1))
+    expect(await screen.findByText(/La phase 2 2026\/2027 de l’AGR n’existe pas encore/)).toBeInTheDocument()
+    expect((screen.getByLabelText('Phase') as HTMLSelectElement).value).toBe('')
+    expect(screen.getByRole('button', { name: 'Importer' })).toBeDisabled()
+    // Chosen by hand anyway, the mismatch is said.
+    fireEvent.change(screen.getByLabelText('Phase'), { target: { value: 'phase-agr-27-1' } })
+    expect(screen.getByText('Ce calendrier est celui de la phase 2, pas de 2026/2027 Phase 1.')).toBeInTheDocument()
   })
 })

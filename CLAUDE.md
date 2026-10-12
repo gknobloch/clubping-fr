@@ -791,6 +791,18 @@ invisible dans le diff comme dans la revue.
 - **Qui** : l'administrateur général, ou l'administrateur d'un club **de la
   fédération que le calendrier nomme** — il construit la poule où son club
   joue. Ensuite la règle de #577 vaut comme partout.
+- **La division se choisit dans la revue** : celle de la phase que le nom
+  désigne est proposée (`matchDivisionName`) — « Prom. HONNEUR » est
+  « Promotion Honneur », « DIVISION I » est « Division 1 » : abréviations,
+  capitales, articles et chiffres romains ramenés à une clé
+  (`divisionNameKey`, `src/lib/divisionNames.ts`) —, une autre peut être
+  prise, ou « Créer ». L'API prend celle choisie (refusée si elle n'est pas
+  de la phase) et, sans choix, cherche avec la même clé. Le miroir de la
+  phase retour (#649) aussi.
+- **La phase est celle que le calendrier nomme**, saison et numéro, et
+  aucune autre : un calendrier de phase 2 rangé en phase 1 empilerait ses
+  journées 8 à 14 sur celles de la phase 1. Absente, rien n'est choisi et la
+  revue le dit ; choisie à la main, l'écart est dit aussi.
 - **Idempotent** : division par (phase, nom), poule par (division, numéro),
   équipe par (club, phase, numéro), journée par (poule, numéro), rencontre par
   ses deux équipes. Landser puis Kembs importent la même Promotion Honneur :

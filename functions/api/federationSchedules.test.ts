@@ -122,4 +122,27 @@ describe('importing an AGR calendar (#647)', () => {
     expect((await ga({ ...body, competitionId: 'nope' })).status).toBe(400)
     expect(d1.count('divisions')).toBe(0)
   })
+
+  it('puts « Prom. HONNEUR » in our « Promotion Honneur », or in the division the review chose (#647)', async () => {
+    const d1 = world()
+    d1.exec(`INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, competition_id) VALUES
+      ('d-ph', 'phase-agr-27-1', 'Promotion Honneur', 4, 4, 0, 'comp-agr'),
+      ('d-other', 'phase-agr-27-1', 'Honneur', 3, 4, 0, 'comp-agr')`)
+    const landser = await as(d1, 'landser-admin')
+    const res = await landser(payload(doc(PROM_HONNEUR_A_PHASE_1), 'phase-agr-27-1', { 'LANDSER ASL': LANDSER, 'KEMBS ASL TT': KEMBS }))
+    expect(await res.json()).toMatchObject({ divisionId: 'd-ph', created: { division: false } })
+    expect(d1.rows('SELECT division_id FROM groups')).toEqual([{ division_id: 'd-ph' }])
+    expect(d1.rows('SELECT count(*) AS n FROM divisions')).toEqual([{ n: 2 }])
+  })
+
+  it('takes the division chosen in the review, and refuses one of another phase', async () => {
+    const d1 = world()
+    d1.exec(`INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, competition_id) VALUES
+      ('d-chosen', 'phase-agr-27-1', 'PH secteur Sud', 4, 4, 0, 'comp-agr'),
+      ('d-p2', 'phase-agr-27-2', 'Promotion Honneur', 4, 4, 0, 'comp-agr')`)
+    const landser = await as(d1, 'landser-admin')
+    const body = payload(doc(PROM_HONNEUR_A_PHASE_1), 'phase-agr-27-1', { 'LANDSER ASL': LANDSER, 'KEMBS ASL TT': KEMBS })
+    expect((await landser({ ...body, divisionId: 'd-p2' })).status).toBe(400)
+    expect(await (await landser({ ...body, divisionId: 'd-chosen' })).json()).toMatchObject({ divisionId: 'd-chosen' })
+  })
 })
