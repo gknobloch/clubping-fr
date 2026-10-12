@@ -859,6 +859,13 @@ invisible dans le diff comme dans la revue.
   (`matchFederationClub` : nom AGR, puis nom affiché). Le nom AGR est retenu
   sur le club (`club_federations.name`, jamais écrasé), donc le second
   calendrier retrouve tout.
+- **Un club créé par un import porte un nom lisible** (#704) : « INGERSHEIM ST
+  ALOYSE » devient « Ingersheim St Aloyse » (`clubNameFromFederation`, la
+  règle de `normalizeFfttName`), sur l'import AGR comme sur les imports de
+  rencontres et de PDF de la FFTT. Le nom imprimé reste celui de
+  `club_federations.name`, contre lequel on rapproche. Un club retrouvé dont le
+  nom est encore entièrement en capitales est renommé — personne ne l'a écrit
+  ainsi ; un nom qui porte une minuscule n'est jamais touché.
 - **Qui** : l'administrateur général, ou l'administrateur d'un club **de la
   fédération que le calendrier nomme** — il construit la poule où son club
   joue. Ensuite la règle de #577 vaut comme partout.

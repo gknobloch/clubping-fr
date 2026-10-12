@@ -94,6 +94,26 @@ describe('importing an AGR calendar (#647)', () => {
     expect(d1.count('games')).toBe(28)
   })
 
+  it('names the clubs it creates for people, and the ones still in capitals it finds again (#704)', async () => {
+    const d1 = world()
+    // Created by an earlier import, never renamed — and one an admin wrote.
+    d1.exec(`INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES
+      ('club-old', '', 'ILLZACH ST JEAN BAPTISTE', 0)`)
+    const d = doc(PROM_HONNEUR_A_PHASE_1)
+    const opponent = d.clubs.find((n) => n.startsWith('ILLZACH'))!
+    const res = await (await as(d1, 'landser-admin'))(payload(d, 'phase-agr-27-1', {
+      'LANDSER ASL': LANDSER, 'KEMBS ASL TT': KEMBS, [opponent]: 'club-old',
+    }))
+    expect(res.status).toBe(200)
+    // No club the import touched is left in capitals; Landser's own name stands.
+    const names = d1.rows<{ display_name: string }>('SELECT display_name FROM clubs').map((r) => r.display_name)
+    expect(names.filter((n) => n === n.toUpperCase())).toEqual([])
+    expect(names).toContain('Landser ASL')
+    expect(d1.rows("SELECT display_name FROM clubs WHERE id = 'club-old'")).toEqual([{ display_name: 'Illzach St Jean Baptiste' }])
+    // The printed name is still what the next calendar is matched on.
+    expect(d1.count("club_federations WHERE name = 'LANDSER ASL'")).toBe(1)
+  })
+
   it('keeps phase 2’s journées 8 to 14, in the AGR’s phase 2', async () => {
     const d1 = world()
     const res = await (await as(d1, 'landser-admin'))(payload(doc(PROM_HONNEUR_A_PHASE_2), 'phase-agr-27-2', { 'LANDSER ASL': LANDSER, 'KEMBS ASL TT': KEMBS }))
