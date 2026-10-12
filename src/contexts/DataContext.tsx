@@ -371,6 +371,8 @@ export interface FederationScheduleImportInput {
   phaseId: string
   competitionId: string
   division: string
+  /** An existing division of the phase to put the poule in (#647); absent, it is found by name or created. */
+  divisionId?: string
   poolNumber: number
   playersPerGame: number
   /** What phase 2 of this division is (#649) — asked when importing phase 1. */

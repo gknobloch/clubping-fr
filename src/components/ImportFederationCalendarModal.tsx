@@ -5,6 +5,8 @@ import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { extractPdfScheduleLines } from '@/lib/pdfScheduleText'
 import { isAgrScheduleDocument, parseAgrScheduleLines, type AgrScheduleDocument } from '@/lib/agrScheduleDocument'
 import { matchFederationClub } from '@/lib/federationClubMatch'
+import { matchDivisionName } from '@/lib/divisionNames'
+import { federationOfDivision } from '@/lib/federations'
 import { phasesOfFederation } from '@/lib/federations'
 import { phaseIdFor, ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { orderPhases } from '@/lib/phases'
@@ -39,6 +41,8 @@ export function ImportFederationCalendarModal({
   const [reading, setReading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phaseId, setPhaseId] = useState('')
+  /** The division the poule goes in: one of the phase's, or '' to create it under the calendar's name. */
+  const [divisionId, setDivisionId] = useState('')
   const [competitionId, setCompetitionId] = useState('')
   const [playersPerGame, setPlayersPerGame] = useState(4)
   const [secondPhase, setSecondPhase] = useState<'' | 'return_leg' | 'new_groups'>('')
@@ -51,6 +55,17 @@ export function ImportFederationCalendarModal({
     () => competitions.filter((c) => c.federationId === federationId && !c.isArchived),
     [competitions, federationId],
   )
+  // The phase's divisions of this federation — what the poule may go in.
+  const divisionsOf = (pid: string) => divisions
+    .filter((d) => d.phaseId === pid && !d.isArchived && federationOfDivision(d, competitions) === federationId)
+    .sort((a, b) => a.rank - b.rank)
+  // « Prom. HONNEUR » is our « Promotion Honneur » (#647): proposed, never forced.
+  const matchedDivisionId = (pid: string, name: string) => matchDivisionName(name, divisionsOf(pid))?.id ?? ''
+  const changePhase = (pid: string) => {
+    setPhaseId(pid)
+    if (doc) setDivisionId(matchedDivisionId(pid, doc.division))
+  }
+
   // The clubs a name may be attached to: those of the federation, by name.
   const fedClubs = useMemo(
     () => clubs
@@ -73,16 +88,20 @@ export function ImportFederationCalendarModal({
       const parsed = parseAgrScheduleLines(lines)
       if ('error' in parsed) { setError(parsed.error); return }
       setDoc(parsed)
-      // The phase its header names, when the general admin has created it.
-      const named = fedPhases.find((p) => p.id === phaseIdFor(federationId, parsed.seasonEndYear - 2000, parsed.phaseNumber))
-        ?? fedPhases.find((p) => ffttPhaseIdForName(p.name) === String(parsed.phaseNumber))
-      setPhaseId(named?.id ?? fedPhases[fedPhases.length - 1]?.id ?? '')
+      // The phase its header names — that season, that number — and no other:
+      // a phase-2 calendar filed under phase 1 would number its journées on
+      // top of phase 1's. Not there yet, nothing is chosen, and the dialog says so.
+      const seasonId = String(parsed.seasonEndYear - 2000)
+      const named = fedPhases.find((p) => p.id === phaseIdFor(federationId, seasonId, parsed.phaseNumber))
+        ?? fedPhases.find((p) => p.seasonId === seasonId && ffttPhaseIdForName(p.name) === String(parsed.phaseNumber))
+      setPhaseId(named?.id ?? '')
+      setDivisionId(named ? matchedDivisionId(named.id, parsed.division) : '')
       const championship = key(parsed.championship.replace(/^championnat\s*/i, ''))
       setCompetitionId((fedCompetitions.find((c) => championship && key(c.displayName).includes(championship)) ?? fedCompetitions[0])?.id ?? '')
       setPlayersPerGame(/division\s*2\b/i.test(parsed.division) ? 3 : 4)
       // What phase 2 is (#649): what the division already says, else what the
       // calendar's notes say — the AGR writes « phase retour » when it is one.
-      const known = divisions.find((d) => d.phaseId === named?.id && key(d.displayName) === key(parsed.division))?.secondPhase
+      const known = named ? matchDivisionName(parsed.division, divisionsOf(named.id))?.secondPhase : undefined
       setSecondPhase(known ?? (parsed.notes.some((n) => /\bretour\b/i.test(n)) ? 'return_leg' : ''))
       setClubIds(Object.fromEntries(parsed.clubs.map((name) => [name, matchFederationClub(name, clubs, federationId)?.id ?? ''])))
     } catch {
@@ -102,6 +121,7 @@ export function ImportFederationCalendarModal({
     setError(null)
     const result = await importFederationSchedule({
       federationId, phaseId, competitionId, division: doc.division, poolNumber: doc.poolNumber,
+      ...(divisionId ? { divisionId } : {}),
       playersPerGame, notes: doc.notes,
       ...(doc.phaseNumber === 1 && secondPhase ? { secondPhase } : {}),
       clubs: doc.clubs.map((name) => ({ name, clubId: clubIds[name] || null })),
@@ -181,8 +201,8 @@ export function ImportFederationCalendarModal({
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label htmlFor="fed-cal-phase" className="block text-sm font-medium text-slate-700">Phase</label>
-                <select id="fed-cal-phase" value={phaseId} onChange={(e) => setPhaseId(e.target.value)} className={SELECT_CLASS}>
-                  {fedPhases.length === 0 && <option value="">Aucune phase</option>}
+                <select id="fed-cal-phase" value={phaseId} onChange={(e) => changePhase(e.target.value)} className={SELECT_CLASS}>
+                  {!phaseId && <option value="">{fedPhases.length === 0 ? 'Aucune phase' : 'Choisir une phase…'}</option>}
                   {fedPhases.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
                 </select>
               </div>
@@ -201,6 +221,43 @@ export function ImportFederationCalendarModal({
                 </select>
               </div>
             </div>
+            {(() => {
+              // The phase the calendar is: missing, or another one chosen by hand.
+              const chosen = fedPhases.find((p) => p.id === phaseId)
+              const season = `${doc.seasonEndYear - 1}/${doc.seasonEndYear}`
+              if (!phaseId) {
+                return (
+                  <p role="alert" className="text-sm text-amber-800">
+                    La phase {doc.phaseNumber} {season} de l’{federation?.shortName ?? 'AGR'} n’existe pas encore :
+                    l’administrateur général la crée d’abord (Phases), ou choisissez-en une autre.
+                  </p>
+                )
+              }
+              return chosen && ffttPhaseIdForName(chosen.name) !== String(doc.phaseNumber) ? (
+                <p role="alert" className="text-sm text-amber-800">
+                  Ce calendrier est celui de la phase {doc.phaseNumber}, pas de {chosen.displayName}.
+                </p>
+              ) : null
+            })()}
+            {phaseId && (
+              <div>
+                <label htmlFor="fed-cal-division" className="block text-sm font-medium text-slate-700">Division</label>
+                <select
+                  id="fed-cal-division"
+                  value={divisionId}
+                  onChange={(e) => setDivisionId(e.target.value)}
+                  className={SELECT_CLASS}
+                >
+                  <option value="">Créer « {doc.division} »</option>
+                  {divisionsOf(phaseId).map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+                </select>
+                {divisionId && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    La poule {doc.poolLetter} y sera ajoutée, ou retrouvée si elle y est déjà.
+                  </p>
+                )}
+              </div>
+            )}
             {doc.phaseNumber === 1 && (
               <div>
                 <label htmlFor="fed-cal-second-phase" className="block text-sm font-medium text-slate-700">Phase 2</label>

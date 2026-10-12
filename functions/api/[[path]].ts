@@ -25,6 +25,7 @@ import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt, seasonNumber } 
 import { addressTakenMessage } from '../../src/lib/addressOwner'
 import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
 import { pdfTextLines } from '../../src/lib/pdfLines'
+import { divisionNameKey } from '../../src/lib/divisionNames'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, ffttPhaseIdForName, localPhaseId, phaseIdFor, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -3198,6 +3199,8 @@ interface FederationScheduleInput {
   phaseId: string
   competitionId: string
   division: string
+  /** An existing division of the phase, chosen in the review (#647); absent, found by name or created. */
+  divisionId?: string
   poolNumber: number
   playersPerGame: number
   /** What phase 2 of this division is (#649); absent leaves what is stored. */
@@ -3234,6 +3237,7 @@ function parseFederationScheduleInput(b: Record<string, unknown>): FederationSch
   const input = {
     federationId: str(b.federationId), phaseId: str(b.phaseId), competitionId: str(b.competitionId),
     division: str(b.division), poolNumber: Number(b.poolNumber),
+    ...(str(b.divisionId) ? { divisionId: str(b.divisionId) } : {}),
     playersPerGame: Number(b.playersPerGame) === 3 ? 3 : 4,
     ...(b.secondPhase === 'return_leg' || b.secondPhase === 'new_groups' ? { secondPhase: b.secondPhase as 'return_leg' | 'new_groups' } : {}),
     notes: (Array.isArray(b.notes) ? b.notes : []).map(str).filter(Boolean).slice(0, 10),
@@ -3296,11 +3300,21 @@ app.post('/federation-schedules/import', async (c) => {
     }
   }
 
-  // Division by (phase, name), poule by (division, number).
-  const key = (name: string) => name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?')
+  // Division: the one the review chose, else found by name — « Prom. HONNEUR »
+  // is « Promotion Honneur » (`divisionNameKey`) —, else created. Poule by
+  // (division, number).
+  const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ? AND is_archived = 0')
     .bind(input.phaseId).all<{ id: string; display_name: string; rank: number }>()
-  const existingDivision = divisions.results.find((d) => key(d.display_name) === key(input.division))
+  let existingDivision: { id: string; display_name: string; rank: number } | undefined
+  if (input.divisionId) {
+    existingDivision = divisions.results.find((d) => d.id === input.divisionId)
+    if (!existingDivision) {
+      return c.json({ error: 'unknown_division', message: 'Cette division n’est pas une division de cette phase.' }, 400)
+    }
+  } else {
+    const wanted = divisionNameKey(input.division)
+    existingDivision = divisions.results.find((d) => divisionNameKey(d.display_name) === wanted)
+  }
   const divisionId = existingDivision?.id ?? newId('div')
   const stmts: D1PreparedStatement[] = []
   if (!existingDivision) {
@@ -3584,12 +3598,10 @@ async function mirrorReturnLeg(db: D1Database, groupId: string): Promise<MirrorR
   if (!next) return { ok: false, error: 'no_next_phase' }
 
   const stmts: D1PreparedStatement[] = []
-  const key = (name: string) => name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
-
   // Division by (phase, name) — the name the phase-2 PDF will carry too.
   const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?')
     .bind(next.id).all<{ id: string; display_name: string; rank: number }>()
-  const existingDivision = divisions.results.find((d) => key(d.display_name) === key(division.display_name))
+  const existingDivision = divisions.results.find((d) => divisionNameKey(d.display_name) === divisionNameKey(division.display_name))
   const divisionId = existingDivision?.id ?? newId('div')
   if (!existingDivision) {
     const rank = divisions.results.some((d) => d.rank === division.rank)
