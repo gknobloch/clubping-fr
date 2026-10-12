@@ -122,7 +122,8 @@ test.describe('Zones tactiles et tableaux sur mobile (#307, #305)', () => {
     const before = (await trigger.boundingBox())!
     expect(before.x + before.width).toBeLessThanOrEqual(375)
 
-    const scroller = page.locator('main div.overflow-x-auto').first()
+    // The table's scroller, not the header toolbar's (#700).
+    const scroller = page.locator('main div.overflow-x-auto:has(table)').first()
     await scroller.evaluate((el) => el.scrollBy({ left: 300 }))
     await expect
       .poll(async () => (await scroller.evaluate((el) => el.scrollLeft)))

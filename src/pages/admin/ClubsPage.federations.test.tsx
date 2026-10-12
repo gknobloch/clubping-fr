@@ -56,15 +56,20 @@ describe('ClubsPage — federations (#643)', () => {
 
   it('shows the clubs of one federation — Kembs in both lists', () => {
     renderPage()
-    fireEvent.change(screen.getByLabelText('Fédération'), { target: { value: 'agr' } })
+    // The switch of every other list (#700), « Toutes » first.
+    expect(screen.getByRole('radio', { name: 'Toutes' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
     expect(screen.queryByText('Rixheim PPA')).not.toBeInTheDocument()
     expect(screen.getByText('Kembs TT')).toBeInTheDocument()
     expect(screen.getByText('Landser ASL')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Fédération'), { target: { value: 'fftt' } })
+    fireEvent.click(screen.getByRole('radio', { name: 'FFTT' }))
     expect(screen.getByText('Rixheim PPA')).toBeInTheDocument()
     expect(screen.getByText('Kembs TT')).toBeInTheDocument()
     expect(screen.queryByText('Landser ASL')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Toutes' }))
+    expect(screen.getByText('Landser ASL')).toBeInTheDocument()
   })
 
   it('reads the filter from the URL, and ignores a federation it does not know', () => {

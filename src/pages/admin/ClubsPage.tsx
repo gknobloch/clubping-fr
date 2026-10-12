@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Club } from '@/types'
 import { useAppData } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportIcon, PlusIcon } from '@/components/icons'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
@@ -107,22 +108,17 @@ export function ClubsPage() {
             )}
           </>
         }
+        // The switch of every other list (#700), with « Toutes » first: Kembs
+        // is in both federations, and the list starts on every club.
+        controls={federations.length > 1 && (
+          <FederationSwitch
+            options={[{ id: '', shortName: 'Toutes' }, ...federations]}
+            value={federationFilter ?? ''}
+            onChange={setFederationFilter}
+          />
+        )}
       />
       {showsFftt && <VenueBackfill />}
-      {federations.length > 1 && (
-        <div className="flex items-center gap-2">
-          <label htmlFor="clubs-federation" className="text-sm text-slate-600">Fédération</label>
-          <select
-            id="clubs-federation"
-            value={federationFilter ?? ''}
-            onChange={(e) => setFederationFilter(e.target.value)}
-            className="min-h-[44px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 md:min-h-0 md:py-1.5 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-          >
-            <option value="">Toutes</option>
-            {federations.map((f) => <option key={f.id} value={f.id}>{f.shortName}</option>)}
-          </select>
-        </div>
-      )}
       {archivedClubs.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input

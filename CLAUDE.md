@@ -764,6 +764,11 @@ invisible dans le diff comme dans la revue.
   Divisions, la division à l'écran sur Groupes.
 - Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
   page : la phase de la FFTT n'a pas de division AGR.
+- **Fédération et phase vivent dans la barre de `PageHeader`** (`controls`),
+  sur chaque liste — Divisions et Clubs y sont venus en #700 : une carte à
+  part changeait la hauteur et l'espacement d'un écran à l'autre. La phase est
+  `PhasePager`, une seule pastille, plus une copie par page. Sur Clubs,
+  l'interrupteur commence par « Toutes » : Kembs est des deux.
 
 ### Division parente (#236, #694)
 - **Une division ne se classe jamais au-dessus de sa parente** : les chevrons
