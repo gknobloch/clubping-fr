@@ -762,6 +762,20 @@ invisible dans le diff comme dans la revue.
 - Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
   page : la phase de la FFTT n'a pas de division AGR.
 
+### Division parente (#236, #694)
+- **Une division ne se classe jamais au-dessus de sa parente** : les chevrons
+  grisés sur Divisions sont ce verrou (`canMoveDivisionUp/Down`), pas une panne.
+- **La parente se change après la création** : le formulaire « Modifier » ne
+  propose que les divisions classées au-dessus (`parentCandidates`), ce qui
+  garde le verrou vrai et rend un cycle impossible. Une parente qu'il ne liste
+  pas — supprimée, archivée, ou une division FFTT pas encore importée — reste
+  ce qu'elle est (« Division introuvable ») : le formulaire n'envoie la parente
+  que si elle a changé.
+- **Supprimer une division rattache ses enfants à sa propre parente**, ou à
+  aucune (`withoutDivision` côté écran, le même `UPDATE` dans le batch de
+  l'API). Une parente introuvable ne verrouille rien, mais ne se corrigeait
+  plus.
+
 ### Points et classement (#646)
 - **La FFTT classe par points (plus haut = mieux), l'AGR par un classement
   (plus bas = mieux)**, 25 à 80 sur la liste de Landser. Les deux se rangent

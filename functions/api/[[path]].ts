@@ -3963,7 +3963,11 @@ app.patch('/divisions/:id', async (c) => {
   if ('rank' in p) { s.push('rank = ?'); v.push(p.rank) }
   if ('playersPerGame' in p) { s.push('players_per_game = ?'); v.push(p.playersPerGame) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
-  if ('parentId' in p) { s.push('parent_id = ?'); v.push(p.parentId ?? null) }
+  // '' is « no parent », as the form says it (#694); never itself.
+  if ('parentId' in p) {
+    if (p.parentId === id) return c.json({ error: 'invalid_parent' }, 400)
+    s.push('parent_id = ?'); v.push(p.parentId || null)
+  }
   if ('identifier' in p) { s.push('identifier = ?'); v.push(p.identifier ?? null) }
   // '' is how the form says "belongs to no competition" (#482).
   if ('competitionId' in p) { s.push('competition_id = ?'); v.push(p.competitionId || null) }
@@ -3994,6 +3998,9 @@ app.delete('/divisions/:id', async (c) => {
   await db.batch([
     ...clearGroupsAndTeams(db, groups, teams, id),
     db.prepare('DELETE FROM groups WHERE division_id = ?').bind(id),
+    // Its children move up to its own parent — or to none — rather than
+    // pointing at nothing (#694); `withoutDivision` is the same rule on screen.
+    db.prepare('UPDATE divisions SET parent_id = (SELECT parent_id FROM divisions WHERE id = ?) WHERE parent_id = ?').bind(id, id),
     db.prepare('DELETE FROM divisions WHERE id = ?').bind(id),
   ])
   return c.json({ ok: true })

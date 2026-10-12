@@ -6,7 +6,9 @@ import {
   ffttIdFromIri,
   isFfttContestIdentifier,
   orderDivisions,
+  parentCandidates,
   playersPerGameFor,
+  withoutDivision,
   type FfttDivision,
 } from './ffttDivisions'
 
@@ -118,6 +120,30 @@ describe('canMoveDivisionUp / canMoveDivisionDown', () => {
   it('returns false for a division not in the list', () => {
     expect(canMoveDivisionUp({ id: 'missing' }, inPhase)).toBe(false)
     expect(canMoveDivisionDown({ id: 'missing' }, inPhase)).toBe(false)
+  })
+})
+
+describe('parentCandidates (#694)', () => {
+  // Ranked A, B, C — B is A's child, C is B's.
+  const a = { id: 'a' }
+  const b = { id: 'b', parentId: 'a' }
+  const c = { id: 'c', parentId: 'b' }
+
+  it('offers only what ranks above, so no division outranks its parent nor descends from itself', () => {
+    expect(parentCandidates(c, [a, b, c]).map((x) => x.id)).toEqual(['a', 'b'])
+    expect(parentCandidates(a, [a, b, c])).toEqual([])
+    expect(parentCandidates({ id: 'missing' }, [a, b, c])).toEqual([])
+  })
+})
+
+describe('withoutDivision (#694)', () => {
+  it('moves the children of a deleted division up to its own parent', () => {
+    const left = withoutDivision([{ id: 'a' }, { id: 'b', parentId: 'a' }, { id: 'c', parentId: 'b' }, { id: 'd', parentId: 'b' }], 'b')
+    expect(left).toEqual([{ id: 'a' }, { id: 'c', parentId: 'a' }, { id: 'd', parentId: 'a' }])
+  })
+
+  it('leaves them without a parent when the deleted one had none', () => {
+    expect(withoutDivision([{ id: 'a' }, { id: 'b', parentId: 'a' }], 'a')).toEqual([{ id: 'b' }])
   })
 })
 
