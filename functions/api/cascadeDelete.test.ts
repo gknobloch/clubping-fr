@@ -46,4 +46,21 @@ describe('cascading deletes (#291) — on a D1 that counts its bindings', () => 
     expect((await d2.del('/seasons/26')).status).toBe(200)
     expect(['seasons', 'phases', 'divisions', 'teams'].map(d2.count)).toEqual([0, 0, 0, 0])
   })
+
+  it('hands the children of a deleted division to its own parent (#694)', async () => {
+    const d1 = await world()
+    d1.exec(`INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id) VALUES
+      ('d0', 'phase-26-1', 'Excellence', 0, 4, 0, NULL),
+      ('d2', 'phase-26-1', 'GE 2', 2, 4, 0, 'd1'), ('d3', 'phase-26-1', 'GE 3', 3, 4, 0, 'd1')`)
+    d1.exec("UPDATE divisions SET parent_id = 'd0' WHERE id = 'd1'")
+    expect((await d1.del('/divisions/d1')).status).toBe(200)
+    expect(d1.rows('SELECT id, parent_id FROM divisions ORDER BY id')).toEqual([
+      { id: 'd0', parent_id: null }, { id: 'd2', parent_id: 'd0' }, { id: 'd3', parent_id: 'd0' },
+    ])
+    // And to none, when it had none.
+    expect((await d1.del('/divisions/d0')).status).toBe(200)
+    expect(d1.rows('SELECT id, parent_id FROM divisions ORDER BY id')).toEqual([
+      { id: 'd2', parent_id: null }, { id: 'd3', parent_id: null },
+    ])
+  })
 })

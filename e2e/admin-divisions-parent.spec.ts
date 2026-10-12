@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { loginAs } from './helpers'
 
 // Matches the mock data: phase-26-1 (2025/2026 Phase 1, active) has GE 1..GE 7,
-// none of them carrying a parent (they predate #236).
+// GE 2..GE 5 each hanging from the one above.
 test.describe('General admin — Division ranking (#236)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, 'admin')
@@ -39,5 +39,37 @@ test.describe('General admin — Division ranking (#236)', () => {
     await expect(childRow.getByRole('button', { name: 'Monter' })).toBeDisabled()
     // Parent can't move down past its own child.
     await expect(parentRow.getByRole('button', { name: 'Descendre' })).toBeDisabled()
+  })
+
+  // #694 — the parent was only chosen at creation, and a deleted parent left
+  // its children pointing at nothing. GE 1 → GE 5 are a chain; GE 6 and GE 7
+  // have no parent.
+  const row = (page: Page, name: string) => page.getByRole('row', { name: new RegExp(`^${name}(?!\\d)`) })
+
+  test('an existing division takes a new parent among those ranked above it', async ({ page }) => {
+    await row(page, 'GE 7').getByRole('button', { name: 'Modifier' }).click()
+    const parent = page.getByLabel('Division parente')
+    await expect(parent).toHaveValue('')
+    // Only what ranks above it is offered — never GE 7 itself.
+    await expect(parent.locator('option')).toHaveText(['Aucune (division de tête)', 'GE 1', 'GE 2', 'GE 3', 'GE 4', 'GE 5', 'GE 6'])
+    await parent.selectOption({ label: 'GE 6' })
+    await page.getByRole('button', { name: 'Enregistrer' }).click()
+
+    await expect(row(page, 'GE 7').getByRole('button', { name: 'Monter' })).toBeDisabled()
+    await expect(row(page, 'GE 6').getByRole('button', { name: 'Descendre' })).toBeDisabled()
+  })
+
+  test('deleting a division hands its children to its own parent', async ({ page }) => {
+    await row(page, 'GE 3').getByRole('button', { name: 'Archiver' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Archiver' }).click()
+    await page.getByLabel(/Afficher les divisions archivées/).check()
+    await row(page, 'GE 3').getByRole('button', { name: 'Supprimer' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click()
+    await expect(row(page, 'GE 3')).toHaveCount(0)
+
+    // GE 4 now hangs from GE 2, directly above it.
+    await expect(row(page, 'GE 4').getByRole('button', { name: 'Monter' })).toBeDisabled()
+    await row(page, 'GE 4').getByRole('button', { name: 'Modifier' }).click()
+    await expect(page.getByLabel('Division parente').locator('option:checked')).toHaveText('GE 2')
   })
 })

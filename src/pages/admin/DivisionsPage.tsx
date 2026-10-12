@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
-import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
+import { canMoveDivisionDown, canMoveDivisionUp, parentCandidates } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { divisionIdsOfOrganization, filtersLocally, localOrganizationOptions } from '@/lib/organizationFilter'
@@ -211,6 +211,14 @@ export function DivisionsPage() {
     })
   }
 
+  // Creating: any division of the phase, the new one going right after it.
+  // Editing: only those ranked above (#694) — a parent never ranks below its
+  // child, and none of its descendants can become its parent.
+  const parentOptions = (() => {
+    const inPhase = activeDivisions.filter((d) => d.phaseId === form.phaseId).sort((a, b) => a.rank - b.rank)
+    return editing ? parentCandidates(editing, inPhase) : inPhase
+  })()
+
   const closeModal = () => {
     setEditing(null)
     setCreating(false)
@@ -234,6 +242,9 @@ export function DivisionsPage() {
         ...(!isFftt ? { secondPhase: (form.secondPhase || '') as Division['secondPhase'] } : {}),
         // '' clears it, as for the competition (#692).
         ...(!isFftt ? { organizationId: form.organizationId } : {}),
+        // Only when changed (#694): an FFTT parent not imported yet is not
+        // among the options, and must not be cleared by an unrelated edit.
+        ...(form.parentId !== (editing.parentId ?? '') ? { parentId: form.parentId } : {}),
       })
       closeModal()
     } else if (creating && form.phaseId) {
@@ -483,27 +494,27 @@ export function DivisionsPage() {
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
-              {creating && (
-                <div>
-                  <label htmlFor="edit-parentId" className="block text-sm font-medium text-slate-700">
-                    Division parente
-                  </label>
-                  <select
-                    id="edit-parentId"
-                    value={form.parentId}
-                    onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                  >
-                    <option value="">Aucune (division de tête)</option>
-                    {activeDivisions
-                      .filter((d) => d.phaseId === form.phaseId)
-                      .sort((a, b) => a.rank - b.rank)
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>{d.displayName}</option>
-                      ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label htmlFor="edit-parentId" className="block text-sm font-medium text-slate-700">
+                  Division parente
+                </label>
+                <select
+                  id="edit-parentId"
+                  value={form.parentId}
+                  onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                >
+                  <option value="">Aucune (division de tête)</option>
+                  {parentOptions.map((d) => (
+                    <option key={d.id} value={d.id}>{d.displayName}</option>
+                  ))}
+                  {/* A parent that is not listed — deleted, archived, or an
+                      FFTT division not imported yet — stays what it is. */}
+                  {form.parentId && !parentOptions.some((d) => d.id === form.parentId) && (
+                    <option value={form.parentId}>Division introuvable</option>
+                  )}
+                </select>
+              </div>
               <div>
                 <label htmlFor="edit-competitionId" className="block text-sm font-medium text-slate-700">
                   Compétition

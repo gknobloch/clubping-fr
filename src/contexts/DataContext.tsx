@@ -70,6 +70,7 @@ import {
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { fillVenuesFromFftt, type ClubVenue, type VenueFillResult } from '@/lib/clubVenues'
 import { fetchClubDetailXmlFromBrowser } from '@/lib/ffttClub'
+import { withoutDivision } from '@/lib/ffttDivisions'
 import { seasonIdFromName } from '@/lib/season'
 import { ffttPhaseIdForName, phaseIdFor } from '@/lib/ffttPhases'
 import { withActivePhase, withActiveSeason, withPhaseAlignedToSeason } from '@/lib/seasonActivation'
@@ -1640,7 +1641,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     setMatchDays((prev) => prev.filter((md) => !divMatchDayIds.includes(md.id)))
     setTeams((prev) => prev.filter((t) => !divTeamIds.includes(t.id)))
     setGroups((prev) => prev.filter((g) => !divGroupIds.includes(g.id)))
-    setDivisions((prev) => prev.filter((d) => d.id !== id))
+    // Its children move up to its parent, as the API does (#694).
+    setDivisions((prev) => withoutDivision(prev, id))
 
     if (persist) api(`/divisions/${id}`, { method: 'DELETE' })
   }, [persist, groups, teams, matchDays, games])
