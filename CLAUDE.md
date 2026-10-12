@@ -638,6 +638,16 @@ invisible dans le diff comme dans la revue.
 - **La session reste un profil de club** : aucune règle d'autorisation ne
   change. Ce que la personne ouvre au-delà, c'est `reaches`, relu à chaque
   changement — une délégation retirée prend effet aussitôt.
+- **`reaches` se lit depuis qui s'est connecté, pas depuis le profil ouvert**
+  (#702, `sessions.origin_user_id`, 0074). Nathan, délégué de Chloé, ouvre son
+  profil : la session est celle de Chloé, et lue depuis Chloé elle n'offrait
+  pas Nathan — le retour passait par une déconnexion et un nouveau code. Et
+  elle offrait ceux qui ont délégué à Chloé : deux niveaux, ce que la
+  délégation interdit. La connexion par code ou OAuth note le profil de
+  l'adresse quand elle en ouvre un autre (le plus récent de ce qu'elle
+  atteint), `/auth/switch` le transmet, et le sélecteur comme le changement
+  lisent depuis lui. Une session d'avant 0074 n'a pas d'origine : elle est
+  elle-même, comme avant.
 - **La délégation** (`person_delegates`, 0064) : Benjamin ouvre les profils de
   Sacha, Sacha n'ouvre pas ceux de Benjamin. **Un seul niveau**, par
   construction : un délégué n'atteint jamais les délégations de celui qui

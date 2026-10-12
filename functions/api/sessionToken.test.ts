@@ -34,7 +34,8 @@ const SCHEMA = `
   CREATE TABLE sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL,
     created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
-    token_hashed INTEGER NOT NULL DEFAULT 0
+    token_hashed INTEGER NOT NULL DEFAULT 0,
+    origin_user_id TEXT -- 0074, who signed in (#702)
   );
   CREATE TABLE users (
     id TEXT PRIMARY KEY, email TEXT, role TEXT NOT NULL DEFAULT 'player',

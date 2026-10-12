@@ -15,7 +15,8 @@
 // person, which the first way already covers.
 //
 // The profile switcher lists this, `/auth/switch` admits it, sign-in lands on
-// the most recent of it, and a device rings for it. One fragment for all of
+// the most recent of it, and a device rings for it. The first two read it from
+// who signed in, not from the profile the session is now (#702). One fragment for all of
 // them, so they cannot drift apart: a phone that rang for a profile the
 // switcher would not open, or the reverse, is the bug this file exists to stop.
 
