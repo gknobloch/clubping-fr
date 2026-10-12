@@ -15,6 +15,7 @@ import { FederationSelect } from '@/components/FederationSelect'
 import { FederationSwitch } from '@/components/FederationSwitch'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { divisionIdsOfOrganization, filtersLocally, localOrganizationOptions } from '@/lib/organizationFilter'
 import { useConfirm } from '@/components/useConfirm'
 import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision } from '@/lib/federations'
 import { phaseScope } from '@/lib/phaseScope'
@@ -23,7 +24,7 @@ export function GroupsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
-    groups: allGroups, divisions, phases, teams, clubs, competitions = [], federations = [],
+    groups: allGroups, divisions, phases, teams, clubs, competitions = [], federations = [], organizations = [],
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
@@ -61,8 +62,24 @@ export function GroupsPage() {
     return () => { cancelled = true }
   }, [fetchOrganizations])
 
+  // From our own data wherever divisions know their organisation (#692); the
+  // FFTT is asked only for a phase whose divisions predate it.
+  const phaseDivisions = useMemo(
+    () => divisionsOfFederation(divisions, competitions, federationId).filter((d) => d.phaseId === phase?.id),
+    [divisions, competitions, federationId, phase?.id],
+  )
+  const local = filtersLocally(phaseDivisions, federationId)
+  const localOptions = useMemo(
+    () => localOrganizationOptions(organizations, phaseDivisions, federationId),
+    [organizations, phaseDivisions, federationId],
+  )
+
   useEffect(() => {
     const ffttPhaseId = phase ? ffttPhaseIdForName(phase.name) : null
+    if (local) {
+      setOrgDivisionIds(organizationId ? divisionIdsOfOrganization(phaseDivisions, organizationId) : null)
+      return
+    }
     if (!isFftt || !organizationId || !phase || !ffttPhaseId) {
       setOrgDivisionIds(null)
       return
@@ -77,9 +94,12 @@ export function GroupsPage() {
       )
     })
     return () => { cancelled = true }
-  }, [isFftt, organizationId, phase, fetchDivisionsPreview])
+  }, [isFftt, local, organizationId, phase, phaseDivisions, fetchDivisionsPreview])
 
-  const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
+  const orgGroups = useMemo(
+    () => groupOrganizationsByType(local ? localOptions : orgs),
+    [local, localOptions, orgs],
+  )
 
   // Division — the actual scope of the page; reset whenever the phase or the
   // organization filter changes so a stale, now-hidden division can't linger.
@@ -268,7 +288,8 @@ export function GroupsPage() {
 
       {/* Organization (optional filter, FFTT only) + Division pickers */}
       <div className="flex flex-wrap items-end gap-3">
-        {isFftt && (
+        {/* Each federation's organisations narrow its own divisions (#692). */}
+        {orgGroups.length > 0 && (
         <div>
           <label htmlFor="groups-org" className="block text-sm font-medium text-slate-700">
             Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>

@@ -9,7 +9,7 @@ import type {
   CompetitionRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
   MemberGroupRow, MemberGroupMemberRow, CompetitionGroupRow,
   TrainingRow, TrainingSessionRow, TrainingAvailabilityRow,
-  FederationRow, ClubFederationRow, FederationLicenceRow,
+  FederationRow, ClubFederationRow, FederationLicenceRow, OrganizationRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibility'
@@ -331,7 +331,7 @@ app.get('/data', async (c) => {
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, competitionGroupsR, memberGroupsR, memberGroupMembersR,
     trainingsR, trainingSessionsR, trainingAvailsR,
-    federationsR, clubFederationsR, federationLicencesR,
+    federationsR, clubFederationsR, federationLicencesR, organizationsR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
     db.prepare('SELECT * FROM phases').all<PhaseRow>(),
@@ -363,6 +363,14 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM federations ORDER BY sort_order').all<FederationRow>(),
     db.prepare('SELECT * FROM club_federations').all<ClubFederationRow>(),
     db.prepare('SELECT * FROM federation_licences').all<FederationLicenceRow>(),
+    // The organisations that mean something here (#692): another federation's
+    // (the AGR's two) and those a division names — not the FFTT's whole list,
+    // which only its import dialogs browse.
+    db.prepare(
+      `SELECT id, type, identifier, name, federation_id FROM organizations
+        WHERE federation_id != 'fftt' OR id IN (SELECT organization_id FROM divisions WHERE organization_id IS NOT NULL)
+        ORDER BY federation_id, name`,
+    ).all<OrganizationRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -388,6 +396,7 @@ app.get('/data', async (c) => {
     affiliationsByClub.set(r.club_id, [...(affiliationsByClub.get(r.club_id) ?? []), {
       federationId: r.federation_id, affiliationNumber: r.affiliation_number,
       ...(r.name ? { name: r.name } : {}),
+      ...(r.organization_id ? { organizationId: r.organization_id } : {}),
     }])
   }
 
@@ -440,6 +449,9 @@ app.get('/data', async (c) => {
   // Annotated with the shared contract (#285) so a field renamed or dropped
   // here fails the build instead of reaching the client as undefined.
   const payload: DataState = {
+    organizations: organizationsR.results.map((r) => ({
+      id: r.id, type: r.type, identifier: r.identifier, name: r.name, federationId: r.federation_id,
+    })),
     federations: federationsR.results.map((r) => ({
       id: r.id, displayName: r.display_name, shortName: r.short_name,
       isImported: bool(r.is_imported), sortOrder: r.sort_order,
@@ -469,6 +481,7 @@ app.get('/data', async (c) => {
       // "inherit the competition" into "admit everyone" (#482).
       ...(r.categories !== null ? { categories: jsonParseCategories(r.categories) } : {}),
       ...(r.second_phase === 'return_leg' || r.second_phase === 'new_groups' ? { secondPhase: r.second_phase } : {}),
+      ...(r.organization_id ? { organizationId: r.organization_id } : {}),
     })),
     // Pre-sorted by sort_order in the query above (#482).
     competitions: competitionsR.results.map(r => ({
@@ -788,7 +801,7 @@ app.patch('/seasons/:id', async (c) => {
 
 // GET /fftt/organizations — locally cached FFTT organizations (never hits FFTT).
 app.get('/fftt/organizations', async (c) => {
-  const r = await c.env.DB.prepare('SELECT id, type, identifier, name FROM organizations ORDER BY type, name').all()
+  const r = await c.env.DB.prepare("SELECT id, type, identifier, name FROM organizations WHERE federation_id = 'fftt' ORDER BY type, name").all()
   return c.json({ organizations: r.results })
 })
 
@@ -808,7 +821,8 @@ app.post('/fftt/organizations/refresh', async (c) => {
   const db = c.env.DB
   const now = new Date().toISOString()
   const stmts = [
-    db.prepare('DELETE FROM organizations'),
+    // The FFTT's list only: the AGR's organisations are not FFTT data (#692).
+    db.prepare("DELETE FROM organizations WHERE federation_id = 'fftt'"),
     ...members.map((m) =>
       db.prepare('INSERT INTO organizations (id, type, identifier, name, updated_at) VALUES (?, ?, ?, ?, ?)')
         .bind(String(m.id), m['@type'], m.identifier, m.name, now),
@@ -816,7 +830,7 @@ app.post('/fftt/organizations/refresh', async (c) => {
   ]
   // Chunked: D1 batches are capped well below the ~130 rows FFTT returns.
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
-  const r = await db.prepare('SELECT id, type, identifier, name FROM organizations ORDER BY type, name').all()
+  const r = await db.prepare("SELECT id, type, identifier, name FROM organizations WHERE federation_id = 'fftt' ORDER BY type, name").all()
   return c.json({ organizations: r.results })
 })
 
@@ -1077,7 +1091,8 @@ app.get('/fftt/divisions-preview', async (c) => {
   if (!resolved.contest) return c.json({ error: 'no_contest' }, 404)
   const result = await fetchFfttDivisions(p.org, p.ph, resolved.contest)
   if (!result) return c.json({ error: 'fftt_unavailable' }, 502)
-  const phaseRow = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
+  // The FFTT's phase: the AGR plays a « Phase 1 » in the same, shared season (#645).
+  const phaseRow = await c.env.DB.prepare("SELECT id FROM phases WHERE season_id = ? AND name = ? AND COALESCE(federation_id, 'fftt') = 'fftt'")
     .bind(String(p.season), `Phase ${p.ph}`).first()
   const existing = phaseRow
     ? await phaseDivisions(c.env.DB, phaseRow.id as string)
@@ -1228,6 +1243,8 @@ type ImportedDivision = {
   parentId?: string
   /** The competition this division was filed under (#482). */
   competitionId?: string
+  /** The FFTT organisation it was imported for (#692). */
+  organizationId?: string
 }
 
 // Core of the divisions import: re-fetches from FFTT (never trusts a client
@@ -1262,7 +1279,8 @@ async function importDivisions(
 
   const phaseName = `Phase ${p.ph}`
   let phaseRow = await db.prepare(
-    'SELECT id, season_id, name, display_name, status FROM phases WHERE season_id = ? AND name = ?',
+    // The FFTT's phase: the AGR plays a « Phase 1 » in the same, shared season (#645).
+    "SELECT id, season_id, name, display_name, status FROM phases WHERE season_id = ? AND name = ? AND COALESCE(federation_id, 'fftt') = 'fftt'",
   ).bind(String(p.season), phaseName).first()
   const createdPhase = !phaseRow
   if (!phaseRow) {
@@ -1297,13 +1315,16 @@ async function importDivisions(
       id: d.id, phaseId, displayName, rank,
       playersPerGame: playersPerGameFor(d.identifier), isArchived: false,
       identifier: d.identifier, competitionId,
+      // The organisation the import ran for (#692) — a league's GE divisions,
+      // a committee's departmental ones: what the Organisation filter reads.
+      organizationId: String(p.org),
       ...(d.parentId ? { parentId: d.parentId } : {}),
     })
   }
   if (created.length) {
     await db.batch(created.map((d) =>
-      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
-        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier, d.competitionId ?? null),
+      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, organization_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)')
+        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier, d.competitionId ?? null, d.organizationId ?? null),
     ))
   }
   // Divisions already present — imported before this existed, or created by
@@ -1311,10 +1332,14 @@ async function importDivisions(
   // yet. Re-importing must never move a division a general admin has since
   // filed somewhere else: this fills a blank, it does not overwrite a decision.
   if (skipped.length) {
-    await db.batch(skipped.map((d) =>
+    await db.batch(skipped.flatMap((d) => [
       db.prepare('UPDATE divisions SET competition_id = ? WHERE phase_id = ? AND (id = ? OR lower(display_name) = ?) AND competition_id IS NULL')
         .bind(competitionId, phaseId, d.id, d.name.toLowerCase()),
-    ))
+      // Same for its organisation (#692): a division imported before it was
+      // recorded gets it from the next import, never overwritten.
+      db.prepare('UPDATE divisions SET organization_id = ? WHERE phase_id = ? AND (id = ? OR lower(display_name) = ?) AND organization_id IS NULL')
+        .bind(String(p.org), phaseId, d.id, d.name.toLowerCase()),
+    ]))
   }
   return {
     phase: {
@@ -1560,7 +1585,8 @@ app.post('/teams/import', async (c) => {
   const createdDivisions: ImportedDivision[] = []
   const divisionRows = await db.prepare('SELECT id, phase_id FROM divisions').all()
   const divisionById = new Map(divisionRows.results.map((d) => [d.id as string, d]))
-  const phaseRowsAll = await db.prepare('SELECT id, season_id, name, display_name, status FROM phases').all()
+  // The FFTT's phases only — keyed by (season, name), which the AGR's share (#645).
+  const phaseRowsAll = await db.prepare("SELECT id, season_id, name, display_name, status FROM phases WHERE COALESCE(federation_id, 'fftt') = 'fftt'").all()
   const phaseByKey = new Map(phaseRowsAll.results.map((p) => [`${p.season_id}|${p.name}`, p]))
   const rankRows = await db.prepare('SELECT phase_id, MAX(rank) AS max_rank FROM divisions GROUP BY phase_id').all()
   const maxRankByPhase = new Map(rankRows.results.map((r) => [r.phase_id as string, (r.max_rank as number | null) ?? 0]))
@@ -3201,6 +3227,8 @@ interface FederationScheduleInput {
   division: string
   /** An existing division of the phase, chosen in the review (#647); absent, found by name or created. */
   divisionId?: string
+  /** The organisation the poule is played in (#692) — the AGR's Haut-Rhin or Bas-Rhin. */
+  organizationId?: string
   poolNumber: number
   playersPerGame: number
   /** What phase 2 of this division is (#649); absent leaves what is stored. */
@@ -3238,6 +3266,7 @@ function parseFederationScheduleInput(b: Record<string, unknown>): FederationSch
     federationId: str(b.federationId), phaseId: str(b.phaseId), competitionId: str(b.competitionId),
     division: str(b.division), poolNumber: Number(b.poolNumber),
     ...(str(b.divisionId) ? { divisionId: str(b.divisionId) } : {}),
+    ...(str(b.organizationId) ? { organizationId: str(b.organizationId) } : {}),
     playersPerGame: Number(b.playersPerGame) === 3 ? 3 : 4,
     ...(b.secondPhase === 'return_leg' || b.secondPhase === 'new_groups' ? { secondPhase: b.secondPhase as 'return_leg' | 'new_groups' } : {}),
     notes: (Array.isArray(b.notes) ? b.notes : []).map(str).filter(Boolean).slice(0, 10),
@@ -3271,6 +3300,12 @@ app.post('/federation-schedules/import', async (c) => {
   const competition = await db.prepare('SELECT id FROM competitions WHERE id = ? AND federation_id = ?')
     .bind(input.competitionId, input.federationId).first()
   if (!competition) return c.json({ error: 'unknown_competition', message: 'Cette compétition n’est pas une compétition de la fédération.' }, 400)
+  if (input.organizationId) {
+    const organization = await db.prepare('SELECT id FROM organizations WHERE id = ? AND federation_id = ?')
+      .bind(input.organizationId, input.federationId).first()
+    if (!organization) return c.json({ error: 'unknown_organization', message: 'Cette organisation n’est pas de la fédération.' }, 400)
+  }
+  const organizationId = input.organizationId ?? null
 
   // Every name the matches use must be in the club list, resolved or to create.
   const named = new Map(input.clubs.map((cl) => [cl.name, cl.clubId]))
@@ -3320,10 +3355,16 @@ app.post('/federation-schedules/import', async (c) => {
   if (!existingDivision) {
     const rank = Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
     stmts.push(db.prepare(
-      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, second_phase) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)',
-    ).bind(divisionId, input.phaseId, input.division, rank, input.playersPerGame, input.competitionId, input.secondPhase ?? null))
-  } else if (input.secondPhase) {
-    stmts.push(db.prepare('UPDATE divisions SET second_phase = ? WHERE id = ?').bind(input.secondPhase, divisionId))
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, second_phase, organization_id) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)',
+    ).bind(divisionId, input.phaseId, input.division, rank, input.playersPerGame, input.competitionId, input.secondPhase ?? null, organizationId))
+  } else {
+    if (input.secondPhase) {
+      stmts.push(db.prepare('UPDATE divisions SET second_phase = ? WHERE id = ?').bind(input.secondPhase, divisionId))
+    }
+    // A division with no organisation takes the poule's (#692); one it has stays.
+    if (organizationId) {
+      stmts.push(db.prepare('UPDATE divisions SET organization_id = ? WHERE id = ? AND organization_id IS NULL').bind(organizationId, divisionId))
+    }
   }
   const group = existingDivision
     ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
@@ -3340,10 +3381,12 @@ app.post('/federation-schedules/import', async (c) => {
   for (const cl of input.clubs) {
     if (cl.clubId) {
       clubIdOf.set(cl.name, cl.clubId)
+      // The AGR name and the organisation are learnt, never overwritten (#692).
       stmts.push(db.prepare(
-        `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES (?, ?, '', ?)
-         ON CONFLICT(club_id, federation_id) DO UPDATE SET name = COALESCE(club_federations.name, excluded.name)`,
-      ).bind(cl.clubId, input.federationId, cl.name))
+        `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, '', ?, ?)
+         ON CONFLICT(club_id, federation_id) DO UPDATE SET name = COALESCE(club_federations.name, excluded.name),
+           organization_id = COALESCE(club_federations.organization_id, excluded.organization_id)`,
+      ).bind(cl.clubId, input.federationId, cl.name, organizationId))
       continue
     }
     const id = newId('club')
@@ -3351,8 +3394,8 @@ app.post('/federation-schedules/import', async (c) => {
     createdClubs.push(id)
     stmts.push(
       db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, \'\', ?, 0)').bind(id, cl.name),
-      db.prepare("INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES (?, ?, '', ?)")
-        .bind(id, input.federationId, cl.name),
+      db.prepare("INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, '', ?, ?)")
+        .bind(id, input.federationId, cl.name, organizationId),
     )
   }
 
@@ -3584,12 +3627,12 @@ async function mirrorReturnLeg(db: D1Database, groupId: string): Promise<MirrorR
     .bind(groupId).first<{ id: string; division_id: string; number: number; team_ids: string; note: string | null }>()
   if (!group) return { ok: false, error: 'not_found' }
   const division = await db.prepare(
-    `SELECT d.id, d.phase_id, d.display_name, d.rank, d.players_per_game, d.competition_id, d.categories, d.second_phase, f.is_imported
+    `SELECT d.id, d.phase_id, d.display_name, d.rank, d.players_per_game, d.competition_id, d.categories, d.second_phase, d.organization_id, f.is_imported
        FROM divisions d JOIN phases p ON p.id = d.phase_id
        JOIN federations f ON f.id = COALESCE(p.federation_id, 'fftt') WHERE d.id = ?`,
   ).bind(group.division_id).first<{
     id: string; phase_id: string; display_name: string; rank: number; players_per_game: number
-    competition_id: string | null; categories: string | null; second_phase: string | null; is_imported: number
+    competition_id: string | null; categories: string | null; second_phase: string | null; organization_id: string | null; is_imported: number
   }>()
   if (!division) return { ok: false, error: 'not_found' }
   if (division.is_imported) return { ok: false, error: 'imported_federation' }
@@ -3608,8 +3651,8 @@ async function mirrorReturnLeg(db: D1Database, groupId: string): Promise<MirrorR
       ? Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
       : division.rank
     stmts.push(db.prepare(
-      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, categories) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)',
-    ).bind(divisionId, next.id, division.display_name, rank, division.players_per_game, division.competition_id, division.categories))
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, categories, organization_id) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)',
+    ).bind(divisionId, next.id, division.display_name, rank, division.players_per_game, division.competition_id, division.categories, division.organization_id))
   }
   const existingGroup = existingDivision
     ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
@@ -3873,14 +3916,27 @@ async function divisionFederationRefusal(
     : 'Cette compétition n’est pas de la fédération de cette phase.'
 }
 
+/** Why this organisation cannot run a division of this phase, or null — it must be the phase's federation's (#692). */
+async function organizationRefusal(
+  db: Env['Bindings']['DB'], phaseId: string, organizationId: string | null,
+): Promise<string | null> {
+  if (!organizationId) return null
+  const row = await db.prepare(
+    `SELECT 1 FROM organizations o JOIN phases p ON p.id = ?
+      WHERE o.id = ? AND o.federation_id = COALESCE(p.federation_id, 'fftt')`,
+  ).bind(phaseId, organizationId).first()
+  return row ? null : 'Cette organisation n’est pas de la fédération de cette phase.'
+}
+
 app.post('/divisions', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
   const refusal = await divisionFederationRefusal(c.env.DB, d.phaseId, d.competitionId || null)
+    ?? await organizationRefusal(c.env.DB, d.phaseId, d.organizationId || null)
   if (refusal) return c.json({ error: 'federation_mismatch', message: refusal }, 400)
   await c.env.DB.prepare(
-    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null).run()
+    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null, d.organizationId || null).run()
   return c.json({ ok: true })
 })
 
@@ -3888,14 +3944,15 @@ app.patch('/divisions/:id', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
-  if ('phaseId' in p || 'competitionId' in p) {
-    const row = await c.env.DB.prepare('SELECT phase_id, competition_id FROM divisions WHERE id = ?')
-      .bind(id).first<{ phase_id: string; competition_id: string | null }>()
+  if ('phaseId' in p || 'competitionId' in p || 'organizationId' in p) {
+    const row = await c.env.DB.prepare('SELECT phase_id, competition_id, organization_id FROM divisions WHERE id = ?')
+      .bind(id).first<{ phase_id: string; competition_id: string | null; organization_id: string | null }>()
     if (row) {
+      const phaseId = 'phaseId' in p ? p.phaseId : row.phase_id
       const refusal = await divisionFederationRefusal(
-        c.env.DB,
-        'phaseId' in p ? p.phaseId : row.phase_id,
-        'competitionId' in p ? (p.competitionId || null) : row.competition_id,
+        c.env.DB, phaseId, 'competitionId' in p ? (p.competitionId || null) : row.competition_id,
+      ) ?? await organizationRefusal(
+        c.env.DB, phaseId, 'organizationId' in p ? (p.organizationId || null) : row.organization_id,
       )
       if (refusal) return c.json({ error: 'federation_mismatch', message: refusal }, 400)
     }
@@ -3916,6 +3973,8 @@ app.patch('/divisions/:id', async (c) => {
     s.push('categories = ?')
     v.push(Array.isArray(p.categories) ? categoriesJson(p.categories) : null)
   }
+  // '' is « no organisation », as for the competition (#692).
+  if ('organizationId' in p) { s.push('organization_id = ?'); v.push(p.organizationId || null) }
   // What its phase 2 is (#649); anything else — '' from the form — is « not known ».
   if ('secondPhase' in p) {
     s.push('second_phase = ?')
@@ -4151,15 +4210,22 @@ app.put('/clubs/:clubId/affiliations/:federationId', async (c) => {
   const federationId = c.req.param('federationId')
   if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
   if (federationId === 'fftt') return c.json({ error: 'bad_request' }, 400)
-  const d = await c.req.json<{ affiliationNumber?: unknown; name?: unknown }>()
+  const d = await c.req.json<{ affiliationNumber?: unknown; name?: unknown; organizationId?: unknown }>()
   if (!(await federationExists(db, federationId))) return c.json(notFound, 404)
   const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first<{ id: string }>()
   if (!club) return c.json(notFound, 404)
+  // The club's organisation in that federation (#692): one of its own.
+  const organizationId = typeof d.organizationId === 'string' && d.organizationId ? d.organizationId : null
+  if (organizationId) {
+    const known = await db.prepare('SELECT 1 FROM organizations WHERE id = ? AND federation_id = ?')
+      .bind(organizationId, federationId).first()
+    if (!known) return c.json({ error: 'unknown_organization' }, 400)
+  }
   await db.prepare(
-    `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES (?, ?, ?, ?)
+    `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (club_id, federation_id) DO UPDATE
-       SET affiliation_number = excluded.affiliation_number, name = excluded.name`,
-  ).bind(clubId, federationId, String(d.affiliationNumber ?? '').trim(), cleanName(d.name)).run()
+       SET affiliation_number = excluded.affiliation_number, name = excluded.name, organization_id = excluded.organization_id`,
+  ).bind(clubId, federationId, String(d.affiliationNumber ?? '').trim(), cleanName(d.name), organizationId).run()
   return c.json({ ok: true })
 })
 

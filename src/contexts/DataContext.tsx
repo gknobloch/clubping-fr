@@ -373,6 +373,8 @@ export interface FederationScheduleImportInput {
   division: string
   /** An existing division of the phase to put the poule in (#647); absent, it is found by name or created. */
   divisionId?: string
+  /** The organisation the poule is played in (#692) — the AGR's Haut-Rhin or Bas-Rhin. */
+  organizationId?: string
   poolNumber: number
   playersPerGame: number
   /** What phase 2 of this division is (#649) — asked when importing phase 1. */
@@ -714,6 +716,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const [divisions, setDivisions] = useState<Division[]>(initialData?.divisions ?? [])
   const [competitions, setCompetitions] = useState<Competition[]>(initialData?.competitions ?? [])
   const [federations, setFederations] = useState<Federation[]>(initialData?.federations ?? [])
+  // Reference data (#692): another federation's organisations, and the FFTT's a division names.
+  const [organizations, setOrganizations] = useState<Organization[]>(initialData?.organizations ?? [])
   const [competitionGroups, setCompetitionGroups] = useState<CompetitionGroup[]>(
     initialData?.competitionGroups ?? [],
   )
@@ -784,6 +788,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       // A cache written before #643 knows no federation; every screen reads a
       // missing one as the FFTT, which is what that data was.
       setFederations(data.federations ?? [])
+      setOrganizations(data.organizations ?? [])
       // Defaulted: a cache written before #604 carries none, and "no club has
       // restricted anything" is the right reading of that.
       setCompetitionGroups(data.competitionGroups ?? [])
@@ -969,8 +974,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         headers: authHeaders(),
       })
       if (!r.ok) return null
-      const { organizations } = (await r.json()) as { organizations: Organization[] }
-      return organizations
+      const body = (await r.json()) as { organizations: Organization[] }
+      return body.organizations
     } catch {
       return null
     }
@@ -1663,7 +1668,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) {
       api(`/clubs/${clubId}/affiliations/${affiliation.federationId}`, {
         method: 'PUT',
-        body: JSON.stringify({ affiliationNumber: affiliation.affiliationNumber, name: affiliation.name ?? null }),
+        body: JSON.stringify({
+          affiliationNumber: affiliation.affiliationNumber, name: affiliation.name ?? null,
+          organizationId: affiliation.organizationId ?? null,
+        }),
       })
     }
   }, [persist])
@@ -2618,6 +2626,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     () => ({
       staleSince,
       federations,
+      organizations,
       divisions,
       competitions,
       competitionGroups,
@@ -2739,7 +2748,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }),
     [
       staleSince,
-      federations, divisions, competitions, competitionGroups,
+      federations, organizations, divisions, competitions, competitionGroups,
       clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
       playerSeasonLicences, setClubSeasonLicences,

@@ -21,9 +21,19 @@ type Matchable = Pick<Club, 'id' | 'displayName' | 'affiliations' | 'isArchived'
  */
 export function matchFederationClub<C extends Matchable>(
   name: string, clubs: readonly C[], federationId: string,
+  /**
+   * The calendar's organisation (#692): a club filed under another one of the
+   * federation's is not a candidate — « SG » or « ASL » exist on both sides of
+   * the Haut-Rhin and the Bas-Rhin. A club with no organisation stays one.
+   */
+  organizationId?: string,
 ): C | undefined {
   const k = key(name)
-  const live = clubs.filter((c) => !c.isArchived)
+  const elsewhere = (c: C) => {
+    const org = (c.affiliations ?? []).find((a) => a.federationId === federationId)?.organizationId
+    return !!organizationId && !!org && org !== organizationId
+  }
+  const live = clubs.filter((c) => !c.isArchived && !elsewhere(c))
   const inFederation = (c: C) => (c.affiliations ?? []).some((a) => a.federationId === federationId)
   return live.find((c) => (c.affiliations ?? []).some((a) => a.federationId === federationId && a.name && key(a.name) === k))
     ?? live.find((c) => inFederation(c) && key(c.displayName) === k)

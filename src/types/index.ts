@@ -55,6 +55,8 @@ export interface ClubAffiliation {
   federationId: string
   /** That federation's number for the club ("680036"); may be blank. */
   affiliationNumber: string
+  /** The club's organisation in that federation (#692): Landser is AGR Haut-Rhin. */
+  organizationId?: string
   /**
    * The club's name in that federation's documents ("KEMBS ASL TT"), what its
    * calendars are matched against. Absent when it is the club's own name.
@@ -98,9 +100,11 @@ export interface Organization {
   id: string
   /** FFTT @type: 'Federation' | 'Zone' | 'League' | 'Committee'. */
   type: string
-  /** FFTT short code, e.g. "L06" (league) or "D68" (committee). */
+  /** FFTT short code, e.g. "L06" (league) or "D68" (committee); the AGR's department number. */
   identifier: string
   name: string
+  /** Whose organisation it is (#692): the FFTT's cached list, or the AGR's Haut-Rhin and Bas-Rhin. */
+  federationId?: string
 }
 
 /** Shared 3-state lifecycle used by seasons and phases (#227). */
@@ -162,6 +166,12 @@ export interface Division {
    * Absent: not known yet, and nothing is prepared.
    */
   secondPhase?: 'return_leg' | 'new_groups'
+  /**
+   * The organisation that runs it (#692) — an FFTT league or committee, the
+   * AGR's Haut-Rhin. A division's and not a competition's: one FFTT
+   * championship spans a league's divisions and a committee's.
+   */
+  organizationId?: string
 }
 
 /**
@@ -522,6 +532,12 @@ export interface GameSelection {
 export interface DataState {
   /** The federations (#643), ordered — reference data, the same for everyone. */
   federations: Federation[]
+  /**
+   * The organisations that mean something here (#692): another federation's
+   * (the AGR's Haut-Rhin and Bas-Rhin) and the FFTT's a division names.
+   * Optional: absent from a cache written before it, and from the app's payload.
+   */
+  organizations?: Organization[]
   divisions: Division[]
   competitions: Competition[]
   /**

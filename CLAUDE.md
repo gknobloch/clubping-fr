@@ -778,6 +778,36 @@ invisible dans le diff comme dans la revue.
   nom de la fédération quand il y en a deux). Les équipes « de cette phase »
   sont celles de la phase active de chaque fédération (`activePhaseIdsOf`).
 
+### Organisations par fédération (#692)
+- **Une organisation est celle d'une fédération** (`organizations.federation_id`,
+  0073) : la liste de la FFTT reste un cache rafraîchi depuis son API — et ce
+  rafraîchissement ne vide plus que les siennes —, l'AGR a les siennes écrites
+  une fois, **Haut-Rhin** (`agr-68`) et **Bas-Rhin** (`agr-67`). Tout ce
+  qu'il y avait d'AGR est du Haut-Rhin.
+- **L'organisation est celle d'une division, pas d'une compétition** : à la
+  FFTT, un même championnat porte les divisions régionales d'une ligue (GE 1 à
+  7) et les départementales d'un comité. L'import des divisions FFTT écrit
+  celle pour laquelle il tourne (et la complète au réimport, comme la
+  compétition) ; l'import d'un calendrier AGR, celle choisie dans la revue ;
+  le formulaire de Divisions la propose pour l'AGR. Une organisation d'une
+  autre fédération que la phase est refusée.
+- **Un club a une organisation dans une fédération**
+  (`club_federations.organization_id`) : Landser est AGR Haut-Rhin. Elle se
+  règle avec l'affiliation, sur la fiche du club. L'import d'un calendrier
+  part de celle du club de l'administrateur, propose le championnat de
+  l'organisation (« Championnat du Haut-Rhin »), et ne rapproche un nom que
+  des clubs de cette organisation ou d'aucune (`matchFederationClub`) — « SG »
+  ou « ASL » existent des deux côtés.
+- **Le filtre « Organisation » lit nos données** (`organizationFilter.ts`) :
+  toujours pour l'AGR, et pour la FFTT dès que toutes les divisions de la
+  phase connaissent la leur ; d'ici là la FFTT est encore interrogée, comme
+  avant. `/data` porte les organisations de l'AGR et celles de la FFTT qu'une
+  division nomme — pas la liste entière, que seuls les dialogues d'import
+  parcourent.
+- **Avec les saisons communes (#645), les imports FFTT cherchent leur phase
+  dans la FFTT** : une « Phase 1 » de l'AGR est dans la même saison, sous le
+  même nom.
+
 ### Calendrier d'une fédération sans API (#647)
 - **L'AGR n'a pas d'API** : le calendrier d'une poule est un PDF à couche
   texte propre. `src/lib/agrScheduleDocument.ts` le lit (en-tête, « Journée

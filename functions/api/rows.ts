@@ -118,6 +118,8 @@ export interface DivisionRow {
   categories: string | null
   /** Phase 2 of a phase-1 division (#649): 'return_leg' | 'new_groups' | NULL (not known). */
   second_phase: string | null
+  /** 0073 (#692): the organisation that runs it — an FFTT league or committee, the AGR's Haut-Rhin. */
+  organization_id?: string | null
 }
 
 export interface CompetitionRow {
@@ -157,6 +159,17 @@ export interface ClubFederationRow {
   federation_id: string
   affiliation_number: string
   name: string | null
+  /** 0073 (#692): the club's organisation in that federation — the AGR's Haut-Rhin. */
+  organization_id?: string | null
+}
+
+export interface OrganizationRow {
+  id: string
+  type: string
+  identifier: string
+  name: string
+  /** 0073 (#692): 'fftt' for the FFTT's cached list. */
+  federation_id: string
 }
 
 export interface ClubRow {

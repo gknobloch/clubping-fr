@@ -147,7 +147,8 @@ describe('PUT /clubs/:clubId/affiliations/:federationId (#643)', () => {
     expect(res.status).toBe(200)
     const [upsert] = matching(writes, /club_federations/)
     expect(upsert.sql).toContain('ON CONFLICT')
-    expect(upsert.params).toEqual([KEMBS, 'agr', '680021', 'KEMBS ASL TT'])
+    // No organisation said (#692): none stored.
+    expect(upsert.params).toEqual([KEMBS, 'agr', '680021', 'KEMBS ASL TT', null])
   })
 
   it('stores a blank name as none — the club\'s own name stands', async () => {

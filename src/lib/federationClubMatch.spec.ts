@@ -26,3 +26,15 @@ describe('matchFederationClub', () => {
     expect(matchFederationClub('MOOSCH ST AUGUSTIN', clubs, 'agr')).toBeUndefined()
   })
 })
+
+describe('matchFederationClub within an organisation (#692)', () => {
+  const asl = (id: string, organizationId: string) => ({
+    id, displayName: 'ASL', isArchived: false,
+    affiliations: [{ federationId: 'agr', affiliationNumber: '', name: 'ASL', organizationId }],
+  })
+  it('never takes a club of the other committee', () => {
+    const both = [asl('bas-rhin', 'agr-67'), asl('haut-rhin', 'agr-68')]
+    expect(matchFederationClub('ASL', both, 'agr', 'agr-68')?.id).toBe('haut-rhin')
+    expect(matchFederationClub('ASL', [both[0]], 'agr', 'agr-68')).toBeUndefined()
+  })
+})

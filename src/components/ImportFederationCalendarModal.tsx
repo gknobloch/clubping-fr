@@ -35,7 +35,7 @@ export function ImportFederationCalendarModal({
   viewerClubId?: string
   onClose: () => void
 }) {
-  const { clubs, phases, seasons, competitions, divisions, federations = [], importFederationSchedule } = useAppData()
+  const { clubs, phases, seasons, competitions, divisions, federations = [], organizations = [], importFederationSchedule } = useAppData()
   const federation = federations.find((f) => f.id === federationId)
   const [doc, setDoc] = useState<AgrScheduleDocument | null>(null)
   const [reading, setReading] = useState(false)
@@ -43,6 +43,8 @@ export function ImportFederationCalendarModal({
   const [phaseId, setPhaseId] = useState('')
   /** The division the poule goes in: one of the phase's, or '' to create it under the calendar's name. */
   const [divisionId, setDivisionId] = useState('')
+  /** The organisation the poule is played in (#692): the Haut-Rhin or the Bas-Rhin. */
+  const [organizationId, setOrganizationId] = useState('')
   const [competitionId, setCompetitionId] = useState('')
   const [playersPerGame, setPlayersPerGame] = useState(4)
   const [secondPhase, setSecondPhase] = useState<'' | 'return_leg' | 'new_groups'>('')
@@ -64,6 +66,31 @@ export function ImportFederationCalendarModal({
   const changePhase = (pid: string) => {
     setPhaseId(pid)
     if (doc) setDivisionId(matchedDivisionId(pid, doc.division))
+  }
+
+  // The federation's organisations (#692), and the one this calendar is
+  // presumably from: the viewer's club's, else the only one there is.
+  const fedOrganizations = useMemo(
+    () => organizations.filter((o) => o.federationId === federationId),
+    [organizations, federationId],
+  )
+  const viewerOrganizationId = clubs.find((c) => c.id === viewerClubId)?.affiliations
+    ?.find((a) => a.federationId === federationId)?.organizationId
+  // The championship of that organisation — « Championnat du Haut-Rhin ».
+  const competitionFor = (orgId: string, championship: string) => {
+    const orgName = key(fedOrganizations.find((o) => o.id === orgId)?.name ?? '')
+    return (orgName ? fedCompetitions.find((c) => key(c.displayName).includes(orgName)) : undefined)
+      ?? fedCompetitions.find((c) => championship && key(c.displayName).includes(championship))
+      ?? fedCompetitions[0]
+  }
+  const matchClubs = (names: readonly string[], orgId: string) =>
+    Object.fromEntries(names.map((name) => [name, matchFederationClub(name, clubs, federationId, orgId || undefined)?.id ?? '']))
+  const changeOrganization = (orgId: string) => {
+    setOrganizationId(orgId)
+    if (doc) {
+      setClubIds(matchClubs(doc.clubs, orgId))
+      setCompetitionId(competitionFor(orgId, key(doc.championship.replace(/^championnat\s*/i, '')))?.id ?? '')
+    }
   }
 
   // The clubs a name may be attached to: those of the federation, by name.
@@ -97,13 +124,15 @@ export function ImportFederationCalendarModal({
       setPhaseId(named?.id ?? '')
       setDivisionId(named ? matchedDivisionId(named.id, parsed.division) : '')
       const championship = key(parsed.championship.replace(/^championnat\s*/i, ''))
-      setCompetitionId((fedCompetitions.find((c) => championship && key(c.displayName).includes(championship)) ?? fedCompetitions[0])?.id ?? '')
+      const orgId = viewerOrganizationId ?? (fedOrganizations.length === 1 ? fedOrganizations[0].id : '')
+      setOrganizationId(orgId)
+      setCompetitionId(competitionFor(orgId, championship)?.id ?? '')
       setPlayersPerGame(/division\s*2\b/i.test(parsed.division) ? 3 : 4)
       // What phase 2 is (#649): what the division already says, else what the
       // calendar's notes say — the AGR writes « phase retour » when it is one.
       const known = named ? matchDivisionName(parsed.division, divisionsOf(named.id))?.secondPhase : undefined
       setSecondPhase(known ?? (parsed.notes.some((n) => /\bretour\b/i.test(n)) ? 'return_leg' : ''))
-      setClubIds(Object.fromEntries(parsed.clubs.map((name) => [name, matchFederationClub(name, clubs, federationId)?.id ?? ''])))
+      setClubIds(matchClubs(parsed.clubs, orgId))
     } catch {
       setError('Impossible de lire ce fichier.')
     } finally {
@@ -122,6 +151,7 @@ export function ImportFederationCalendarModal({
     const result = await importFederationSchedule({
       federationId, phaseId, competitionId, division: doc.division, poolNumber: doc.poolNumber,
       ...(divisionId ? { divisionId } : {}),
+      ...(organizationId ? { organizationId } : {}),
       playersPerGame, notes: doc.notes,
       ...(doc.phaseNumber === 1 && secondPhase ? { secondPhase } : {}),
       clubs: doc.clubs.map((name) => ({ name, clubId: clubIds[name] || null })),
@@ -198,6 +228,20 @@ export function ImportFederationCalendarModal({
               </p>
             </div>
 
+            {fedOrganizations.length > 0 && (
+              <div>
+                <label htmlFor="fed-cal-organization" className="block text-sm font-medium text-slate-700">Organisation</label>
+                <select
+                  id="fed-cal-organization"
+                  value={organizationId}
+                  onChange={(e) => changeOrganization(e.target.value)}
+                  className={SELECT_CLASS}
+                >
+                  <option value="">Non précisée</option>
+                  {fedOrganizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label htmlFor="fed-cal-phase" className="block text-sm font-medium text-slate-700">Phase</label>

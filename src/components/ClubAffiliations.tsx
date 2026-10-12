@@ -22,7 +22,10 @@ const INPUT_CLASS =
  * Says nothing while the FFTT is the only federation there is.
  */
 export function ClubAffiliations({ club, canEdit, idPrefix }: { club: Club; canEdit: boolean; idPrefix: string }) {
-  const { federations, setClubAffiliation, removeClubAffiliation } = useAppData()
+  const { federations, organizations = [], setClubAffiliation, removeClubAffiliation } = useAppData()
+  // A federation's organisations (#692) — the AGR's Haut-Rhin and Bas-Rhin.
+  const organizationsOf = (federationId: string) => organizations.filter((o) => o.federationId === federationId)
+  const organizationName = (id: string | undefined) => organizations.find((o) => o.id === id)?.name
   const [confirm, confirmDialog] = useConfirm()
   const [editing, setEditing] = useState<{ isNew: boolean; draft: ClubAffiliation } | null>(null)
 
@@ -38,11 +41,12 @@ export function ClubAffiliations({ club, canEdit, idPrefix }: { club: Club; canE
 
   const save = () => {
     if (!editing) return
-    const { federationId, affiliationNumber, name } = editing.draft
+    const { federationId, affiliationNumber, name, organizationId } = editing.draft
     setClubAffiliation(club.id, {
       federationId,
       affiliationNumber: affiliationNumber.trim(),
       ...(name?.trim() ? { name: name.trim() } : {}),
+      ...(organizationId ? { organizationId } : {}),
     })
     setEditing(null)
   }
@@ -90,6 +94,7 @@ export function ClubAffiliations({ club, canEdit, idPrefix }: { club: Club; canE
                 {a.affiliationNumber
                   ? <span className="text-slate-900">n° <span className="font-mono">{a.affiliationNumber}</span></span>
                   : <span className="text-slate-500">sans numéro</span>}
+                {organizationName(a.organizationId) && <span className="text-slate-500"> · {organizationName(a.organizationId)}</span>}
                 {a.name && <span className="block truncate text-slate-500">{a.name}</span>}
               </div>
               {canEdit && (
@@ -144,6 +149,27 @@ export function ClubAffiliations({ club, canEdit, idPrefix }: { club: Club; canE
                   className={INPUT_CLASS}
                 />
               </div>
+              {organizationsOf(editing.draft.federationId).length > 0 && (
+                <div>
+                  <label htmlFor={`${idPrefix}-affiliation-organization`} className="block text-sm font-medium text-slate-700">
+                    Organisation
+                  </label>
+                  <select
+                    id={`${idPrefix}-affiliation-organization`}
+                    value={editing.draft.organizationId ?? ''}
+                    onChange={(e) => setDraft({ organizationId: e.target.value || undefined })}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="">Non précisée</option>
+                    {organizationsOf(editing.draft.federationId).map((o) => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Le comité dont le club relève : ses championnats et les clubs de ses calendriers en viennent.
+                  </p>
+                </div>
+              )}
               <div>
                 <label htmlFor={`${idPrefix}-affiliation-name`} className="block text-sm font-medium text-slate-700">
                   Nom dans cette fédération
