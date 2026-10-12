@@ -38,6 +38,14 @@ export const ICON_TARGET_CLASS =
 /** Same idea for inline text actions, which need the height but not the width. */
 export const TEXT_TARGET_CLASS = 'inline-flex min-h-11 items-center md:min-h-0'
 
+/**
+ * The outline of a header toolbar's controls — the federation switch and the
+ * phase pager, side by side (#706). `box-content`: the height is what the
+ * buttons inside fill — 44px below md: (#372), 34 above — and the border sits
+ * outside it, so both are one height and one border whatever they hold.
+ */
+export const TOOLBAR_PILL_CLASS = 'box-content h-11 rounded-lg border border-slate-200 bg-white md:h-[34px]'
+
 export function PrimaryButton({
   className = '',
   type = 'button',

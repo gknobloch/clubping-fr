@@ -778,7 +778,8 @@ invisible dans le diff comme dans la revue.
   sur chaque liste — Divisions et Clubs y sont venus en #700 : une carte à
   part changeait la hauteur et l'espacement d'un écran à l'autre. La phase est
   `PhasePager`, une seule pastille, plus une copie par page. Sur Clubs,
-  l'interrupteur commence par « Toutes » : Kembs est des deux.
+  l'interrupteur commence par « Tous » : Kembs est des deux. Les deux
+  contrôles partagent contour et hauteur (`TOOLBAR_PILL_CLASS`, #706).
 
 ### Division parente (#236, #694)
 - **Une division ne se classe jamais au-dessus de sa parente** : les chevrons
