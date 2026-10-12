@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import type { Club } from '@/types'
+import { mockFederations } from '@/mock/data'
 
 vi.mock('@/contexts/AuthContext', () => ({
   DEV_LOGIN: true,
@@ -29,15 +30,15 @@ const detail = (numero: string, ville: string) =>
   `<liste><club><numero>${numero}</numero><nom>CLUB</nom><nomsalle>Gymnase Jean Moulin</nomsalle>` +
   `<adressesalle1>3 rue du Stade</adressesalle1><codepsalle>88000</codepsalle><villesalle>${ville}</villesalle></club></liste>`
 
-function renderPage() {
+function renderPage(url = '/clubs') {
   const data = {
-    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
+    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: mockFederations,
     groups: [], teams: [], players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
     gameAvailabilities: [], gameSelections: [], users: [],
   }
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <DataProvider initialData={data}>
         <ClubsPage />
       </DataProvider>
@@ -52,6 +53,15 @@ describe('ClubsPage — completing addresses from FFTT (#613)', () => {
     vi.stubGlobal('fetch', vi.fn())
     renderPage()
     expect(screen.getByRole('status')).toHaveTextContent('2 clubs n\'ont aucune adresse')
+    expect(screen.getByRole('button', { name: 'Importer depuis la FFTT' })).toBeInTheDocument()
+  })
+
+  it('offers neither the FFTT import nor its halls while another federation is listed', () => {
+    vi.stubGlobal('fetch', vi.fn())
+    renderPage('/clubs?federation=agr')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Importer depuis la FFTT' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ajouter un club' })).toBeInTheDocument()
   })
 
   it('writes the hall FFTT gives, and says what it could not do', async () => {

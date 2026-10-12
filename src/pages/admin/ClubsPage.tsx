@@ -41,6 +41,9 @@ export function ClubsPage() {
   const visibleClubs = (showArchived ? clubs : activeClubs)
     .filter((c) => !federationFilter || clubIsIn(c, federationFilter))
   const shortName = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
+  // The FFTT's import and its hall backfill are about the FFTT: not offered
+  // while another federation's clubs are listed.
+  const showsFftt = !federationFilter || federationFilter === FFTT_FEDERATION_ID
 
   const openEdit = (club: Club) => {
     navigate(`/clubs/${encodeURIComponent(club.id)}`)
@@ -48,7 +51,8 @@ export function ClubsPage() {
 
   const openCreate = () => {
     setCreating(true)
-    setForm(emptyForm)
+    // A club added while one federation is listed is that federation's.
+    setForm({ ...emptyForm, federationId: federationFilter ?? FFTT_FEDERATION_ID })
   }
 
   const handleSave = () => {
@@ -98,11 +102,13 @@ export function ClubsPage() {
         actions={
           <>
             <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter un club" onClick={openCreate} />
-            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            {showsFftt && (
+              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            )}
           </>
         }
       />
-      <VenueBackfill />
+      {showsFftt && <VenueBackfill />}
       {federations.length > 1 && (
         <div className="flex items-center gap-2">
           <label htmlFor="clubs-federation" className="text-sm text-slate-600">Fédération</label>
