@@ -14,7 +14,8 @@ import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import type { Game, MatchDay, Team } from '@shared/types'
-import { activePhaseOf } from '@shared/lib/federations'
+import { activeTeamOf } from '@shared/lib/activeTeam'
+import { todayIso } from '@shared/lib/weeks'
 
 // ---------------------------------------------------------------------------
 // Player match list — the games a player was selected for in a phase, aligned
@@ -88,7 +89,9 @@ export default function MesMatchsScreen() {
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [phases, participated],
   )
-  const activePhase = activePhaseOf(phases)
+  // The phase of the team the home opens on — any federation's (#711).
+  const activePhase = phases.find((p) =>
+    p.id === activeTeamOf(targetPlayerId, teams, phases, games, mdMap, todayIso())?.phaseId)
   const fallbackPhase =
     activePhase && participated.has(activePhase.id)
       ? activePhase

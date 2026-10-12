@@ -33,7 +33,7 @@ import { todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
 import { activeSeasonId } from '@shared/lib/season'
-import { activePhaseOf } from '@shared/lib/federations'
+import { activeTeamOf } from '@shared/lib/activeTeam'
 
 // ---------------------------------------------------------------------------
 // Home screen — player dashboard
@@ -81,18 +81,13 @@ export default function HomeScreen() {
   // address behind it (#426).
   const venueFor = (homeTeam: Team | undefined): string | undefined => getVenue(homeTeam, clubs)
 
-  const myTeamByPhase = useMemo(() => {
-    if (!myPlayerId) return new Map<string, Team>()
-    const map = new Map<string, Team>()
-    for (const t of teams) {
-      if (t.playerIds.includes(myPlayerId)) map.set(t.phaseId, t)
-    }
-    return map
-  }, [teams, myPlayerId])
-
   const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
-  const activePhase = activePhaseOf(phases)
-  const myActiveTeam = activePhase ? myTeamByPhase.get(activePhase.id) : undefined
+  // In the active phase of any federation, not the FFTT's alone (#711).
+  const myActiveTeam = useMemo(
+    () => activeTeamOf(myPlayerId, teams, phases, games, mdMap, today),
+    [myPlayerId, teams, phases, games, mdMap, today],
+  )
+  const activePhase = phases.find((p) => p.id === myActiveTeam?.phaseId)
   const isCaptain = !!(user && myActiveTeam && mayManageTeam(user, myActiveTeam))
   const isPlayer = !!myPlayerId && !!myActiveTeam
 
