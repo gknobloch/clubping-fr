@@ -24,7 +24,7 @@ import { FederationSelect } from '@/components/FederationSelect'
 import {
   FFTT_FEDERATION_ID, clubIsIn, divisionsOfFederation, federationChoices, federationOfDivision,
 } from '@/lib/federations'
-import { poolLabel } from '@/lib/poolLabel'
+import { poolLabel, poolTitle } from '@/lib/poolLabel'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
 import { activeSeasonId } from '@/lib/season'
 import { withSeasonCategory } from '@/lib/seasonCategories'
@@ -754,7 +754,7 @@ export function TeamsPage() {
                     className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
                     {groupsInDivision.map((g) => (
-                      <option key={g.id} value={g.id}>Groupe {g.number}</option>
+                      <option key={g.id} value={g.id}>{poolTitle(g, { divisions, competitions })}</option>
                     ))}
                   </select>
                 </div>
