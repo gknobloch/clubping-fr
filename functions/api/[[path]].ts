@@ -26,6 +26,7 @@ import { addressTakenMessage } from '../../src/lib/addressOwner'
 import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
 import { pdfTextLines } from '../../src/lib/pdfLines'
 import { divisionNameKey } from '../../src/lib/divisionNames'
+import { clubNameFromFederation } from '../../src/lib/ffttNames'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, ffttPhaseIdForName, localPhaseId, phaseIdFor, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -53,6 +54,17 @@ import {
 // Exported for tests: the session guard is only observable through a real
 // request, so the suites that pin it down fetch this app directly (#320, #138).
 export const app = new Hono<Env>().basePath('/api')
+
+/**
+ * Renames a club an import finds again, if its name is still the one a
+ * federation printed in capitals — nobody wrote it so (#704). The import that
+ * created it now spells it for people; this catches the clubs created before.
+ * SQLite's upper() folds ASCII only, which is what « nobody typed a lowercase
+ * letter » needs.
+ */
+const renameShoutingClub = (db: D1Database, clubId: string, raw: string) =>
+  db.prepare('UPDATE clubs SET display_name = ? WHERE id = ? AND display_name = upper(display_name) AND display_name <> ?')
+    .bind(clubNameFromFederation(raw), clubId, clubNameFromFederation(raw))
 
 // Opaque generated id (#278), same shape as the web app's nextId(). The
 // counter keeps a single request that creates several rows from colliding on
@@ -2350,6 +2362,8 @@ app.post('/games/import', async (c) => {
   }
 
   const createdClubs: Array<Record<string, unknown>> = []
+  /** Clubs found again, with the name the FFTT prints for them (#704). */
+  const foundClubNames = new Map<string, string>()
   const createdTeams: Array<Record<string, unknown>> = []
   const createdMatchDays: Array<Record<string, unknown>> = []
   const updatedMatchDays: Array<Record<string, unknown>> = []
@@ -2373,10 +2387,14 @@ app.post('/games/import', async (c) => {
   // doubles as the natural dedup key across groups in one import.
   const clubIdFor = (side: FfttMatchTeam): string | null => {
     if (!side.clubIdentifier) return null
+    const printed = side.clubName || side.teamName.replace(/\s*\(?\d+\)?\s*$/, '')
     const existing = resolver.clubByAffiliation.get(side.clubIdentifier)
-    if (existing) return existing
+    if (existing) {
+      if (printed) foundClubNames.set(existing, printed)
+      return existing
+    }
     const id = `club-fftt-${side.clubIdentifier}`
-    const displayName = side.clubName || side.teamName.replace(/\s*\(?\d+\)?\s*$/, '')
+    const displayName = clubNameFromFederation(printed)
     createdClubs.push({ id, affiliationNumber: side.clubIdentifier, displayName, isArchived: false, addresses: [], channels: [] })
     resolver.clubByAffiliation.set(side.clubIdentifier, id)
     return id
@@ -2539,6 +2557,7 @@ app.post('/games/import', async (c) => {
     ...createdClubs.map((cl) =>
       db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
+    ...[...foundClubNames].map(([id, raw]) => renameShoutingClub(db, id, raw)),
     ...createdTeams.map((t) =>
       db.prepare(
         `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived, team_id)
@@ -2853,6 +2872,8 @@ app.post('/schedule-documents/import', async (c) => {
   const createdDivisions: Array<{ id: string; phaseId: string; displayName: string; rank: number; playersPerGame: number; isArchived: boolean }> = []
   const createdGroupIds = new Set<string>()
   const createdClubs: Array<{ id: string; affiliationNumber: string; displayName: string; isArchived: boolean; addresses: []; channels: [] }> = []
+  /** Clubs found again, with the name the document prints for them (#704). */
+  const foundClubNames = new Map<string, string>()
   const createdTeams: Array<Record<string, unknown>> = []
   /** Existing teams with no playing day recorded, to seed from the roster (#294). */
   const teamDefaultsToFill: Array<{ id: string; day: string; time: string }> = []
@@ -2884,11 +2905,15 @@ app.post('/schedule-documents/import', async (c) => {
   const localId = (prefix: string) => `${prefix}-doc-${Date.now()}-${uidCounter++}`
 
   const clubIdFor = (name: string, affiliationNumber: string): string => {
+    const printed = name.replace(/\s*\d+\s*$/, '').trim() || name
     const existing = resolver.clubByAffiliation.get(affiliationNumber)
-    if (existing) return existing
+    if (existing) {
+      foundClubNames.set(existing, printed)
+      return existing
+    }
     const id = `club-fftt-${affiliationNumber}`
     createdClubs.push({
-      id, affiliationNumber, displayName: name.replace(/\s*\d+\s*$/, '').trim() || name,
+      id, affiliationNumber, displayName: clubNameFromFederation(printed),
       isArchived: false, addresses: [], channels: [],
     })
     resolver.clubByAffiliation.set(affiliationNumber, id)
@@ -3105,6 +3130,7 @@ app.post('/schedule-documents/import', async (c) => {
     ...createdClubs.map((cl) =>
       db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
+    ...[...foundClubNames].map(([id, raw]) => renameShoutingClub(db, id, raw)),
     ...[...touchedGroups.values()].map((g) =>
       createdGroupIds.has(g.id)
         ? db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
@@ -3386,14 +3412,16 @@ app.post('/federation-schedules/import', async (c) => {
         `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, '', ?, ?)
          ON CONFLICT(club_id, federation_id) DO UPDATE SET name = COALESCE(club_federations.name, excluded.name),
            organization_id = COALESCE(club_federations.organization_id, excluded.organization_id)`,
-      ).bind(cl.clubId, input.federationId, cl.name, organizationId))
+      ).bind(cl.clubId, input.federationId, cl.name, organizationId), renameShoutingClub(db, cl.clubId, cl.name))
       continue
     }
     const id = newId('club')
     clubIdOf.set(cl.name, id)
     createdClubs.push(id)
     stmts.push(
-      db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, \'\', ?, 0)').bind(id, cl.name),
+      // Spelled for people (#704); the printed name stays the federation's,
+      // the one its next calendar is matched against.
+      db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, \'\', ?, 0)').bind(id, clubNameFromFederation(cl.name)),
       db.prepare("INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, '', ?, ?)")
         .bind(id, input.federationId, cl.name, organizationId),
     )
