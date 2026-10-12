@@ -531,7 +531,10 @@ invisible dans le diff comme dans la revue.
 - **Les imports FFTT ne sont offerts que là où la FFTT a quelque chose** :
   pas d'« Importer depuis la FFTT » pour un club sans numéro FFTT, ni d'import
   de calendrier FFTT pour une poule d'une autre fédération (`importableGroupIds`,
-  « Importer les matchs » d'une équipe, « Importer les groupes FFTT »).
+  « Importer les matchs » d'une équipe, « Importer les groupes FFTT »). Sur
+  `/clubs` filtré sur une autre fédération, ni l'import ni « Compléter depuis
+  la FFTT » ; la fiche d'un club de cette seule fédération n'offre pas de
+  synchronisation FFTT — il ne lui manque aucun numéro (#698).
 
 ### Une licence par fédération (#644)
 - **La licence FFTT reste `users.license_number`**, et `federation_licences`

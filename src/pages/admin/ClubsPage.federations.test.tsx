@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import { mockFederations } from '@/mock/data'
 import type { Club } from '@/types'
@@ -11,6 +11,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }))
 
 const { ClubsPage } = await import('./ClubsPage')
+const { ClubDetailPage } = await import('./ClubDetailPage')
 
 // #643 — the clubs list tags every affiliation and filters on one federation.
 
@@ -27,7 +28,7 @@ const clubs = [
   club('club-agr-680036', 'Landser ASL', { affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }] }),
 ]
 
-function renderPage(path = '/clubs') {
+function renderPage(path = '/clubs', page: React.ReactNode = <ClubsPage />) {
   const data = {
     divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [],
     federations: mockFederations,
@@ -37,9 +38,7 @@ function renderPage(path = '/clubs') {
   }
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <DataProvider initialData={data}>
-        <ClubsPage />
-      </DataProvider>
+      <DataProvider initialData={data}>{page}</DataProvider>
     </MemoryRouter>,
   )
 }
@@ -74,5 +73,20 @@ describe('ClubsPage — federations (#643)', () => {
 
     renderPage('/clubs?federation=ufolep')
     expect(screen.getAllByText('Rixheim PPA').length).toBeGreaterThan(0)
+  })
+})
+
+describe('A club’s page — the FFTT sync for a club of the FFTT (#698)', () => {
+  const detail = (id: string) =>
+    renderPage(`/clubs/${id}`, <Routes><Route path="/clubs/:clubId" element={<ClubDetailPage />} /></Routes>)
+
+  it('is not offered to a club of the AGR alone, which lacks no FFTT number', () => {
+    detail('club-agr-680036')
+    expect(screen.queryByRole('heading', { name: 'Synchronisation FFTT' })).not.toBeInTheDocument()
+  })
+
+  it('stays for a club in both', () => {
+    detail('club-fftt-06680140')
+    expect(screen.getByRole('heading', { name: 'Synchronisation FFTT' })).toBeInTheDocument()
   })
 })

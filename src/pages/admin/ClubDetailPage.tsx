@@ -152,29 +152,33 @@ export function ClubDetailPage() {
       <ClubCompetitions clubId={club.id} idPrefix="admin-club" />
       <ClubTrainings clubId={club.id} idPrefix="admin-club" />
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-sm font-medium text-slate-800">Synchronisation FFTT</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          {club.affiliationNumber
-            ? `Récupère à nouveau le nom et le lieu de jeu de ce club depuis la FFTT (n° ${club.affiliationNumber}).`
-            : 'Renseignez le numéro d’affiliation ci-dessus pour pouvoir synchroniser ce club depuis la FFTT.'}
-        </p>
-        <button
-          type="button"
-          onClick={handleSync}
-          disabled={syncState === 'loading' || !club.affiliationNumber}
-          className={`mt-3 border border-accent-600 text-accent-600 hover:bg-accent-50 ${OUTLINE_BUTTON_CLASS}`}
-        >
-          {syncState === 'loading' ? 'Synchronisation…' : 'Synchroniser depuis la FFTT'}
-        </button>
-        {syncState === 'done' && <p className="mt-2 text-sm text-green-700">Club synchronisé.</p>}
-        {syncState === 'not_found' && (
-          <p className="mt-2 text-sm text-slate-600">Aucun club trouvé sur la FFTT pour ce numéro d’affiliation.</p>
-        )}
-        {syncState === 'error' && (
-          <p className="mt-2 text-sm text-red-600">Impossible de contacter la FFTT. Réessayez plus tard.</p>
-        )}
-      </div>
+      {/* Not for a club only in another federation: it has no FFTT number to
+          give, and is not missing one. */}
+      {(club.affiliationNumber || !club.affiliations?.length) && (
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-slate-800">Synchronisation FFTT</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {club.affiliationNumber
+              ? `Récupère à nouveau le nom et le lieu de jeu de ce club depuis la FFTT (n° ${club.affiliationNumber}).`
+              : 'Renseignez le numéro d’affiliation ci-dessus pour pouvoir synchroniser ce club depuis la FFTT.'}
+          </p>
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={syncState === 'loading' || !club.affiliationNumber}
+            className={`mt-3 border border-accent-600 text-accent-600 hover:bg-accent-50 ${OUTLINE_BUTTON_CLASS}`}
+          >
+            {syncState === 'loading' ? 'Synchronisation…' : 'Synchroniser depuis la FFTT'}
+          </button>
+          {syncState === 'done' && <p className="mt-2 text-sm text-green-700">Club synchronisé.</p>}
+          {syncState === 'not_found' && (
+            <p className="mt-2 text-sm text-slate-600">Aucun club trouvé sur la FFTT pour ce numéro d’affiliation.</p>
+          )}
+          {syncState === 'error' && (
+            <p className="mt-2 text-sm text-red-600">Impossible de contacter la FFTT. Réessayez plus tard.</p>
+          )}
+        </div>
+      )}
 
       {!club.isArchived ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6">
