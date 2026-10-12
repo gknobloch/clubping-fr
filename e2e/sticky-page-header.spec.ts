@@ -97,7 +97,7 @@ test.describe('En-tête de page — mobile (#311)', () => {
   })
 
   test('les écrans sans contrôles n’ont pas de barre collante', async ({ page }) => {
-    for (const path of ['/joueurs', '/clubs', '/saisons']) {
+    for (const path of ['/joueurs', '/saisons']) {
       await page.goto(path)
       await page.locator('main h1').waitFor()
       await expect(page.locator('[data-testid="page-toolbar"]')).toHaveCount(0)
@@ -107,9 +107,10 @@ test.describe('En-tête de page — mobile (#311)', () => {
 
   // The consistency half of the acceptance criteria: every screen that has a
   // control puts it at the same level, not just Journées. Équipes and Groupes
-  // used to park their phase switcher in the scrolling flow.
+  // used to park their phase switcher in the scrolling flow; Divisions and
+  // Clubs did until #700.
   test('les écrans à contrôles les gardent tous collés, à la même hauteur', async ({ page }) => {
-    for (const path of ['/journees', '/equipes', '/groupes']) {
+    for (const path of ['/journees', '/equipes', '/groupes', '/divisions', '/clubs']) {
       await page.goto(path)
       await page.locator('main h1').waitFor()
 

@@ -6,7 +6,8 @@ import { ImportDivisionsModal } from '@/components/ImportDivisionsModal'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
-import { ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
+import { ImportIcon, PlusIcon } from '@/components/icons'
+import { PhasePager } from '@/components/PhasePager'
 import { canMoveDivisionDown, canMoveDivisionUp, parentCandidates } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
@@ -298,6 +299,20 @@ export function DivisionsPage() {
             )}
           </>
         }
+        // Federation (#645), then the phase (#235) — the toolbar of Équipes
+        // and Groupes, not a card of its own (#700).
+        controls={
+          <>
+            <FederationSwitch options={scope.options} value={scope.federationId} onChange={changeFederation} />
+            {filterPhase && (
+              <PhasePager
+                label={`Saison ${filterPhase.displayName}`}
+                onPrev={phaseIndex > 0 ? () => setFilterPhaseId(orderedPhases[phaseIndex - 1].id) : undefined}
+                onNext={phaseIndex < orderedPhases.length - 1 ? () => setFilterPhaseId(orderedPhases[phaseIndex + 1].id) : undefined}
+              />
+            )}
+          </>
+        }
       />
       {importOpen && (
         <ImportDivisionsModal
@@ -305,23 +320,6 @@ export function DivisionsPage() {
           defaultOrganizationId={organizationId}
           onImported={setOrganizationId}
         />
-      )}
-      {/* Federation (#645), then the phase switcher (#235) */}
-      <FederationSwitch options={scope.options} value={scope.federationId} onChange={changeFederation} />
-      {filterPhase && (
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-          <PhaseSwitchButton
-            dir="prev"
-            disabled={phaseIndex <= 0}
-            onClick={() => phaseIndex > 0 && setFilterPhaseId(orderedPhases[phaseIndex - 1].id)}
-          />
-          <span className="font-display text-sm font-semibold text-slate-800">{filterPhase.displayName}</span>
-          <PhaseSwitchButton
-            dir="next"
-            disabled={phaseIndex >= orderedPhases.length - 1}
-            onClick={() => phaseIndex < orderedPhases.length - 1 && setFilterPhaseId(orderedPhases[phaseIndex + 1].id)}
-          />
-        </div>
       )}
       {/* Each federation's organisations narrow its own divisions (#692). */}
       {orgGroups.length > 0 && (

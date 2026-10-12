@@ -8,7 +8,8 @@ import { pointsFor } from '@/lib/phasePoints'
 import { phaseScope } from '@/lib/phaseScope'
 import { rankingLabel } from '@/lib/ranking'
 import { FederationSwitch } from '@/components/FederationSwitch'
-import { CaptainIcon, ClockIcon, FileIcon, ImportIcon, PhaseSwitchButton, PlusIcon, WhatsAppIcon } from '@/components/icons'
+import { CaptainIcon, ClockIcon, FileIcon, ImportIcon, PlusIcon, WhatsAppIcon } from '@/components/icons'
+import { PhasePager } from '@/components/PhasePager'
 import { ImportFederationCalendarModal } from '@/components/ImportFederationCalendarModal'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, ICON_TARGET_CLASS, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
@@ -468,23 +469,13 @@ export function TeamsPage() {
         controls={
           <>
           <FederationSwitch options={scope.options} value={scope.federationId} onChange={changeFederation} />
-          {phase ? (
-            <div className="flex h-11 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:h-9">
-              <PhaseSwitchButton
-                dir="prev"
-                disabled={phaseIndex <= 0}
-                onClick={() => phaseIndex > 0 && setPhaseId(orderedPhases[phaseIndex - 1].id)}
-              />
-              <span className="whitespace-nowrap font-display text-sm font-semibold text-slate-800">
-                Saison {phase.displayName}
-              </span>
-              <PhaseSwitchButton
-                dir="next"
-                disabled={phaseIndex >= orderedPhases.length - 1}
-                onClick={() => phaseIndex < orderedPhases.length - 1 && setPhaseId(orderedPhases[phaseIndex + 1].id)}
-              />
-            </div>
-          ) : null}
+          {phase && (
+            <PhasePager
+              label={`Saison ${phase.displayName}`}
+              onPrev={phaseIndex > 0 ? () => setPhaseId(orderedPhases[phaseIndex - 1].id) : undefined}
+              onNext={phaseIndex < orderedPhases.length - 1 ? () => setPhaseId(orderedPhases[phaseIndex + 1].id) : undefined}
+            />
+          )}
           </>
         }
       />

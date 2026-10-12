@@ -38,7 +38,8 @@ import { FederationSwitch } from '@/components/FederationSwitch'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
-import { ImportIcon, PhaseSwitchButton } from '@/components/icons'
+import { ImportIcon } from '@/components/icons'
+import { PhasePager } from '@/components/PhasePager'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
   AVAILABILITY_COLORS,
@@ -984,21 +985,12 @@ export function MatchDaysPage() {
             <div className="hidden md:flex">
               <FederationSwitch options={scope.options} value={scope.federationId} onChange={handleFederationChange} />
             </div>
-            <div className="hidden h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:flex">
-              <PhaseSwitchButton
-                dir="prev"
-                disabled={!previousPhase}
-                onClick={() => previousPhase && handlePhaseChange(previousPhase.id)}
-              />
-              <span className="whitespace-nowrap font-display text-sm font-semibold text-slate-800">
-                {selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
-              </span>
-              <PhaseSwitchButton
-                dir="next"
-                disabled={!nextPhase}
-                onClick={() => nextPhase && handlePhaseChange(nextPhase.id)}
-              />
-            </div>
+            <PhasePager
+              className="hidden md:flex"
+              label={selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
+              onPrev={previousPhase ? () => handlePhaseChange(previousPhase.id) : undefined}
+              onNext={nextPhase ? () => handlePhaseChange(nextPhase.id) : undefined}
+            />
 
             {/* Team shortcuts — matrix-only: they jump between the per-team
                 tables, which do not exist below md:. */}
