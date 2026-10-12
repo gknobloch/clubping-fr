@@ -5,6 +5,7 @@ import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { extractPdfScheduleLines } from '@/lib/pdfScheduleText'
 import { isAgrScheduleDocument, parseAgrScheduleLines, type AgrScheduleDocument } from '@/lib/agrScheduleDocument'
 import { matchFederationClub } from '@/lib/federationClubMatch'
+import { clubNameFromFederation } from '@/lib/ffttNames'
 import { matchDivisionName } from '@/lib/divisionNames'
 import { federationOfDivision } from '@/lib/federations'
 import { phasesOfFederation } from '@/lib/federations'
@@ -341,9 +342,13 @@ export function ImportFederationCalendarModal({
                       onChange={(e) => setClubIds((m) => ({ ...m, [name]: e.target.value }))}
                       className="min-h-[44px] md:min-h-0 w-full sm:w-64 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
                     >
-                      <option value="">Créer « {name} »</option>
+                      {/* The names the import writes (#704, #708): a club is created
+                          spelled for people, and one still in capitals is renamed
+                          when the import uses it. The printed name, beside, is the
+                          one the federation knows it by. */}
+                      <option value="">Créer « {clubNameFromFederation(name)} »</option>
                       {[...fedClubs, ...clubs.filter((c) => c.id === clubIds[name] && !fedClubs.includes(c))].map((c) => (
-                        <option key={c.id} value={c.id}>{c.displayName}</option>
+                        <option key={c.id} value={c.id}>{clubNameFromFederation(c.displayName)}</option>
                       ))}
                     </select>
                   </li>

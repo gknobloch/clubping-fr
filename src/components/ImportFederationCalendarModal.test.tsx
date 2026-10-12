@@ -17,6 +17,8 @@ const { ImportFederationCalendarModal } = await import('./ImportFederationCalend
 const club = (id: string, displayName: string, over: Partial<Club> = {}): Club =>
   ({ id, affiliationNumber: '', displayName, isArchived: false, addresses: [], channels: [], ...over })
 const clubs = [
+  // Created by an import before #704, still in capitals: offered as it will read.
+  club('lutterbach', 'LUTTERBACH SG', { affiliations: [{ federationId: 'agr', affiliationNumber: '', name: 'LUTTERBACH SG' }] }),
   club('landser', 'Landser ASL', { affiliations: [{ federationId: 'agr', affiliationNumber: '680036', organizationId: 'agr-68' }] }),
   club('kembs', 'Kembs TT', { affiliationNumber: '06680140', affiliations: [{ federationId: 'agr', affiliationNumber: '680021', name: 'KEMBS ASL TT' }] }),
   club('rixheim', 'Rixheim PPA', { affiliationNumber: '06680011' }),
@@ -73,7 +75,10 @@ describe('ImportFederationCalendarModal', () => {
     expect(clubSelect('LANDSER ASL').value).toBe('landser')
     expect(clubSelect('KEMBS ASL TT').value).toBe('kembs')
     expect(clubSelect('SPECHBACH MJC').value).toBe('')
+    // Named as the import will write them (#708): created spelled for people.
+    expect(clubSelect('SPECHBACH MJC').selectedOptions[0].textContent).toBe('Créer « Spechbach MJC »')
     expect(screen.getByText('KIRCHBERG/NIEDERBRUCK 4 JOUE A NIEDERBRUCK')).toBeInTheDocument()
+    expect(within(clubSelect('SPECHBACH MJC')).getByRole('option', { name: 'Lutterbach SG' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Importer' })).toBeEnabled()
   })
 
