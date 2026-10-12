@@ -746,6 +746,12 @@ invisible dans le diff comme dans la revue.
 - **« La phase active » se demande avec sa fédération** : `activePhaseOf`
   (la FFTT par défaut), jamais `phases.find(active)`, qui rendrait la première
   des deux. `activeSeasonId` est la saison active, tout court.
+- **« L'équipe d'un joueur » se cherche dans toutes les phases actives**
+  (`activeTeamOf`, #711) — jamais dans `activePhaseOf(phases)`, qui ne
+  répond que pour la FFTT : un joueur de Landser n'avait pas d'équipe, et
+  l'accueil lui montrait la vue générique, sans « Ma disponibilité ». Un
+  membre de Kembs en a une par fédération ; l'accueil (web et app) et « Mes
+  matchs » partent de celle dont le prochain match vient en premier.
 - **« La phase suivante » aussi** : la phase 2 d'une poule AGR (#649) et le
   compte du brûlage AGR sur la saison (#651) ne lisent que les phases de la
   même fédération — la phase 2 de la FFTT est dans la même saison.

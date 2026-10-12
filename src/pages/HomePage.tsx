@@ -30,7 +30,7 @@ import {
 } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 import { NextTrainings } from '@/components/NextTrainings'
-import { activePhaseOf } from '@/lib/federations'
+import { activeTeamOf } from '@/lib/activeTeam'
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -59,16 +59,13 @@ export function HomePage() {
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
 
   const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
-  const activePhase = activePhaseOf(phases)
-  const myActiveTeam = useMemo(
-    () =>
-      myPlayerId && activePhase
-        ? teams.find((t) => t.phaseId === activePhase.id && t.playerIds.includes(myPlayerId))
-        : undefined,
-    [teams, activePhase, myPlayerId],
-  )
-
   const mdMap = useMemo(() => new Map(matchDays.map((md) => [md.id, md])), [matchDays])
+  // In the active phase of any federation, not the FFTT's alone (#711).
+  const myActiveTeam = useMemo(
+    () => activeTeamOf(myPlayerId, teams, phases, games, mdMap, today),
+    [myPlayerId, teams, phases, games, mdMap, today],
+  )
+  const activePhase = phases.find((p) => p.id === myActiveTeam?.phaseId)
 
   const teamGames = useMemo(
     () =>

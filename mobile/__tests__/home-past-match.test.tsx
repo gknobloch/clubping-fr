@@ -131,3 +131,19 @@ describe("Accueil — un match joué n'est plus un prochain match", () => {
     expect(screen.getByText("Aujourd'hui")).toBeTruthy()
   })
 })
+
+// #711 — Nathan plays for ASL Landser 1, in the AGR's phase. The home looked
+// for his team in the FFTT's active phase only, found none, and showed the
+// generic view: no next match, no « Ma disponibilité ».
+describe("Accueil — l'équipe d'un joueur de l'AGR", () => {
+  it('opens on his match, whatever federation the phase is', () => {
+    mockData.phases = [
+      { id: 'ph-fftt', seasonId: 's1', name: 'phase1', displayName: 'Phase 1', status: 'active' },
+      { id: 'ph1', seasonId: 's1', name: 'phase1', displayName: 'Phase 1', status: 'active', federationId: 'agr' },
+    ]
+    render(<HomeScreen />)
+
+    expect(screen.getByText('Prochain match')).toBeTruthy()
+    expect(screen.getByText(new RegExp(dayAndMonth(COMING_DATE)))).toBeTruthy()
+  })
+})
