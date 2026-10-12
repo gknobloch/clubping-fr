@@ -17,7 +17,7 @@ const { ImportFederationCalendarModal } = await import('./ImportFederationCalend
 const club = (id: string, displayName: string, over: Partial<Club> = {}): Club =>
   ({ id, affiliationNumber: '', displayName, isArchived: false, addresses: [], channels: [], ...over })
 const clubs = [
-  club('landser', 'Landser ASL', { affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }] }),
+  club('landser', 'Landser ASL', { affiliations: [{ federationId: 'agr', affiliationNumber: '680036', organizationId: 'agr-68' }] }),
   club('kembs', 'Kembs TT', { affiliationNumber: '06680140', affiliations: [{ federationId: 'agr', affiliationNumber: '680021', name: 'KEMBS ASL TT' }] }),
   club('rixheim', 'Rixheim PPA', { affiliationNumber: '06680011' }),
 ]
@@ -28,6 +28,12 @@ const phases: Phase[] = [
 ]
 const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat Messieurs', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },
+  { id: 'c-bas', displayName: 'Championnat du Bas-Rhin', categories: [], federationId: 'agr', sortOrder: 1, isArchived: false },
+  { id: 'c-haut', displayName: 'Championnat du Haut-Rhin', categories: [], federationId: 'agr', sortOrder: 2, isArchived: false },
+]
+const organizations = [
+  { id: 'agr-68', type: 'Committee', identifier: '68', name: 'Haut-Rhin', federationId: 'agr' },
+  { id: 'agr-67', type: 'Committee', identifier: '67', name: 'Bas-Rhin', federationId: 'agr' },
 ]
 
 function open(viewerClubId?: string, divisions: Division[] = [], lines = PROM_HONNEUR_A_PHASE_1, phaseList = phases) {
@@ -35,7 +41,7 @@ function open(viewerClubId?: string, divisions: Division[] = [], lines = PROM_HO
   render(
     <DataProvider
       initialData={{
-        divisions, clubs, seasons, phases: phaseList, competitions, competitionGroups: [], competitionEligibilities: [],
+        divisions, clubs, seasons, phases: phaseList, competitions, organizations, competitionGroups: [], competitionEligibilities: [],
         federations: mockFederations, groups: [], teams: [], players: [], playerSeasonCategories: [],
         playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
         playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [], users: [],
@@ -57,7 +63,12 @@ describe('ImportFederationCalendarModal', () => {
     expect(await screen.findByText('Prom. HONNEUR · Poule A · Phase 1')).toBeInTheDocument()
     expect(screen.getByText(/7 journées \(J1 à J7\), 28 rencontres, 7 clubs/)).toBeInTheDocument()
     expect((screen.getByLabelText('Phase') as HTMLSelectElement).value).toBe('phase-agr-27-1')
-    expect((screen.getByLabelText('Compétition') as HTMLSelectElement).value).toBe('c-agr')
+    // Landser is AGR Haut-Rhin (#692): its organisation, and that organisation's championship.
+    expect((screen.getByLabelText('Organisation') as HTMLSelectElement).value).toBe('agr-68')
+    expect((screen.getByLabelText('Compétition') as HTMLSelectElement).value).toBe('c-haut')
+    fireEvent.change(screen.getByLabelText('Organisation'), { target: { value: 'agr-67' } })
+    expect((screen.getByLabelText('Compétition') as HTMLSelectElement).value).toBe('c-bas')
+    fireEvent.change(screen.getByLabelText('Organisation'), { target: { value: 'agr-68' } })
     // Landser by its display name, Kembs by its AGR name, the rest to create.
     expect(clubSelect('LANDSER ASL').value).toBe('landser')
     expect(clubSelect('KEMBS ASL TT').value).toBe('kembs')

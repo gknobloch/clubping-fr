@@ -10,6 +10,7 @@ import { ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
 import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { divisionIdsOfOrganization, filtersLocally, localOrganizationOptions } from '@/lib/organizationFilter'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, orderedCategoryPicks, type PlayerCategory } from '@/lib/playerCategories'
 import { FFTT_FEDERATION_ID, federationOfCompetition, federationOfPhase } from '@/lib/federations'
@@ -22,6 +23,7 @@ export function DivisionsPage() {
     phases,
     
     federations = [],
+    organizations = [],
     competitions,
     updateDivision,
     addDivision,
@@ -64,8 +66,24 @@ export function DivisionsPage() {
     return () => { cancelled = true }
   }, [fetchOrganizations])
 
+  // From our own data wherever divisions know their organisation (#692); the
+  // FFTT is asked only for a phase whose divisions predate it.
+  const phaseDivisions = useMemo(
+    () => allDivisions.filter((d) => d.phaseId === filterPhase?.id),
+    [allDivisions, filterPhase?.id],
+  )
+  const local = filtersLocally(phaseDivisions, scope.federationId)
+  const localOptions = useMemo(
+    () => localOrganizationOptions(organizations, phaseDivisions, scope.federationId),
+    [organizations, phaseDivisions, scope.federationId],
+  )
+
   useEffect(() => {
     const ffttPhaseId = filterPhase ? ffttPhaseIdForName(filterPhase.name) : null
+    if (local) {
+      setOrgDivisionIds(organizationId ? divisionIdsOfOrganization(phaseDivisions, organizationId) : null)
+      return
+    }
     if (!isFftt || !organizationId || !filterPhase || !ffttPhaseId) {
       setOrgDivisionIds(null)
       return
@@ -80,9 +98,12 @@ export function DivisionsPage() {
       )
     })
     return () => { cancelled = true }
-  }, [isFftt, organizationId, filterPhase, fetchDivisionsPreview])
+  }, [isFftt, local, organizationId, filterPhase, phaseDivisions, fetchDivisionsPreview])
 
-  const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
+  const orgGroups = useMemo(
+    () => groupOrganizationsByType(local ? localOptions : orgs),
+    [local, localOptions, orgs],
+  )
 
   const activeCompetitions = useMemo(
     () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -118,6 +139,8 @@ export function DivisionsPage() {
     categories: [] as PlayerCategory[],
     /** What phase 2 is, for a federation without an API (#649); '' = not known. */
     secondPhase: '' as '' | 'return_leg' | 'new_groups',
+    /** Who runs it, for a federation without an API (#692); '' = not said. */
+    organizationId: '',
   })
 
   const activeDivisions = useMemo(() => allDivisions.filter((d) => !d.isArchived), [allDivisions])
@@ -163,6 +186,7 @@ export function DivisionsPage() {
       restrictCategories: div.categories !== undefined,
       categories: div.categories ?? [],
       secondPhase: div.secondPhase ?? '',
+      organizationId: div.organizationId ?? '',
     })
   }
 
@@ -182,6 +206,8 @@ export function DivisionsPage() {
       restrictCategories: false,
       categories: [],
       secondPhase: '',
+      // The organisation being filtered on, else the federation's only one.
+      organizationId: organizationId || (localOptions.length === 1 ? localOptions[0].id : ''),
     })
   }
 
@@ -206,6 +232,8 @@ export function DivisionsPage() {
         // '' rather than undefined for the same reason as competitionId: the
         // API reads it as « not known » (#649).
         ...(!isFftt ? { secondPhase: (form.secondPhase || '') as Division['secondPhase'] } : {}),
+        // '' clears it, as for the competition (#692).
+        ...(!isFftt ? { organizationId: form.organizationId } : {}),
       })
       closeModal()
     } else if (creating && form.phaseId) {
@@ -227,6 +255,7 @@ export function DivisionsPage() {
         ...(parent ? { parentId: parent.id } : {}),
         ...(form.competitionId ? { competitionId: form.competitionId } : {}),
         ...(form.restrictCategories ? { categories: orderedCategoryPicks(form.categories) } : {}),
+        ...(!isFftt && form.organizationId ? { organizationId: form.organizationId } : {}),
       })
       closeModal()
     }
@@ -283,8 +312,8 @@ export function DivisionsPage() {
           />
         </div>
       )}
-      {/* The FFTT's organisations narrow the FFTT's divisions only. */}
-      {isFftt && (
+      {/* Each federation's organisations narrow its own divisions (#692). */}
+      {orgGroups.length > 0 && (
         <div>
           <label htmlFor="divisions-org" className="block text-sm font-medium text-slate-700">
             Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
@@ -553,6 +582,22 @@ export function DivisionsPage() {
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
+              {!isFftt && localOptions.length > 0 && (
+                <div>
+                  <label htmlFor="edit-organizationId" className="block text-sm font-medium text-slate-700">
+                    Organisation
+                  </label>
+                  <select
+                    id="edit-organizationId"
+                    value={form.organizationId}
+                    onChange={(e) => setForm((f) => ({ ...f, organizationId: e.target.value }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    <option value="">Non précisée</option>
+                    {localOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+              )}
               {editing && !isFftt && (
                 <div>
                   <label htmlFor="edit-secondPhase" className="block text-sm font-medium text-slate-700">

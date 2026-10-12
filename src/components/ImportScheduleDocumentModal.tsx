@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { federationOfPhase } from '@/lib/federations'
 import {
   useAppData, type ScheduleDocImportInput, type ScheduleDocImportResult,
 } from '@/contexts/DataContext'
@@ -96,7 +97,8 @@ export function ImportScheduleDocumentModal({
   ): FileEntry => {
     const seasonMissing = !parsed.seasonId || !seasons.some((s) => s.id === parsed.seasonId)
     const phase = parsed.seasonId && parsed.phaseNumber !== null
-      ? phases.find((p) => p.seasonId === parsed.seasonId && p.name === `Phase ${parsed.phaseNumber}`)
+      // The FFTT's: the AGR plays a « Phase 1 » in the same, shared season (#645).
+      ? phases.find((p) => p.seasonId === parsed.seasonId && p.name === `Phase ${parsed.phaseNumber}` && federationOfPhase(p) === 'fftt')
       : undefined
 
     const lockedGroup = applyLock && lockedGroupId ? groups.find((g) => g.id === lockedGroupId) : undefined

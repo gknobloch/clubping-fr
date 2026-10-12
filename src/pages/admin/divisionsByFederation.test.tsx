@@ -47,14 +47,20 @@ const competitions: Competition[] = [
   { id: 'c-agr', displayName: 'Championnat AGR', categories: [], federationId: 'agr', sortOrder: 0, isArchived: false },
   { id: 'c-fftt', displayName: 'Championnat de France', categories: [], federationId: 'fftt', sortOrder: 1, isArchived: false },
 ]
-const division = (id: string, displayName: string, rank: number, competitionId?: string): Division => ({
+const division = (id: string, displayName: string, rank: number, competitionId?: string, organizationId?: string): Division => ({
   id, phaseId: competitionId ? agrPhase.id : phase.id, displayName, rank, playersPerGame: 4, isArchived: false, competitionId,
+  ...(organizationId ? { organizationId } : {}),
 })
 const divisions = [
   division('d-ge3', 'GE 3', 1),
   division('d-n3', 'Nationale 3', 2),
-  division('d-exc', 'Excellence', 1, 'c-agr'),
-  division('d-hon', 'Honneur', 2, 'c-agr'),
+  division('d-exc', 'Excellence', 1, 'c-agr', 'agr-68'),
+  division('d-hon', 'Honneur', 2, 'c-agr', 'agr-67'),
+]
+// The AGR's two committees (#692).
+const organizations = [
+  { id: 'agr-68', type: 'Committee', identifier: '68', name: 'Haut-Rhin', federationId: 'agr' },
+  { id: 'agr-67', type: 'Committee', identifier: '67', name: 'Bas-Rhin', federationId: 'agr' },
 ]
 const groups: Group[] = divisions.map((d) => ({
   id: `g-${d.id}`, divisionId: d.id, number: 1, teamIds: [], isArchived: false,
@@ -74,7 +80,7 @@ const teams = [
 
 function renderPage(page: React.ReactNode) {
   const data = {
-    divisions, clubs: [rixheim, kembs, landser], seasons, phases: [phase, agrPhase], competitions,
+    divisions, clubs: [rixheim, kembs, landser], seasons, phases: [phase, agrPhase], competitions, organizations,
     competitionGroups: [], competitionEligibilities: [], federations: mockFederations,
     groups, teams, players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
@@ -109,8 +115,8 @@ describe('Groupes — one federation at a time', () => {
     // A switch in the header, as on Divisions (#645).
     fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
     expect(optionsOf(screen.getByLabelText('Division'))).toEqual(['Choisir une division…', 'Excellence', 'Honneur'])
-    // The FFTT's organisation filter means nothing to the AGR.
-    expect(screen.queryByLabelText(/Organisation/)).not.toBeInTheDocument()
+    // The AGR's organisation filter offers its own committees, not the FFTT's (#692).
+    expect(optionsOf(screen.getByLabelText(/Organisation/))).toEqual(['Toutes', 'Bas-Rhin (67)', 'Haut-Rhin (68)'])
   })
 
   it('opens « Ajouter un groupe » on the page’s federation, and switches with it', () => {
@@ -242,5 +248,16 @@ describe('Phases and Compétitions — the same switch (#645)', () => {
     expect(screen.getByText('Championnat AGR')).toBeInTheDocument()
     expect(screen.queryByText('Championnat de France')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Importer depuis la FFTT' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Organisation — the AGR’s committees, from our data (#692)', () => {
+  it('narrows the AGR’s divisions to one committee, without asking the FFTT', () => {
+    as('general_admin')
+    renderPage(<DivisionsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
+    fireEvent.change(screen.getByLabelText(/Organisation/), { target: { value: 'agr-67' } })
+    expect(screen.getByText('Honneur')).toBeInTheDocument()
+    expect(screen.queryByText('Excellence')).not.toBeInTheDocument()
   })
 })
