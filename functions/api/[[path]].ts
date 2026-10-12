@@ -4990,19 +4990,22 @@ function clearGroupsAndTeams(
   const mdGameIds = `SELECT id FROM games WHERE match_day_id IN (${mdIds})`
   const teamGameIds =
     `SELECT id FROM games WHERE home_team_id IN (${teamIdsSql}) OR away_team_id IN (${teamIdsSql})`
+  // The scope's id, once per placeholder. `teamIdsSql` appears twice in some
+  // of these, and D1 refuses a statement bound with fewer values than it has
+  // `?` — binding it once made every cascading delete answer 500 since #291,
+  // while the screens, deleting optimistically, showed it gone until a reload.
+  const each = (sql: string) => db.prepare(sql).bind(...Array.from({ length: sql.split('?').length - 1 }, () => bind))
   return [
-    db.prepare(`DELETE FROM game_availabilities WHERE game_id IN (${mdGameIds})`).bind(bind),
-    db.prepare(`DELETE FROM game_selections WHERE game_id IN (${mdGameIds})`).bind(bind),
+    each(`DELETE FROM game_availabilities WHERE game_id IN (${mdGameIds})`),
+    each(`DELETE FROM game_selections WHERE game_id IN (${mdGameIds})`),
     // A team of this scope can also appear in a game hanging off a match day
     // outside it; clear those before the teams disappear.
-    db.prepare(`DELETE FROM game_availabilities WHERE game_id IN (${teamGameIds})`).bind(bind),
-    db.prepare(`DELETE FROM game_selections WHERE game_id IN (${teamGameIds})`).bind(bind),
-    db.prepare(`DELETE FROM games WHERE match_day_id IN (${mdIds})`).bind(bind),
-    db.prepare(
-      `DELETE FROM games WHERE home_team_id IN (${teamIdsSql}) OR away_team_id IN (${teamIdsSql})`,
-    ).bind(bind),
-    db.prepare(`DELETE FROM match_days WHERE group_id IN (${groupIdsSql})`).bind(bind),
-    db.prepare(`DELETE FROM teams WHERE id IN (${teamIdsSql})`).bind(bind),
+    each(`DELETE FROM game_availabilities WHERE game_id IN (${teamGameIds})`),
+    each(`DELETE FROM game_selections WHERE game_id IN (${teamGameIds})`),
+    each(`DELETE FROM games WHERE match_day_id IN (${mdIds})`),
+    each(`DELETE FROM games WHERE home_team_id IN (${teamIdsSql}) OR away_team_id IN (${teamIdsSql})`),
+    each(`DELETE FROM match_days WHERE group_id IN (${groupIdsSql})`),
+    each(`DELETE FROM teams WHERE id IN (${teamIdsSql})`),
   ]
 }
 

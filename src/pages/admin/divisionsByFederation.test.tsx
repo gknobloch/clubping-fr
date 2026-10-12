@@ -15,6 +15,8 @@ vi.mock('@/contexts/AuthContext', () => ({
 const { GroupsPage } = await import('./GroupsPage')
 const { TeamsPage } = await import('./TeamsPage')
 const { DivisionsPage } = await import('./DivisionsPage')
+const { PhasesPage } = await import('./PhasesPage')
+const { CompetitionsPage } = await import('./CompetitionsPage')
 
 // #660 — a division picker offers one federation's divisions: the general
 // admin chooses which, a club is held to its own, and the FFTT imports are
@@ -104,7 +106,8 @@ describe('Groupes — one federation at a time', () => {
     const divisionPicker = screen.getByLabelText('Division')
     expect(optionsOf(divisionPicker)).toEqual(['Choisir une division…', 'GE 3', 'Nationale 3'])
 
-    fireEvent.change(screen.getByLabelText('Fédération'), { target: { value: 'agr' } })
+    // A switch in the header, as on Divisions (#645).
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
     expect(optionsOf(screen.getByLabelText('Division'))).toEqual(['Choisir une division…', 'Excellence', 'Honneur'])
     // The FFTT's organisation filter means nothing to the AGR.
     expect(screen.queryByLabelText(/Organisation/)).not.toBeInTheDocument()
@@ -113,7 +116,7 @@ describe('Groupes — one federation at a time', () => {
   it('opens « Ajouter un groupe » on the page’s federation, and switches with it', () => {
     as('general_admin')
     renderPage(<GroupsPage />)
-    fireEvent.change(screen.getByLabelText('Fédération'), { target: { value: 'agr' } })
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter un groupe' }))
     const dialog = screen.getByRole('dialog')
     expect(optionsOf(within(dialog).getByLabelText('Division'))).toEqual(['Excellence', 'Honneur'])
@@ -216,5 +219,28 @@ describe('Divisions — a division is its phase’s federation’s (#645)', () =
     const dialog = screen.getByRole('dialog')
     expect(optionsOf(within(dialog).getByLabelText('Compétition')))
       .toEqual(['Aucune (aucune restriction de catégorie)', 'Championnat de France'])
+  })
+})
+
+describe('Phases and Compétitions — the same switch (#645)', () => {
+  it('lists one federation’s phases, and creates in it', () => {
+    as('general_admin')
+    renderPage(<PhasesPage />)
+    expect(screen.getAllByRole('row').map((r) => r.textContent)).toHaveLength(2)
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
+    expect(screen.getByRole('radio', { name: 'AGR' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une phase' }))
+    expect((within(screen.getByRole('dialog')).getByLabelText('Fédération') as HTMLSelectElement).value).toBe('agr')
+  })
+
+  it('lists one federation’s competitions, the FFTT import on the FFTT only', () => {
+    as('general_admin')
+    renderPage(<CompetitionsPage />)
+    expect(screen.getByText('Championnat de France')).toBeInTheDocument()
+    expect(screen.queryByText('Championnat AGR')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'AGR' }))
+    expect(screen.getByText('Championnat AGR')).toBeInTheDocument()
+    expect(screen.queryByText('Championnat de France')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Importer depuis la FFTT' })).not.toBeInTheDocument()
   })
 })

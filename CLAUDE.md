@@ -655,6 +655,11 @@ invisible dans le diff comme dans la revue.
 - `householdIds` est le foyer **dans les deux sens** — qui le profil atteint
   et qui l'atteint : l'alerte capitaine épargne le parent qui a agi depuis le
   profil de son enfant (#640), délégation ou adresse partagée.
+- **Le SQLite des tests compte les liaisons comme D1** : un `?` sans valeur
+  y lève (`migratedD1.testkit`). `node:sqlite` lie NULL en silence, et c'est
+  ainsi que les suppressions en cascade de #291 — une sous-requête répétée,
+  liée une fois — ont répondu 500 en production des mois durant, leurs tests
+  au vert, l'écran montrant la suppression jusqu'au rechargement.
 - **Les tests de cette relation tournent sur un vrai SQLite migré**
   (`migratedD1.testkit.ts` : toutes les migrations, dans l'ordre). Une
   jointure écrite contre la mauvaise colonne s'enregistre parfaitement dans un
@@ -749,7 +754,11 @@ invisible dans le diff comme dans la revue.
   (« FFTT | AGR »), sur le web comme dans l'app (un `FederationSwitch` de
   chaque côté) ; il ne s'affiche que s'il y a un choix, donc jamais pour
   Landser ni pour Rixheim. Un lien qui nomme une phase (un match, une journée
-  de l'accueil) ouvre sur sa fédération.
+  de l'accueil) ouvre sur sa fédération. **Phases et Compétitions** aussi : le
+  même interrupteur filtre la liste, son compte d'archivées, et ce qu'on y
+  crée ; « Importer depuis la FFTT » n'est que sur la FFTT. **Un compte
+  d'archivées compte ce que la liste montre** : la phase à l'écran sur
+  Divisions, la division à l'écran sur Groupes.
 - Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
   page : la phase de la FFTT n'a pas de division AGR.
 

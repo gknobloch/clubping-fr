@@ -9,7 +9,8 @@ import { ImportIcon, PlusIcon } from '@/components/icons'
 import { ImportCompetitionsModal } from '@/components/ImportCompetitionsModal'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, type PlayerCategory } from '@/lib/playerCategories'
-import { FFTT_FEDERATION_ID, federationOfCompetition, federationOptionLabel } from '@/lib/federations'
+import { FFTT_FEDERATION_ID, federationChoices, federationOfCompetition, federationOptionLabel } from '@/lib/federations'
+import { FederationSwitch } from '@/components/FederationSwitch'
 
 const INPUT_CLASS =
   'mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20'
@@ -39,13 +40,23 @@ export function CompetitionsPage() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(emptyForm)
 
-  const archivedCount = competitions.filter((c) => c.isArchived).length
+  // One federation at a time, as on Divisions (#645): the switch says which.
+  const federationOptions = federationChoices(federations ?? [])
+  const [chosenFederation, setChosenFederation] = useState<string>(FFTT_FEDERATION_ID)
+  const pageFederation = federationOptions.some((f) => f.id === chosenFederation)
+    ? chosenFederation
+    : federationOptions[0]?.id ?? FFTT_FEDERATION_ID
+  const ofFederation = useMemo(
+    () => competitions.filter((c) => federationOfCompetition(c) === pageFederation),
+    [competitions, pageFederation],
+  )
+  const archivedCount = ofFederation.filter((c) => c.isArchived).length
   const shown = useMemo(
-    () => competitions
+    () => ofFederation
       .filter((c) => showArchived || !c.isArchived)
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName)),
-    [competitions, showArchived],
+    [ofFederation, showArchived],
   )
 
   // How many divisions each competition holds — the number that says whether
@@ -58,13 +69,10 @@ export function CompetitionsPage() {
   const holdsDivisions = (competitionId: string) =>
     divisions.some((d) => d.competitionId === competitionId)
 
-  const federationLabel = (id: string) =>
-    federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
-
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, federationId: pageFederation })
   }
 
   const openEdit = (competition: Competition) => {
@@ -135,10 +143,19 @@ export function CompetitionsPage() {
           <>
             {/* Manual add is the fallback; the FFTT import is the default path,
                 same rule as /divisions (#219, #482). */}
-            <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une compétition" onClick={openCreate} />
-            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            <HeaderAction
+              variant={pageFederation === FFTT_FEDERATION_ID ? 'secondary' : 'primary'}
+              icon={<PlusIcon />}
+              label="Ajouter une compétition"
+              onClick={openCreate}
+            />
+            {/* The FFTT's championships come from its API; another federation's are added by hand. */}
+            {pageFederation === FFTT_FEDERATION_ID && (
+              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            )}
           </>
         }
+        controls={<FederationSwitch options={federationOptions} value={pageFederation} onChange={setChosenFederation} />}
       />
       {importOpen && <ImportCompetitionsModal onClose={() => setImportOpen(false)} />}
 
@@ -185,13 +202,6 @@ export function CompetitionsPage() {
               <tr key={competition.id} className={`hover:bg-slate-50/50 ${competition.isArchived ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {competition.displayName}
-                  {/* Which federation runs it (#643); an imported one says so. */}
-                  <span
-                    className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
-                    title={competition.ffttContestIdentifier ? "Créée par l'import des divisions FFTT" : undefined}
-                  >
-                    {federationLabel(federationOfCompetition(competition))}
-                  </span>
                   {competition.isArchived && (
                     <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">
                       Archivée

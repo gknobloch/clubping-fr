@@ -12,6 +12,7 @@ import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/comp
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { FileIcon, ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
 import { FederationSelect } from '@/components/FederationSelect'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
 import { useConfirm } from '@/components/useConfirm'
@@ -106,7 +107,11 @@ export function GroupsPage() {
   const [showArchived, setShowArchived] = useState(false)
 
   const activeGroups = useMemo(() => allGroups.filter((g) => !g.isArchived), [allGroups])
-  const archivedGroups = useMemo(() => allGroups.filter((g) => g.isArchived), [allGroups])
+  // Counted where the list is: the division on screen (#645).
+  const archivedGroups = useMemo(
+    () => allGroups.filter((g) => g.isArchived && g.divisionId === division?.id),
+    [allGroups, division?.id],
+  )
   const visibleGroups = showArchived ? allGroups : activeGroups
   const groups = division
     ? visibleGroups.filter((g) => g.divisionId === division.id).sort((a, b) => a.number - b.number)
@@ -232,7 +237,14 @@ export function GroupsPage() {
           </>
         }
         controls={
-          phase ? (
+          <>
+          {/* The federation first, as on Divisions (#645): a switch, not a dropdown. */}
+          <FederationSwitch
+            options={federationOptions}
+            value={federationId}
+            onChange={(id) => { setChosenFederationId(id); setOrganizationId(''); setPhaseId(undefined) }}
+          />
+          {phase ? (
             <div className="flex h-11 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:h-9">
               <PhaseSwitchButton
                 dir="prev"
@@ -248,19 +260,14 @@ export function GroupsPage() {
                 onClick={() => phaseIndex < orderedPhases.length - 1 && setPhaseId(orderedPhases[phaseIndex + 1].id)}
               />
             </div>
-          ) : undefined
+          ) : null}
+          </>
         }
       />
 
 
-      {/* Federation, Organization (optional filter, FFTT only) + Division pickers */}
+      {/* Organization (optional filter, FFTT only) + Division pickers */}
       <div className="flex flex-wrap items-end gap-3">
-        <FederationSelect
-          id="groups-federation"
-          options={federationOptions}
-          value={federationId}
-          onChange={(id) => { setChosenFederationId(id); setOrganizationId(''); setPhaseId(undefined) }}
-        />
         {isFftt && (
         <div>
           <label htmlFor="groups-org" className="block text-sm font-medium text-slate-700">

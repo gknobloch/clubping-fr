@@ -121,7 +121,12 @@ export function DivisionsPage() {
   })
 
   const activeDivisions = useMemo(() => allDivisions.filter((d) => !d.isArchived), [allDivisions])
-  const archivedDivisions = useMemo(() => allDivisions.filter((d) => d.isArchived), [allDivisions])
+  // Counted where the list is: the phase on screen, in the federation on screen
+  // (#645) — not every archived division of every federation.
+  const archivedDivisions = useMemo(
+    () => allDivisions.filter((d) => d.isArchived && (!filterPhase || d.phaseId === filterPhase.id)),
+    [allDivisions, filterPhase],
+  )
   const visibleDivisions = showArchived ? allDivisions : activeDivisions
   const divisions = (filterPhase
     ? visibleDivisions.filter((d) => d.phaseId === filterPhase.id)

@@ -16,24 +16,57 @@ import { join } from 'node:path'
 
 const MIGRATIONS = join(__dirname, '..', '..', 'migrations')
 
+/**
+ * The `?` placeholders of a statement, outside quoted strings and comments.
+ * D1 refuses a statement bound with fewer values than it has placeholders;
+ * `node:sqlite` binds the missing ones as NULL and says nothing — which is how
+ * every cascading delete answered 500 in production for months while its test
+ * passed (#291, found on the AGR preview).
+ */
+function placeholderCount(sql: string): number {
+  let n = 0
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]
+    if (ch === "'" || ch === '"') {
+      const close = sql.indexOf(ch, i + 1)
+      i = close < 0 ? sql.length : close
+    } else if (ch === '-' && sql[i + 1] === '-') {
+      const eol = sql.indexOf('\n', i)
+      i = eol < 0 ? sql.length : eol
+    } else if (ch === '?') {
+      n++
+    }
+  }
+  return n
+}
+
 export function migratedD1() {
   const sqlite = new DatabaseSync(':memory:')
   for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
     sqlite.exec(readFileSync(join(MIGRATIONS, file), 'utf8'))
   }
   sqlite.exec('PRAGMA foreign_keys = ON')
+  const strict = (sql: string, params: unknown[]) => {
+    const wanted = placeholderCount(sql)
+    if (params.length !== wanted) {
+      throw new Error(`D1_ERROR: Wrong number of parameter bindings for SQL query (${params.length} for ${wanted}): ${sql.trim().slice(0, 120)}`)
+    }
+  }
   const bound = (sql: string, params: unknown[]) => ({
     async first<T>() {
+      strict(sql, params)
       return (sqlite.prepare(sql).get(...(params as never[])) ?? null) as T | null
     },
     async all<T>() {
+      strict(sql, params)
       return { results: sqlite.prepare(sql).all(...(params as never[])) as T[] }
     },
     async run() {
+      strict(sql, params)
       sqlite.prepare(sql).run(...(params as never[]))
       return { success: true }
     },
-    __run: () => sqlite.prepare(sql).run(...(params as never[])),
+    __run: () => { strict(sql, params); return sqlite.prepare(sql).run(...(params as never[])) },
   })
   const db = {
     prepare: (sql: string) => ({

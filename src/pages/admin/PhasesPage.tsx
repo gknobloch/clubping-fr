@@ -4,6 +4,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { FFTT_PHASES, phaseOrderKey } from '@/lib/ffttPhases'
 import { FFTT_FEDERATION_ID, activePhaseOf, federationChoices, federationOfPhase } from '@/lib/federations'
 import { FederationSelect } from '@/components/FederationSelect'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { activeSeasonId, seasonNumber } from '@/lib/season'
 import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
@@ -34,12 +35,20 @@ export function PhasesPage() {
   })
   // A phase is one federation's (#645): the season is everybody's.
   const federationOptions = federationChoices(federations)
-  const shortNameOf = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id
   const [confirm, confirmDialog] = useConfirm()
 
-  const activePhases = useMemo(() => allPhases.filter((p) => p.status !== 'archived'), [allPhases])
-  const archivedPhases = useMemo(() => allPhases.filter((p) => p.status === 'archived'), [allPhases])
-  const phases = showArchived ? allPhases : activePhases
+  // One federation at a time, as on Divisions (#645): the switch says which.
+  const [chosenFederation, setChosenFederation] = useState<string>(FFTT_FEDERATION_ID)
+  const pageFederation = federationOptions.some((f) => f.id === chosenFederation)
+    ? chosenFederation
+    : federationOptions[0]?.id ?? FFTT_FEDERATION_ID
+  const federationPhases = useMemo(
+    () => allPhases.filter((p) => federationOfPhase(p) === pageFederation),
+    [allPhases, pageFederation],
+  )
+  const activePhases = useMemo(() => federationPhases.filter((p) => p.status !== 'archived'), [federationPhases])
+  const archivedPhases = useMemo(() => federationPhases.filter((p) => p.status === 'archived'), [federationPhases])
+  const phases = showArchived ? federationPhases : activePhases
 
   const getSeasonName = (seasonId: string) =>
     seasons.find((s) => s.id === seasonId)?.displayName ?? seasonId
@@ -62,7 +71,7 @@ export function PhasesPage() {
     setCreating(true)
     const firstSeasonId = activeSeasonId(seasons) ?? seasons[0]?.id ?? ''
     setForm({
-      federationId: FFTT_FEDERATION_ID,
+      federationId: pageFederation,
       seasonId: firstSeasonId,
       name: 'Phase 1',
       displayName: firstSeasonId ? `${getSeasonName(firstSeasonId)} Phase 1` : '',
@@ -145,6 +154,7 @@ export function PhasesPage() {
       <PageHeader
         title="Phases"
         actions={<HeaderAction icon={<PlusIcon />} label="Ajouter une phase" onClick={openCreate} />}
+        controls={<FederationSwitch options={federationOptions} value={pageFederation} onChange={setChosenFederation} />}
       />
       {archivedPhases.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
@@ -182,11 +192,6 @@ export function PhasesPage() {
               <tr key={phase.id} className={`hover:bg-slate-50/50 ${phase.status === 'archived' ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {phase.displayName}
-                  {federationOptions.length > 1 && (
-                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
-                      {shortNameOf(federationOfPhase(phase))}
-                    </span>
-                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{seasonLabel(phase.seasonId)}</td>
                 <td className="px-4 py-3">
