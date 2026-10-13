@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { divisionNameKey, matchDivisionName } from './divisionNames'
+import { divisionNameKey, divisionShortName, matchDivisionName } from './divisionNames'
 
 // #647 — a calendar's division name against ours.
 
@@ -33,5 +33,32 @@ describe('matchDivisionName', () => {
     expect(matchDivisionName('Prom. HONNEUR', ours)?.displayName).toBe('Promotion Honneur')
     expect(matchDivisionName('DIVISION I', ours)?.displayName).toBe('Division 1')
     expect(matchDivisionName('Honneur', ours)).toBeUndefined()
+  })
+})
+
+describe('divisionShortName (#716)', () => {
+  it.each([
+    ['Excellence', 'Exc.'],
+    ['Promotion Excellence', 'PE'],
+    ["Promotion d'Excellence", 'PE'],
+    ['Honneur', 'Hon.'],
+    ["Division d'Honneur", 'Hon.'],
+    ['Promotion Honneur', 'PH'],
+    ['Prom. HONNEUR', 'PH'],
+    ['Division 1', 'D1'],
+    ['DIVISION II', 'D2'],
+    ['Départementale 1', 'D1'],
+    ['L03_Regionale 2 Messieurs', 'R2'],
+    ['Nationale 1 Messieurs', 'N1'],
+    ['Pre-Nat Masculine', 'PN'],
+    ['L03_Pré-Nationale Messieurs', 'PN'],
+  ])('« %s » → %s', (name, short) => {
+    expect(divisionShortName(name)).toBe(short)
+  })
+
+  // Every name in production and on the dev base, 13 October 2026, that is
+  // not one of the above: short already, or nothing to read in it.
+  it.each(['GE 6', 'GE Elite', 'Démo Division 1', 'Nationale 1 Dames'])('leaves « %s » as it is', (name) => {
+    expect(divisionShortName(name)).toBe(name)
   })
 })

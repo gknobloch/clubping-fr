@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-na
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
+import { divisionShortName } from '@shared/lib/divisionNames'
 
 // Shared presentational summary for a single game/match: an optional round
 // label (e.g. "Équipe 5"), the matchup title with a home/away indicator, the
@@ -60,7 +61,7 @@ export function GameSummary({
       {hasBadges && (
         <View style={s.badges}>
           {matchDayNumber != null ? <Text style={s.badge}>J{matchDayNumber}</Text> : null}
-          {divisionLabel ? <Text style={s.badge}>{divisionLabel}</Text> : null}
+          {divisionLabel ? <Text style={s.badge}>{divisionShortName(divisionLabel)}</Text> : null}
           {poolLabel ? <Text style={s.badge}>{poolLabel}</Text> : null}
         </View>
       )}

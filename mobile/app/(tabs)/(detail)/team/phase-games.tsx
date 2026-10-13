@@ -7,7 +7,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { getTeamName } from '@/utils/roles'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolBadge } from '@shared/lib/poolLabel'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { colors } from '@/constants/colors'
@@ -293,7 +293,7 @@ export default function PhaseGamesScreen() {
                 <MatchHeader
                   matchDayNumber={md.number}
                   divisionLabel={divisions.find((d) => d.id === team.divisionId)?.displayName}
-                  poolLabel={poolLabel(team, groups, { divisions, competitions })}
+                  poolLabel={poolBadge(team, groups, { divisions, competitions })}
                   teamColor={team.color}
                   teamNumber={team.number}
                   isHome={isHome}
