@@ -702,12 +702,8 @@ invisible dans le diff comme dans la revue.
   d'adresse, ou la sienne — et son parent pour délégué. L'index unique
   (0068) ne se déploie qu'une fois les adresses partagées réglées en
   production — sinon la migration échoue, et le déploiement avec. Il est
-  donc **sorti de la livraison de #653** (#724) et revient dans sa propre PR
-  (#725) : #653 déployée, l'administrateur général règle les adresses
-  partagées sur /demandes, puis l'index. Entre les deux, un parent ne bascule
-  plus sur le profil de son enfant par l'adresse — `reaches` ne relie plus
-  par elle. La base dev l'a déjà ; wrangler ne rejouera pas une migration
-  enregistrée, et la PR la rapporte sous le même nom.
+  donc **sorti de la livraison de #653** (#724) et revenu seul (#725), une
+  fois les adresses partagées réglées en production sur /demandes.
 - **Ou ce sont deux fiches d'une même personne** : « C'est la même personne »
   (deux personnes seulement — à trois, lesquelles ?) fusionne l'une dans
   l'autre (`POST /people/:personId/merge-into`) : ses profils, ses
