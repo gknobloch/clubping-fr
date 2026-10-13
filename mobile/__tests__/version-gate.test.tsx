@@ -21,7 +21,7 @@ jest.mock('@/constants/api', () => ({
 const mockFetch = jest.fn()
 
 /** The server publishing a given floor. */
-function floor(body: Record<string, string> | null) {
+function floor(body: Record<string, unknown> | null) {
   mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => body ?? {} })
 }
 
@@ -146,6 +146,24 @@ describe('the gate fails open (#508)', () => {
     renderBoth()
 
     expect(screen.queryByText(WALL)).toBeNull()
+    expect(screen.queryByText(BANNER)).toBeNull()
+  })
+})
+
+// jest-expo runs as iOS. The server names what each store serves, and an
+// iPhone need not wait on Play's review to hear about the App Store's (#708).
+describe('a build follows its own store (#708)', () => {
+  it('is invited once its own store serves something newer', async () => {
+    floor({ latest: '1.3.0', latestByPlatform: { ios: '1.4.0', android: '1.3.0' } })
+    render(<UpdateBanner />)
+    expect(await screen.findByText(BANNER)).toBeTruthy()
+  })
+
+  it('is not invited to what only the other store serves', async () => {
+    floor({ latest: '1.3.0', latestByPlatform: { ios: '1.3.0', android: '1.4.0' } })
+    render(<UpdateBanner />)
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 0))
     expect(screen.queryByText(BANNER)).toBeNull()
   })
 })
