@@ -91,7 +91,7 @@ export function AppHeader({
         {title}
       </Text>
 
-      <View style={[styles.side, styles.sideRight]}>{showAccount && <AccountHeaderButton />}</View>
+      <View style={[styles.side, styles.sideRight]}>{showAccount && <AccountHeaderButton menuTop={HEADER_HEIGHT + insets.top} />}</View>
     </View>
   )
 }
