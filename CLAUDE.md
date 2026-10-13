@@ -857,9 +857,12 @@ invisible dans le diff comme dans la revue.
   mercredi au vendredi) ; **la phase 2 garde sa numérotation** (journées 8 à
   14). **Les poules sont des lettres** : un numéro stocké, « Poule A »
   affiché (`poolLabel` avec son contexte divisions / compétitions).
-- Les lignes de pied sont **la note de la poule** (`groups.note`, 0069),
-  affichée sur l'écran du match — « RIEDISHEIM 1 JOUE DANS LA SALLE DU
-  MTT ».
+- Les lignes de pied sont **la note de la poule** (`groups.note`, 0069) —
+  « RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT ». **Dans l'app, sur la fiche
+  d'équipe** (#718), sous le titre de la poule, entre « Calendrier » et
+  « Tous les matchs de cette équipe » : sur l'écran de chaque match, elle
+  disait la même chose d'un match à l'autre, entre l'en-tête et les
+  disponibilités. Sur le web, elle est encore sur l'écran du match.
 - **La revue décide, l'API vérifie** (`POST /federation-schedules/import`) :
   phase et compétition de la fédération, joueurs par rencontre (3 en
   Division 2), et chaque nom rattaché à un club existant ou créé nu

@@ -1,5 +1,5 @@
 import { Linking } from 'react-native'
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, within } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import type { Club, Competition, Division, Group, Phase, Player, Team, User } from '@shared/types'
 import TeamDetailScreen from '@/app/(tabs)/(detail)/team/[id]'
@@ -280,5 +280,45 @@ describe('Fiche équipe — l’éligibilité aux compétitions (#498)', () => {
     openPicker()
 
     expect(screen.getByText('Hugo Bernard')).toBeTruthy()
+  })
+})
+
+// The federation's word on the poule (#647) — where a club plays away from
+// home, the postponement deadline. It was on every match screen, saying the
+// same thing on each; it is about the poule, so it is on the team (#718).
+describe('Fiche équipe — la note de la poule (#718)', () => {
+  const agr = { id: 'c-agr', displayName: 'Championnat du Haut-Rhin', federationId: 'agr' } as Competition
+
+  beforeEach(() => {
+    mockData.competitions = [agr]
+    mockData.divisions = [{ ...mockData.divisions[0], displayName: 'Excellence', competitionId: 'c-agr' }]
+  })
+
+  afterEach(() => {
+    mockData.competitions = []
+    mockData.groups = []
+  })
+
+  it('names the poule and gives its note, one line each', () => {
+    mockData.groups = [{
+      id: 'g1', divisionId: 'd1', number: 1, teamIds: ['t1'], isArchived: false,
+      note: 'RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT\nLIMITE DES REPORTS DE MATCH : 10/01/2027',
+    }]
+
+    render(<TeamDetailScreen />)
+
+    const note = screen.getByTestId('team-pool-note')
+    expect(within(note).getByText('Poule A')).toBeTruthy()
+    expect(within(note).getByText('RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT')).toBeTruthy()
+    expect(within(note).getByText('LIMITE DES REPORTS DE MATCH : 10/01/2027')).toBeTruthy()
+    expect(note.props.accessibilityLabel).toBe('À savoir sur la poule')
+  })
+
+  it('shows nothing for a poule without a note', () => {
+    mockData.groups = [{ id: 'g1', divisionId: 'd1', number: 1, teamIds: ['t1'], isArchived: false }]
+
+    render(<TeamDetailScreen />)
+
+    expect(screen.queryByTestId('team-pool-note')).toBeNull()
   })
 })
