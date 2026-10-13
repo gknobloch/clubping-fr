@@ -53,6 +53,14 @@ describe('profileReaches', () => {
     expect(await profileReaches(db, 'leo', 'benjamin')).toBe(false)
   })
 
+  it('refuses a second person on an address in the schema itself', () => {
+    const { exec } = family()
+    expect(() => exec("INSERT INTO people (id, first_name, email, phone) VALUES ('person-leo', 'Léo', ' HENAUT@example.fr', '')"))
+      .toThrow(/UNIQUE/)
+    // No address is not an address: many people may have none.
+    exec("INSERT INTO people (id, first_name, email, phone) VALUES ('person-a', 'A', NULL, ''), ('person-b', 'B', '', '')")
+  })
+
 })
 
 describe('householdIds', () => {
