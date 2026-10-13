@@ -979,6 +979,36 @@ invisible dans le diff comme dans la revue.
   depuis `utils/documentPicker.ts`, dans un `try` comme
   `expoNotifications.ts` ; un vieux binaire dit « mettez l'app à jour ».
 
+### Une même personne dans deux fédérations, sans adresse commune (#731)
+- **L'import de la liste AGR de Landser a créé seize personnes, dont neuf
+  jouaient déjà à Rixheim** : deux personnes pour un même licencié, et le
+  profil de Landser sans adresse — personne ne pouvait l'ouvrir. « C'est la
+  même personne » (#655) n'était offert qu'à deux personnes partageant une
+  adresse.
+- **`personMergeRefusal` est la règle de `POST /people/:id/merge-into`**
+  (`src/lib/namesakes.ts`, la même des deux côtés) : refusé pour deux adresses
+  différentes, pour une adresse du côté supprimé (`keep_other` : la personne
+  gardée est celle qui se connecte, `personMergeTarget`), et pour un profil
+  dans un même club des deux côtés — un doublon se supprime, il ne se réunit
+  pas. Une adresse partagée reste le cas de départ.
+- **`namesakes` liste les paires** de même nom (accents, casse et traits
+  d'union à part, `personNameKey`) dans deux clubs, que la règle admet. Trois
+  personnes d'un même nom ne sont pas listées : lesquelles ? Sur `/demandes`
+  (« Mêmes noms dans plusieurs clubs ») et sur la fiche, pour
+  l'administrateur général. **Une question, jamais une fusion** : un père et
+  son fils portent un même nom.
+- **L'import d'une liste d'une autre fédération le demande d'avance**
+  (`personCandidates`, dernier argument de `buildImportRows`) : après les
+  homonymes du club, une personne d'un autre club de même nom est proposée
+  (`link.on: 'person'`). Confirmée, la ligne écrit un **profil sur cette
+  personne** (`writes.profiles`, `POST /players/:sourceId/profiles`, qui
+  copie nom, adresse et téléphone côté serveur) — la personne garde son nom,
+  seuls la licence et le classement sont de la liste. L'id est frappé par
+  l'appelant, comme pour `POST /players`, pour que le classement s'y range
+  dans la même passe ; pris, il est refusé. Jamais pour une liste FFTT : une
+  licence FFTT est une personne dans un club, le même nom ailleurs est un
+  transfert ou un homonyme.
+
 ### Phase retour (#649)
 - Une division AGR joue sa phase 2 de deux façons : **les mêmes poules,
   réception inversée** (« phase retour »), ou **de nouvelles poules** tirées du

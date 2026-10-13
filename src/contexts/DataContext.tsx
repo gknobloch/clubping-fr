@@ -488,6 +488,8 @@ export type ClubAdminResult = { ok: true } | { ok: false; message: string }
 
 /** What `addProfileInClub` writes on the receiving club (#644). */
 export interface ProfileInClub {
+  /** Minted by the caller, so an import can file points under it (#731). */
+  id?: string
   clubId: string
   /** Its FFTT licence, when the receiving club is in the FFTT. */
   licenseNumber?: string
@@ -2096,7 +2098,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     async (playerId: string, profile: ProfileInClub): Promise<ProfileResult> => {
       const source = players.find((p) => p.id === playerId)
       if (!source) return { ok: false, message: 'Licencié introuvable.' }
-      let id = nextId('player')
+      let id = profile.id ?? nextId('player')
       if (persist) {
         try {
           const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/profiles`, {

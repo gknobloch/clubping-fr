@@ -41,6 +41,7 @@ import { categoryFor } from './seasonCategories'
 import { FFTT_FEDERATION_ID } from './federations'
 import { licenceOf } from './licences'
 import { rankingLabel } from './ranking'
+import { personNameKey } from './namesakes'
 
 /**
  * The federation an import speaks for, when it is not the FFTT (#648): an
@@ -424,9 +425,12 @@ export interface PlayerImportRow {
    * question put to the admin rather than an answer.
    */
   link?: {
+    /** A member of the club — or, `on: 'person'`, a person of another club (#731). */
     id: string
-    on: 'name'
+    on: 'name' | 'person'
     name: string
+    /** Where that person already plays, for `on: 'person'`. */
+    clubNames?: string[]
     /**
      * The licence that member carries today, when they carry one at all
      * (#566). Its presence is the difference between the two cases, and the
@@ -438,6 +442,12 @@ export interface PlayerImportRow {
     /** Whether that member is archived — said, because it explains the absence. */
     archived?: boolean
   }
+  /**
+   * A person of another club the admin said this licensee is (#731): the row
+   * creates this club's profile ON that person — their name, address and
+   * phone, copied server side — instead of a person nobody can sign in as.
+   */
+  join?: { personId: string; sourceId: string; name: string; clubNames: string[] }
 }
 
 /** Key identifying one field of one licence in a preview's selection set. */
@@ -511,6 +521,44 @@ export function importCandidates(users: User[], clubId: string, federation?: Imp
     }))
 }
 
+/**
+ * Someone another club already holds (#731), as a candidate for a licence of
+ * another federation's list: Enzo Lotz plays the FFTT at Rixheim, and the AGR
+ * list of Landser names him. Without this the import made a second person,
+ * with no address, whom Enzo could never open.
+ */
+export interface PersonCandidate {
+  personId: string
+  /** A player profile of theirs, the one the new profile is copied from (`POST /players/:id/profiles`). */
+  sourceId: string
+  firstName?: string
+  lastName?: string
+  clubNames: string[]
+}
+
+/**
+ * The people of every other club, for another federation's list only: an
+ * FFTT licence is one person in one club, and the same name elsewhere is a
+ * transfer or a namesake, not a second profile. A person who already has a
+ * profile in this club is the club's own candidate (`importCandidates`), and
+ * one with no active player profile has nothing to copy from.
+ */
+export function personCandidates(
+  users: readonly User[], clubs: ReadonlyArray<{ id: string; displayName: string }>, clubId: string,
+  federation?: ImportFederation,
+): PersonCandidate[] {
+  if (!otherFederation(federation)) return []
+  const byPerson = new Map<string, User[]>()
+  for (const u of users) if (u.personId) byPerson.set(u.personId, [...(byPerson.get(u.personId) ?? []), u])
+  return [...byPerson.entries()].flatMap(([personId, profiles]) => {
+    if (profiles.some((u) => u.clubId === clubId)) return []
+    const source = profiles.find((u) => u.isPlayer && u.status !== 'archived' && u.clubId)
+    if (!source) return []
+    const clubNames = [...new Set(profiles.map((u) => clubs.find((c) => c.id === u.clubId)?.displayName).filter((n): n is string => !!n))]
+    return [{ personId, sourceId: source.id, firstName: source.firstName, lastName: source.lastName, clubNames }]
+  })
+}
+
 const nameKey = (first: string | undefined, last: string | undefined) =>
   `${(first ?? '').trim().toLocaleLowerCase('fr-FR')}|${(last ?? '').trim().toLocaleLowerCase('fr-FR')}`
 
@@ -569,6 +617,11 @@ export function buildImportRows(
   confirmed: ReadonlyMap<string, string> = new Map(),
   /** Another federation's list (#648): its licence is matched, its classement filed. */
   federation?: ImportFederation,
+  /**
+   * People of other clubs (#731) — see `personCandidates`. Offered after the
+   * club's own namesakes; a confirmation in `confirmed` names the person.
+   */
+  persons: PersonCandidate[] = [],
 ): PlayerImportRow[] {
   const other = otherFederation(federation)
   const licenceOfPlayer = (p: Player) => (other ? licenceOf(p, other.id) : p.licenseNumber ?? '').trim()
@@ -576,6 +629,7 @@ export function buildImportRows(
     players.filter((p) => licenceOfPlayer(p)).map((p) => [licenceOfPlayer(p), p]),
   )
   const byId = new Map(candidates.map((c) => [c.id, c]))
+  const byPerson = new Map(persons.map((p) => [p.personId, p]))
   // Whoever a licence of this very import has already taken is spoken for, and
   // must not also be offered as somebody else's namesake — matched on their
   // licence, or claimed by a confirmation the admin has already given. Two
@@ -618,6 +672,19 @@ export function buildImportRows(
     const accepted = byId.get(confirmed.get(licence.licence.trim()) ?? '')
     if (accepted) return against(licence, accepted)
 
+    const person = byPerson.get(confirmed.get(licence.licence.trim()) ?? '')
+    if (person) {
+      // A new profile, on a person who keeps their name: only the licence and
+      // the classement are this list's to write.
+      const fields = playerSyncFields(licence, {
+        lastName: person.lastName ?? '', firstName: person.firstName ?? '', licenseNumber: '',
+      }, federation).map((f) => (f.key === 'licenseNumber' ? { ...f, current: null } : f))
+      return {
+        licence, status: 'new' as const, fields,
+        join: { personId: person.personId, sourceId: person.sourceId, name: personName(person), clubNames: person.clubNames },
+      }
+    }
+
     const suggestion = findImportCandidate(licence, candidates, claimed)
     if (suggestion) {
       const held = (suggestion.licenseNumber ?? '').trim()
@@ -634,9 +701,24 @@ export function buildImportRows(
         },
       }
     }
+    // Nobody in the club: perhaps somebody of another club (#731). One
+    // namesake is a question; several, none.
+    const wanted = personNameKey(licence.firstName, licence.lastName)
+    const elsewhere = persons.filter((p) => !claimed.has(p.personId) && personNameKey(p.firstName, p.lastName) === wanted)
+    if (wanted && elsewhere.length === 1) {
+      const [p] = elsewhere
+      return {
+        licence,
+        status: 'new' as const,
+        fields: playerSyncFields(licence, undefined, federation),
+        link: { id: p.personId, on: 'person' as const, name: personName(p), clubNames: p.clubNames },
+      }
+    }
     return { licence, status: 'new' as const, fields: playerSyncFields(licence, undefined, federation) }
   })
 }
+
+const personName = (p: { firstName?: string; lastName?: string }) => `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()
 
 /**
  * Licensees we hold for this club that the FFTT list does not mention — a
@@ -675,6 +757,20 @@ export interface PlayerImportCreate {
   licences?: Array<{ federationId: string; number: string }>
 }
 
+/**
+ * A licensee of another club joining this one (#731): a profile on their
+ * person, written by `POST /players/:sourceId/profiles` — which copies name,
+ * address and phone server side — under the id minted here, so points and a
+ * category can be filed under it.
+ */
+export interface PlayerImportProfile {
+  id: string
+  sourceId: string
+  clubId: string
+  licenseNumber?: string
+  licences?: Array<{ federationId: string; number: string }>
+}
+
 /** A licensee the import would correct, with only the ticked fields in it. */
 export interface PlayerImportUpdate {
   id: string
@@ -684,6 +780,8 @@ export interface PlayerImportUpdate {
 /** Everything one reviewed import writes, and what it amounts to. */
 export interface PlayerImportWrites {
   creates: PlayerImportCreate[]
+  /** Profiles on a person of another club (#731) — counted in `created`. */
+  profiles: PlayerImportProfile[]
   updates: PlayerImportUpdate[]
   points: PlayerPhasePoints[]
   categories: PlayerSeasonCategory[]
@@ -723,7 +821,7 @@ export function playerImportWrites(
   const other = federationId && federationId !== FFTT_FEDERATION_ID ? federationId : undefined
   const licencesFor = (number: string) => [{ federationId: other!, number }]
   const writes: PlayerImportWrites = {
-    creates: [], updates: [], points: [], categories: [], created: 0, updated: 0,
+    creates: [], profiles: [], updates: [], points: [], categories: [], created: 0, updated: 0,
   }
 
   for (const row of rows) {
@@ -733,7 +831,15 @@ export function playerImportWrites(
     const has = (key: PlayerSyncFieldKey) => picked.some((f) => f.key === key)
 
     let playerId = row.playerId
-    if (!playerId) {
+    if (!playerId && row.join) {
+      playerId = newId()
+      const licence = has('licenseNumber') ? row.licence.licence : ''
+      writes.profiles.push({
+        id: playerId, sourceId: row.join.sourceId, clubId,
+        ...(licence ? (other ? { licences: licencesFor(licence) } : { licenseNumber: licence }) : {}),
+      })
+      writes.created += 1
+    } else if (!playerId) {
       // A new licensee: name and licence come from FFTT, and everything else is
       // ours to fill in later — FFTT states no e-mail and no phone.
       playerId = newId()

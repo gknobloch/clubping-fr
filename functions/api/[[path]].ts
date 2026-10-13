@@ -28,6 +28,7 @@ import { pdfTextLines } from '../../src/lib/pdfLines'
 import { divisionNameKey } from '../../src/lib/divisionNames'
 import { clubNameFromFederation } from '../../src/lib/ffttNames'
 import { clubMergeKeeper, clubMergeRefusal } from '../../src/lib/clubMerge'
+import { personMergeRefusal } from '../../src/lib/namesakes'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, ffttPhaseIdForName, localPhaseId, phaseIdFor, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -5569,7 +5570,7 @@ const PROFILE_REFUSALS = {
 app.post('/players/:id/profiles', async (c) => {
   const db = c.env.DB
   const sourceId = c.req.param('id')
-  const d = await c.req.json<{ clubId?: unknown; licenseNumber?: unknown; licences?: unknown }>()
+  const d = await c.req.json<{ id?: unknown; clubId?: unknown; licenseNumber?: unknown; licences?: unknown }>()
   const clubId = typeof d.clubId === 'string' ? d.clubId : ''
   if (!clubId || !administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
 
@@ -5597,7 +5598,14 @@ app.post('/players/:id/profiles', async (c) => {
     if (existing) return refuseProfile('already_in_club', existing.id)
   }
 
-  const id = newId('player')
+  // The caller may name the id, as POST /players lets it (#731): an import
+  // files the classement under it in the same pass. Taken, it is refused
+  // rather than overwritten.
+  const wanted = typeof d.id === 'string' && /^[\w-]{1,80}$/.test(d.id) ? d.id : null
+  if (wanted && await db.prepare('SELECT 1 FROM users WHERE id = ?').bind(wanted).first()) {
+    return c.json({ error: 'id_taken' }, 409)
+  }
+  const id = wanted ?? newId('player')
   const licenseNumber = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
   // The new profile belongs to the same PERSON (#655): that is the link, and
   // the copied fields below are only the mirror `users` still carries. A
@@ -5792,10 +5800,12 @@ app.post('/people/:personId/address-to-delegate', async (c) => {
  * the target left blank. The target's own fields win — it is the one chosen to
  * stay.
  *
- * The general admin's alone, and only for two people who share an address —
- * the one fact that says they might be one, re-read here like the hand-over
- * above. Everything lands in one batch: half a merge is a profile pointing at
- * a person who no longer exists.
+ * The general admin's alone. First offered for two people sharing an address;
+ * since #731 also for namesakes in two clubs, which nothing else ties — the
+ * AGR gives no address. What still stops it (`personMergeRefusal`): two
+ * different addresses, an address on the side that would be deleted, or a
+ * profile in one club on both sides. Everything lands in one batch: half a
+ * merge is a profile pointing at a person who no longer exists.
  */
 app.post('/people/:personId/merge-into', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
@@ -5806,15 +5816,27 @@ app.post('/people/:personId/merge-into', async (c) => {
   const targetId = d.targetId
   if (targetId === personId) return c.json({ error: 'self' }, 400)
 
-  const found = await db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
-    .bind(personId, targetId).all<{ id: string; email: string | null }>()
-  const person = found.results.find((r) => r.id === personId)
-  const target = found.results.find((r) => r.id === targetId)
-  if (!person || !target) return c.json(notFound, 404)
-  const address = (r: { email: string | null }) => r.email?.trim().toLowerCase() ?? ''
-  if (!address(person) || address(person) !== address(target)) {
-    return c.json({ error: 'not_shared', message: "Ces deux personnes ne partagent plus d'adresse." }, 409)
+  const [found, profiles] = await Promise.all([
+    db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
+      .bind(personId, targetId).all<{ id: string; email: string | null }>(),
+    db.prepare('SELECT id, club_id, person_id FROM users WHERE person_id IN (?, ?)')
+      .bind(personId, targetId).all<{ id: string; club_id: string | null; person_id: string }>(),
+  ])
+  const mergeable = (id: string) => {
+    const r = found.results.find((x) => x.id === id)
+    return r && {
+      personId: r.id, email: r.email ?? undefined,
+      profiles: profiles.results.filter((u) => u.person_id === id)
+        .map((u) => ({ userId: u.id, clubId: u.club_id ?? undefined })),
+    }
   }
+  const person = mergeable(personId)
+  const target = mergeable(targetId)
+  if (!person || !target) return c.json(notFound, 404)
+  // Re-read, like the hand-over above: an address added since the screen
+  // loaded, or a profile in a common club, is a reason to stop (#731).
+  const refusal = personMergeRefusal(target, person)
+  if (refusal) return c.json({ error: refusal.reason, message: refusal.message }, 409)
 
   const fill = (col: string) => `${col} = COALESCE(NULLIF(${col}, ''), (SELECT NULLIF(${col}, '') FROM people WHERE id = ?))`
   await db.batch([

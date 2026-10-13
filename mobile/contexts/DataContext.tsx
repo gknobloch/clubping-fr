@@ -620,6 +620,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           ...(c.licences ? { licences: c.licences } : {}),
         })
       }
+      // A licensee of another club joins this one on their person (#731):
+      // the API copies name, address and phone from the source profile.
+      for (const p of writes.profiles) {
+        await write(`/players/${p.sourceId}/profiles`, 'POST', {
+          id: p.id, clubId: p.clubId,
+          ...(p.licenseNumber ? { licenseNumber: p.licenseNumber } : {}),
+          ...(p.licences ? { licences: p.licences } : {}),
+        })
+      }
       for (const u of writes.updates) await write(`/players/${u.id}`, 'PATCH', u.patch)
       if (writes.points.length) {
         await write('/player-phase-points/batch', 'POST', { updates: writes.points })

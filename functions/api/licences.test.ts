@@ -179,6 +179,18 @@ describe('POST /players/:id/profiles — a profile in another club (#644)', () =
     expect(userInserts(writes)).toHaveLength(0)
   })
 
+  it('takes the id an import minted, and refuses one already taken (#731)', async () => {
+    const { db, writes } = fakeDb('ca')
+    const res = await send(db, '/players/p-gilles-rixheim/profiles', 'POST', { ...body, id: 'player-import-1' })
+    expect(await res.json()).toMatchObject({ id: 'player-import-1' })
+    expect(userInserts(writes)[0].params[0]).toBe('player-import-1')
+
+    const taken = fakeDb('ca')
+    const refused = await send(taken.db, '/players/p-gilles-rixheim/profiles', 'POST', { ...body, id: 'p-gilles' })
+    expect(refused.status).toBe(409)
+    expect(userInserts(taken.writes)).toHaveLength(0)
+  })
+
   it('answers 404 for an unknown licensee or club', async () => {
     const { db, writes } = fakeDb('ga')
     expect((await send(db, '/players/nobody/profiles', 'POST', body)).status).toBe(404)

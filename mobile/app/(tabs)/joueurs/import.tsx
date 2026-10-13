@@ -27,6 +27,7 @@ import {
   fetchFfttPlayerFromBrowser,
   fieldKey,
   importCandidates,
+  personCandidates,
   playerImportWrites,
   playersMissingFromFftt,
   sameClubNumber,
@@ -186,10 +187,12 @@ export default function ImportPlayersScreen() {
     // match (#566). This argument was `[]` on both clients, which is why a
     // licensee already held under a wrong number was recreated beside himself.
     const candidates = importCandidates(users, club?.id ?? '', importFederation)
+    // People of other clubs, for another federation's list (#731).
+    const persons = personCandidates(users, clubs, club?.id ?? '', importFederation)
     const make = (links: ReadonlyMap<string, string>) => buildImportRows(
       licences, players, playerPhasePoints, phase?.id ?? '', candidates,
       importFederation ? [] : playerSeasonCategories, importFederation ? undefined : phase?.seasonId, links,
-      importFederation,
+      importFederation, persons,
     )
     rebuild.current = make
     setConfirmed(new Map())
@@ -715,7 +718,23 @@ function LicenceCard({
         </View>
       </View>
 
-      {row.link && (
+      {row.link?.on === 'person' && (
+        // Somebody of another club (#731): yes adds a profile here to the
+        // person who already plays there, instead of a second person.
+        <View style={s.linkBox}>
+          <Text style={s.linkNote}>
+            {row.link.name} joue déjà à {row.link.clubNames?.join(', ')}. Est-ce la même personne ?
+          </Text>
+          <TouchableOpacity
+            testID={`import-link-${row.licence.licence}`}
+            style={s.linkBtn}
+            onPress={() => onConfirmLink(row.licence.licence, row.link!.id)}
+          >
+            <Text style={s.linkBtnTxt}>Oui, lui ajouter un profil ici</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {row.link && row.link.on !== 'person' && (
         // A namesake the club already holds — with no licence of their own (an
         // approved club admin, most likely, #474) or under a number that is
         // simply wrong (#566). A name is not proof: two people in one club can
@@ -740,7 +759,11 @@ function LicenceCard({
       )}
       {linked && (
         <View style={s.linkBox}>
-          <Text style={s.linkNote}>Rattaché à un membre du club.</Text>
+          <Text style={s.linkNote}>
+            {row.join
+              ? `Profil ajouté à ${row.join.name}, qui joue aussi à ${row.join.clubNames.join(', ')}.`
+              : 'Rattaché à un membre du club.'}
+          </Text>
           <TouchableOpacity
             testID={`import-unlink-${row.licence.licence}`}
             style={s.linkBtn}

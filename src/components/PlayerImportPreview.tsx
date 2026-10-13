@@ -9,6 +9,7 @@ import { fieldKey, writableFields } from '@/lib/ffttPlayers'
  * unaccented, so its spelling is usually the worse of the two.
  */
 function rowName(row: PlayerImportRow): string {
+  if (row.join) return row.join.name
   const held = (key: PlayerSyncField['key']) => row.fields.find((f) => f.key === key)?.current
   return `${held('firstName') ?? row.licence.firstName} ${held('lastName') ?? row.licence.lastName}`
 }
@@ -33,6 +34,25 @@ function LinkOffer({
   onConfirm: (licence: string, memberId: string | null) => void
 }) {
   const link = row.link!
+  // Somebody of another club (#731): saying yes adds a profile here to the
+  // person who already plays there, rather than making a second person.
+  if (link.on === 'person') {
+    return (
+      <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+        <p className="text-sm text-amber-900">
+          <span className="font-medium">{link.name}</span> joue déjà à {link.clubNames?.join(', ')}.
+          {' '}Est-ce la même personne&nbsp;?
+        </p>
+        <button
+          type="button"
+          onClick={() => onConfirm(row.licence.licence, link.id)}
+          className="mt-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-sm font-medium text-amber-900 hover:bg-amber-100"
+        >
+          Oui — lui ajouter un profil dans ce club
+        </button>
+      </div>
+    )
+  }
   return (
     <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
       <p className="text-sm text-amber-900">
@@ -114,7 +134,9 @@ export function PlayerImportPreview({
                 {row.link && <LinkOffer row={row} onConfirm={onConfirmLink} />}
                 {isLinked && (
                   <p className="mt-1 text-sm text-slate-600">
-                    Rattaché à un membre du club.{' '}
+                    {row.join
+                      ? `Profil ajouté à ${row.join.name}, qui joue aussi à ${row.join.clubNames.join(', ')}.`
+                      : 'Rattaché à un membre du club.'}{' '}
                     <button
                       type="button"
                       onClick={() => onConfirmLink(row.licence.licence, null)}
