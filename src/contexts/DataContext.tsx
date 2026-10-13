@@ -552,6 +552,12 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   removeClubAffiliation: (clubId: string, federationId: string) => void
   archiveClub: (id: string) => void
   deleteClub: (id: string) => void
+  /**
+   * Fold `removeId` into `keepId` (#730): its teams, members, addresses,
+   * affiliations and groups move over and the row is deleted. Awaited, and
+   * the data fetched again: only the server knows every row it moved.
+   */
+  mergeClubs: (removeId: string, keepId: string) => Promise<{ ok: true } | { ok: false; message: string }>
   addClubAddress: (clubId: string, data: Omit<Address, 'id'>) => Address
   /**
    * Reads each club's hall from FFTT and writes it where the club has no
@@ -1712,6 +1718,53 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) api(`/clubs/${id}`, { method: 'DELETE' })
   }, [persist])
 
+  const mergeClubs = useCallback(
+    async (removeId: string, keepId: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (persist) {
+        try {
+          const res = await fetch(`/api/clubs/${encodeURIComponent(removeId)}/merge-into`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ targetId: keepId }),
+          })
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null
+            return { ok: false, message: body?.message ?? "La fusion a échoué." }
+          }
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+        setRetryNonce((n) => n + 1)
+        return { ok: true }
+      }
+      // Without a server (tests, the mock): what the screens read, moved.
+      const repoint = <T extends { clubId?: string }>(list: T[]) =>
+        list.map((x) => (x.clubId === removeId ? { ...x, clubId: keepId } : x))
+      setClubs((prev) => {
+        const removed = prev.find((c) => c.id === removeId)
+        return prev.filter((c) => c.id !== removeId).map((c) => (c.id !== keepId || !removed ? c : {
+          ...c,
+          affiliationNumber: c.affiliationNumber || removed.affiliationNumber,
+          addresses: [...c.addresses, ...removed.addresses.map((a) => ({ ...a, isDefault: c.addresses.length ? false : a.isDefault }))],
+          channels: [...c.channels, ...removed.channels],
+          affiliations: [
+            ...(c.affiliations ?? []).map((a) => {
+              const r = removed.affiliations?.find((x) => x.federationId === a.federationId)
+              return r ? { ...r, ...a, affiliationNumber: a.affiliationNumber || r.affiliationNumber, name: a.name || r.name, organizationId: a.organizationId || r.organizationId } : a
+            }),
+            ...(removed.affiliations ?? []).filter((r) => !(c.affiliations ?? []).some((a) => a.federationId === r.federationId)),
+          ],
+        }))
+      })
+      setTeams(repoint)
+      setPlayers(repoint)
+      setUsers(repoint)
+      setMemberGroups(repoint)
+      setCompetitionGroups(repoint)
+      setTrainings(repoint)
+      return { ok: true }
+    },
+    [persist],
+  )
+
   const addClubAddress = useCallback((clubId: string, data: Omit<Address, 'id'>) => {
     const id = nextId('addr')
     const address: Address = { ...data, id }
@@ -2657,6 +2710,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       removeDelegate,
       addressToDelegate,
       mergePeople,
+      mergeClubs,
       setClubAffiliation,
       removeClubAffiliation,
       archiveClub,
@@ -2761,7 +2815,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, mergeClubs, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, importFederationSchedule, prepareReturnLeg, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

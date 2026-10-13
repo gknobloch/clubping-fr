@@ -9,6 +9,7 @@ import { ImportIcon, PlusIcon } from '@/components/icons'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
 import { ImportClubModal } from '@/components/ImportClubModal'
+import { MergeClubDialog } from '@/components/MergeClubDialog'
 import { useConfirm } from '@/components/useConfirm'
 import { clubsMissingVenue, type VenueFillResult } from '@/lib/clubVenues'
 import { FFTT_FEDERATION_ID, clubAffiliations, clubIsIn, federationOptionLabel } from '@/lib/federations'
@@ -20,6 +21,7 @@ export function ClubsPage() {
   const { clubs, federations, addClub, archiveClub, updateClub, deleteClub, teams, players } = useAppData()
   const [creating, setCreating] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [merging, setMerging] = useState<Club | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [confirm, confirmDialog] = useConfirm()
@@ -185,6 +187,8 @@ export function ClubsPage() {
                     label={`Actions — ${club.displayName}`}
                     actions={[
                       { label: 'Modifier', onClick: () => openEdit(club) },
+                      // Two rows for one club, as the AGR import left them (#730).
+                      !club.isArchived && { label: 'Fusionner…', onClick: () => setMerging(club) },
                       !club.isArchived && {
                         label: 'Archiver',
                         tone: 'danger',
@@ -301,6 +305,7 @@ export function ClubsPage() {
       )}
 
       {importOpen && <ImportClubModal onClose={() => setImportOpen(false)} />}
+      {merging && <MergeClubDialog club={merging} onClose={() => setMerging(null)} />}
     </div>
   )
 }

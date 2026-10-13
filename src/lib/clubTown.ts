@@ -57,3 +57,14 @@ export function townFromClubName(name: string): string | undefined {
   // Capitalised again: a leading joint that survived is part of the name now.
   return town.length >= 2 ? town.charAt(0).toLocaleUpperCase('fr-FR') + town.slice(1) : undefined
 }
+
+/**
+ * The first word of a club's town, folded for comparison — « Illzach St Jean
+ * Baptiste » and « Illzach TTSJB » are both `illzach`. Empty when the name
+ * gives no town. What says two rows may be one club (#730): a suggestion in
+ * the calendar review, the first group of the merge dialog.
+ */
+export function townKey(name: string): string {
+  return (townFromClubName(name) ?? '').split(/\s+/)[0]
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}

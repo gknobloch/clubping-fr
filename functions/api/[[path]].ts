@@ -27,6 +27,7 @@ import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
 import { pdfTextLines } from '../../src/lib/pdfLines'
 import { divisionNameKey } from '../../src/lib/divisionNames'
 import { clubNameFromFederation } from '../../src/lib/ffttNames'
+import { clubMergeKeeper, clubMergeRefusal } from '../../src/lib/clubMerge'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, ffttPhaseIdForName, localPhaseId, phaseIdFor, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -4301,6 +4302,108 @@ app.delete('/clubs/:id', async (c) => {
     db.prepare('DELETE FROM member_groups WHERE club_id = ?').bind(id),
     ...trainingDeletes(db, 'SELECT id FROM trainings WHERE club_id = ?', id),
     db.prepare('DELETE FROM clubs WHERE id = ?').bind(id),
+  ])
+  return c.json({ ok: true })
+})
+
+/**
+ * Fold one club into another (#730): the AGR calendar import created bare
+ * clubs beside ones that already existed, one holding the members and the
+ * other the teams. Everything the removed row owns moves onto the kept one,
+ * then the removed row goes — in one batch, since half a merge is teams
+ * pointing at a club that no longer exists.
+ *
+ * The general admin's alone: two clubs are nobody's property (#570). Which
+ * row stays is not the caller's to choose freely — the one whose id the
+ * imports look up must survive (`clubMergeKeeper`) — and every case that
+ * needs a decision first is refused with its reason (`clubMergeRefusal`),
+ * the same rule the dialog applied before sending.
+ */
+app.post('/clubs/:id/merge-into', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const removeId = c.req.param('id')
+  const d = await c.req.json<{ targetId?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  if (typeof d.targetId !== 'string' || !d.targetId) return c.json({ error: 'bad_request' }, 400)
+  const keepId = d.targetId
+
+  const [clubRows, fedRows, teamRows, groupRows, reservedRows] = await Promise.all([
+    db.prepare('SELECT id, display_name, affiliation_number FROM clubs WHERE id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, federation_id, affiliation_number FROM club_federations WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, phase_id, number FROM teams WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, display_name FROM member_groups WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, competition_id FROM club_competition_groups WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+  ])
+  const feds = fedRows.results as Array<{ club_id: string; federation_id: string; affiliation_number: string | null }>
+  const clubOf = (id: string) => {
+    const r = (clubRows.results as Array<{ id: string; display_name: string; affiliation_number: string | null }>)
+      .find((x) => x.id === id)
+    return r && {
+      id: r.id, displayName: r.display_name, affiliationNumber: r.affiliation_number ?? '',
+      affiliations: feds.filter((f) => f.club_id === id)
+        .map((f) => ({ federationId: f.federation_id, affiliationNumber: f.affiliation_number ?? '' })),
+    }
+  }
+  const remove = clubOf(removeId)
+  const keep = clubOf(keepId)
+  if (!remove || !keep) return c.json(notFound, 404)
+  if (clubMergeKeeper(remove, keep).keep.id !== keep.id) {
+    return c.json({ error: 'keep_other', message: `C’est « ${remove.displayName} » qui doit être gardé.` }, 409)
+  }
+  const refusal = clubMergeRefusal(keep, remove, {
+    teams: (teamRows.results as Array<{ club_id: string; phase_id: string; number: number }>)
+      .map((t) => ({ clubId: t.club_id, phaseId: t.phase_id, number: t.number })),
+    memberGroups: (groupRows.results as Array<{ club_id: string; display_name: string }>)
+      .map((g) => ({ clubId: g.club_id, displayName: g.display_name })),
+    competitionGroups: (reservedRows.results as Array<{ club_id: string; competition_id: string }>)
+      .map((g) => ({ clubId: g.club_id, competitionId: g.competition_id })),
+  })
+  if (refusal) return c.json({ error: refusal.reason, message: refusal.message }, 409)
+
+  const fromRemoved = (col: string) =>
+    `(SELECT NULLIF(r.${col}, '') FROM club_federations r WHERE r.club_id = ? AND r.federation_id = club_federations.federation_id)`
+  const move = (table: string) => db.prepare(`UPDATE ${table} SET club_id = ? WHERE club_id = ?`).bind(keepId, removeId)
+  await db.batch([
+    // The kept club keeps its default address; the incoming ones arrive as others.
+    db.prepare(
+      `UPDATE club_addresses SET is_default = 0
+         WHERE club_id = ? AND EXISTS (SELECT 1 FROM club_addresses k WHERE k.club_id = ? AND k.is_default = 1)`,
+    ).bind(removeId, keepId),
+    move('club_addresses'),
+    move('club_channels'),
+    // club_id is the logo's key: it moves only onto a club that has none,
+    // and a second logo goes with the deleted row.
+    db.prepare(
+      'UPDATE club_logos SET club_id = ? WHERE club_id = ? AND NOT EXISTS (SELECT 1 FROM club_logos k WHERE k.club_id = ?)',
+    ).bind(keepId, removeId, keepId),
+    // An affiliation both hold keeps the kept club's values, its blanks filled
+    // — « LANDSER ASL », the name the next calendar is matched against, and
+    // the organisation. One only the removed club holds moves over whole.
+    db.prepare(
+      `UPDATE club_federations SET
+         affiliation_number = COALESCE(NULLIF(affiliation_number, ''), ${fromRemoved('affiliation_number')}, ''),
+         name = COALESCE(NULLIF(name, ''), ${fromRemoved('name')}),
+         organization_id = COALESCE(NULLIF(organization_id, ''), ${fromRemoved('organization_id')})
+       WHERE club_id = ?`,
+    ).bind(removeId, removeId, removeId, keepId),
+    db.prepare(
+      `INSERT OR IGNORE INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id)
+         SELECT ?, federation_id, affiliation_number, name, organization_id FROM club_federations WHERE club_id = ?`,
+    ).bind(keepId, removeId),
+    db.prepare(
+      `UPDATE clubs SET affiliation_number = (SELECT affiliation_number FROM clubs WHERE id = ?)
+         WHERE id = ? AND COALESCE(affiliation_number, '') = ''`,
+    ).bind(removeId, keepId),
+    // Team ids were derived at creation and are never recomputed (#282):
+    // a team changes club without changing id, and its games follow it.
+    move('teams'),
+    move('users'),
+    move('member_groups'),
+    move('club_competition_groups'),
+    move('trainings'),
+    move('club_admin_requests'),
+    db.prepare('DELETE FROM fftt_club_teams_cache WHERE club_id = ?').bind(removeId),
+    db.prepare('DELETE FROM clubs WHERE id = ?').bind(removeId),
   ])
   return c.json({ ok: true })
 })

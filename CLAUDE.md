@@ -917,6 +917,33 @@ invisible dans le diff comme dans la revue.
   dans ce cas. Les fixtures de test sont trois vrais calendriers, **le
   contact du pied remplacé** (nom, adresse et e-mail d'un officiel).
 
+### Deux fiches pour un club (#730)
+- **Les imports AGR ont dédoublé des clubs** : « Landser ASL » à côté de
+  « ASL Landser » (l'un les membres, l'autre les équipes), « Kembs ASL TT » à
+  côté du « Kembs TT » de la FFTT. **« Fusionner… »** sur `/clubs`
+  (administrateur général, `POST /clubs/:id/merge-into`) les réunit : équipes,
+  membres, adresses (le défaut du club gardé reste le seul), canaux, logo,
+  affiliations (les blancs du gardé comblés — nom AGR, organisation), groupes,
+  réservations, entraînements, demandes d'onboarding ; puis la ligne part, dans
+  **un seul batch**.
+- **Le club gardé n'est pas au choix** (`clubMergeKeeper`,
+  `src/lib/clubMerge.ts`) : celui dont l'id se dérive d'un numéro —
+  `club-fftt-…`, puis `club-<fédération>-…` — parce que c'est sous cet id que
+  les imports le cherchent ; supprimé, le prochain import FFTT le recréerait.
+  L'API refuse l'autre sens (409 `keep_other`), le dialogue le dit d'avance.
+- **Ce qui demande une décision est refusé avec sa raison**
+  (`clubMergeRefusal`, la même règle des deux côtés) : deux numéros FFTT, deux
+  numéros d'une même fédération, deux équipes d'un même numéro dans une même
+  phase, deux groupes de même nom, une compétition réservée des deux côtés.
+- Les ids d'équipe restent ce qu'ils sont (#282) : une équipe change de club
+  sans changer d'id, ses rencontres la suivent.
+- **La revue d'un calendrier propose tous les clubs**, ceux de la fédération
+  d'abord : n'offrir que ceux déjà affiliés laissait « Kembs TT » hors
+  d'atteinte, et « Créer » faisait le second. `matchFederationClub` lit aussi
+  les mots dans le désordre (« LANDSER ASL » = « ASL Landser ») et propose le
+  **seul** club d'une ville (`townKey`) — jamais un club que la fédération
+  connaît déjà sous un autre nom. Une suggestion, comme le reste.
+
 ### Liste des joueurs d'une fédération sans API (#648)
 - L'AGR publie la liste d'un club en PDF (« Liste des joueurs » : licence,
   NOM Prénom, classement). `src/lib/agrPlayerList.ts` la lit en
