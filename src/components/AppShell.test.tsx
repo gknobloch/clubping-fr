@@ -12,7 +12,7 @@ const authState = vi.hoisted(() => ({
 
 vi.mock('@/contexts/AuthContext', () => ({
   DEV_LOGIN: true,
-  useAuth: () => ({ user: authState.user, displayName: 'admin@example.com', logout: vi.fn() }),
+  useAuth: () => ({ user: authState.user, displayName: 'admin@example.com', logout: vi.fn(), profiles: [] }),
 }))
 
 // happy-dom does not evaluate media queries, so the `md:` breakpoint has no

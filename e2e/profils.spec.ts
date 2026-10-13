@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test'
 
 // #640 — a parent and a child, one address. The session is one of them; the
-// header offers the others, grouped by club, and a tap becomes the other.
+// header's account menu (#722) offers the others, grouped by club, and a click
+// becomes the other.
 //
 // The E2E stack has no API behind the front end, so the two auth routes this
 // flow touches are answered here: `/auth/me` restores whichever session the
@@ -43,29 +44,31 @@ test.describe('Changer de profil (#640)', () => {
 
   test('propose les profils de l’adresse et bascule sur l’autre', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('banner').getByRole('link', { name: 'Enzo Lotz' })).toBeVisible()
+    await page.getByRole('banner').getByRole('button', { name: 'Enzo Lotz' }).click()
+    const menu = page.locator('#account-menu')
+    // Who is signed in, and where: then the others, by club — not Enzo again.
+    await expect(menu.getByText('Enzo Lotz', { exact: true })).toBeVisible()
+    await expect(menu.getByText('Changer de profil')).toBeVisible()
+    await expect(menu.getByRole('heading', { name: 'Rixheim PPA' })).toBeVisible()
+    await expect(menu.getByRole('button', { name: /Enzo Lotz/ })).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Changer de profil' }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByRole('heading', { name: 'Changer de profil' })).toBeVisible()
-    await expect(dialog.getByText('Rixheim PPA')).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /Enzo Lotz/ })).toBeDisabled()
-
-    await dialog.getByRole('button', { name: /Quentin Colle/ }).click()
-    await expect(dialog).toBeHidden()
+    await menu.getByRole('button', { name: /Quentin Colle/ }).click()
+    await expect(menu).toBeHidden()
     await expect(page).toHaveURL('/')
-    await expect(page.getByRole('banner').getByRole('link', { name: 'Quentin Colle' })).toBeVisible()
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Quentin Colle' })).toBeVisible()
 
     // The new session is the one a reload restores.
     await page.reload()
-    await expect(page.getByRole('banner').getByRole('link', { name: 'Quentin Colle' })).toBeVisible()
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Quentin Colle' })).toBeVisible()
   })
 
   test('ne propose rien quand l’adresse n’ouvre qu’un profil', async ({ page }) => {
     await page.unroute('**/api/auth/me')
     await page.route('**/api/auth/me', (route) => route.fulfill(json({ user: enzo, profiles: [profiles[0]] })))
     await page.goto('/')
-    await expect(page.getByRole('banner').getByRole('link', { name: 'Enzo Lotz' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Changer de profil' })).toHaveCount(0)
+    await page.getByRole('banner').getByRole('button', { name: 'Enzo Lotz' }).click()
+    const menu = page.locator('#account-menu')
+    await expect(menu.getByRole('link', { name: /Mon compte/ })).toBeVisible()
+    await expect(menu.getByText('Changer de profil')).toHaveCount(0)
   })
 })

@@ -1335,16 +1335,19 @@ invisible dans le diff comme dans la revue.
 - `/auth/me` et chaque réponse de connexion portent `profiles` — le membre
   connecté compris, clubs nommés. Le sélecteur (`profilesByClub`) groupe par
   club ; il n'apparaît **qu'avec un autre profil à proposer**
-  (`hasOtherProfiles`) : en-tête et Mon compte sur le web, Mon compte dans
-  l'app.
-- **Dans l'app, l'avatar de l'en-tête ouvre le menu du compte** (#720,
-  `AccountMenu`), accroché sous lui : nom, club et rôle du profil ouvert,
+  (`hasOtherProfiles`) : le menu du compte de l'en-tête et Mon compte, sur
+  le web comme dans l'app.
+- **L'avatar de l'en-tête ouvre le menu du compte** (`AccountMenu`, #720 dans
+  l'app, #722 sur le web — l'avatar et le nom sur ordinateur, l'avatar seul à
+  côté du bouton de menu sur un téléphone), accroché sous lui : nom, club et rôle du profil ouvert,
   « Mon compte », puis les autres profils par club — un toucher en change.
   Changer de profil était tout en bas de Compte, à deux écrans de l'endroit
   où un parent ouvre les matchs de son enfant. Les lignes sont
-  `ProfileChoices`, partagées avec la feuille « Changer de profil » de
-  Compte, qui reste. Le menu est un `Modal` (#625) : il tourne avec le
-  téléphone. Après un changement, on revient à l'accueil : l'écran d'avant était
+  `ProfileChoices` dans l'app, `ProfileList` sur le web — partagées avec
+  « Changer de profil » de Compte, qui reste. Dans l'app, le menu est un
+  `Modal` (#625) : il tourne avec le téléphone. Sur un téléphone, le web
+  l'étend sur la largeur de l'écran, 16 px en retrait : accroché à l'avatar,
+  il sortait par la gauche. Après un changement, on revient à l'accueil : l'écran d'avant était
   celui de l'autre profil, peut-être un écran d'administration.
 - **Un appareil sonne pour tous les profils de son adresse**, dérivé à l'envoi
   (`tokensByUser`) et non écrit une ligne par profil : `push_tokens` reste clé
