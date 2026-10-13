@@ -159,7 +159,10 @@ export interface MatrixRow {
   player: Player
   isCaptain: boolean
   points?: string
-  /** The FFTT has not listed a licence for them this season (#488). */
+  /** Their licence in the federation the section is about (#644). */
+  licence: string
+  /** The FFTT has not listed a licence for them this season (#488) — and
+   *  the section is an FFTT one: the listing says nothing of an AGR team. */
   unlicensed?: boolean
   /** Answered available, over the team's fixtures in the phase. Ignored in a
    *  section with no team: there are no fixtures of theirs to count. */
@@ -365,12 +368,12 @@ export function MatchDayMatrix({
                 </Text>
                 {/* The marker goes on the licence line — that line is already
                     about the licence, and the name column cannot widen (#488). */}
-                {(row.player.licenseNumber || row.unlicensed) ? (
+                {(row.licence || row.unlicensed) ? (
                   <Text style={s.license} numberOfLines={1}>
-                    {row.player.licenseNumber}
+                    {row.licence}
                     {row.unlicensed ? (
                       <Text style={s.unlicensed}>
-                        {row.player.licenseNumber ? ' ' : ''}Sans licence
+                        {row.licence ? ' ' : ''}Sans licence
                       </Text>
                     ) : null}
                   </Text>

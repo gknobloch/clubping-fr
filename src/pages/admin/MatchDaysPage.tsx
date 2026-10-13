@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, Fragment, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { poolLabel } from '@/lib/poolLabel'
+import { poolLabel, poolTitle } from '@/lib/poolLabel'
 import type { MatchDay, AvailabilityStatus, Player } from '@/types'
+import { federationOfTeam, licenceOf } from '@/lib/licences'
+import { FFTT_FEDERATION_ID } from '@/lib/federations'
 import { useAuth } from '@/contexts/AuthContext'
 import { importableGroupIds as importableGroupIdsFor } from '@/lib/importScope'
 import { useAppData } from '@/contexts/DataContext'
@@ -30,11 +32,14 @@ import { categoryFromIndex, seasonCategoryIndex } from '@/lib/seasonCategories'
 import { teamEligibility } from '@/lib/competitionEligibility'
 import { answerOverride, mayAnswerFor, mayManageTeam } from '@/lib/teamAuthority'
 import { unlicensedIds } from '@/lib/seasonLicences'
-import { orderPhases, defaultPhase } from '@/lib/phases'
+import { phaseScope } from '@/lib/phaseScope'
+import { federationOfPhase } from '@/lib/federations'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { PageHeader } from '@/components/PageHeader'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ModalShell } from '@/components/ModalShell'
-import { ImportIcon, PhaseSwitchButton } from '@/components/icons'
+import { ImportIcon } from '@/components/icons'
+import { PhasePager } from '@/components/PhasePager'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import {
   AVAILABILITY_COLORS,
@@ -143,12 +148,18 @@ function MatchDayColgroup({ matchDayCount }: { matchDayCount: number }) {
  * column the matrix cannot afford to widen.
  */
 function LicenceLine({
-  licenseNumber,
-  unlicensed,
+  player,
+  federationId,
+  unlicensed: unlicensedByFftt,
 }: {
-  licenseNumber?: string
+  player: Pick<Player, 'licenseNumber' | 'licences'>
+  /** The federation of the team the row is about — its licence is the one printed (#644). */
+  federationId: string
   unlicensed: boolean
 }) {
+  const licenseNumber = licenceOf(player, federationId)
+  // "Sans licence" is the FFTT's listing (#488): it says nothing of an AGR team.
+  const unlicensed = unlicensedByFftt && federationId === FFTT_FEDERATION_ID
   if (!licenseNumber && !unlicensed) return null
   return (
     <span className="block text-xs">
@@ -185,6 +196,7 @@ export function MatchDaysPage() {
     playerSeasonCategories,
     playerSeasonLicences,
     seasons,
+    federations = [],
     setGameAvailability,
     clearGameAvailability,
     getGameSelectionPlayerIds,
@@ -208,10 +220,18 @@ export function MatchDaysPage() {
   const openedPhaseId = deepLinkParams.get('phase')
   const openedJournee = Number(deepLinkParams.get('journee')) || null
 
-  // Opens on the active phase, or the one a link names; a deep link to a
-  // fixture overrides it below.
+  // The federation first, then its phases (#645): a club in both has two
+  // active phases. A link naming a phase opens on that phase's federation.
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(() => {
+    const opened = openedPhaseId ? phases.find((p) => p.id === openedPhaseId) : undefined
+    return opened ? federationOfPhase(opened) : undefined
+  })
+  const scope = phaseScope({ federations, phases, club: scopedClub, chosen: chosenFederation })
+
+  // Opens on the federation's active phase, or the one a link names; a deep
+  // link to a fixture overrides it below.
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>(
-    () => (openedPhaseId && phases.some((p) => p.id === openedPhaseId) ? openedPhaseId : defaultPhase(phases)?.id ?? ''),
+    () => (openedPhaseId && phases.some((p) => p.id === openedPhaseId) ? openedPhaseId : scope.defaultPhase?.id ?? ''),
   )
   const [importGamesOpen, setImportGamesOpen] = useState(false)
   const [highlight, setHighlight] = useState<{ teamId: string; matchDayId: string } | null>(null)
@@ -221,14 +241,16 @@ export function MatchDaysPage() {
   const importScopeClubId = hasClubScope ? user?.clubId : undefined
   const importableGroupIds = useMemo(
     () => importableGroupIdsFor({
-      phaseId: selectedPhaseId, divisions, groups, teams, clubId: importScopeClubId,
+      phaseId: selectedPhaseId, divisions, competitions, groups, teams, clubId: importScopeClubId,
     }),
-    [divisions, groups, teams, selectedPhaseId, importScopeClubId],
+    [divisions, competitions, groups, teams, selectedPhaseId, importScopeClubId],
   )
 
   /** All teams of the user's club in the selected phase (one block per team; each team has its own group's match-days). */
   const userClubId = user?.clubId
 
+  // The federation decides the brûlage rule — the AGR's counts the season (#651).
+  const brulageCtx = useMemo(() => ({ teams, phases, divisions, competitions }), [teams, phases, divisions, competitions])
   const myClubTeamsInPhase = useMemo(() => {
     if (!selectedPhaseId || !userClubId) return []
     return teams
@@ -450,7 +472,7 @@ export function MatchDaysPage() {
     if (playerId && matchDayId) {
       all = all.filter((tid) => {
         const t = teams.find((x) => x.id === tid)
-        return t ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId) : false
+        return t ? isPlayerEligibleForTeam(playerId, t, myClubTeamsInPhase, matchDays, games, gameSelections, matchDayId, brulageCtx) : false
       })
     }
     if (playerId) {
@@ -467,7 +489,9 @@ export function MatchDaysPage() {
     const g = groups.find((x) => x.id === groupId)
     if (!g) return groupId
     const div = divisions.find((d) => d.id === g.divisionId)
-    return div ? `${div.displayName} – Groupe ${g.number}` : `Groupe ${g.number}`
+    // « Poule A » at the AGR (#696).
+    const name = poolTitle(g, { divisions, competitions })
+    return div ? `${div.displayName} – ${name}` : name
   }
 
   const getAvailability = (gameId: string, playerId: string): AvailabilityStatus | undefined => {
@@ -620,7 +644,7 @@ export function MatchDaysPage() {
         opponentName: getTeamLabel(opponentId),
         teamName: getTeamLabel(team.id),
         divisionName: divisions.find((d) => d.id === team.divisionId)?.displayName,
-        poolLabel: poolLabel(team, groups),
+        poolLabel: poolLabel(team, groups, { divisions, competitions }),
         isMine: !!user?.id && roster.includes(user.id),
         isHome,
         dateLabel: formatMatchDayRange(gameDate(game, matchDay), gameDate(game, matchDay)),
@@ -736,7 +760,7 @@ export function MatchDaysPage() {
         .flatMap((id) => teams.find((t) => t.id === id) ?? [])
     : []
 
-  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
+  const orderedPhases = scope.phases
   const selectedPhaseIndex = orderedPhases.findIndex((p) => p.id === selectedPhaseId)
   const selectedPhase = orderedPhases[selectedPhaseIndex]
   const previousPhase = selectedPhaseIndex > 0 ? orderedPhases[selectedPhaseIndex - 1] : undefined
@@ -752,6 +776,14 @@ export function MatchDaysPage() {
     // Re-default the mobile journée to the new phase's active one, rather than
     // carrying over a number that may not exist there (#306).
     setMobileMatchDayNumber(null)
+  }
+
+  // Another federation is another set of phases: open on its own default.
+  const handleFederationChange = (federationId: string) => {
+    setChosenFederation(federationId)
+    const next = phaseScope({ federations, phases, club: scopedClub, chosen: federationId }).defaultPhase
+    if (next) handlePhaseChange(next.id)
+    else setSelectedPhaseId('')
   }
 
   const scrollToTeam = (teamId: string) => {
@@ -802,6 +834,8 @@ export function MatchDaysPage() {
     deepLinkDoneRef.current = true
 
     setSelectedPhaseId(team.phaseId)
+    const teamPhase = phases.find((p) => p.id === team.phaseId)
+    if (teamPhase) setChosenFederation(federationOfPhase(teamPhase))
     // Claim the phase so the smart-offset effect does not re-centre on the
     // current week and undo the positioning below.
     autoPositionedPhaseRef.current = team.phaseId
@@ -821,7 +855,7 @@ export function MatchDaysPage() {
     }
 
     setHighlight({ teamId: team.id, matchDayId: matchDay.id })
-  }, [deepLinkGameId, deepLinkTeamId, games, teams, matchDays])
+  }, [deepLinkGameId, deepLinkTeamId, games, teams, matchDays, phases, seasons])
 
   /**
    * Scroll to the deep-linked team, once. Deliberately not folded into the
@@ -915,6 +949,7 @@ export function MatchDaysPage() {
                 covers. The band is two rows tall on a phone; PageHeader
                 measures it, so the sticky offset follows. */}
             <div className="flex w-full flex-col gap-2 md:hidden">
+              <FederationSwitch options={scope.options} value={scope.federationId} onChange={handleFederationChange} />
               <Switcher
                 title={selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
                 onPrev={previousPhase ? () => handlePhaseChange(previousPhase.id) : undefined}
@@ -945,22 +980,17 @@ export function MatchDaysPage() {
             </div>
 
             {/* Phase switcher, md: and up — the same pill as Équipes, down to
-                the wording: one control, one label, on both screens. */}
-            <div className="hidden h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:flex">
-              <PhaseSwitchButton
-                dir="prev"
-                disabled={!previousPhase}
-                onClick={() => previousPhase && handlePhaseChange(previousPhase.id)}
-              />
-              <span className="whitespace-nowrap font-display text-sm font-semibold text-slate-800">
-                {selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
-              </span>
-              <PhaseSwitchButton
-                dir="next"
-                disabled={!nextPhase}
-                onClick={() => nextPhase && handlePhaseChange(nextPhase.id)}
-              />
+                the wording: one control, one label, on both screens. The
+                federation comes before it, for a club in two (#645). */}
+            <div className="hidden md:flex">
+              <FederationSwitch options={scope.options} value={scope.federationId} onChange={handleFederationChange} />
             </div>
+            <PhasePager
+              className="hidden md:flex"
+              label={selectedPhase ? `Saison ${selectedPhase.displayName}` : '—'}
+              onPrev={previousPhase ? () => handlePhaseChange(previousPhase.id) : undefined}
+              onNext={nextPhase ? () => handlePhaseChange(nextPhase.id) : undefined}
+            />
 
             {/* Team shortcuts — matrix-only: they jump between the per-team
                 tables, which do not exist below md:. */}
@@ -1332,6 +1362,8 @@ export function MatchDaysPage() {
                           matchDays,
                           games,
                           gameSelections,
+                          null,
+                          brulageCtx,
                         )
                         const brulageColor = brulage.burnedIntoTeamId
                           ? getTeamColor(brulage.burnedIntoTeamId)
@@ -1350,7 +1382,8 @@ export function MatchDaysPage() {
                                 })()}
                               </span>
                               <LicenceLine
-                                licenseNumber={player.licenseNumber}
+                                player={player}
+                                federationId={federationOfTeam(team, divisions, competitions)}
                                 unlicensed={unlicensed.has(player.id)}
                               />
                             </td>
@@ -1687,7 +1720,9 @@ export function MatchDaysPage() {
                         })()}
                       </span>
                       <LicenceLine
-                        licenseNumber={player.licenseNumber}
+                        player={player}
+                        // Nobody's team: the club's teams of this phase decide.
+                        federationId={federationOfTeam(myClubTeamsInPhase[0], divisions, competitions)}
                         unlicensed={unlicensed.has(player.id)}
                       />
                     </td>
@@ -1695,7 +1730,7 @@ export function MatchDaysPage() {
                     <td className="whitespace-nowrap px-3 py-2 text-center text-slate-400">—</td>
                     <td className="whitespace-nowrap px-3 py-2 text-center text-slate-600 text-xs">
                       {(() => {
-                        const b = computeBrulage(player.id, myClubTeamsInPhase, matchDays, games, gameSelections)
+                        const b = computeBrulage(player.id, myClubTeamsInPhase, matchDays, games, gameSelections, null, brulageCtx)
                         if (!b.burnedIntoTeamId) return '—'
                         const bTeam = teams.find((t) => t.id === b.burnedIntoTeamId)
                         const bColor = getTeamColor(b.burnedIntoTeamId)

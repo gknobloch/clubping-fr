@@ -1,3 +1,4 @@
+import { isProvisionalSlot } from '@/lib/matchdays'
 import { Link } from 'react-router-dom'
 import { ChevronRightIcon, HomeIcon, AwayIcon } from '@/components/icons'
 import { MatchDate } from '@/components/MatchDate'
@@ -93,7 +94,7 @@ export function MatchDayCards({ entries }: { entries: MatchDayCardEntry[] }) {
                   <span className="truncate font-medium text-slate-800">{matchup}</span>
                 </span>
                 <span className="text-xs text-slate-500">
-                  <MatchDate label={dateLabel} confirmed={confirmed} />
+                  <MatchDate label={dateLabel} confirmed={confirmed} provisional={isProvisionalSlot(game)} />
                   {time ? ` · ${time}` : ''}
                 </span>
                 <span className={`text-xs ${short ? 'font-medium text-amber-700' : 'text-slate-500'}`}>

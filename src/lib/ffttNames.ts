@@ -109,3 +109,19 @@ export function normalizeFfttName(raw: string): string {
   })
   return out + raw.slice(at)
 }
+
+/**
+ * A club's name as an import writes it (#704): a federation prints it in
+ * capitals — « INGERSHEIM ST ALOYSE » —, and that is spelled for people the
+ * way the FFTT club import always has. A name with any lowercase letter was
+ * written by someone and is kept as it is.
+ */
+export function clubNameFromFederation(raw: string): string {
+  const name = raw.trim()
+  return isShouting(name) ? normalizeFfttName(name) : name
+}
+
+/** Whether a name has letters and no lowercase among them — nobody typed it so. */
+export function isShouting(name: string): boolean {
+  return /\p{L}/u.test(name) && name === name.toLocaleUpperCase('fr-FR')
+}

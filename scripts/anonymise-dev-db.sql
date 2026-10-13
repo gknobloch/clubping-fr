@@ -30,17 +30,28 @@ CREATE TABLE anonymise_shared_emails AS
    WHERE email IS NOT NULL AND trim(email) != ''
    GROUP BY lower(trim(email));
 
+-- One pseudonym per PERSON (#655): Gilles at Rixheim and at Landser is one
+-- person, and a preview that named his two profiles differently would show
+-- them as strangers. Keyed on the person's oldest profile, read before the
+-- update below, like the addresses above.
+DROP TABLE IF EXISTS anonymise_person_rows;
+CREATE TABLE anonymise_person_rows AS
+  SELECT person_id, min(rowid) AS first_rowid
+    FROM users
+   WHERE person_id IS NOT NULL
+   GROUP BY person_id;
+
 -- Pseudonyms rather than "Joueur 12": names of realistic length are what
 -- surface wrapping and truncation bugs, which is half the point of previewing
 -- on a phone. 12 x 12 combinations, deterministic on rowid so a given row keeps
 -- the same identity across refreshes.
 UPDATE users SET
-  first_name = CASE rowid % 12
+  first_name = CASE COALESCE((SELECT first_rowid FROM anonymise_person_rows WHERE person_id = users.person_id), rowid) % 12
     WHEN 0 THEN 'Camille' WHEN 1 THEN 'Lucas'  WHEN 2  THEN 'Manon'
     WHEN 3 THEN 'Hugo'    WHEN 4 THEN 'Léa'    WHEN 5  THEN 'Nathan'
     WHEN 6 THEN 'Chloé'   WHEN 7 THEN 'Théo'   WHEN 8  THEN 'Inès'
     WHEN 9 THEN 'Louis'   WHEN 10 THEN 'Jade'  ELSE 'Paul' END,
-  last_name = CASE (rowid / 12) % 12
+  last_name = CASE (COALESCE((SELECT first_rowid FROM anonymise_person_rows WHERE person_id = users.person_id), rowid) / 12) % 12
     WHEN 0 THEN 'Martin'  WHEN 1 THEN 'Bernard' WHEN 2  THEN 'Dubois'
     WHEN 3 THEN 'Thomas'  WHEN 4 THEN 'Robert'  WHEN 5  THEN 'Richard'
     WHEN 6 THEN 'Petit'   WHEN 7 THEN 'Durand'  WHEN 8  THEN 'Leroy'
@@ -64,6 +75,21 @@ UPDATE users SET
   -- stamps a fresh visit the moment anyone signs in as a row.
   first_login_at = NULL,
   last_seen_at = NULL;
+
+-- The person behind each profile (#655) holds the same name, address and
+-- phone: rewritten from the pseudonymised profiles, every one of which now
+-- agrees with its siblings.
+UPDATE people SET
+  first_name = (SELECT u.first_name FROM users u WHERE u.person_id = people.id LIMIT 1),
+  last_name = (SELECT u.last_name FROM users u WHERE u.person_id = people.id LIMIT 1),
+  email = (SELECT u.email FROM users u WHERE u.person_id = people.id LIMIT 1),
+  phone = '0600000000',
+  birth_date = NULL,
+  birth_place = NULL;
+
+-- A licence in another federation (#644) identifies a real person in that
+-- federation's directory exactly as an FFTT one does.
+UPDATE federation_licences SET number = printf('98%05d', rowid);
 
 -- Live production session tokens. Copying these into a less protected
 -- environment hands out authenticated access to real accounts; nothing on a
@@ -115,6 +141,12 @@ UPDATE clubs SET
   -- refresh-dev-db.sh verifies afterwards.
   affiliation_number = printf('99%06d', rowid);
 
+-- A club's number and name in another federation (#643) lead back to the real
+-- club as surely as the FFTT's.
+UPDATE club_federations SET
+  affiliation_number = printf('98%04d', rowid),
+  name = NULL;
+
 -- The town is recomputed from the club's rowid rather than parsed back out of
 -- display_name, so an address stays in the town its club is named after.
 UPDATE club_addresses SET
@@ -153,3 +185,4 @@ DELETE FROM player_avatars_pre_0036;
 DELETE FROM club_logos;
 
 DROP TABLE IF EXISTS anonymise_shared_emails;
+DROP TABLE IF EXISTS anonymise_person_rows;

@@ -17,6 +17,7 @@ function renderSheet({
   others = [] as Player[],
   initialSelection = [] as string[],
   unlicensed = undefined as ReadonlySet<string> | undefined,
+  pickNote = undefined as Parameters<typeof SelectionSheet>[0]['pickNote'],
   onSave = vi.fn(),
 } = {}) {
   render(
@@ -29,6 +30,7 @@ function renderSheet({
       availabilityOf={() => undefined}
       committedElsewhere={new Map()}
       unlicensed={unlicensed}
+      pickNote={pickNote}
       onSave={onSave}
       onClose={vi.fn()}
     />,
@@ -167,5 +169,28 @@ describe('SelectionSheet — licence not validated (#488)', () => {
     renderSheet()
     expect(screen.queryByText('Sans licence')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('SelectionSheet at the AGR (#683)', () => {
+  const notes: Record<string, { label: string; becomesTitularOf: number | null }> = {
+    o1: { label: '2/3 au-dessus', becomesTitularOf: null },
+    o2: { label: 'Titulaire en éq. 3', becomesTitularOf: 3 },
+  }
+  const others = [player('o1', 'Nicolas', 'Broglin'), player('o2', 'Léo', 'Martin')]
+
+  it('says beside each renfort how many times they have played above their team', () => {
+    renderSheet({ others, pickNote: (id) => notes[id] ?? null })
+    expect(screen.getByText('2/3 au-dessus')).toBeInTheDocument()
+    expect(screen.getByText('Titulaire en éq. 3')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('names the fourth once picked, and still lets it through', async () => {
+    const { onSave } = renderSheet({ others, pickNote: (id) => notes[id] ?? null })
+    await userEvent.click(screen.getByRole('button', { name: /Léo Martin/ }))
+    expect(screen.getByRole('status')).toHaveTextContent('Léo Martin deviendra titulaire de l’équipe 3')
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(onSave).toHaveBeenCalledWith(['o2'])
   })
 })

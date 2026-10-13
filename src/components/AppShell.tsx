@@ -5,8 +5,7 @@ import { BrandMark } from '@/components/BrandMark'
 import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
 import { useConfirm } from '@/components/useConfirm'
 import { OfflineBanner } from '@/components/OfflineBanner'
-import { ProfileSwitcherDialog, SwitchProfileIcon } from '@/components/ProfileSwitcher'
-import { hasOtherProfiles } from '@/lib/profiles'
+import { AccountMenu } from '@/components/AccountMenu'
 
 function PreviewBanner() {
   if (!IS_PR_PREVIEW) return null
@@ -44,11 +43,7 @@ function LogoutIcon() {
 }
 
 export function AppShell() {
-  const { user, displayName, logout, profiles } = useAuth()
-  // A parent and a child on one address (#640). Only when there is another
-  // profile to become: one profile is not a choice.
-  const canSwitch = hasOtherProfiles(profiles, user?.id)
-  const [switching, setSwitching] = useState(false)
+  const { user, displayName, logout } = useAuth()
   const [confirm, confirmDialog] = useConfirm()
   const location = useLocation()
   const navigate = useNavigate()
@@ -115,7 +110,6 @@ export function AppShell() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {confirmDialog}
-      {switching && <ProfileSwitcherDialog onClose={() => setSwitching(false)} />}
       <PreviewBanner />
       <OfflineBanner />
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -137,20 +131,8 @@ export function AppShell() {
               </Link>
             ))}
             <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-              <Link to="/compte" className="text-right" title="Mon compte">
-                <p className="text-sm font-medium text-slate-800 hover:text-accent-600">{displayName}</p>
-              </Link>
-              {canSwitch && (
-                <button
-                  type="button"
-                  onClick={() => setSwitching(true)}
-                  title="Changer de profil"
-                  aria-label="Changer de profil"
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <SwitchProfileIcon />
-                </button>
-              )}
+              {/* Who is signed in, Compte, and the profiles to switch to (#722). */}
+              <AccountMenu />
               <button
                 type="button"
                 onClick={handleLogout}
@@ -163,30 +145,34 @@ export function AppShell() {
             </div>
           </nav>
 
-          {/* Mobile: everything above lives behind this button. */}
-          <button
-            type="button"
-            onClick={() => setMenuOpen((open) => !open)}
-            aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-            aria-expanded={menuOpen}
-            aria-controls="menu-mobile"
-            className={`-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 ${bar.hide}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
-              {menuOpen ? (
-                <>
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </>
-              ) : (
-                <>
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </>
-              )}
-            </svg>
-          </button>
+          {/* Mobile: the account menu (#722), and everything else behind the
+              menu button. */}
+          <div className={`flex items-center gap-1 ${bar.hide}`}>
+            <AccountMenu compact />
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              aria-expanded={menuOpen}
+              aria-controls="menu-mobile"
+              className="-mr-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                {menuOpen ? (
+                  <>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </>
+                ) : (
+                  <>
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <line x1="3" y1="12" x2="21" y2="12" />
+                    <line x1="3" y1="18" x2="21" y2="18" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
         </div>
 
         {menuOpen && (
@@ -210,16 +196,6 @@ export function AppShell() {
                 <Link to="/compte" className={`${drawerLinkClass(location.pathname === '/compte')} flex-1`}>
                   {displayName}
                 </Link>
-                {canSwitch && (
-                  <button
-                    type="button"
-                    onClick={() => { setMenuOpen(false); setSwitching(true) }}
-                    aria-label="Changer de profil"
-                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <SwitchProfileIcon />
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={handleLogout}

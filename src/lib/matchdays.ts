@@ -1,12 +1,48 @@
 // Shared domain logic — imported by the web app (@/lib/matchdays) and the
 // mobile app (@shared/lib/matchdays). Keep this module free of any
 // browser/RN/Node deps.
-import type { Team, Game, MatchDay, GameSelection, Division, Group } from '../types'
+import type { Team, Game, MatchDay, GameSelection, Division, Group, Competition } from '../types'
 import { getMondayOf, getSundayOf, todayIso } from './weeks'
+import { federationOfTeam } from './licences'
+
+/** What the AGR's one-match-per-journée rule needs to know of two teams (#651). */
+export interface RoundRuleContext {
+  divisions: ReadonlyArray<Pick<Division, 'id' | 'competitionId' | 'displayName'>>
+  competitions: ReadonlyArray<Pick<Competition, 'id' | 'federationId'>>
+}
+
+/**
+ * An AGR division played at the department's level (art. 22): Excellence,
+ * Promotion d'Excellence, Honneur. Promotion d'Honneur and Divisions I to III
+ * are the sector's.
+ */
+export function isAgrDepartmentalDivision(name: string): boolean {
+  return /excellence/i.test(name) || (/honneur/i.test(name) && !/prom/i.test(name))
+}
+
+/**
+ * Whether a player may play both teams' matches of one journée — the AGR's
+ * art. 30. Over the first three journées, not when both teams play a
+ * departmental division, nor two teams of one division; from the fourth,
+ * always. Never at the FFTT, nor without a context: one match per journée is
+ * what the app has always held.
+ */
+export function mayPlayBothInRound(a: Team, b: Team, roundNumber: number, ctx: RoundRuleContext | undefined): boolean {
+  if (!ctx) return false
+  if (federationOfTeam(a, ctx.divisions, ctx.competitions) !== 'agr') return false
+  if (federationOfTeam(b, ctx.divisions, ctx.competitions) !== 'agr') return false
+  if (roundNumber > 3) return true
+  if (a.divisionId === b.divisionId) return false
+  const name = (t: Team) => ctx.divisions.find((d) => d.id === t.divisionId)?.displayName ?? ''
+  return !(isAgrDepartmentalDivision(name(a)) && isAgrDepartmentalDivision(name(b)))
+}
 
 // Players already selected for another club team in the same journée (round
 // number), mapped to that team's number — they can't be fielded twice the
-// same match-day, so they're non-selectable for the current team.
+// same match-day, so they're non-selectable for the current team. Given a
+// context, the AGR's art. 30 decides instead (`mayPlayBothInRound`): a screen
+// that asks "who may still play here?" passes one; one that shows where
+// everybody plays (the phase planning) does not.
 export function playersCommittedElsewhere(
   currentTeamId: string,
   roundNumber: number,
@@ -14,14 +50,17 @@ export function playersCommittedElsewhere(
   games: Game[],
   matchDays: MatchDay[],
   gameSelections: GameSelection[],
+  ctx?: RoundRuleContext,
 ): Map<string, number> {
   const mdNumberById = new Map(matchDays.map((md) => [md.id, md.number]))
   const clubTeamById = new Map(clubTeams.map((t) => [t.id, t]))
+  const current = clubTeamById.get(currentTeamId)
   const result = new Map<string, number>()
   for (const sel of gameSelections) {
     if (sel.teamId === currentTeamId) continue
     const team = clubTeamById.get(sel.teamId)
     if (!team) continue
+    if (current && mayPlayBothInRound(current, team, roundNumber, ctx)) continue
     const game = games.find((g) => g.id === sel.gameId)
     if (!game || mdNumberById.get(game.matchDayId) !== roundNumber) continue
     for (const pid of sel.playerIds) if (!result.has(pid)) result.set(pid, team.number)
@@ -115,10 +154,16 @@ export interface GameSchedule {
  * that, only the journée's week is known.
  */
 export function gameSchedule(
-  game: Pick<Game, 'date' | 'time'> | undefined,
+  game: Pick<Game, 'date' | 'time'> & { source?: Game['source'] } | undefined,
   matchDay: Pick<MatchDay, 'date'>,
   homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
 ): GameSchedule {
+  // A return-leg fixture prepared before its calendar is published (#649)
+  // sits on a provisional journée date nobody announced: its week, never a
+  // day — whatever the home club's usual day.
+  if (isProvisionalSlot(game)) {
+    return { date: null, time: '', week: isoWeekRange(matchDay.date) }
+  }
   // A game without its own date sits on the journée's — that has always been
   // the fallback, and it must stay one: requiring game.date would push every
   // manually created fixture into the "unconfirmed" branch.
@@ -137,7 +182,7 @@ export function gameSchedule(
  * date should mark it, and none should offer to put it in a calendar.
  */
 export function isSlotConfirmed(
-  game: Pick<Game, 'date' | 'time'> | undefined,
+  game: Pick<Game, 'date' | 'time'> & { source?: Game['source'] } | undefined,
   matchDay: Pick<MatchDay, 'date'>,
   homeTeam: Pick<Team, 'defaultDay' | 'defaultTime'> | undefined,
 ): boolean {
@@ -147,6 +192,18 @@ export function isSlotConfirmed(
 /** What to tell someone hovering an unconfirmed date, in both apps. */
 export const UNCONFIRMED_SLOT_HINT =
   'Date et heure non confirmées : le jour de jeu du club recevant n’est pas connu.'
+
+/**
+ * A return-leg fixture prepared before its calendar exists (#649): mirrored
+ * from phase 1, undated, on a journée whose date is an estimate.
+ */
+export function isProvisionalSlot(game: { date?: Game['date']; source?: Game['source'] } | undefined): boolean {
+  return game?.source === 'mirror' && !game.date
+}
+
+/** Its hint: the reason differs, so the sentence does too. */
+export const PROVISIONAL_SLOT_HINT =
+  'Date provisoire : le calendrier de la phase retour n’est pas encore publié.'
 
 /**
  * Just the time from `gameSchedule` — the one every screen needs and the only

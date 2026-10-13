@@ -16,10 +16,19 @@ export function parseSeasonName(name: string): { startYear: number; endYear: num
   return { startYear, endYear }
 }
 
-/** Derive the FFTT-aligned season id from a display name ("2025/2026" → "26"), or null if invalid. */
+/**
+ * Derive the season id from a display name: "2025/2026" → "26". One id for
+ * every federation (#645). Null if the name is invalid.
+ */
 export function seasonIdFromName(name: string): string | null {
   const parsed = parseSeasonName(name)
   return parsed ? String(parsed.endYear - 2000) : null
+}
+
+/** The chronological number of a season id ("27" → 27; an older "agr-27" too). */
+export function seasonNumber(seasonId: string): number {
+  const n = Number(seasonId.slice(seasonId.lastIndexOf('-') + 1))
+  return Number.isFinite(n) ? n : 0
 }
 
 /** Normalize an FFTT season name ("Saison 2025 / 2026") to our display name ("2025/2026"). */
@@ -42,6 +51,9 @@ export function seasonIdFromFftt(ffttIri: string): string {
  * asking "can this licensee play?" is not asking about 2023. Screens that show
  * history (a player's own page) name their season explicitly instead.
  */
-export function activeSeasonId(seasons: Array<{ id: string; status: string }>): string | undefined {
+export function activeSeasonId(
+  seasons: ReadonlyArray<{ id: string; status: string }>,
+): string | undefined {
+  // One season for every federation (#645): the active one is the active one.
   return seasons.find((s) => s.status === 'active')?.id
 }

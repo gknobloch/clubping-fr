@@ -9,12 +9,15 @@ import { ImportIcon, PlusIcon } from '@/components/icons'
 import { ImportCompetitionsModal } from '@/components/ImportCompetitionsModal'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, type PlayerCategory } from '@/lib/playerCategories'
+import { FFTT_FEDERATION_ID, federationChoices, federationOfCompetition, federationOptionLabel } from '@/lib/federations'
+import { FederationSwitch } from '@/components/FederationSwitch'
 
 const INPUT_CLASS =
   'mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20'
 
 const emptyForm = {
   displayName: '',
+  federationId: FFTT_FEDERATION_ID,
   categories: [] as PlayerCategory[],
 }
 
@@ -27,7 +30,7 @@ const emptyForm = {
  */
 export function CompetitionsPage() {
   const {
-    competitions, divisions, addCompetition, updateCompetition, deleteCompetition,
+    competitions, divisions, federations, addCompetition, updateCompetition, deleteCompetition,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
 
@@ -37,13 +40,23 @@ export function CompetitionsPage() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(emptyForm)
 
-  const archivedCount = competitions.filter((c) => c.isArchived).length
+  // One federation at a time, as on Divisions (#645): the switch says which.
+  const federationOptions = federationChoices(federations ?? [])
+  const [chosenFederation, setChosenFederation] = useState<string>(FFTT_FEDERATION_ID)
+  const pageFederation = federationOptions.some((f) => f.id === chosenFederation)
+    ? chosenFederation
+    : federationOptions[0]?.id ?? FFTT_FEDERATION_ID
+  const ofFederation = useMemo(
+    () => competitions.filter((c) => federationOfCompetition(c) === pageFederation),
+    [competitions, pageFederation],
+  )
+  const archivedCount = ofFederation.filter((c) => c.isArchived).length
   const shown = useMemo(
-    () => competitions
+    () => ofFederation
       .filter((c) => showArchived || !c.isArchived)
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName)),
-    [competitions, showArchived],
+    [ofFederation, showArchived],
   )
 
   // How many divisions each competition holds — the number that says whether
@@ -51,10 +64,15 @@ export function CompetitionsPage() {
   const divisionCount = (competitionId: string) =>
     divisions.filter((d) => d.competitionId === competitionId && !d.isArchived).length
 
+  // A competition changes federation only while nothing is filed under it,
+  // archived divisions included — the API refuses otherwise (#643).
+  const holdsDivisions = (competitionId: string) =>
+    divisions.some((d) => d.competitionId === competitionId)
+
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, federationId: pageFederation })
   }
 
   const openEdit = (competition: Competition) => {
@@ -62,6 +80,7 @@ export function CompetitionsPage() {
     setEditing(competition)
     setForm({
       displayName: competition.displayName,
+      federationId: federationOfCompetition(competition),
       categories: competition.categories,
     })
   }
@@ -86,11 +105,15 @@ export function CompetitionsPage() {
     const categories = orderedCategories()
       .map((c) => c.code)
       .filter((c) => form.categories.includes(c))
+    const { federationId } = form
     if (editing) {
-      updateCompetition(editing.id, { displayName, categories })
+      updateCompetition(editing.id, {
+        displayName, categories,
+        ...(federationId !== federationOfCompetition(editing) ? { federationId } : {}),
+      })
     } else {
       addCompetition({
-        displayName, categories,
+        displayName, categories, federationId,
         sortOrder: Math.max(0, ...competitions.map((c) => c.sortOrder)) + 1,
         isArchived: false,
       })
@@ -120,10 +143,19 @@ export function CompetitionsPage() {
           <>
             {/* Manual add is the fallback; the FFTT import is the default path,
                 same rule as /divisions (#219, #482). */}
-            <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une compétition" onClick={openCreate} />
-            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            <HeaderAction
+              variant={pageFederation === FFTT_FEDERATION_ID ? 'secondary' : 'primary'}
+              icon={<PlusIcon />}
+              label="Ajouter une compétition"
+              onClick={openCreate}
+            />
+            {/* The FFTT's championships come from its API; another federation's are added by hand. */}
+            {pageFederation === FFTT_FEDERATION_ID && (
+              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            )}
           </>
         }
+        controls={<FederationSwitch options={federationOptions} value={pageFederation} onChange={setChosenFederation} />}
       />
       {importOpen && <ImportCompetitionsModal onClose={() => setImportOpen(false)} />}
 
@@ -170,14 +202,6 @@ export function CompetitionsPage() {
               <tr key={competition.id} className={`hover:bg-slate-50/50 ${competition.isArchived ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
                   {competition.displayName}
-                  {competition.ffttContestIdentifier && (
-                    <span
-                      className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
-                      title="Créée par l'import des divisions FFTT"
-                    >
-                      FFTT
-                    </span>
-                  )}
                   {competition.isArchived && (
                     <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">
                       Archivée
@@ -257,6 +281,30 @@ export function CompetitionsPage() {
                   className={INPUT_CLASS}
                 />
               </div>
+
+              {federations.length > 1 && (
+                <div>
+                  <label htmlFor="competition-federation" className="block text-sm font-medium text-slate-700">
+                    Fédération
+                  </label>
+                  <select
+                    id="competition-federation"
+                    value={form.federationId}
+                    onChange={(e) => setForm((f) => ({ ...f, federationId: e.target.value }))}
+                    disabled={!!editing && holdsDivisions(editing.id)}
+                    className={`${INPUT_CLASS} disabled:bg-slate-50 disabled:text-slate-600`}
+                  >
+                    {federations.map((f) => (
+                      <option key={f.id} value={f.id}>{federationOptionLabel(f)}</option>
+                    ))}
+                  </select>
+                  {editing && holdsDivisions(editing.id) && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Des divisions y sont rattachées : la fédération ne se change plus.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <fieldset>
                 <legend className="text-sm font-medium text-slate-700">

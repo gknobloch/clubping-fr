@@ -11,6 +11,8 @@ import { LicenceTag } from '@/components/LicenceTag'
 import { unlicensedIds } from '@shared/lib/seasonLicences'
 import type { Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
+import { activeSeasonId } from '@shared/lib/season'
 
 export type PlayerHistoryEntry = {
   jNumber?: number
@@ -43,6 +45,7 @@ export function PlayerSheet({
   player,
   phaseLabel,
   phasePoints,
+  pointsLabel = 'Points',
   gamesPlayed,
   gamesTotal,
   team,
@@ -56,6 +59,8 @@ export function PlayerSheet({
   /** e.g. "Saison 2025/2026 Phase 2" — used as section heading above phase stats */
   phaseLabel?: string
   phasePoints?: string
+  /** « Points » at the FFTT, « Classement » at the AGR (#646). */
+  pointsLabel?: string
   gamesPlayed: number
   /** When provided, "Matchs joués" reads "played / total". */
   gamesTotal?: number
@@ -73,13 +78,13 @@ export function PlayerSheet({
    */
   showProfile?: boolean
 }) {
-  const { clubs, players, seasons, playerSeasonLicences } = useAppData()
+  const { clubs, federations, players, seasons, playerSeasonLicences } = useAppData()
 
   // The FFTT did not list their licence this season (#488) — said here too,
   // since this sheet is how a captain looks a player up from the matrix.
   const unlicensed = unlicensedIds(
     playerSeasonLicences,
-    seasons.find((s) => s.status === 'active')?.id,
+    activeSeasonId(seasons),
     players.filter((p) => p.clubId === player.clubId),
   ).has(player.id)
   const router = useRouter()
@@ -110,10 +115,13 @@ export function PlayerSheet({
           <Text style={s.name}>{player.firstName} {player.lastName}</Text>
           {unlicensed && <LicenceTag />}
         </View>
-        <View style={s.row}>
-          <Text style={s.label}>Licence</Text>
-          <Text style={s.value}>{player.licenseNumber}</Text>
-        </View>
+        {/* One row per federation (#644). */}
+        {licencesOf(player).map((l) => (
+          <View key={l.federationId} style={s.row}>
+            <Text style={s.label}>{licenceLabel(l.federationId, federations)}</Text>
+            <Text style={s.value}>{l.number}</Text>
+          </View>
+        ))}
 
         <View style={s.divider} />
 
@@ -122,7 +130,7 @@ export function PlayerSheet({
         <View style={s.rows}>
           {phasePoints && (
             <View style={s.row}>
-              <Text style={s.label}>Points</Text>
+              <Text style={s.label}>{pointsLabel}</Text>
               <Text style={s.value}>{phasePoints}</Text>
             </View>
           )}

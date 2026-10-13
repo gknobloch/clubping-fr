@@ -10,7 +10,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
 import { mayManageTeam } from '@shared/lib/teamAuthority'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolLabel, poolTitle } from '@shared/lib/poolLabel'
 import { sortByName } from '@shared/lib/sortByName'
 import { teamPhaseEntries } from '@shared/lib/teamPhases'
 import {
@@ -31,6 +31,7 @@ import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { activeSeasonId } from '@shared/lib/season'
 
 function openUrl(url: string) {
   Linking.openURL(url).catch(() => {
@@ -77,7 +78,8 @@ export function TeamDetail({
   const team = teams.find((t) => t.id === id)
   const club = clubs.find((c) => c.id === team?.clubId)
   const division = divisions.find((d) => d.id === team?.divisionId)
-  const pool = team ? poolLabel(team, groups) : undefined
+  const pool = team ? poolLabel(team, groups, { divisions, competitions }) : undefined
+  const group = groups.find((g) => g.id === team?.groupId)
   const isCaptain = !!(user && team && mayManageTeam(user, team))
 
   // The FFTT did not list these licences this season (#488): a squad list is
@@ -85,7 +87,7 @@ export function TeamDetail({
   const unlicensed = useMemo(
     () => unlicensedIds(
       playerSeasonLicences,
-      seasons.find((s) => s.status === 'active')?.id,
+      activeSeasonId(seasons),
       players.filter((p) => p.clubId === team?.clubId),
     ),
     [playerSeasonLicences, seasons, players, team?.clubId],
@@ -128,7 +130,7 @@ export function TeamDetail({
       memberGroups,
     })
     // The season being played decides: a category is a fact about a season.
-    const seasonId = seasons.find((se) => se.status === 'active')?.id
+    const seasonId = activeSeasonId(seasons)
     const categoryIndex = seasonCategoryIndex(playerSeasonCategories)
     return sortByName(
       selectablePlayers(
@@ -302,6 +304,20 @@ export function TeamDetail({
             )}
           </View>
         )}
+
+        {/* What the federation's calendar says about the poule (#647): where a
+            club plays when not at home, where the sheets go, the deadline for
+            postponements. It was on every match screen (#718), between the
+            header and the availabilities, saying the same thing on each: it is
+            about the poule, so it lives with the team that plays in it. */}
+        {group?.note ? (
+          <View style={styles.section} accessibilityLabel="À savoir sur la poule" testID="team-pool-note">
+            <Text style={styles.sectionTitle}>{poolTitle(group, { divisions, competitions })}</Text>
+            {group.note.split('\n').map((line) => (
+              <Text key={line} style={styles.poolNote}>{line}</Text>
+            ))}
+          </View>
+        ) : null}
 
         {/* All matches for this team (phase switcher lives on the target screen) */}
         {hasGames && (
@@ -536,6 +552,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: 14, color: colors.textSecondary },
   infoText: { fontSize: 14, color: colors.textPrimary },
   scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  poolNote: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
 
   // WhatsApp — an icon in the identity banner, as on the web team cards
   whatsappIconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },

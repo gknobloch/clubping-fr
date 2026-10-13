@@ -6,17 +6,25 @@ import { ImportDivisionsModal } from '@/components/ImportDivisionsModal'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
-import { ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
-import { canMoveDivisionDown, canMoveDivisionUp } from '@/lib/ffttDivisions'
+import { ImportIcon, PlusIcon } from '@/components/icons'
+import { PhasePager } from '@/components/PhasePager'
+import { canMoveDivisionDown, canMoveDivisionUp, parentCandidates } from '@/lib/ffttDivisions'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { divisionIdsOfOrganization, filtersLocally, localOrganizationOptions } from '@/lib/organizationFilter'
 import { useConfirm } from '@/components/useConfirm'
 import { categoriesSummary, orderedCategories, orderedCategoryPicks, type PlayerCategory } from '@/lib/playerCategories'
+import { FFTT_FEDERATION_ID, federationOfCompetition, federationOfPhase } from '@/lib/federations'
+import { phaseScope } from '@/lib/phaseScope'
+import { FederationSwitch } from '@/components/FederationSwitch'
 
 export function DivisionsPage() {
   const {
     divisions: allDivisions,
     phases,
+    
+    federations = [],
+    organizations = [],
     competitions,
     updateDivision,
     addDivision,
@@ -29,15 +37,21 @@ export function DivisionsPage() {
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
 
-  // Phase switcher — defaults to the active phase, chronological order (#235).
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = phases.find((p) => p.status === 'active')
+  // The federation, then its phases (#645) — its active one by default,
+  // chronological order (#235). Divisions belong to a phase, so the list is
+  // the federation's by the same stroke.
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
+  const scope = phaseScope({ federations, phases, chosen: chosenFederation })
+  const isFftt = scope.federationId === FFTT_FEDERATION_ID
+  const orderedPhases = scope.phases
   const [filterPhaseId, setFilterPhaseId] = useState<string | undefined>(undefined)
-  const filterPhase = orderedPhases.find((p) => p.id === filterPhaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
+  const filterPhase = orderedPhases.find((p) => p.id === filterPhaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === filterPhase?.id)
+  const changeFederation = (federationId: string) => {
+    setChosenFederation(federationId)
+    setFilterPhaseId(undefined)
+    setOrganizationId('')
+  }
 
   // Organization — optional filter narrowing the division list to one FFTT
   // championship, same mechanism as /groupes (#237). Best-effort: it never
@@ -53,9 +67,25 @@ export function DivisionsPage() {
     return () => { cancelled = true }
   }, [fetchOrganizations])
 
+  // From our own data wherever divisions know their organisation (#692); the
+  // FFTT is asked only for a phase whose divisions predate it.
+  const phaseDivisions = useMemo(
+    () => allDivisions.filter((d) => d.phaseId === filterPhase?.id),
+    [allDivisions, filterPhase?.id],
+  )
+  const local = filtersLocally(phaseDivisions, scope.federationId)
+  const localOptions = useMemo(
+    () => localOrganizationOptions(organizations, phaseDivisions, scope.federationId),
+    [organizations, phaseDivisions, scope.federationId],
+  )
+
   useEffect(() => {
     const ffttPhaseId = filterPhase ? ffttPhaseIdForName(filterPhase.name) : null
-    if (!organizationId || !filterPhase || !ffttPhaseId) {
+    if (local) {
+      setOrgDivisionIds(organizationId ? divisionIdsOfOrganization(phaseDivisions, organizationId) : null)
+      return
+    }
+    if (!isFftt || !organizationId || !filterPhase || !ffttPhaseId) {
       setOrgDivisionIds(null)
       return
     }
@@ -69,13 +99,28 @@ export function DivisionsPage() {
       )
     })
     return () => { cancelled = true }
-  }, [organizationId, filterPhase, fetchDivisionsPreview])
+  }, [isFftt, local, organizationId, filterPhase, phaseDivisions, fetchDivisionsPreview])
 
-  const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
+  const orgGroups = useMemo(
+    () => groupOrganizationsByType(local ? localOptions : orgs),
+    [local, localOptions, orgs],
+  )
 
   const activeCompetitions = useMemo(
     () => competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder),
     [competitions],
+  )
+  // A division is in one phase and one competition, and both are one
+  // federation's (#645): the form offers the competitions of its phase's
+  // federation only — an AGR championship filed in the FFTT's phase is a
+  // division no AGR page lists. One already chosen stays offered, so editing
+  // never swaps it silently. The API holds the same rule.
+  const federationOfPhaseId = (phaseId: string) => {
+    const p = phases.find((x) => x.id === phaseId)
+    return p ? federationOfPhase(p) : scope.federationId
+  }
+  const competitionsFor = (phaseId: string, current: string) => activeCompetitions.filter(
+    (c) => federationOfCompetition(c) === federationOfPhaseId(phaseId) || c.id === current,
   )
   const competitionName = (id: string | undefined) =>
     competitions.find((c) => c.id === id)?.displayName ?? '—'
@@ -93,10 +138,19 @@ export function DivisionsPage() {
     /** Off = inherit the competition's categories; on = this division decides. */
     restrictCategories: false,
     categories: [] as PlayerCategory[],
+    /** What phase 2 is, for a federation without an API (#649); '' = not known. */
+    secondPhase: '' as '' | 'return_leg' | 'new_groups',
+    /** Who runs it, for a federation without an API (#692); '' = not said. */
+    organizationId: '',
   })
 
   const activeDivisions = useMemo(() => allDivisions.filter((d) => !d.isArchived), [allDivisions])
-  const archivedDivisions = useMemo(() => allDivisions.filter((d) => d.isArchived), [allDivisions])
+  // Counted where the list is: the phase on screen, in the federation on screen
+  // (#645) — not every archived division of every federation.
+  const archivedDivisions = useMemo(
+    () => allDivisions.filter((d) => d.isArchived && (!filterPhase || d.phaseId === filterPhase.id)),
+    [allDivisions, filterPhase],
+  )
   const visibleDivisions = showArchived ? allDivisions : activeDivisions
   const divisions = (filterPhase
     ? visibleDivisions.filter((d) => d.phaseId === filterPhase.id)
@@ -132,23 +186,39 @@ export function DivisionsPage() {
       competitionId: div.competitionId ?? '',
       restrictCategories: div.categories !== undefined,
       categories: div.categories ?? [],
+      secondPhase: div.secondPhase ?? '',
+      organizationId: div.organizationId ?? '',
     })
   }
 
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    const phaseId = filterPhase?.id || phases[0]?.id || ''
+    const phaseId = filterPhase?.id || orderedPhases[0]?.id || ''
     setForm({
       phaseId,
       displayName: '',
       parentId: '',
       playersPerGame: 4,
-      competitionId: '',
+      // Outside the FFTT a division needs its competition — none would file
+      // it under the FFTT (#643) —, so the federation's first is preset.
+      competitionId: federationOfPhaseId(phaseId) === FFTT_FEDERATION_ID
+        ? '' : competitionsFor(phaseId, '')[0]?.id ?? '',
       restrictCategories: false,
       categories: [],
+      secondPhase: '',
+      // The organisation being filtered on, else the federation's only one.
+      organizationId: organizationId || (localOptions.length === 1 ? localOptions[0].id : ''),
     })
   }
+
+  // Creating: any division of the phase, the new one going right after it.
+  // Editing: only those ranked above (#694) — a parent never ranks below its
+  // child, and none of its descendants can become its parent.
+  const parentOptions = (() => {
+    const inPhase = activeDivisions.filter((d) => d.phaseId === form.phaseId).sort((a, b) => a.rank - b.rank)
+    return editing ? parentCandidates(editing, inPhase) : inPhase
+  })()
 
   const closeModal = () => {
     setEditing(null)
@@ -168,6 +238,14 @@ export function DivisionsPage() {
         // null is "inherit"; an array — even empty, meaning every category — is
         // the division speaking for itself (#482).
         categories: form.restrictCategories ? orderedCategoryPicks(form.categories) : undefined,
+        // '' rather than undefined for the same reason as competitionId: the
+        // API reads it as « not known » (#649).
+        ...(!isFftt ? { secondPhase: (form.secondPhase || '') as Division['secondPhase'] } : {}),
+        // '' clears it, as for the competition (#692).
+        ...(!isFftt ? { organizationId: form.organizationId } : {}),
+        // Only when changed (#694): an FFTT parent not imported yet is not
+        // among the options, and must not be cleared by an unrelated edit.
+        ...(form.parentId !== (editing.parentId ?? '') ? { parentId: form.parentId } : {}),
       })
       closeModal()
     } else if (creating && form.phaseId) {
@@ -189,6 +267,7 @@ export function DivisionsPage() {
         ...(parent ? { parentId: parent.id } : {}),
         ...(form.competitionId ? { competitionId: form.competitionId } : {}),
         ...(form.restrictCategories ? { categories: orderedCategoryPicks(form.categories) } : {}),
+        ...(!isFftt && form.organizationId ? { organizationId: form.organizationId } : {}),
       })
       closeModal()
     }
@@ -215,7 +294,23 @@ export function DivisionsPage() {
           <>
             {/* Manual add is the fallback; FFTT import is the default path (#219). */}
             <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter une division" onClick={openCreate} />
-            <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            {isFftt && (
+              <HeaderAction icon={<ImportIcon />} label="Importer depuis la FFTT" onClick={() => setImportOpen(true)} />
+            )}
+          </>
+        }
+        // Federation (#645), then the phase (#235) — the toolbar of Équipes
+        // and Groupes, not a card of its own (#700).
+        controls={
+          <>
+            <FederationSwitch options={scope.options} value={scope.federationId} onChange={changeFederation} />
+            {filterPhase && (
+              <PhasePager
+                label={`Saison ${filterPhase.displayName}`}
+                onPrev={phaseIndex > 0 ? () => setFilterPhaseId(orderedPhases[phaseIndex - 1].id) : undefined}
+                onNext={phaseIndex < orderedPhases.length - 1 ? () => setFilterPhaseId(orderedPhases[phaseIndex + 1].id) : undefined}
+              />
+            )}
           </>
         }
       />
@@ -226,42 +321,29 @@ export function DivisionsPage() {
           onImported={setOrganizationId}
         />
       )}
-      {/* Phase switcher (#235) */}
-      {filterPhase && (
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-          <PhaseSwitchButton
-            dir="prev"
-            disabled={phaseIndex <= 0}
-            onClick={() => phaseIndex > 0 && setFilterPhaseId(orderedPhases[phaseIndex - 1].id)}
-          />
-          <span className="font-display text-sm font-semibold text-slate-800">{filterPhase.displayName}</span>
-          <PhaseSwitchButton
-            dir="next"
-            disabled={phaseIndex >= orderedPhases.length - 1}
-            onClick={() => phaseIndex < orderedPhases.length - 1 && setFilterPhaseId(orderedPhases[phaseIndex + 1].id)}
-          />
+      {/* Each federation's organisations narrow its own divisions (#692). */}
+      {orgGroups.length > 0 && (
+        <div>
+          <label htmlFor="divisions-org" className="block text-sm font-medium text-slate-700">
+            Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
+          </label>
+          <select
+            id="divisions-org"
+            value={organizationId}
+            onChange={(e) => setOrganizationId(e.target.value)}
+            className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+          >
+            <option value="">Toutes</option>
+            {orgGroups.map((g) => (
+              <optgroup key={g.type} label={g.label}>
+                {g.organizations.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name} ({o.identifier})</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </div>
       )}
-      <div>
-        <label htmlFor="divisions-org" className="block text-sm font-medium text-slate-700">
-          Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
-        </label>
-        <select
-          id="divisions-org"
-          value={organizationId}
-          onChange={(e) => setOrganizationId(e.target.value)}
-          className="mt-1 min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-        >
-          <option value="">Toutes</option>
-          {orgGroups.map((g) => (
-            <optgroup key={g.type} label={g.label}>
-              {g.organizations.map((o) => (
-                <option key={o.id} value={o.id}>{o.name} ({o.identifier})</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
       {archivedDivisions.length > 0 && (
         <label className="flex min-h-[44px] items-center gap-2 md:min-h-0">
           <input
@@ -391,7 +473,8 @@ export function DivisionsPage() {
                     onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, parentId: '' }))}
                     className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                   >
-                    {phases.map((p) => (
+                    {/* The phases of the federation on screen (#645). */}
+                    {orderedPhases.map((p) => (
                       <option key={p.id} value={p.id}>{p.displayName}</option>
                     ))}
                   </select>
@@ -409,27 +492,27 @@ export function DivisionsPage() {
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
-              {creating && (
-                <div>
-                  <label htmlFor="edit-parentId" className="block text-sm font-medium text-slate-700">
-                    Division parente
-                  </label>
-                  <select
-                    id="edit-parentId"
-                    value={form.parentId}
-                    onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                  >
-                    <option value="">Aucune (division de tête)</option>
-                    {activeDivisions
-                      .filter((d) => d.phaseId === form.phaseId)
-                      .sort((a, b) => a.rank - b.rank)
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>{d.displayName}</option>
-                      ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label htmlFor="edit-parentId" className="block text-sm font-medium text-slate-700">
+                  Division parente
+                </label>
+                <select
+                  id="edit-parentId"
+                  value={form.parentId}
+                  onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                >
+                  <option value="">Aucune (division de tête)</option>
+                  {parentOptions.map((d) => (
+                    <option key={d.id} value={d.id}>{d.displayName}</option>
+                  ))}
+                  {/* A parent that is not listed — deleted, archived, or an
+                      FFTT division not imported yet — stays what it is. */}
+                  {form.parentId && !parentOptions.some((d) => d.id === form.parentId) && (
+                    <option value={form.parentId}>Division introuvable</option>
+                  )}
+                </select>
+              </div>
               <div>
                 <label htmlFor="edit-competitionId" className="block text-sm font-medium text-slate-700">
                   Compétition
@@ -440,8 +523,11 @@ export function DivisionsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, competitionId: e.target.value }))}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 >
-                  <option value="">Aucune (aucune restriction de catégorie)</option>
-                  {activeCompetitions.map((c) => (
+                  {/* No competition means the FFTT (#643): only an FFTT phase offers it. */}
+                  {(federationOfPhaseId(form.phaseId) === FFTT_FEDERATION_ID || !form.competitionId) && (
+                    <option value="">Aucune (aucune restriction de catégorie)</option>
+                  )}
+                  {competitionsFor(form.phaseId, form.competitionId).map((c) => (
                     <option key={c.id} value={c.id}>{c.displayName}</option>
                   ))}
                 </select>
@@ -505,6 +591,39 @@ export function DivisionsPage() {
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 />
               </div>
+              {!isFftt && localOptions.length > 0 && (
+                <div>
+                  <label htmlFor="edit-organizationId" className="block text-sm font-medium text-slate-700">
+                    Organisation
+                  </label>
+                  <select
+                    id="edit-organizationId"
+                    value={form.organizationId}
+                    onChange={(e) => setForm((f) => ({ ...f, organizationId: e.target.value }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    <option value="">Non précisée</option>
+                    {localOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {editing && !isFftt && (
+                <div>
+                  <label htmlFor="edit-secondPhase" className="block text-sm font-medium text-slate-700">
+                    Phase 2
+                  </label>
+                  <select
+                    id="edit-secondPhase"
+                    value={form.secondPhase}
+                    onChange={(e) => setForm((f) => ({ ...f, secondPhase: e.target.value as typeof f.secondPhase }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    <option value="">Pas encore connue</option>
+                    <option value="return_leg">Phase retour : mêmes poules, réception inversée</option>
+                    <option value="new_groups">Nouvelles poules</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button

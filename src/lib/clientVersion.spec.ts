@@ -111,3 +111,22 @@ describe('versionVerdict — failing open (#508)', () => {
     expect(versionVerdict('dev', { minSupported: '9.0.0' })).toBe('ok')
   })
 })
+
+describe('versionVerdict — its own store (#708)', () => {
+  const floor = { latest: '1.7.0', latestByPlatform: { ios: '1.8.0', android: '1.7.0' } }
+
+  it('lets a build follow its own store', () => {
+    expect(versionVerdict('1.7.0', floor, 'ios')).toBe('update-available')
+    expect(versionVerdict('1.7.0', floor, 'android')).toBe('ok')
+  })
+
+  it('reads what both serve when its store is not named', () => {
+    expect(versionVerdict('1.6.0', { latest: '1.7.0', latestByPlatform: { ios: '1.8.0' } }, 'android')).toBe(
+      'update-available',
+    )
+  })
+
+  it('reads what both serve without a platform, as builds up to 1.7.0 do', () => {
+    expect(versionVerdict('1.7.0', floor)).toBe('ok')
+  })
+})

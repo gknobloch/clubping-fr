@@ -6,24 +6,35 @@ import { useConfirm } from '@/components/useConfirm'
 import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { ProfileList } from '@/components/ProfileSwitcher'
+import { PersonDelegates } from '@/components/PersonDelegates'
 import { hasOtherProfiles } from '@/lib/profiles'
 import { fileToAvatar } from '@/lib/avatarFile'
 import { getTeamName } from '@/lib/teamName'
-import { pointsFor } from '@/lib/phasePoints'
+import { currentRankings } from '@/lib/ranking'
+import { addressOwner, addressTakenMessage } from '@/lib/addressOwner'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
+import { licenceLabel, licencesOf } from '@/lib/licences'
+import { activePhaseIdsOf, clubFederationIds } from '@/lib/federations'
 
 export function ComptePage() {
   const { user, displayName, roleLabel, logout, profiles } = useAuth()
-  const { players, clubs, teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
+  const { players, users = [], clubs, federations = [], teams, phases, playerPhasePoints, updatePlayer, setAvatar, removeAvatar } = useAppData()
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [confirm, confirmDialog] = useConfirm()
 
   const me = user?.isPlayer ? players.find((p) => p.id === user.id) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
-  const activePhase = phases.find((p) => p.status === 'active')
-  const myTeams = me && activePhase ? teams.filter((t) => t.phaseId === activePhase.id && t.playerIds.includes(me.id)) : []
-  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, me?.id)
+  // Each federation of the club has its active phase (#645), and its own
+  // ranking — points at the FFTT, a classement at the AGR (#646).
+  const myFederations = myClub ? clubFederationIds(myClub) : ['fftt']
+  const activePhaseIds = activePhaseIdsOf(phases, myFederations)
+  const myTeams = me ? teams.filter((t) => activePhaseIds.includes(t.phaseId) && t.playerIds.includes(me.id)) : []
+  const rankings = currentRankings({
+    playerId: me?.id, federationIds: myFederations, phases, rows: playerPhasePoints,
+  })
+  const rankingRowLabel = (r: { federationId: string; label: string }) =>
+    rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
 
   const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -60,9 +71,13 @@ export function ComptePage() {
   // they must still be able to edit the rest of their details, and an admin can
   // clear anyone's address from the Joueurs page (#315).
   const removingOwnEmail = !!me?.email && !form.email.trim()
+  // One address, one person (#655, 4 bis) — judged only when it changes.
+  const emailOwner = me && form.email.trim().toLowerCase() !== (me.email ?? '').trim().toLowerCase()
+    ? addressOwner(form.email, users, { personId: me.personId, id: me.id })
+    : undefined
 
   function saveEdit() {
-    if (!me || removingOwnEmail) return
+    if (!me || removingOwnEmail || emailOwner) return
     updatePlayer(me.id, {
       email: form.email.trim(),
       phone: form.phone || undefined,
@@ -136,6 +151,7 @@ export function ComptePage() {
         ) : editing ? (
           <div className="mt-3 space-y-3">
             <Field label="Email" type="email" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
+            {emailOwner && <p role="alert" className="text-sm text-red-600">{addressTakenMessage(emailOwner)}</p>}
             {removingOwnEmail && (
               <p className="text-sm text-red-600">
                 Votre adresse e-mail sert à vous connecter : vous ne pouvez pas la supprimer vous-même.
@@ -150,7 +166,7 @@ export function ComptePage() {
               <button type="button" onClick={() => setEditing(false)} className={NEUTRAL_BUTTON_CLASS}>
                 Annuler
               </button>
-              <button type="button" onClick={saveEdit} disabled={removingOwnEmail} className={PRIMARY_BUTTON_CLASS}>
+              <button type="button" onClick={saveEdit} disabled={removingOwnEmail || !!emailOwner} className={PRIMARY_BUTTON_CLASS}>
                 Enregistrer
               </button>
             </div>
@@ -161,7 +177,9 @@ export function ComptePage() {
             {me.phone && <InfoRow label="Téléphone" value={me.phone} />}
             {me.birthDate && <InfoRow label="Date de naissance" value={me.birthDate} />}
             {me.birthPlace && <InfoRow label="Lieu de naissance" value={me.birthPlace} />}
-            {me.licenseNumber && <InfoRow label="Licence" value={me.licenseNumber} />}
+            {licencesOf(me).map((l) => (
+              <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+            ))}
           </dl>
         )}
       </section>
@@ -172,7 +190,7 @@ export function ComptePage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profil</h2>
           <dl className="mt-2 divide-y divide-slate-100">
             {myClub && <InfoRow label="Club" value={myClub.displayName} />}
-            {phasePoints && <InfoRow label="Points" value={phasePoints} />}
+            {rankings.map((r) => <InfoRow key={r.federationId} label={rankingRowLabel(r)} value={r.value} />)}
             {myTeams.map((t) => (
               <div key={t.id} className="flex items-center justify-between py-2.5">
                 <dt className="text-sm text-slate-500">Équipe</dt>
@@ -187,16 +205,29 @@ export function ComptePage() {
         </section>
       )}
 
-      {/* Profils — a parent and a child on one address (#640) */}
+      {/* Profils — one person in several clubs, the people they manage (#655),
+          and #640's shared addresses until they are cleaned up */}
       {hasOtherProfiles(profiles, user?.id) && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mes profils</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Votre adresse e-mail donne accès à plusieurs profils. Touchez-en un pour l’ouvrir.
+            Votre compte donne accès à plusieurs profils : vos clubs, et ceux des personnes
+            que vous gérez. Touchez-en un pour l’ouvrir.
           </p>
           <div className="mt-3">
             <ProfileList />
           </div>
+        </section>
+      )}
+
+      {/* Délégations (#655): who may open my profiles, and whose I may open */}
+      {user?.personId && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Délégations</h2>
+          <p className="mt-1 mb-3 text-sm text-slate-500">
+            Un délégué ouvre vos profils avec son propre compte — un parent pour son enfant.
+          </p>
+          <PersonDelegates personId={user.personId} mode="self" idPrefix="compte" />
         </section>
       )}
 

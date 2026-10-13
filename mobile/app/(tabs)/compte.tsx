@@ -11,7 +11,8 @@ import { getTeamName, getRoleLabel } from '@/utils/roles'
 import { Screen, contentWidth } from '@/components/Screen'
 import { Avatar } from '@/components/Avatar'
 import { pickAvatarFromLibrary, takeAvatarPhoto, type ProcessedAvatar } from '@/utils/avatar'
-import { pointsFor } from '@shared/lib/phasePoints'
+import { currentRankings } from '@shared/lib/ranking'
+import { addressOwner } from '@shared/lib/addressOwner'
 import { setNotificationPreferences, setNotificationsEnabled } from '@/utils/push'
 import {
   LEAD_DAY_CHOICES, NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_LABELS, hasChoosableLead,
@@ -22,7 +23,10 @@ import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
 import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
+import { DelegationsSection } from '@/components/DelegationsSection'
 import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
+import { activePhaseIdsOf, clubFederationIds } from '@shared/lib/federations'
 
 /**
  * Ce qu'un membre change sur lui-même — `OWN_PROFILE_FIELDS` côté API (#558),
@@ -38,7 +42,7 @@ export default function MonCompteScreen() {
   const canSwitch = hasOtherProfiles(profiles, user?.id)
   const [switching, setSwitching] = useState(false)
   const {
-    players, teams, clubs, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
+    players, users = [], teams, clubs, federations, phases, playerPhasePoints, trainings, updatePlayer, setAvatar, removeAvatar,
   } = useAppData()
   const [editing, setEditing] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -62,11 +66,18 @@ export default function MonCompteScreen() {
   const player = user?.isPlayer ? players.find((p) => p.id === user.id) : null
   const club = player ? clubs.find((c) => c.id === player.clubId) : null
 
-  const activePhase = phases.find((p) => p.status === 'active')
+  // Each federation of the club has its active phase (#645) and its own
+  // ranking — points at the FFTT, a classement at the AGR (#646).
+  const myFederations = club ? clubFederationIds(club) : ['fftt']
+  const activePhaseIds = activePhaseIdsOf(phases, myFederations)
   const playerTeams = player
-    ? teams.filter((t) => t.phaseId === activePhase?.id && t.playerIds?.includes(player.id))
+    ? teams.filter((t) => activePhaseIds.includes(t.phaseId) && t.playerIds?.includes(player.id))
     : []
-  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, player?.id)
+  const rankings = currentRankings({
+    playerId: player?.id, federationIds: myFederations, phases, rows: playerPhasePoints,
+  })
+  const rankingRowLabel = (r: { federationId: string; label: string }) =>
+    rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
 
   // Optimistic, and put back on failure: a switch that stays where it was put
   // while the server never heard is the one thing this must not do.
@@ -214,8 +225,10 @@ export default function MonCompteScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Profil</Text>
             {club && <InfoRow label="Club" value={club.displayName} />}
-            {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
-            {phasePoints && <InfoRow label="Points" value={phasePoints} />}
+            {licencesOf(player).map((l) => (
+              <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+            ))}
+            {rankings.map((r) => <InfoRow key={r.federationId} label={rankingRowLabel(r)} value={r.value} />)}
             {playerTeams.map((t) => (
               <View key={t.id} style={styles.teamRow}>
                 <View style={[styles.colorDot, { backgroundColor: t.color ?? colors.accent }]} />
@@ -231,7 +244,7 @@ export default function MonCompteScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Mes profils</Text>
             <Text style={styles.switchHint}>
-              Votre adresse e-mail donne accès à plusieurs profils :{' '}
+              Votre compte donne accès à plusieurs profils :{' '}
               {profiles.filter((p) => p.id !== user?.id).map(profileName).join(', ')}.
             </Text>
             <TouchableOpacity
@@ -245,6 +258,9 @@ export default function MonCompteScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Délégations — who opens this person's profiles, and whose they open (#655) */}
+        {user?.personId && <DelegationsSection personId={user.personId} />}
 
         {/* Notifications — the member's own switch, not a club setting */}
         <View style={styles.section}>
@@ -330,6 +346,7 @@ export default function MonCompteScreen() {
           title="Modifier mon profil"
           fields={OWN_FIELDS}
           subject={player}
+          addressOwner={(email) => addressOwner(email, users, { personId: player.personId, id: player.id })}
           onSave={(patch) => updatePlayer(player.id, patch)}
           onClose={() => setEditing(false)}
         />

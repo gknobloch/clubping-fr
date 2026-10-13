@@ -5,7 +5,7 @@ import { useAppData } from '@/contexts/DataContext'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { ChevronRightIcon } from '@/components/icons'
 import { useMatchDayEditing } from '@/lib/useMatchDayEditing'
-import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameTime, isProvisionalSlot, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { sortByName } from '@/lib/sortByName'
 import { pointsFor } from '@/lib/phasePoints'
 import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/lib/competitionEligibility'
@@ -21,6 +21,9 @@ import { MatchSheetView, type MatchSheetPlayer } from '@/components/MatchSheetVi
 import { LicenceBadge } from '@/components/LicenceBadge'
 import { AvailabilityButtons, AvailabilityPills } from '@/components/Availability'
 import type { Player } from '@/types'
+import { federationOfTeam, licenceOf } from '@/lib/licences'
+import { agrPickNote } from '@/lib/brulage'
+import { affiliationNumberIn } from '@/lib/federations'
 
 /**
  * One team's view of one game: the roster laid out vertically with its
@@ -41,7 +44,7 @@ export function MatchDayDetailPage() {
   const {
     teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
     competitions, competitionGroups, memberGroups, setGameSelection,
-    playerSeasonCategories, playerSeasonLicences, seasons,
+    playerSeasonCategories, playerSeasonLicences, seasons, phases,
   } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
@@ -148,6 +151,8 @@ export function MatchDayDetailPage() {
     games,
     matchDays,
     gameSelections,
+    // The AGR's art. 30 (#651).
+    { divisions, competitions },
   )
 
   // Points belong to the phase, not to the fielding team (#384), so a renfort
@@ -162,7 +167,8 @@ export function MatchDayDetailPage() {
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
-      license: p.licenseNumber || undefined,
+      // The licence of the federation this match is played in (#644).
+      license: licenceOf(p, federationOfTeam(team, divisions, competitions)) || undefined,
       points: pointsForPlayer(p.id) || undefined,
     }))
 
@@ -216,6 +222,7 @@ export function MatchDayDetailPage() {
               <MatchDate
                 label={dateLabel}
                 confirmed={isSlotConfirmed(game, matchDay, homeTeam)}
+                provisional={isProvisionalSlot(game)}
               />
               {time ? ` · ${time}` : ''}
             </p>
@@ -351,9 +358,10 @@ export function MatchDayDetailPage() {
         <MatchSheetView
           matchup={isHome ? `${getTeamLabel(team.id)} – ${getTeamLabel(opponentId)}` : `${getTeamLabel(opponentId)} – ${getTeamLabel(team.id)}`}
           clubName={clubs.find((c) => c.id === team.clubId)?.displayName ?? ''}
-          affiliationNumber={clubs.find((c) => c.id === team.clubId)?.affiliationNumber}
+          affiliationNumber={affiliationNumberIn(clubs.find((c) => c.id === team.clubId), federationOfTeam(team, divisions, competitions))}
           players={lineUp}
           isHome={isHome}
+          federationId={federationOfTeam(team, divisions, competitions)}
           onClose={() => setShowingSheet(false)}
         />
       )}
@@ -368,6 +376,10 @@ export function MatchDayDetailPage() {
           availabilityOf={(playerId) => getAvailability(game.id, playerId)}
           committedElsewhere={committedElsewhere}
           unlicensed={unlicensed}
+          pickNote={(playerId) => agrPickNote(
+            playerId, team, myClubTeamsInPhase, matchDays, games, gameSelections, matchDay.id,
+            { teams, phases, divisions, competitions },
+          )}
           onSave={(playerIds) => setGameSelection(game.id, team.id, playerIds)}
           onClose={() => setComposing(false)}
         />

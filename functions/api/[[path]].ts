@@ -3,12 +3,13 @@ import { handle } from 'hono/cloudflare-pages'
 import { authApp, requestToken, userFromToken, type Env } from './auth'
 import { needsSession } from './authGuard'
 import { jsonParseCategories, jsonParseIds, trainingFromRow } from './rows'
-import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubChannel, Competition, DataState } from '../../src/types'
+import type { Address, AvailabilityOverriddenBy, AvailabilityStatus, ClubAffiliation, ClubChannel, Competition, DataState, FederationLicence } from '../../src/types'
 import type {
   SeasonRow, PhaseRow, DivisionRow, ClubRow, ClubAddressRow, ClubChannelRow, GroupRow, TeamRow, PlayerPhasePointsRow, MatchDayRow, GameRow, GameAvailabilityRow, GameSelectionRow, UserRow,
   CompetitionRow, PlayerSeasonCategoryRow, PlayerSeasonLicenceRow,
   MemberGroupRow, MemberGroupMemberRow, CompetitionGroupRow,
   TrainingRow, TrainingSessionRow, TrainingAvailabilityRow,
+  FederationRow, ClubFederationRow, FederationLicenceRow, OrganizationRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
 import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibility'
@@ -20,10 +21,15 @@ import {
   fixtureOverride, mayAnswerOnFixture, mayManageTeam,
   type AuthorityPlayer, type AuthorityTeam, type AuthorityViewer,
 } from '../../src/lib/teamAuthority'
-import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt } from '../../src/lib/season'
+import { seasonIdFromFftt, seasonIdFromName, seasonNameFromFftt, seasonNumber } from '../../src/lib/season'
+import { addressTakenMessage } from '../../src/lib/addressOwner'
+import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
+import { pdfTextLines } from '../../src/lib/pdfLines'
+import { divisionNameKey } from '../../src/lib/divisionNames'
+import { clubNameFromFederation } from '../../src/lib/ffttNames'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
-import { FFTT_PHASES, localPhaseId, phaseOrderKey } from '../../src/lib/ffttPhases'
+import { FFTT_PHASES, ffttPhaseIdForName, localPhaseId, phaseIdFor, phaseOrderKey } from '../../src/lib/ffttPhases'
 import { type FfttClubTeam } from '../../src/lib/ffttTeams'
 import { selectPoolForGroup, type FfttMatch, type FfttMatchTeam, type FfttPool } from '../../src/lib/ffttGames'
 import {
@@ -48,6 +54,17 @@ import {
 // Exported for tests: the session guard is only observable through a real
 // request, so the suites that pin it down fetch this app directly (#320, #138).
 export const app = new Hono<Env>().basePath('/api')
+
+/**
+ * Renames a club an import finds again, if its name is still the one a
+ * federation printed in capitals — nobody wrote it so (#704). The import that
+ * created it now spells it for people; this catches the clubs created before.
+ * SQLite's upper() folds ASCII only, which is what « nobody typed a lowercase
+ * letter » needs.
+ */
+const renameShoutingClub = (db: D1Database, clubId: string, raw: string) =>
+  db.prepare('UPDATE clubs SET display_name = ? WHERE id = ? AND display_name = upper(display_name) AND display_name <> ?')
+    .bind(clubNameFromFederation(raw), clubId, clubNameFromFederation(raw))
 
 // Opaque generated id (#278), same shape as the web app's nextId(). The
 // counter keeps a single request that creates several rows from colliding on
@@ -326,9 +343,14 @@ app.get('/data', async (c) => {
     availsR, selectionsR, usersR, avatarsR, clubLogosR,
     competitionsR, competitionGroupsR, memberGroupsR, memberGroupMembersR,
     trainingsR, trainingSessionsR, trainingAvailsR,
+    federationsR, clubFederationsR, federationLicencesR, organizationsR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
-    db.prepare('SELECT * FROM phases').all<PhaseRow>(),
+    // The FFTT's first (#724): apps up to 1.7.0 take « the » active phase as
+    // the first active one in this list, and with the AGR's active beside it
+    // an FFTT member would open on the AGR's phase — no team, no matches. In
+    // creation order otherwise, which is what they have always read.
+    db.prepare("SELECT * FROM phases ORDER BY CASE COALESCE(federation_id, 'fftt') WHEN 'fftt' THEN 0 ELSE 1 END, rowid").all<PhaseRow>(),
     db.prepare('SELECT * FROM divisions').all<DivisionRow>(),
     db.prepare('SELECT * FROM clubs').all<ClubRow>(),
     db.prepare('SELECT * FROM club_addresses').all<ClubAddressRow>(),
@@ -354,6 +376,17 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM trainings').all<TrainingRow>(),
     db.prepare('SELECT * FROM training_sessions').all<TrainingSessionRow>(),
     db.prepare('SELECT * FROM training_availabilities').all<TrainingAvailabilityRow>(),
+    db.prepare('SELECT * FROM federations ORDER BY sort_order').all<FederationRow>(),
+    db.prepare('SELECT * FROM club_federations').all<ClubFederationRow>(),
+    db.prepare('SELECT * FROM federation_licences').all<FederationLicenceRow>(),
+    // The organisations that mean something here (#692): another federation's
+    // (the AGR's two) and those a division names — not the FFTT's whole list,
+    // which only its import dialogs browse.
+    db.prepare(
+      `SELECT id, type, identifier, name, federation_id FROM organizations
+        WHERE federation_id != 'fftt' OR id IN (SELECT organization_id FROM divisions WHERE organization_id IS NOT NULL)
+        ORDER BY federation_id, name`,
+    ).all<OrganizationRow>(),
   ])
   const avatarUpdatedAt = new Map(
     avatarsR.results.map((r) => [r.user_id as string, r.updated_at as string]),
@@ -370,6 +403,26 @@ app.get('/data', async (c) => {
       id: a.id, label: a.label, street: a.street,
       postalCode: a.postal_code, city: a.city, isDefault: bool(a.is_default),
     })
+  }
+
+  // A club's federations other than the FFTT (#643), whose number stays on
+  // the club row — see clubAffiliations.
+  const affiliationsByClub = new Map<string, ClubAffiliation[]>()
+  for (const r of clubFederationsR.results) {
+    affiliationsByClub.set(r.club_id, [...(affiliationsByClub.get(r.club_id) ?? []), {
+      federationId: r.federation_id, affiliationNumber: r.affiliation_number,
+      ...(r.name ? { name: r.name } : {}),
+      ...(r.organization_id ? { organizationId: r.organization_id } : {}),
+    }])
+  }
+
+  // A member's licences other than the FFTT (#644), whose number stays on the
+  // user row — see licencesOf.
+  const licencesByUser = new Map<string, FederationLicence[]>()
+  for (const r of federationLicencesR.results) {
+    licencesByUser.set(r.user_id, [...(licencesByUser.get(r.user_id) ?? []), {
+      federationId: r.federation_id, number: r.number,
+    }])
   }
 
   // Channels are pre-sorted by sort_order in the query above.
@@ -412,11 +465,19 @@ app.get('/data', async (c) => {
   // Annotated with the shared contract (#285) so a field renamed or dropped
   // here fails the build instead of reaching the client as undefined.
   const payload: DataState = {
+    organizations: organizationsR.results.map((r) => ({
+      id: r.id, type: r.type, identifier: r.identifier, name: r.name, federationId: r.federation_id,
+    })),
+    federations: federationsR.results.map((r) => ({
+      id: r.id, displayName: r.display_name, shortName: r.short_name,
+      isImported: bool(r.is_imported), sortOrder: r.sort_order,
+    })),
     seasons: seasonsR.results.map(r => ({
       id: r.id, displayName: r.display_name, status: r.status,
     })),
     phases: phasesR.results.map(r => ({
       id: r.id, seasonId: r.season_id, name: r.name, displayName: r.display_name,
+      federationId: r.federation_id ?? 'fftt',
       // There used to be a fallback here reading the pre-0012 is_active /
       // is_archived columns, on the grounds that PR previews shared the
       // production D1 and never ran migrations. Both halves are now false:
@@ -435,10 +496,12 @@ app.get('/data', async (c) => {
       // Explicit null check: jsonParseCategories(null) is [], which would turn
       // "inherit the competition" into "admit everyone" (#482).
       ...(r.categories !== null ? { categories: jsonParseCategories(r.categories) } : {}),
+      ...(r.second_phase === 'return_leg' || r.second_phase === 'new_groups' ? { secondPhase: r.second_phase } : {}),
+      ...(r.organization_id ? { organizationId: r.organization_id } : {}),
     })),
     // Pre-sorted by sort_order in the query above (#482).
     competitions: competitionsR.results.map(r => ({
-      id: r.id, displayName: r.display_name,
+      id: r.id, displayName: r.display_name, federationId: r.federation_id,
       categories: jsonParseCategories(r.categories),
       sortOrder: r.sort_order, isArchived: bool(r.is_archived),
       ...(r.fftt_contest_identifier ? { ffttContestIdentifier: r.fftt_contest_identifier } : {}),
@@ -459,6 +522,7 @@ app.get('/data', async (c) => {
       isArchived: bool(r.is_archived),
       addresses: addrByClub.get(r.id) ?? [],
       channels: channelsByClub.get(r.id) ?? [],
+      affiliations: affiliationsByClub.get(r.id) ?? [],
       ...(logoUpdatedAt.has(r.id)
         ? { logoUpdatedAt: logoUpdatedAt.get(r.id) }
         : {}),
@@ -467,11 +531,14 @@ app.get('/data', async (c) => {
       id: r.id, divisionId: r.division_id, number: r.number, teamIds: jsonParseIds(r.team_ids),
       isArchived: bool(r.is_archived),
       ...(r.group_id ? { groupId: r.group_id } : {}),
+      ...(r.note ? { note: r.note } : {}),
     })),
     // Players are the projection of users where is_player = 1.
     players: usersR.results.filter(r => bool(r.is_player)).map(r => ({
       id: r.id, firstName: r.first_name ?? '', lastName: r.last_name ?? '',
       licenseNumber: r.license_number ?? '', phone: r.phone,
+      licences: licencesByUser.get(r.id) ?? [],
+      ...(r.person_id ? { personId: r.person_id } : {}),
       ...(r.email ? { email: r.email } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
@@ -545,6 +612,8 @@ app.get('/data', async (c) => {
       ...(r.first_name ? { firstName: r.first_name } : {}),
       ...(r.last_name ? { lastName: r.last_name } : {}),
       ...(r.license_number ? { licenseNumber: r.license_number } : {}),
+      ...(licencesByUser.has(r.id) ? { licences: licencesByUser.get(r.id) } : {}),
+      ...(r.person_id ? { personId: r.person_id } : {}),
       ...(r.phone ? { phone: r.phone } : {}),
       ...(r.birth_date ? { birthDate: r.birth_date } : {}),
       ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
@@ -561,11 +630,20 @@ const SEASON_STATUSES = ['active', 'upcoming', 'archived']
 
 // Demotion is chronology-aware (#227): what stops being active is archived
 // when it is older than what becomes active, but goes back to 'upcoming' when
-// it is newer (rolling back to an older phase/season).
-async function demoteActivePhases(db: Env['Bindings']['DB'], exceptId: string, newKey: number) {
-  const actives = await db.prepare(
-    "SELECT id, season_id, name FROM phases WHERE status = 'active' AND id != ?",
-  ).bind(exceptId).all()
+// it is newer (rolling back to an older phase/season). One active season for
+// every federation, one active phase in each (#645): the AGR's phase 2 may
+// start on another date than the FFTT's, so activating one federation's phase
+// never touches the other's — but every active phase sits in the active
+// season. The same rule as src/lib/seasonActivation.ts, which the web applies
+// optimistically.
+
+/** Active phases of one federation. */
+const ACTIVE_PHASES_OF_FEDERATION = `
+  SELECT p.id, p.season_id, p.name FROM phases p
+   WHERE p.status = 'active' AND COALESCE(p.federation_id, 'fftt') = ?`
+
+async function demoteActivePhases(db: Env['Bindings']['DB'], exceptId: string, newKey: number, federationId: string) {
+  const actives = await db.prepare(`${ACTIVE_PHASES_OF_FEDERATION} AND p.id != ?`).bind(federationId, exceptId).all()
   for (const r of actives.results) {
     const demoted = phaseOrderKey(r.season_id as string, r.name as string) < newKey ? 'archived' : 'upcoming'
     await db.prepare('UPDATE phases SET status = ? WHERE id = ?').bind(demoted, r.id).run()
@@ -577,25 +655,29 @@ async function demoteActiveSeasons(db: Env['Bindings']['DB'], newSeasonId: strin
     "SELECT id FROM seasons WHERE status = 'active' AND id != ?",
   ).bind(newSeasonId).all()
   for (const r of actives.results) {
-    const demoted = Number(r.id) < Number(newSeasonId) ? 'archived' : 'upcoming'
+    const demoted = seasonNumber(r.id as string) < seasonNumber(newSeasonId) ? 'archived' : 'upcoming'
     await db.prepare('UPDATE seasons SET status = ? WHERE id = ?').bind(demoted, r.id).run()
   }
 }
 
-// Mirror of the phase→season cascade (#227): activating a season keeps the
-// active phase when it already belongs to it, otherwise switches to that
-// season's most recent non-archived phase (Phase 2 over Phase 1) — or none
-// when the season has no phases yet.
-async function alignActivePhaseToSeason(db: Env['Bindings']['DB'], seasonId: string) {
-  const active = await db.prepare("SELECT id, season_id FROM phases WHERE status = 'active'").all()
-  const coherent = active.results.length > 0 && active.results.every(r => r.season_id === seasonId)
-  if (coherent) return
-  const latest = await db.prepare(
-    "SELECT id, name FROM phases WHERE season_id = ? AND status != 'archived' ORDER BY name DESC LIMIT 1",
-  ).bind(seasonId).first()
-  // No phase to activate → compare against the season alone (phase 0).
-  await demoteActivePhases(db, (latest?.id as string) ?? '', phaseOrderKey(seasonId, (latest?.name as string) ?? ''))
-  if (latest) await db.prepare("UPDATE phases SET status = 'active' WHERE id = ?").bind(latest.id).run()
+// Mirror of the phase→season cascade (#227): once a season is active, each
+// federation's active phase is kept when it already belongs to it, otherwise
+// switched to that federation's most recent non-archived phase in the season
+// (Phase 2 over Phase 1) — or none when it has no phase there yet.
+async function alignActivePhasesToSeason(db: Env['Bindings']['DB'], seasonId: string) {
+  const feds = await db.prepare("SELECT DISTINCT COALESCE(federation_id, 'fftt') AS id FROM phases").all<{ id: string }>()
+  for (const { id: federationId } of feds.results) {
+    const active = await db.prepare(ACTIVE_PHASES_OF_FEDERATION).bind(federationId).all()
+    const coherent = active.results.length > 0 && active.results.every(r => r.season_id === seasonId)
+    if (coherent) continue
+    const latest = await db.prepare(
+      `SELECT id, name FROM phases WHERE season_id = ? AND COALESCE(federation_id, 'fftt') = ?
+          AND status != 'archived' ORDER BY name DESC LIMIT 1`,
+    ).bind(seasonId, federationId).first()
+    // No phase to activate → compare against the season alone (phase 0).
+    await demoteActivePhases(db, (latest?.id as string) ?? '', phaseOrderKey(seasonId, (latest?.name as string) ?? ''), federationId)
+    if (latest) await db.prepare("UPDATE phases SET status = 'active' WHERE id = ?").bind(latest.id).run()
+  }
 }
 
 // The FFTT GraphQL API and the dafunker proxy both occasionally hiccup on a
@@ -673,11 +755,12 @@ app.post('/seasons/import-current', async (c) => {
   if (!fftt) return c.json({ error: 'fftt_unavailable' }, 502)
   const existing = await db.prepare('SELECT id FROM seasons WHERE id = ?').bind(fftt.id).first()
   if (existing) return c.json({ error: 'already_exists' }, 409)
+  // The season is every federation's (#645): whichever was active steps down.
   const activeR = await db.prepare("SELECT id FROM seasons WHERE status = 'active'").all()
   await demoteActiveSeasons(db, fftt.id)
   await db.prepare("INSERT INTO seasons (id, display_name, status) VALUES (?, ?, 'active')")
     .bind(fftt.id, fftt.displayName).run()
-  await alignActivePhaseToSeason(db, fftt.id)
+  await alignActivePhasesToSeason(db, fftt.id)
   return c.json({
     season: { id: fftt.id, displayName: fftt.displayName, status: 'active' },
     archivedSeasonIds: activeR.results.map(r => r.id as string),
@@ -690,6 +773,7 @@ app.post('/seasons', async (c) => {
   // The id is always derived from the name (FFTT convention), never trusted
   // from the client — this is what prevents garbage seasons.
   const displayName = typeof d.displayName === 'string' ? d.displayName.trim() : ''
+  // One season for every federation (#645): its phases say whose they are.
   const id = seasonIdFromName(displayName)
   if (!id) return c.json({ error: 'invalid_name' }, 400)
   const existing = await c.env.DB.prepare('SELECT id FROM seasons WHERE id = ?').bind(id).first()
@@ -698,7 +782,7 @@ app.post('/seasons', async (c) => {
   if (status === 'active') await demoteActiveSeasons(c.env.DB, id)
   await c.env.DB.prepare('INSERT INTO seasons (id, display_name, status) VALUES (?, ?, ?)')
     .bind(id, displayName, status).run()
-  if (status === 'active') await alignActivePhaseToSeason(c.env.DB, id)
+  if (status === 'active') await alignActivePhasesToSeason(c.env.DB, id)
   return c.json({ id, displayName, status })
 })
 
@@ -724,7 +808,7 @@ app.patch('/seasons/:id', async (c) => {
     v.push(id)
     await c.env.DB.prepare(`UPDATE seasons SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
     // Season→phase cascade (#227), symmetric with the phase→season one.
-    if (p.status === 'active') await alignActivePhaseToSeason(c.env.DB, id)
+    if (p.status === 'active') await alignActivePhasesToSeason(c.env.DB, id)
   }
   return c.json({ ok: true })
 })
@@ -733,7 +817,7 @@ app.patch('/seasons/:id', async (c) => {
 
 // GET /fftt/organizations — locally cached FFTT organizations (never hits FFTT).
 app.get('/fftt/organizations', async (c) => {
-  const r = await c.env.DB.prepare('SELECT id, type, identifier, name FROM organizations ORDER BY type, name').all()
+  const r = await c.env.DB.prepare("SELECT id, type, identifier, name FROM organizations WHERE federation_id = 'fftt' ORDER BY type, name").all()
   return c.json({ organizations: r.results })
 })
 
@@ -753,7 +837,8 @@ app.post('/fftt/organizations/refresh', async (c) => {
   const db = c.env.DB
   const now = new Date().toISOString()
   const stmts = [
-    db.prepare('DELETE FROM organizations'),
+    // The FFTT's list only: the AGR's organisations are not FFTT data (#692).
+    db.prepare("DELETE FROM organizations WHERE federation_id = 'fftt'"),
     ...members.map((m) =>
       db.prepare('INSERT INTO organizations (id, type, identifier, name, updated_at) VALUES (?, ?, ?, ?, ?)')
         .bind(String(m.id), m['@type'], m.identifier, m.name, now),
@@ -761,7 +846,7 @@ app.post('/fftt/organizations/refresh', async (c) => {
   ]
   // Chunked: D1 batches are capped well below the ~130 rows FFTT returns.
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
-  const r = await db.prepare('SELECT id, type, identifier, name FROM organizations ORDER BY type, name').all()
+  const r = await db.prepare("SELECT id, type, identifier, name FROM organizations WHERE federation_id = 'fftt' ORDER BY type, name").all()
   return c.json({ organizations: r.results })
 })
 
@@ -949,8 +1034,9 @@ async function competitionForContest(
     .prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM competitions')
     .first<{ next: number }>()
   await db.prepare(
-    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name)
-     VALUES (?, ?, '[]', ?, 0, ?, ?)`,
+    // An FFTT contest is the FFTT's, by definition (#643).
+    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, fftt_contest_identifier, fftt_contest_name, federation_id)
+     VALUES (?, ?, '[]', ?, 0, ?, ?, 'fftt')`,
   ).bind(id, displayName ?? contest.name, nextOrder?.next ?? 1, contest.identifier, contest.name).run()
   return id
 }
@@ -1021,7 +1107,8 @@ app.get('/fftt/divisions-preview', async (c) => {
   if (!resolved.contest) return c.json({ error: 'no_contest' }, 404)
   const result = await fetchFfttDivisions(p.org, p.ph, resolved.contest)
   if (!result) return c.json({ error: 'fftt_unavailable' }, 502)
-  const phaseRow = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
+  // The FFTT's phase: the AGR plays a « Phase 1 » in the same, shared season (#645).
+  const phaseRow = await c.env.DB.prepare("SELECT id FROM phases WHERE season_id = ? AND name = ? AND COALESCE(federation_id, 'fftt') = 'fftt'")
     .bind(String(p.season), `Phase ${p.ph}`).first()
   const existing = phaseRow
     ? await phaseDivisions(c.env.DB, phaseRow.id as string)
@@ -1172,6 +1259,8 @@ type ImportedDivision = {
   parentId?: string
   /** The competition this division was filed under (#482). */
   competitionId?: string
+  /** The FFTT organisation it was imported for (#692). */
+  organizationId?: string
 }
 
 // Core of the divisions import: re-fetches from FFTT (never trusts a client
@@ -1206,7 +1295,8 @@ async function importDivisions(
 
   const phaseName = `Phase ${p.ph}`
   let phaseRow = await db.prepare(
-    'SELECT id, season_id, name, display_name, status FROM phases WHERE season_id = ? AND name = ?',
+    // The FFTT's phase: the AGR plays a « Phase 1 » in the same, shared season (#645).
+    "SELECT id, season_id, name, display_name, status FROM phases WHERE season_id = ? AND name = ? AND COALESCE(federation_id, 'fftt') = 'fftt'",
   ).bind(String(p.season), phaseName).first()
   const createdPhase = !phaseRow
   if (!phaseRow) {
@@ -1241,13 +1331,16 @@ async function importDivisions(
       id: d.id, phaseId, displayName, rank,
       playersPerGame: playersPerGameFor(d.identifier), isArchived: false,
       identifier: d.identifier, competitionId,
+      // The organisation the import ran for (#692) — a league's GE divisions,
+      // a committee's departmental ones: what the Organisation filter reads.
+      organizationId: String(p.org),
       ...(d.parentId ? { parentId: d.parentId } : {}),
     })
   }
   if (created.length) {
     await db.batch(created.map((d) =>
-      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
-        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier, d.competitionId ?? null),
+      db.prepare('INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, organization_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)')
+        .bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.parentId ?? null, d.identifier, d.competitionId ?? null, d.organizationId ?? null),
     ))
   }
   // Divisions already present — imported before this existed, or created by
@@ -1255,10 +1348,14 @@ async function importDivisions(
   // yet. Re-importing must never move a division a general admin has since
   // filed somewhere else: this fills a blank, it does not overwrite a decision.
   if (skipped.length) {
-    await db.batch(skipped.map((d) =>
+    await db.batch(skipped.flatMap((d) => [
       db.prepare('UPDATE divisions SET competition_id = ? WHERE phase_id = ? AND (id = ? OR lower(display_name) = ?) AND competition_id IS NULL')
         .bind(competitionId, phaseId, d.id, d.name.toLowerCase()),
-    ))
+      // Same for its organisation (#692): a division imported before it was
+      // recorded gets it from the next import, never overwritten.
+      db.prepare('UPDATE divisions SET organization_id = ? WHERE phase_id = ? AND (id = ? OR lower(display_name) = ?) AND organization_id IS NULL')
+        .bind(String(p.org), phaseId, d.id, d.name.toLowerCase()),
+    ]))
   }
   return {
     phase: {
@@ -1504,7 +1601,8 @@ app.post('/teams/import', async (c) => {
   const createdDivisions: ImportedDivision[] = []
   const divisionRows = await db.prepare('SELECT id, phase_id FROM divisions').all()
   const divisionById = new Map(divisionRows.results.map((d) => [d.id as string, d]))
-  const phaseRowsAll = await db.prepare('SELECT id, season_id, name, display_name, status FROM phases').all()
+  // The FFTT's phases only — keyed by (season, name), which the AGR's share (#645).
+  const phaseRowsAll = await db.prepare("SELECT id, season_id, name, display_name, status FROM phases WHERE COALESCE(federation_id, 'fftt') = 'fftt'").all()
   const phaseByKey = new Map(phaseRowsAll.results.map((p) => [`${p.season_id}|${p.name}`, p]))
   const rankRows = await db.prepare('SELECT phase_id, MAX(rank) AS max_rank FROM divisions GROUP BY phase_id').all()
   const maxRankByPhase = new Map(rankRows.results.map((r) => [r.phase_id as string, (r.max_rank as number | null) ?? 0]))
@@ -2268,6 +2366,8 @@ app.post('/games/import', async (c) => {
   }
 
   const createdClubs: Array<Record<string, unknown>> = []
+  /** Clubs found again, with the name the FFTT prints for them (#704). */
+  const foundClubNames = new Map<string, string>()
   const createdTeams: Array<Record<string, unknown>> = []
   const createdMatchDays: Array<Record<string, unknown>> = []
   const updatedMatchDays: Array<Record<string, unknown>> = []
@@ -2291,10 +2391,14 @@ app.post('/games/import', async (c) => {
   // doubles as the natural dedup key across groups in one import.
   const clubIdFor = (side: FfttMatchTeam): string | null => {
     if (!side.clubIdentifier) return null
+    const printed = side.clubName || side.teamName.replace(/\s*\(?\d+\)?\s*$/, '')
     const existing = resolver.clubByAffiliation.get(side.clubIdentifier)
-    if (existing) return existing
+    if (existing) {
+      if (printed) foundClubNames.set(existing, printed)
+      return existing
+    }
     const id = `club-fftt-${side.clubIdentifier}`
-    const displayName = side.clubName || side.teamName.replace(/\s*\(?\d+\)?\s*$/, '')
+    const displayName = clubNameFromFederation(printed)
     createdClubs.push({ id, affiliationNumber: side.clubIdentifier, displayName, isArchived: false, addresses: [], channels: [] })
     resolver.clubByAffiliation.set(side.clubIdentifier, id)
     return id
@@ -2457,6 +2561,7 @@ app.post('/games/import', async (c) => {
     ...createdClubs.map((cl) =>
       db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
+    ...[...foundClubNames].map(([id, raw]) => renameShoutingClub(db, id, raw)),
     ...createdTeams.map((t) =>
       db.prepare(
         `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived, team_id)
@@ -2771,6 +2876,8 @@ app.post('/schedule-documents/import', async (c) => {
   const createdDivisions: Array<{ id: string; phaseId: string; displayName: string; rank: number; playersPerGame: number; isArchived: boolean }> = []
   const createdGroupIds = new Set<string>()
   const createdClubs: Array<{ id: string; affiliationNumber: string; displayName: string; isArchived: boolean; addresses: []; channels: [] }> = []
+  /** Clubs found again, with the name the document prints for them (#704). */
+  const foundClubNames = new Map<string, string>()
   const createdTeams: Array<Record<string, unknown>> = []
   /** Existing teams with no playing day recorded, to seed from the roster (#294). */
   const teamDefaultsToFill: Array<{ id: string; day: string; time: string }> = []
@@ -2802,11 +2909,15 @@ app.post('/schedule-documents/import', async (c) => {
   const localId = (prefix: string) => `${prefix}-doc-${Date.now()}-${uidCounter++}`
 
   const clubIdFor = (name: string, affiliationNumber: string): string => {
+    const printed = name.replace(/\s*\d+\s*$/, '').trim() || name
     const existing = resolver.clubByAffiliation.get(affiliationNumber)
-    if (existing) return existing
+    if (existing) {
+      foundClubNames.set(existing, printed)
+      return existing
+    }
     const id = `club-fftt-${affiliationNumber}`
     createdClubs.push({
-      id, affiliationNumber, displayName: name.replace(/\s*\d+\s*$/, '').trim() || name,
+      id, affiliationNumber, displayName: clubNameFromFederation(printed),
       isArchived: false, addresses: [], channels: [],
     })
     resolver.clubByAffiliation.set(affiliationNumber, id)
@@ -3023,6 +3134,7 @@ app.post('/schedule-documents/import', async (c) => {
     ...createdClubs.map((cl) =>
       db.prepare('INSERT OR IGNORE INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, 0)')
         .bind(cl.id, cl.affiliationNumber, cl.displayName)),
+    ...[...foundClubNames].map(([id, raw]) => renameShoutingClub(db, id, raw)),
     ...[...touchedGroups.values()].map((g) =>
       createdGroupIds.has(g.id)
         ? db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived) VALUES (?, ?, ?, ?, 0)')
@@ -3118,6 +3230,594 @@ app.post('/schedule-documents/import', async (c) => {
   })
 })
 
+// --- A calendar of a federation without an API (#647) ---
+//
+// The AGR publishes a poule's calendar as a PDF and nothing else. The browser
+// reads it (src/lib/agrScheduleDocument.ts), the admin reviews it — which
+// existing club each name is, the phase, the competition —, and this writes
+// it: the division and the poule (found again when they exist: Landser and
+// Kembs import the same Promotion Honneur, and the second must not double it),
+// the bare clubs it does not know, their teams, the journées and the matches,
+// each with its own date and time.
+//
+// WHO. For a federation the app does not import from, there is no general
+// admin's import to wait for: the admin of a club affiliated to it may build
+// the poule their club plays in — which is why their club must be one the
+// calendar names. Then #577's rule holds as everywhere: one club or the other.
+//
+// IDEMPOTENT. Run twice, it creates nothing the second time: division by
+// (phase, name), poule by (division, number), team by (club, phase, number),
+// journée by (poule, number), match by its two teams. A match found again
+// takes the document's date and time unless someone set them by hand.
+
+interface FederationScheduleInput {
+  federationId: string
+  phaseId: string
+  competitionId: string
+  division: string
+  /** An existing division of the phase, chosen in the review (#647); absent, found by name or created. */
+  divisionId?: string
+  /** The organisation the poule is played in (#692) — the AGR's Haut-Rhin or Bas-Rhin. */
+  organizationId?: string
+  poolNumber: number
+  playersPerGame: number
+  /** What phase 2 of this division is (#649); absent leaves what is stored. */
+  secondPhase?: 'return_leg' | 'new_groups'
+  notes: string[]
+  clubs: Array<{ name: string; clubId: string | null }>
+  journees: Array<{
+    number: number
+    matches: Array<{ date: string; time: string; home: { club: string; number: number }; away: { club: string; number: number } }>
+  }>
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const TIME_RE = /^\d{2}h\d{2}$/
+
+function parseFederationScheduleInput(b: Record<string, unknown>): FederationScheduleInput | null {
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+  const side = (v: unknown) => {
+    const o = v as { club?: unknown; number?: unknown } | null
+    const club = str(o?.club)
+    const number = Number(o?.number)
+    return club && Number.isInteger(number) && number > 0 ? { club, number } : null
+  }
+  const journees = (Array.isArray(b.journees) ? b.journees : []).slice(0, 30).map((j) => {
+    const o = j as { number?: unknown; matches?: unknown }
+    const matches = (Array.isArray(o.matches) ? o.matches : []).slice(0, 20).map((m) => {
+      const mm = m as { date?: unknown; time?: unknown; home?: unknown; away?: unknown }
+      const home = side(mm.home), away = side(mm.away)
+      const date = str(mm.date), time = str(mm.time)
+      return home && away && DATE_RE.test(date) && (!time || TIME_RE.test(time)) ? { date, time, home, away } : null
+    })
+    return { number: Number(o.number), matches: matches.filter((m): m is NonNullable<typeof m> => m !== null), complete: matches.every(Boolean) }
+  })
+  const input = {
+    federationId: str(b.federationId), phaseId: str(b.phaseId), competitionId: str(b.competitionId),
+    division: str(b.division), poolNumber: Number(b.poolNumber),
+    ...(str(b.divisionId) ? { divisionId: str(b.divisionId) } : {}),
+    ...(str(b.organizationId) ? { organizationId: str(b.organizationId) } : {}),
+    playersPerGame: Number(b.playersPerGame) === 3 ? 3 : 4,
+    ...(b.secondPhase === 'return_leg' || b.secondPhase === 'new_groups' ? { secondPhase: b.secondPhase as 'return_leg' | 'new_groups' } : {}),
+    notes: (Array.isArray(b.notes) ? b.notes : []).map(str).filter(Boolean).slice(0, 10),
+    clubs: (Array.isArray(b.clubs) ? b.clubs : []).map((c) => {
+      const o = c as { name?: unknown; clubId?: unknown }
+      return { name: str(o.name), clubId: str(o.clubId) || null }
+    }).filter((c) => c.name),
+    journees: journees.map(({ number, matches }) => ({ number, matches })),
+  }
+  const valid = input.federationId && input.phaseId && input.competitionId && input.division
+    && Number.isInteger(input.poolNumber) && input.poolNumber > 0
+    && journees.length > 0 && journees.every((j) => Number.isInteger(j.number) && j.number > 0 && j.complete)
+  return valid ? input : null
+}
+
+app.post('/federation-schedules/import', async (c) => {
+  const db = c.env.DB
+  const input = parseFederationScheduleInput(await c.req.json<Record<string, unknown>>().catch(() => ({})))
+  if (!input) return c.json({ error: 'invalid_params' }, 400)
+
+  const federation = await db.prepare('SELECT id, is_imported FROM federations WHERE id = ?')
+    .bind(input.federationId).first<{ id: string; is_imported: number }>()
+  if (!federation) return c.json({ error: 'unknown_federation' }, 400)
+  if (federation.is_imported) {
+    return c.json({ error: 'imported_federation', message: 'Cette fédération s’importe depuis son API.' }, 400)
+  }
+  const phase = await db.prepare(
+    "SELECT p.id FROM phases p WHERE p.id = ? AND COALESCE(p.federation_id, 'fftt') = ?",
+  ).bind(input.phaseId, input.federationId).first()
+  if (!phase) return c.json({ error: 'unknown_phase', message: 'Cette phase n’est pas une phase de la fédération.' }, 400)
+  const competition = await db.prepare('SELECT id FROM competitions WHERE id = ? AND federation_id = ?')
+    .bind(input.competitionId, input.federationId).first()
+  if (!competition) return c.json({ error: 'unknown_competition', message: 'Cette compétition n’est pas une compétition de la fédération.' }, 400)
+  if (input.organizationId) {
+    const organization = await db.prepare('SELECT id FROM organizations WHERE id = ? AND federation_id = ?')
+      .bind(input.organizationId, input.federationId).first()
+    if (!organization) return c.json({ error: 'unknown_organization', message: 'Cette organisation n’est pas de la fédération.' }, 400)
+  }
+  const organizationId = input.organizationId ?? null
+
+  // Every name the matches use must be in the club list, resolved or to create.
+  const named = new Map(input.clubs.map((cl) => [cl.name, cl.clubId]))
+  for (const j of input.journees) {
+    for (const m of j.matches) {
+      if (!named.has(m.home.club) || !named.has(m.away.club)) return c.json({ error: 'invalid_params' }, 400)
+    }
+  }
+  const resolvedIds = [...new Set([...named.values()].filter((id): id is string => !!id))]
+  if (resolvedIds.length) {
+    const found = await db.prepare(`SELECT id FROM clubs WHERE id IN (${resolvedIds.map(() => '?').join(',')})`)
+      .bind(...resolvedIds).all<{ id: string }>()
+    if (found.results.length !== resolvedIds.length) return c.json({ error: 'unknown_club' }, 400)
+  }
+
+  // Who: the general admin, or the admin of a club of this federation that
+  // the calendar names (see the note above).
+  const viewer = managingViewer(c)
+  if (!isGeneralAdmin(c)) {
+    const ownClub = viewer.clubId
+    const affiliated = ownClub
+      ? await db.prepare('SELECT 1 FROM club_federations WHERE club_id = ? AND federation_id = ?')
+        .bind(ownClub, input.federationId).first()
+      : null
+    if (viewer.role !== 'club_admin' || !ownClub || !affiliated || !resolvedIds.includes(ownClub)) {
+      return c.json(notAllowed, 403)
+    }
+  }
+
+  // Division: the one the review chose, else found by name — « Prom. HONNEUR »
+  // is « Promotion Honneur » (`divisionNameKey`) —, else created. Poule by
+  // (division, number).
+  const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ? AND is_archived = 0')
+    .bind(input.phaseId).all<{ id: string; display_name: string; rank: number }>()
+  let existingDivision: { id: string; display_name: string; rank: number } | undefined
+  if (input.divisionId) {
+    existingDivision = divisions.results.find((d) => d.id === input.divisionId)
+    if (!existingDivision) {
+      return c.json({ error: 'unknown_division', message: 'Cette division n’est pas une division de cette phase.' }, 400)
+    }
+  } else {
+    const wanted = divisionNameKey(input.division)
+    existingDivision = divisions.results.find((d) => divisionNameKey(d.display_name) === wanted)
+  }
+  const divisionId = existingDivision?.id ?? newId('div')
+  const stmts: D1PreparedStatement[] = []
+  if (!existingDivision) {
+    const rank = Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
+    stmts.push(db.prepare(
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, second_phase, organization_id) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)',
+    ).bind(divisionId, input.phaseId, input.division, rank, input.playersPerGame, input.competitionId, input.secondPhase ?? null, organizationId))
+  } else {
+    if (input.secondPhase) {
+      stmts.push(db.prepare('UPDATE divisions SET second_phase = ? WHERE id = ?').bind(input.secondPhase, divisionId))
+    }
+    // A division with no organisation takes the poule's (#692); one it has stays.
+    if (organizationId) {
+      stmts.push(db.prepare('UPDATE divisions SET organization_id = ? WHERE id = ? AND organization_id IS NULL').bind(organizationId, divisionId))
+    }
+  }
+  const group = existingDivision
+    ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
+      .bind(divisionId, input.poolNumber).first<{ id: string; team_ids: string }>()
+    : null
+  const groupId = group?.id ?? newId('group')
+  const teamIds = new Set(group ? jsonParseIds(group.team_ids) : [])
+  const note = input.notes.length ? input.notes.join('\n') : null
+
+  // Clubs: those resolved keep their id and gain the federation's name for
+  // the next import (never overwriting one); the others are created bare.
+  const clubIdOf = new Map<string, string>()
+  const createdClubs: string[] = []
+  for (const cl of input.clubs) {
+    if (cl.clubId) {
+      clubIdOf.set(cl.name, cl.clubId)
+      // The AGR name and the organisation are learnt, never overwritten (#692).
+      stmts.push(db.prepare(
+        `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, '', ?, ?)
+         ON CONFLICT(club_id, federation_id) DO UPDATE SET name = COALESCE(club_federations.name, excluded.name),
+           organization_id = COALESCE(club_federations.organization_id, excluded.organization_id)`,
+      ).bind(cl.clubId, input.federationId, cl.name, organizationId), renameShoutingClub(db, cl.clubId, cl.name))
+      continue
+    }
+    const id = newId('club')
+    clubIdOf.set(cl.name, id)
+    createdClubs.push(id)
+    stmts.push(
+      // Spelled for people (#704); the printed name stays the federation's,
+      // the one its next calendar is matched against.
+      db.prepare('INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, \'\', ?, 0)').bind(id, clubNameFromFederation(cl.name)),
+      db.prepare("INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, '', ?, ?)")
+        .bind(id, input.federationId, cl.name, organizationId),
+    )
+  }
+
+  // Teams by (club, phase, number) — a club may have two in one poule.
+  const sides = new Map<string, { clubId: string; number: number; name: string }>()
+  for (const j of input.journees) {
+    for (const m of j.matches) {
+      for (const sd of [m.home, m.away]) sides.set(`${sd.club}|${sd.number}`, { clubId: clubIdOf.get(sd.club)!, number: sd.number, name: sd.club })
+    }
+  }
+  const existingTeams = await db.prepare('SELECT id, club_id, number FROM teams WHERE phase_id = ?')
+    .bind(input.phaseId).all<{ id: string; club_id: string; number: number }>()
+  const teamIdOf = new Map<string, string>()
+  let createdTeams = 0
+  for (const [k, sd] of sides) {
+    const existing = existingTeams.results.find((t) => t.club_id === sd.clubId && t.number === sd.number)
+    const id = existing?.id ?? teamIdFor(sd.clubId, input.phaseId, sd.number)
+    teamIdOf.set(k, id)
+    teamIds.add(id)
+    if (!existing) {
+      createdTeams++
+      const slot = usualHomeSlot({ journees: input.journees }, sd.name, sd.number)
+      stmts.push(db.prepare(
+        `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, is_archived)
+         VALUES (?, ?, ?, ?, ?, '', ?, ?, '', '[]', 0)`,
+      ).bind(id, sd.clubId, input.phaseId, sd.number, groupId, slot?.day ?? '', slot?.time ?? ''))
+    }
+  }
+  stmts.push(group
+    ? db.prepare('UPDATE groups SET team_ids = ?, note = ? WHERE id = ?').bind(jsonStr([...teamIds]), note, groupId)
+    : db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived, note) VALUES (?, ?, ?, ?, 0, ?)')
+      .bind(groupId, divisionId, input.poolNumber, jsonStr([...teamIds]), note))
+
+  // Journées and matches.
+  const matchDays = group
+    ? (await db.prepare('SELECT id, number FROM match_days WHERE group_id = ?').bind(groupId).all<{ id: string; number: number }>()).results
+    : []
+  const games = matchDays.length
+    ? (await db.prepare(
+      `SELECT id, match_day_id, home_team_id, away_team_id, date, time, source FROM games
+        WHERE match_day_id IN (${matchDays.map(() => '?').join(',')})`,
+    ).bind(...matchDays.map((m) => m.id)).all<{ id: string; match_day_id: string; home_team_id: string; away_team_id: string; date: string | null; time: string | null; source: string | null }>()).results
+    : []
+  let createdMatchDays = 0, createdGames = 0, updatedGames = 0
+  const touched: string[] = []
+  for (const j of input.journees) {
+    let md = matchDays.find((m) => m.number === j.number)
+    if (!md) {
+      md = { id: newId('md'), number: j.number }
+      matchDays.push(md)
+      createdMatchDays++
+      stmts.push(db.prepare('INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+        .bind(md.id, groupId, j.number, j.matches.map((m) => m.date).sort()[0] ?? null))
+    }
+    touched.push(md.id)
+    for (const m of j.matches) {
+      const home = teamIdOf.get(`${m.home.club}|${m.home.number}`)!
+      const away = teamIdOf.get(`${m.away.club}|${m.away.number}`)!
+      const existing = games.find((g) => g.match_day_id === md!.id
+        && ((g.home_team_id === home && g.away_team_id === away) || (g.home_team_id === away && g.away_team_id === home)))
+      if (existing) {
+        if ((existing.date !== m.date || (m.time && existing.time !== m.time)) && existing.source !== 'manual') {
+          updatedGames++
+          // A mirrored fixture (#649) is a guess at who receives, too: the
+          // published calendar settles it.
+          const swap = existing.source === 'mirror' && existing.home_team_id !== home
+          stmts.push(db.prepare(
+            `UPDATE games SET date = ?, time = coalesce(?, time), source = 'document'${swap ? ', home_team_id = ?, away_team_id = ?' : ''} WHERE id = ?`,
+          ).bind(m.date, m.time || null, ...(swap ? [home, away] : []), existing.id))
+        }
+        continue
+      }
+      createdGames++
+      stmts.push(db.prepare(
+        "INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, source) VALUES (?, ?, ?, ?, ?, ?, 'document')",
+      ).bind(gameIdFor(md.id, home, away), md.id, home, away, m.time || null, m.date))
+    }
+  }
+  stmts.push(...touched.map((id) => matchDayDateRecomputeStmt(db, id)))
+
+  try {
+    for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  } catch (err) {
+    console.error('federation-schedules/import failed', err)
+    return c.json({ error: 'import_failed' }, 500)
+  }
+  // A return leg is prepared as soon as both phases exist (#649) — here when
+  // phase 2 already does, otherwise when it is created.
+  let returnLeg: MirrorResult | null = null
+  if (input.secondPhase === 'return_leg') {
+    returnLeg = await mirrorReturnLeg(db, groupId).catch((err) => {
+      console.error('return leg after import failed', err)
+      return null
+    })
+  }
+  return c.json({
+    ...(returnLeg?.ok ? { returnLeg: returnLeg.created } : {}),
+    ok: true, divisionId, groupId,
+    created: { division: !existingDivision, group: !group, clubs: createdClubs.length, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
+    updatedGames,
+  })
+})
+
+// ── Reading a PDF for the app (#681) ─────────────────────────────────────────
+//
+// The web reads a PDF in the browser (pdfScheduleText.ts). The mobile app
+// cannot: Hermes runs no pdf.js — it has no ReadableStream —, so the phone
+// sends the file here and gets its text lines back, rebuilt by the code the
+// browser uses (`pdfTextLines`). Nothing is stored: the bytes are read and
+// dropped, and the app runs the same parser and review on the lines.
+//
+// pdf.js is imported on the first call only, and in-process: a Worker has no
+// web workers, so its "fake worker" is handed the worker module directly.
+// Administrators only — it is an import step, and reading a PDF is the most
+// CPU this API spends on one request.
+const PDF_MAX_BYTES = 4 * 1024 * 1024
+
+let pdfjsForWorker: Promise<import('../../src/lib/pdfLines').PdfjsLike> | null = null
+function loadPdfjsForWorker() {
+  pdfjsForWorker ??= (async () => {
+    // pdf.js builds a few drawing objects when it loads; reading text never
+    // draws, so inert stand-ins for the browser classes a Worker lacks do.
+    const g = globalThis as Record<string, unknown>
+    class Inert {
+      a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
+      multiplySelf() { return this }
+      preMultiplySelf() { return this }
+      translate() { return this }
+      scale() { return this }
+      invertSelf() { return this }
+    }
+    for (const name of ['DOMMatrix', 'Path2D', 'ImageData']) g[name] ??= Inert
+    const worker = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs')
+    ;(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.min.mjs')
+    return pdfjs as unknown as import('../../src/lib/pdfLines').PdfjsLike
+  })()
+  return pdfjsForWorker
+}
+
+app.post('/pdf/lines', async (c) => {
+  const viewer = managingViewer(c)
+  if (viewer.role !== 'general_admin' && viewer.role !== 'club_admin') return c.json(notAllowed, 403)
+  // The raw bytes, or a multipart `file` — what React Native's fetch uploads
+  // a picked document as.
+  let data: Uint8Array
+  if ((c.req.header('Content-Type') ?? '').startsWith('multipart/form-data')) {
+    const file = (await c.req.parseBody())['file']
+    if (!(file instanceof File)) return c.json({ error: 'empty' }, 400)
+    data = new Uint8Array(await file.arrayBuffer())
+  } else {
+    data = new Uint8Array(await c.req.arrayBuffer())
+  }
+  if (data.byteLength === 0) return c.json({ error: 'empty' }, 400)
+  if (data.byteLength > PDF_MAX_BYTES) return c.json({ error: 'too_large', message: 'Ce fichier dépasse 4 Mo.' }, 413)
+  // « %PDF- » within the first bytes: anything else is not ours to parse.
+  if (!new TextDecoder().decode(data.slice(0, 1024)).includes('%PDF-')) {
+    return c.json({ error: 'not_pdf', message: 'Ce fichier n’est pas un PDF.' }, 400)
+  }
+  try {
+    const lines = await pdfTextLines(await loadPdfjsForWorker(), data)
+    return c.json({ lines })
+  } catch (err) {
+    console.error('pdf/lines failed', err)
+    return c.json({ error: 'unreadable', message: 'Impossible de lire ce fichier.' }, 422)
+  }
+})
+
+// ── Phase retour (#649) ─────────────────────────────────────────────────────
+//
+// An AGR division plays its phase 2 one of two ways: the same poules again,
+// home and away swapped (« phase retour »), or new poules drawn from phase 1's
+// standings. The division says which (`second_phase`), set when its phase-1
+// calendar is imported.
+//
+// For a return leg everything about phase 2 is known but the dates: the same
+// teams, the same pairings, reversed. Waiting for the AGR's PDF would leave a
+// captain with nothing to plan in December, so the poule is MIRRORED into the
+// next phase as soon as that phase exists: division, poule, teams (captain,
+// roster, slot carried over) and one journée per phase-1 journée, numbered on
+// from the last as the AGR numbers them (8 to 14).
+//
+// The fixtures carry `source = 'mirror'` and NO date: nobody announced one.
+// Each journée gets a provisional date — its phase-1 counterpart shifted by
+// phase 1's length plus three weeks, which lands on the real AGR calendar's
+// first return journée — so the screens can place it in a week and say it is
+// to be confirmed (`gameSchedule`). When the phase-2 PDF arrives, its import
+// finds these journées by number and these fixtures by their two teams and
+// writes the real dates over them.
+//
+// IDEMPOTENT, like the import: run twice, it creates nothing the second time;
+// a journée still holding only undated mirrored fixtures gets its provisional
+// date recomputed, so a phase-1 calendar moved since is followed.
+
+/** Phase 1's length plus three weeks — the AGR's winter break, measured on its 2026/2027 calendars. */
+function returnLegShiftDays(phase1Dates: string[]): number {
+  const sorted = phase1Dates.filter(Boolean).sort()
+  if (!sorted.length) return 0
+  const span = Math.round((Date.parse(`${sorted[sorted.length - 1]}T12:00:00Z`) - Date.parse(`${sorted[0]}T12:00:00Z`)) / 86_400_000)
+  return span + 21
+}
+
+function shiftIsoDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * The phase that follows this one in its season and its federation — the
+ * AGR's « Phase 2 » after its « Phase 1 », never the FFTT's (#645).
+ */
+async function nextPhaseOf(db: D1Database, phaseId: string): Promise<{ id: string } | null> {
+  const phase = await db.prepare("SELECT id, season_id, name, COALESCE(federation_id, 'fftt') AS federation_id FROM phases WHERE id = ?")
+    .bind(phaseId).first<{ id: string; season_id: string; name: string; federation_id: string }>()
+  const n = phase ? Number(/(\d+)/.exec(phase.name)?.[1]) : NaN
+  if (!phase || !Number.isInteger(n)) return null
+  const siblings = await db.prepare("SELECT id, name FROM phases WHERE season_id = ? AND COALESCE(federation_id, 'fftt') = ?")
+    .bind(phase.season_id, phase.federation_id).all<{ id: string; name: string }>()
+  return siblings.results.find((p) => Number(/(\d+)/.exec(p.name)?.[1]) === n + 1) ?? null
+}
+
+type MirrorResult =
+  | { ok: true; groupId: string; created: { division: boolean; group: boolean; teams: number; matchDays: number; games: number } }
+  | { ok: false; error: 'not_found' | 'not_return_leg' | 'imported_federation' | 'no_next_phase' }
+
+async function mirrorReturnLeg(db: D1Database, groupId: string): Promise<MirrorResult> {
+  const group = await db.prepare('SELECT id, division_id, number, team_ids, note FROM groups WHERE id = ?')
+    .bind(groupId).first<{ id: string; division_id: string; number: number; team_ids: string; note: string | null }>()
+  if (!group) return { ok: false, error: 'not_found' }
+  const division = await db.prepare(
+    `SELECT d.id, d.phase_id, d.display_name, d.rank, d.players_per_game, d.competition_id, d.categories, d.second_phase, d.organization_id, f.is_imported
+       FROM divisions d JOIN phases p ON p.id = d.phase_id
+       JOIN federations f ON f.id = COALESCE(p.federation_id, 'fftt') WHERE d.id = ?`,
+  ).bind(group.division_id).first<{
+    id: string; phase_id: string; display_name: string; rank: number; players_per_game: number
+    competition_id: string | null; categories: string | null; second_phase: string | null; organization_id: string | null; is_imported: number
+  }>()
+  if (!division) return { ok: false, error: 'not_found' }
+  if (division.is_imported) return { ok: false, error: 'imported_federation' }
+  if (division.second_phase !== 'return_leg') return { ok: false, error: 'not_return_leg' }
+  const next = await nextPhaseOf(db, division.phase_id)
+  if (!next) return { ok: false, error: 'no_next_phase' }
+
+  const stmts: D1PreparedStatement[] = []
+  // Division by (phase, name) — the name the phase-2 PDF will carry too.
+  const divisions = await db.prepare('SELECT id, display_name, rank FROM divisions WHERE phase_id = ?')
+    .bind(next.id).all<{ id: string; display_name: string; rank: number }>()
+  const existingDivision = divisions.results.find((d) => divisionNameKey(d.display_name) === divisionNameKey(division.display_name))
+  const divisionId = existingDivision?.id ?? newId('div')
+  if (!existingDivision) {
+    const rank = divisions.results.some((d) => d.rank === division.rank)
+      ? Math.max(0, ...divisions.results.map((d) => d.rank)) + 1
+      : division.rank
+    stmts.push(db.prepare(
+      'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, competition_id, categories, organization_id) VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)',
+    ).bind(divisionId, next.id, division.display_name, rank, division.players_per_game, division.competition_id, division.categories, division.organization_id))
+  }
+  const existingGroup = existingDivision
+    ? await db.prepare('SELECT id, team_ids FROM groups WHERE division_id = ? AND number = ?')
+      .bind(divisionId, group.number).first<{ id: string; team_ids: string }>()
+    : null
+  const group2Id = existingGroup?.id ?? newId('group')
+
+  // Teams by (club, phase, number), carrying what a captain set up in phase 1.
+  const sourceTeamIds = jsonParseIds(group.team_ids)
+  const sourceTeams = sourceTeamIds.length
+    ? (await db.prepare(
+      `SELECT id, club_id, number, game_location_id, default_day, default_time, captain_id, player_ids, color, whatsapp_link
+         FROM teams WHERE id IN (${sourceTeamIds.map(() => '?').join(',')})`,
+    ).bind(...sourceTeamIds).all<{
+      id: string; club_id: string; number: number; game_location_id: string; default_day: string; default_time: string
+      captain_id: string; player_ids: string; color: string | null; whatsapp_link: string | null
+    }>()).results
+    : []
+  const phase2Teams = await db.prepare('SELECT id, club_id, number FROM teams WHERE phase_id = ?')
+    .bind(next.id).all<{ id: string; club_id: string; number: number }>()
+  const teamOf = new Map<string, string>()
+  const team2Ids = new Set(existingGroup ? jsonParseIds(existingGroup.team_ids) : [])
+  let createdTeams = 0
+  for (const t of sourceTeams) {
+    const existing = phase2Teams.results.find((p) => p.club_id === t.club_id && p.number === t.number)
+    const id = existing?.id ?? teamIdFor(t.club_id, next.id, t.number)
+    teamOf.set(t.id, id)
+    team2Ids.add(id)
+    if (existing) continue
+    createdTeams++
+    stmts.push(db.prepare(
+      `INSERT OR IGNORE INTO teams (id, club_id, phase_id, number, group_id, game_location_id, default_day, default_time, captain_id, player_ids, color, whatsapp_link, is_archived)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    ).bind(id, t.club_id, next.id, t.number, group2Id, t.game_location_id, t.default_day, t.default_time,
+      t.captain_id, t.player_ids, t.color, t.whatsapp_link))
+  }
+  stmts.push(existingGroup
+    ? db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr([...team2Ids]), group2Id)
+    : db.prepare('INSERT INTO groups (id, division_id, number, team_ids, is_archived, note) VALUES (?, ?, ?, ?, 0, ?)')
+      .bind(group2Id, divisionId, group.number, jsonStr([...team2Ids]), group.note))
+
+  // Journées: n + the last phase-1 number, on a provisional date.
+  const matchDays = (await db.prepare('SELECT id, number, date FROM match_days WHERE group_id = ? ORDER BY number')
+    .bind(group.id).all<{ id: string; number: number; date: string | null }>()).results
+  const games = matchDays.length
+    ? (await db.prepare(
+      `SELECT match_day_id, home_team_id, away_team_id FROM games WHERE match_day_id IN (${matchDays.map(() => '?').join(',')})`,
+    ).bind(...matchDays.map((m) => m.id)).all<{ match_day_id: string; home_team_id: string; away_team_id: string }>()).results
+    : []
+  const last = Math.max(0, ...matchDays.map((m) => m.number))
+  const shift = returnLegShiftDays(matchDays.map((m) => m.date ?? ''))
+  const matchDays2 = existingGroup
+    ? (await db.prepare('SELECT id, number FROM match_days WHERE group_id = ?').bind(group2Id).all<{ id: string; number: number }>()).results
+    : []
+  const games2 = matchDays2.length
+    ? (await db.prepare(
+      `SELECT match_day_id, home_team_id, away_team_id, date, source FROM games WHERE match_day_id IN (${matchDays2.map(() => '?').join(',')})`,
+    ).bind(...matchDays2.map((m) => m.id)).all<{ match_day_id: string; home_team_id: string; away_team_id: string; date: string | null; source: string | null }>()).results
+    : []
+  let createdMatchDays = 0, createdGames = 0
+  for (const md of matchDays) {
+    const provisional = md.date ? shiftIsoDate(md.date, shift) : null
+    let md2 = matchDays2.find((m) => m.number === md.number + last)
+    if (!md2) {
+      md2 = { id: newId('md'), number: md.number + last }
+      createdMatchDays++
+      stmts.push(db.prepare('INSERT INTO match_days (id, group_id, number, date) VALUES (?, ?, ?, ?)')
+        .bind(md2.id, group2Id, md2.number, provisional))
+    } else {
+      const own = games2.filter((g) => g.match_day_id === md2!.id)
+      if (own.length && own.every((g) => g.source === 'mirror' && !g.date)) {
+        stmts.push(db.prepare('UPDATE match_days SET date = ? WHERE id = ?').bind(provisional, md2.id))
+      }
+    }
+    for (const g of games.filter((x) => x.match_day_id === md.id)) {
+      // Reversed: phase 1's visitor receives.
+      const home = teamOf.get(g.away_team_id), away = teamOf.get(g.home_team_id)
+      if (!home || !away) continue
+      const found = games2.some((x) => x.match_day_id === md2!.id
+        && ((x.home_team_id === home && x.away_team_id === away) || (x.home_team_id === away && x.away_team_id === home)))
+      if (found) continue
+      createdGames++
+      stmts.push(db.prepare(
+        "INSERT OR IGNORE INTO games (id, match_day_id, home_team_id, away_team_id, time, date, source) VALUES (?, ?, ?, ?, NULL, NULL, 'mirror')",
+      ).bind(gameIdFor(md2.id, home, away), md2.id, home, away))
+    }
+  }
+
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  return {
+    ok: true, groupId: group2Id,
+    created: { division: !existingDivision, group: !existingGroup, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
+  }
+}
+
+/** Mirror every return-leg poule of `phaseId`'s previous phase — when its phase 2 is created. */
+async function mirrorReturnLegsInto(db: D1Database, phaseId: string): Promise<void> {
+  const phase = await db.prepare('SELECT season_id, name FROM phases WHERE id = ?')
+    .bind(phaseId).first<{ season_id: string; name: string }>()
+  const n = phase ? Number(/(\d+)/.exec(phase.name)?.[1]) : NaN
+  if (!phase || !Number.isInteger(n) || n < 2) return
+  const groups = await db.prepare(
+    `SELECT g.id, d.phase_id FROM groups g JOIN divisions d ON d.id = g.division_id JOIN phases p ON p.id = d.phase_id
+      WHERE p.season_id = ? AND d.second_phase = 'return_leg' AND g.is_archived = 0`,
+  ).bind(phase.season_id).all<{ id: string; phase_id: string }>()
+  for (const g of groups.results) {
+    if ((await nextPhaseOf(db, g.phase_id))?.id !== phaseId) continue
+    await mirrorReturnLeg(db, g.id)
+  }
+}
+
+// POST /groups/:id/return-leg — prepare a poule's return leg on demand: the
+// general admin, or the admin of a club that plays in it (#577's rule).
+app.post('/groups/:id/return-leg', async (c) => {
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const clubs = await db.prepare(
+    `SELECT DISTINCT t.club_id FROM teams t JOIN groups g ON g.id = ? WHERE t.id IN (SELECT value FROM json_each(g.team_ids))`,
+  ).bind(id).all<{ club_id: string }>()
+  if (!administersAny(managingViewer(c), clubs.results.map((r) => r.club_id))) return c.json(notAllowed, 403)
+  const result = await mirrorReturnLeg(db, id)
+  if (!result.ok) {
+    const messages: Record<string, string> = {
+      not_found: 'Poule introuvable.',
+      not_return_leg: 'Cette division ne joue pas sa phase 2 en phase retour.',
+      imported_federation: 'Cette fédération s’importe depuis son API.',
+      no_next_phase: 'La phase suivante n’existe pas encore : l’administrateur général la crée d’abord.',
+    }
+    return c.json({ error: result.error, message: messages[result.error] }, result.error === 'not_found' ? 404 : 409)
+  }
+  return c.json(result)
+})
+
 app.delete('/seasons/:id', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const db = c.env.DB
@@ -3139,11 +3839,15 @@ app.delete('/seasons/:id', async (c) => {
 // --- Phases ---
 
 // The active (season · phase) combination must stay coherent (#227): activating
-// a phase demotes every other active phase (#221, archived when older,
-// 'upcoming' when newer) AND activates the phase's season (same demotion rule
-// for the previous season).
-async function activatePhaseCascade(db: Env['Bindings']['DB'], phaseId: string, seasonId: string, phaseName: string) {
-  await demoteActivePhases(db, phaseId, phaseOrderKey(seasonId, phaseName))
+// a phase demotes every other active phase of its federation (#221, #645 —
+// archived when older, 'upcoming' when newer) AND activates the phase's
+// season, the one every federation shares. Once the phase is written, the
+// other federations' active phases follow that season
+// (`alignActivePhasesToSeason`).
+async function activatePhaseCascade(
+  db: Env['Bindings']['DB'], phaseId: string, seasonId: string, phaseName: string, federationId: string,
+) {
+  await demoteActivePhases(db, phaseId, phaseOrderKey(seasonId, phaseName), federationId)
   await demoteActiveSeasons(db, seasonId)
   await db.prepare("UPDATE seasons SET status = 'active' WHERE id = ?").bind(seasonId).run()
 }
@@ -3151,14 +3855,27 @@ async function activatePhaseCascade(db: Env['Bindings']['DB'], phaseId: string, 
 app.post('/phases', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
-  const existing = await c.env.DB.prepare('SELECT id FROM phases WHERE season_id = ? AND name = ?')
-    .bind(d.seasonId, d.name).first()
+  // A phase is one federation's (#645); none named is the FFTT, as before.
+  const federationId = typeof d.federationId === 'string' && d.federationId ? d.federationId : 'fftt'
+  const federation = await c.env.DB.prepare('SELECT id FROM federations WHERE id = ?').bind(federationId).first()
+  if (!federation) return c.json({ error: 'unknown_federation' }, 400)
+  const existing = await c.env.DB.prepare(
+    "SELECT id FROM phases WHERE season_id = ? AND name = ? AND COALESCE(federation_id, 'fftt') = ?",
+  ).bind(d.seasonId, d.name, federationId).first()
   if (existing) return c.json({ error: 'already_exists' }, 409)
+  // The id derives from (federation, season, phase) for a known phase name:
+  // two federations play a Phase 1 in the same season (`phaseIdFor`).
+  const n = ffttPhaseIdForName(d.name)
+  const id = n ? phaseIdFor(federationId, d.seasonId, n) : d.id
   const status = SEASON_STATUSES.includes(d.status) ? d.status : 'upcoming'
-  if (status === 'active') await activatePhaseCascade(c.env.DB, d.id, d.seasonId, d.name)
+  if (status === 'active') await activatePhaseCascade(c.env.DB, id, d.seasonId, d.name, federationId)
   await c.env.DB.prepare(
-    'INSERT INTO phases (id, season_id, name, display_name, status) VALUES (?, ?, ?, ?, ?)'
-  ).bind(d.id, d.seasonId, d.name, d.displayName, status).run()
+    'INSERT INTO phases (id, season_id, name, display_name, status, federation_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, d.seasonId, d.name, d.displayName, status, federationId).run()
+  if (status === 'active') await alignActivePhasesToSeason(c.env.DB, d.seasonId)
+  // Phase 2 of a federation without an API: its return-leg poules are known
+  // already (#649). Never fails the creation — the Équipes page offers it again.
+  await mirrorReturnLegsInto(c.env.DB, id).catch((err) => console.error('return legs on phase creation failed', err))
   return c.json({ ok: true })
 })
 
@@ -3176,12 +3893,14 @@ app.patch('/phases/:id', async (c) => {
   }
   if (s.length) {
     // Activating a phase cascades to its season (#227).
-    if (p.status === 'active') {
-      const row = await c.env.DB.prepare('SELECT season_id, name FROM phases WHERE id = ?').bind(id).first()
-      if (row) await activatePhaseCascade(c.env.DB, id, row.season_id as string, row.name as string)
-    }
+    const row = p.status === 'active'
+      ? await c.env.DB.prepare("SELECT season_id, name, COALESCE(federation_id, 'fftt') AS federation_id FROM phases WHERE id = ?")
+        .bind(id).first<{ season_id: string; name: string; federation_id: string }>()
+      : null
+    if (row) await activatePhaseCascade(c.env.DB, id, row.season_id, row.name, row.federation_id)
     v.push(id)
     await c.env.DB.prepare(`UPDATE phases SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
+    if (row) await alignActivePhasesToSeason(c.env.DB, row.season_id)
   }
   return c.json({ ok: true })
 })
@@ -3207,12 +3926,49 @@ app.delete('/phases/:id', async (c) => {
 })
 
 // --- Divisions ---
+/**
+ * Why a division cannot sit in this phase with this competition, or null:
+ * both are one federation's (#645), and an AGR championship filed in the
+ * FFTT's phase is a division no AGR page would list. No competition is the
+ * FFTT's (#643). An unknown phase is left to the insert to refuse.
+ */
+async function divisionFederationRefusal(
+  db: Env['Bindings']['DB'], phaseId: string, competitionId: string | null,
+): Promise<string | null> {
+  const phase = await db.prepare("SELECT COALESCE(federation_id, 'fftt') AS f FROM phases WHERE id = ?")
+    .bind(phaseId).first<{ f: string }>()
+  if (!phase) return null
+  const competition = competitionId
+    ? await db.prepare("SELECT COALESCE(federation_id, 'fftt') AS f FROM competitions WHERE id = ?")
+      .bind(competitionId).first<{ f: string }>()
+    : null
+  const competitionFederation = competition?.f ?? 'fftt'
+  return phase.f === competitionFederation
+    ? null
+    : 'Cette compétition n’est pas de la fédération de cette phase.'
+}
+
+/** Why this organisation cannot run a division of this phase, or null — it must be the phase's federation's (#692). */
+async function organizationRefusal(
+  db: Env['Bindings']['DB'], phaseId: string, organizationId: string | null,
+): Promise<string | null> {
+  if (!organizationId) return null
+  const row = await db.prepare(
+    `SELECT 1 FROM organizations o JOIN phases p ON p.id = ?
+      WHERE o.id = ? AND o.federation_id = COALESCE(p.federation_id, 'fftt')`,
+  ).bind(phaseId, organizationId).first()
+  return row ? null : 'Cette organisation n’est pas de la fédération de cette phase.'
+}
+
 app.post('/divisions', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const d = await c.req.json()
+  const refusal = await divisionFederationRefusal(c.env.DB, d.phaseId, d.competitionId || null)
+    ?? await organizationRefusal(c.env.DB, d.phaseId, d.organizationId || null)
+  if (refusal) return c.json({ error: 'federation_mismatch', message: refusal }, 400)
   await c.env.DB.prepare(
-    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null).run()
+    'INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, parent_id, identifier, competition_id, categories, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(d.id, d.phaseId, d.displayName, d.rank, d.playersPerGame, d.isArchived ? 1 : 0, d.parentId ?? null, d.identifier ?? null, d.competitionId || null, Array.isArray(d.categories) ? categoriesJson(d.categories) : null, d.organizationId || null).run()
   return c.json({ ok: true })
 })
 
@@ -3220,13 +3976,30 @@ app.patch('/divisions/:id', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
   const id = c.req.param('id')
   const p = await c.req.json()
+  if ('phaseId' in p || 'competitionId' in p || 'organizationId' in p) {
+    const row = await c.env.DB.prepare('SELECT phase_id, competition_id, organization_id FROM divisions WHERE id = ?')
+      .bind(id).first<{ phase_id: string; competition_id: string | null; organization_id: string | null }>()
+    if (row) {
+      const phaseId = 'phaseId' in p ? p.phaseId : row.phase_id
+      const refusal = await divisionFederationRefusal(
+        c.env.DB, phaseId, 'competitionId' in p ? (p.competitionId || null) : row.competition_id,
+      ) ?? await organizationRefusal(
+        c.env.DB, phaseId, 'organizationId' in p ? (p.organizationId || null) : row.organization_id,
+      )
+      if (refusal) return c.json({ error: 'federation_mismatch', message: refusal }, 400)
+    }
+  }
   const s: string[] = [], v: unknown[] = []
   if ('phaseId' in p) { s.push('phase_id = ?'); v.push(p.phaseId) }
   if ('displayName' in p) { s.push('display_name = ?'); v.push(p.displayName) }
   if ('rank' in p) { s.push('rank = ?'); v.push(p.rank) }
   if ('playersPerGame' in p) { s.push('players_per_game = ?'); v.push(p.playersPerGame) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
-  if ('parentId' in p) { s.push('parent_id = ?'); v.push(p.parentId ?? null) }
+  // '' is « no parent », as the form says it (#694); never itself.
+  if ('parentId' in p) {
+    if (p.parentId === id) return c.json({ error: 'invalid_parent' }, 400)
+    s.push('parent_id = ?'); v.push(p.parentId || null)
+  }
   if ('identifier' in p) { s.push('identifier = ?'); v.push(p.identifier ?? null) }
   // '' is how the form says "belongs to no competition" (#482).
   if ('competitionId' in p) { s.push('competition_id = ?'); v.push(p.competitionId || null) }
@@ -3235,6 +4008,13 @@ app.patch('/divisions/:id', async (c) => {
   if ('categories' in p) {
     s.push('categories = ?')
     v.push(Array.isArray(p.categories) ? categoriesJson(p.categories) : null)
+  }
+  // '' is « no organisation », as for the competition (#692).
+  if ('organizationId' in p) { s.push('organization_id = ?'); v.push(p.organizationId || null) }
+  // What its phase 2 is (#649); anything else — '' from the form — is « not known ».
+  if ('secondPhase' in p) {
+    s.push('second_phase = ?')
+    v.push(p.secondPhase === 'return_leg' || p.secondPhase === 'new_groups' ? p.secondPhase : null)
   }
   if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE divisions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
   return c.json({ ok: true })
@@ -3250,6 +4030,9 @@ app.delete('/divisions/:id', async (c) => {
   await db.batch([
     ...clearGroupsAndTeams(db, groups, teams, id),
     db.prepare('DELETE FROM groups WHERE division_id = ?').bind(id),
+    // Its children move up to its own parent — or to none — rather than
+    // pointing at nothing (#694); `withoutDivision` is the same rule on screen.
+    db.prepare('UPDATE divisions SET parent_id = (SELECT parent_id FROM divisions WHERE id = ?) WHERE parent_id = ?').bind(id, id),
     db.prepare('DELETE FROM divisions WHERE id = ?').bind(id),
   ])
   return c.json({ ok: true })
@@ -3280,14 +4063,22 @@ const categoriesJson = (v: unknown): string => {
     typeof x === 'string' && (PLAYER_CATEGORIES as readonly string[]).includes(x)))
 }
 
+/** Whether a federation id names one that exists (#643). */
+const federationExists = async (db: D1Database, id: unknown): Promise<boolean> =>
+  typeof id === 'string' &&
+  !!(await db.prepare('SELECT id FROM federations WHERE id = ?').bind(id).first<{ id: string }>())
+
 app.post('/competitions', async (c) => {
   if (!isGeneralAdmin(c)) return c.json({ error: 'not_allowed' }, 403)
   const d = await c.req.json()
+  // Absent is the FFTT, as it was for every competition before #643.
+  const federationId = d.federationId ?? 'fftt'
+  if (!(await federationExists(c.env.DB, federationId))) return c.json({ error: 'bad_request' }, 400)
   await c.env.DB.prepare(
-    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO competitions (id, display_name, categories, sort_order, is_archived, federation_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   ).bind(
-    d.id, d.displayName, categoriesJson(d.categories), d.sortOrder ?? 0, d.isArchived ? 1 : 0,
+    d.id, d.displayName, categoriesJson(d.categories), d.sortOrder ?? 0, d.isArchived ? 1 : 0, federationId,
   ).run()
   return c.json({ ok: true })
 })
@@ -3301,6 +4092,18 @@ app.patch('/competitions/:id', async (c) => {
   if ('categories' in p) { s.push('categories = ?'); v.push(categoriesJson(p.categories)) }
   if ('sortOrder' in p) { s.push('sort_order = ?'); v.push(p.sortOrder) }
   if ('isArchived' in p) { s.push('is_archived = ?'); v.push(p.isArchived ? 1 : 0) }
+  if ('federationId' in p) {
+    // A competition changes federation only while nothing is filed under it
+    // (#643): its divisions would move with it, and with them every team,
+    // poule and match — a mistake made on creation is what this is for.
+    if (!(await federationExists(c.env.DB, p.federationId))) return c.json({ error: 'bad_request' }, 400)
+    const filed = await c.env.DB
+      .prepare('SELECT id FROM divisions WHERE competition_id = ? LIMIT 1')
+      .bind(id)
+      .first<{ id: string }>()
+    if (filed) return c.json({ error: 'competition_has_divisions' }, 409)
+    s.push('federation_id = ?'); v.push(p.federationId)
+  }
   if (s.length) {
     v.push(id)
     await c.env.DB.prepare(`UPDATE competitions SET ${s.join(', ')} WHERE id = ?`).bind(...v).run()
@@ -3383,6 +4186,18 @@ app.post('/clubs', async (c) => {
   await c.env.DB.prepare(
     'INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES (?, ?, ?, ?)'
   ).bind(d.id, d.affiliationNumber, d.displayName, d.isArchived ? 1 : 0).run()
+  // Its federations other than the FFTT (#643) — Landser ASL is created as an
+  // AGR club, with no FFTT number at all.
+  const affiliations = (Array.isArray(d.affiliations) ? d.affiliations : []).filter(
+    (a: Record<string, unknown>) => typeof a.federationId === 'string' && a.federationId !== 'fftt',
+  )
+  if (affiliations.length) {
+    await c.env.DB.batch(affiliations.map((a: Record<string, unknown>) =>
+      c.env.DB.prepare(
+        `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name)
+         SELECT ?, id, ?, ? FROM federations WHERE id = ?`,
+      ).bind(d.id, String(a.affiliationNumber ?? '').trim(), cleanName(a.name), a.federationId)))
+  }
   // Insert addresses
   if (d.addresses?.length) {
     const stmts = d.addresses.map((a: Record<string, unknown>) =>
@@ -3416,6 +4231,58 @@ app.patch('/clubs/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+/** A federation's name for a club: trimmed, and null when it says nothing (#643). */
+const cleanName = (v: unknown): string | null =>
+  typeof v === 'string' && v.trim() ? v.trim() : null
+
+/**
+ * Declare — or correct — a club's affiliation to a federation other than the
+ * FFTT (#643): its number there, and the name that federation prints for it.
+ *
+ * The club's own decision, so `administers` (#558). The FFTT is refused: its
+ * number is `clubs.affiliation_number`, written through PATCH /clubs/:id, and a
+ * row here would be a second copy of it (see 0061).
+ */
+app.put('/clubs/:clubId/affiliations/:federationId', async (c) => {
+  const db = c.env.DB
+  const clubId = c.req.param('clubId')
+  const federationId = c.req.param('federationId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  if (federationId === 'fftt') return c.json({ error: 'bad_request' }, 400)
+  const d = await c.req.json<{ affiliationNumber?: unknown; name?: unknown; organizationId?: unknown }>()
+  if (!(await federationExists(db, federationId))) return c.json(notFound, 404)
+  const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first<{ id: string }>()
+  if (!club) return c.json(notFound, 404)
+  // The club's organisation in that federation (#692): one of its own.
+  const organizationId = typeof d.organizationId === 'string' && d.organizationId ? d.organizationId : null
+  if (organizationId) {
+    const known = await db.prepare('SELECT 1 FROM organizations WHERE id = ? AND federation_id = ?')
+      .bind(organizationId, federationId).first()
+    if (!known) return c.json({ error: 'unknown_organization' }, 400)
+  }
+  await db.prepare(
+    `INSERT INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (club_id, federation_id) DO UPDATE
+       SET affiliation_number = excluded.affiliation_number, name = excluded.name, organization_id = excluded.organization_id`,
+  ).bind(clubId, federationId, String(d.affiliationNumber ?? '').trim(), cleanName(d.name), organizationId).run()
+  return c.json({ ok: true })
+})
+
+/**
+ * Leave a federation (#643). What the club plays there is not touched: teams
+ * belong to poules, not to the affiliation, and a club that leaves by mistake
+ * gets its row back without losing anything.
+ */
+app.delete('/clubs/:clubId/affiliations/:federationId', async (c) => {
+  const clubId = c.req.param('clubId')
+  if (!administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+  await c.env.DB
+    .prepare('DELETE FROM club_federations WHERE club_id = ? AND federation_id = ?')
+    .bind(clubId, c.req.param('federationId'))
+    .run()
+  return c.json({ ok: true })
+})
+
 // Only ever called on a club the admin has confirmed has no teams/players
 // left (checked client-side, #247 follow-up) — no cascade needed here.
 app.delete('/clubs/:id', async (c) => {
@@ -3425,6 +4292,7 @@ app.delete('/clubs/:id', async (c) => {
   await db.batch([
     db.prepare('DELETE FROM club_addresses WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM club_channels WHERE club_id = ?').bind(id),
+    db.prepare('DELETE FROM club_federations WHERE club_id = ?').bind(id),
     db.prepare('DELETE FROM club_logos WHERE club_id = ?').bind(id),
     db.prepare(
       'DELETE FROM member_group_members WHERE group_id IN (SELECT id FROM member_groups WHERE club_id = ?)',
@@ -4227,19 +5095,22 @@ function clearGroupsAndTeams(
   const mdGameIds = `SELECT id FROM games WHERE match_day_id IN (${mdIds})`
   const teamGameIds =
     `SELECT id FROM games WHERE home_team_id IN (${teamIdsSql}) OR away_team_id IN (${teamIdsSql})`
+  // The scope's id, once per placeholder. `teamIdsSql` appears twice in some
+  // of these, and D1 refuses a statement bound with fewer values than it has
+  // `?` — binding it once made every cascading delete answer 500 since #291,
+  // while the screens, deleting optimistically, showed it gone until a reload.
+  const each = (sql: string) => db.prepare(sql).bind(...Array.from({ length: sql.split('?').length - 1 }, () => bind))
   return [
-    db.prepare(`DELETE FROM game_availabilities WHERE game_id IN (${mdGameIds})`).bind(bind),
-    db.prepare(`DELETE FROM game_selections WHERE game_id IN (${mdGameIds})`).bind(bind),
+    each(`DELETE FROM game_availabilities WHERE game_id IN (${mdGameIds})`),
+    each(`DELETE FROM game_selections WHERE game_id IN (${mdGameIds})`),
     // A team of this scope can also appear in a game hanging off a match day
     // outside it; clear those before the teams disappear.
-    db.prepare(`DELETE FROM game_availabilities WHERE game_id IN (${teamGameIds})`).bind(bind),
-    db.prepare(`DELETE FROM game_selections WHERE game_id IN (${teamGameIds})`).bind(bind),
-    db.prepare(`DELETE FROM games WHERE match_day_id IN (${mdIds})`).bind(bind),
-    db.prepare(
-      `DELETE FROM games WHERE home_team_id IN (${teamIdsSql}) OR away_team_id IN (${teamIdsSql})`,
-    ).bind(bind),
-    db.prepare(`DELETE FROM match_days WHERE group_id IN (${groupIdsSql})`).bind(bind),
-    db.prepare(`DELETE FROM teams WHERE id IN (${teamIdsSql})`).bind(bind),
+    each(`DELETE FROM game_availabilities WHERE game_id IN (${teamGameIds})`),
+    each(`DELETE FROM game_selections WHERE game_id IN (${teamGameIds})`),
+    each(`DELETE FROM games WHERE match_day_id IN (${mdIds})`),
+    each(`DELETE FROM games WHERE home_team_id IN (${teamIdsSql}) OR away_team_id IN (${teamIdsSql})`),
+    each(`DELETE FROM match_days WHERE group_id IN (${groupIdsSql})`),
+    each(`DELETE FROM teams WHERE id IN (${teamIdsSql})`),
   ]
 }
 
@@ -4365,17 +5236,116 @@ async function mayWritePlayers(
   return !foreign.some(Boolean)
 }
 
+// --- People (#655) ---
+//
+// A `users` row is a CLUB PROFILE; the person behind it — name, address,
+// phone, birth — is a `people` row (0063). Gilles is one person with two
+// profiles, Rixheim and Landser. Those fields still live on `users` as well, as
+// a mirror kept equal to the person's: the API reads them there in a hundred
+// places, and those reads move later, in their own deploy (#410).
+
+/** The person a new club profile gets: one of its own, keyed on it. */
+const personIdFor = (userId: string) => `person-${userId}`
+
+/**
+ * The person ANOTHER than `exceptPersonId` who already signs in with this
+ * address (#655, 4 bis), or null. One address opens one person: a second one
+ * on it is refused here rather than settled later under « Adresses
+ * partagées ». Case and surrounding space aside, as at sign-in.
+ */
+async function addressOwnerIn(db: D1Database, email: string | null, exceptPersonId: string | null) {
+  if (!email?.trim()) return null
+  return db.prepare(
+    `SELECT id, first_name, last_name FROM people
+      WHERE lower(trim(email)) = lower(trim(?)) AND id != ? LIMIT 1`,
+  ).bind(email, exceptPersonId ?? '').first<{ id: string; first_name: string | null; last_name: string | null }>()
+}
+
+const addressTaken = (owner: { first_name: string | null; last_name: string | null }) => ({
+  error: 'address_taken',
+  message: addressTakenMessage({ firstName: owner.first_name, lastName: owner.last_name }),
+}) as const
+
+interface PersonFields {
+  firstName: unknown
+  lastName: unknown
+  email: string | null
+  phone: unknown
+  birthDate: unknown
+  birthPlace: unknown
+}
+
+/**
+ * Write a new person — before the profile that names it, so a profile never
+ * points at nobody. `OR IGNORE`: a retried request finds it already there.
+ */
+async function insertPerson(db: D1Database, personId: string, f: PersonFields): Promise<void> {
+  await db.prepare(
+    `INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(personId, f.firstName ?? null, f.lastName ?? null, f.email, f.phone ?? '', f.birthDate ?? null, f.birthPlace ?? null).run()
+}
+
+/** The fields a person holds, by their payload name — what `users` mirrors. */
+const PERSON_COLUMNS = {
+  firstName: 'first_name',
+  lastName: 'last_name',
+  email: 'email',
+  phone: 'phone',
+  birthDate: 'birth_date',
+  birthPlace: 'birth_place',
+} as const
+type PersonKey = keyof typeof PERSON_COLUMNS
+const isPersonKey = (k: string): k is PersonKey => k in PERSON_COLUMNS
+
 app.post('/players', async (c) => {
   const d = await c.req.json()
   // The club is named by the body, so there is nothing to look up: a club admin
   // fills their own roster, a general admin anyone's (#558).
   if (!administers(managingViewer(c), d.clubId)) return c.json(notAllowed, 403)
+  // A new licensee is a new person (#655); a second club for someone who
+  // already exists goes through POST /players/:id/profiles instead. And a new
+  // person cannot take another's address (4 bis).
+  const owner = await addressOwnerIn(c.env.DB, emailOrNull(d.email), null)
+  if (owner) return c.json(addressTaken(owner), 409)
+  const personId = personIdFor(d.id)
+  await insertPerson(c.env.DB, personId, {
+    firstName: d.firstName, lastName: d.lastName, email: emailOrNull(d.email),
+    phone: d.phone, birthDate: d.birthDate, birthPlace: d.birthPlace,
+  })
   await c.env.DB.prepare(
-    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId).run()
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(d.id, emailOrNull(d.email), d.firstName, d.lastName, d.licenseNumber, d.phone ?? '', d.birthDate ?? null, d.birthPlace ?? null, d.status, d.clubId, personId).run()
+  // A Landser licensee is created with their AGR licence and no FFTT one (#644).
+  if ('licences' in d) await replaceLicences(c.env.DB, d.id, d.licences)
   return c.json({ ok: true })
 })
+
+/**
+ * Replace a member's licences outside the FFTT with `licences` (#644): a
+ * replacement, like the groups of a member (#602), so two admins saving at once
+ * end on one list rather than a mixture. An FFTT entry, an unknown federation
+ * or a blank number is dropped — the FFTT licence is `users.license_number`,
+ * written as it always was (see 0062).
+ */
+async function replaceLicences(db: D1Database, userId: string, licences: unknown): Promise<void> {
+  const list = (Array.isArray(licences) ? licences : []) as Array<Record<string, unknown>>
+  const wanted = new Map<string, string>()
+  for (const l of list) {
+    const federationId = typeof l.federationId === 'string' ? l.federationId : ''
+    const number = typeof l.number === 'string' ? l.number.trim() : ''
+    if (federationId && federationId !== 'fftt' && number) wanted.set(federationId, number)
+  }
+  await db.batch([
+    db.prepare('DELETE FROM federation_licences WHERE user_id = ?').bind(userId),
+    // The SELECT drops a federation that does not exist, without a lookup first.
+    ...[...wanted].map(([federationId, number]) => db.prepare(
+      `INSERT INTO federation_licences (user_id, federation_id, number)
+       SELECT ?, id, ? FROM federations WHERE id = ?`,
+    ).bind(userId, number, federationId)),
+  ])
+}
 
 /**
  * What a member may change about themselves from "Mon compte" (#558).
@@ -4395,29 +5365,73 @@ app.patch('/players/:id', async (c) => {
   // their own four contact fields (#558). A `clubId` in the patch is judged
   // twice over — moving somebody writes on the club they leave and on the one
   // they join, so both have to be the caller's.
+  const db = c.env.DB
   const viewer = managingViewer(c)
   const manages =
-    (viewer.role === 'general_admin' || administers(viewer, await clubOfPlayer(c.env.DB, id))) &&
+    (viewer.role === 'general_admin' || administers(viewer, await clubOfPlayer(db, id))) &&
     (!('clubId' in p) || administers(viewer, p.clubId))
-  if (!manages) {
-    const self = c.get('user')?.id === id
-    const ownFieldsOnly = Object.keys(p).every(
-      (k) => (OWN_PROFILE_FIELDS as readonly string[]).includes(k),
-    )
-    if (!self || !ownFieldsOnly) return c.json(notAllowed, 403)
+
+  // What describes the PERSON — name, address, phone, birth — is shared by
+  // every club profile they have (#655). An administrator of one club does not
+  // decide it for the other: on a person playing in two clubs, only the person
+  // and a general admin may. A person in one club only is the club admin's to
+  // correct, exactly as before (#600).
+  const personValue = (k: PersonKey): unknown =>
+    k === 'email' ? emailOrNull(p.email)
+      : k === 'birthDate' || k === 'birthPlace' ? p[k] ?? null
+        : p[k]
+  const askedPersonKeys = Object.keys(p).filter(isPersonKey)
+  const target = askedPersonKeys.length
+    ? await db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>()
+    : null
+  // Only what CHANGES is judged: the forms send every field, and a club admin
+  // correcting a licence must not be refused over an address left as it was.
+  const personKeys = askedPersonKeys.filter((k) =>
+    !target || (personValue(k) ?? null) !== (target[PERSON_COLUMNS[k]] ?? null))
+  const personId = target?.person_id ?? null
+  const personClubs = personId
+    ? (await db.prepare('SELECT DISTINCT club_id FROM users WHERE person_id = ?').bind(personId)
+      .all<{ club_id: string | null }>()).results.map((r) => r.club_id)
+    : []
+  const clubsOfPerson = personClubs.length ? personClubs : [target?.club_id ?? null]
+  const sessionUser = c.get('user')
+  const self = !!sessionUser && (sessionUser.id === id || (!!personId && sessionUser.person_id === personId))
+  const mayWritePerson = (key: PersonKey) =>
+    viewer.role === 'general_admin'
+    || (manages && clubsOfPerson.every((club) => administers(viewer, club ?? undefined)))
+    || (self && (OWN_PROFILE_FIELDS as readonly string[]).includes(key))
+
+  const profileKeys = Object.keys(p).filter((k) => !isPersonKey(k))
+  if (profileKeys.length && !manages) return c.json(notAllowed, 403)
+  if (!personKeys.every(mayWritePerson)) return c.json(notAllowed, 403)
+  // A changed address must not be another person's (4 bis). Judged only when
+  // it changes: a form sent back unchanged is not taking anything.
+  if (personKeys.includes('email')) {
+    const owner = await addressOwnerIn(db, emailOrNull(p.email), personId)
+    if (owner) return c.json(addressTaken(owner), 409)
   }
 
+  const ps: string[] = [], pv: unknown[] = []
+  for (const k of personKeys) { ps.push(`${PERSON_COLUMNS[k]} = ?`); pv.push(personValue(k)) }
+
   const s: string[] = [], v: unknown[] = []
-  if ('firstName' in p) { s.push('first_name = ?'); v.push(p.firstName) }
-  if ('lastName' in p) { s.push('last_name = ?'); v.push(p.lastName) }
   if ('licenseNumber' in p) { s.push('license_number = ?'); v.push(p.licenseNumber) }
-  if ('email' in p) { s.push('email = ?'); v.push(emailOrNull(p.email)) }
-  if ('phone' in p) { s.push('phone = ?'); v.push(p.phone) }
-  if ('birthDate' in p) { s.push('birth_date = ?'); v.push(p.birthDate ?? null) }
-  if ('birthPlace' in p) { s.push('birth_place = ?'); v.push(p.birthPlace ?? null) }
   if ('status' in p) { s.push('status = ?'); v.push(p.status) }
   if ('clubId' in p) { s.push('club_id = ?'); v.push(p.clubId) }
-  if (s.length) { v.push(id); await c.env.DB.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  // A profile with no person yet — written in the deploy window — keeps its
+  // fields on its own row, as every profile did before (#655).
+  if (!personId) { s.push(...ps); v.push(...pv) }
+  if (s.length) { v.push(id); await db.prepare(`UPDATE users SET ${s.join(', ')} WHERE id = ?`).bind(...v).run() }
+  if (personId && ps.length) {
+    // The person, and the mirror on every profile of theirs.
+    await db.batch([
+      db.prepare(`UPDATE people SET ${ps.join(', ')} WHERE id = ?`).bind(...pv, personId),
+      db.prepare(`UPDATE users SET ${ps.join(', ')} WHERE person_id = ?`).bind(...pv, personId),
+    ])
+  }
+  // Not one of OWN_PROFILE_FIELDS, so only an administrator gets here with it:
+  // a licence decides where somebody may play (#644).
+  if ('licences' in p) await replaceLicences(c.env.DB, id, p.licences)
   // A member who changes club leaves the old club's groups (#602): those are
   // how the club they left sorts its own people, and it no longer lists them.
   if ('clubId' in p) {
@@ -4426,6 +5440,307 @@ app.patch('/players/:id', async (c) => {
        WHERE user_id = ? AND group_id IN (SELECT id FROM member_groups WHERE club_id IS NOT ?)`,
     ).bind(id, p.clubId ?? null).run()
   }
+  return c.json({ ok: true })
+})
+
+/**
+ * Give a licensee a profile in another club (#644) — Gilles, at Rixheim for the
+ * FFTT, joins Landser for the AGR.
+ *
+ * A session is one member in one club (#640), so playing for a second club is
+ * a second profile, linked to the first by the e-mail address alone. Retyping
+ * it by hand is how the link breaks: one typo and the switcher never offers the
+ * other profile. So the server copies what describes the person — name,
+ * address, phone, birth — from the source row, and the caller says only what
+ * belongs to the new club: which one, and the licences played there.
+ *
+ * Writing on the club that receives the profile, so `administers` of it
+ * (#558); nothing is written on the source's club. The copy reads nothing the
+ * payload does not already carry to the same caller.
+ */
+const PROFILE_REFUSALS = {
+  same_club: 'Ce licencié est déjà dans ce club.',
+  already_in_club: 'Ce licencié a déjà un profil dans ce club.',
+} as const
+
+app.post('/players/:id/profiles', async (c) => {
+  const db = c.env.DB
+  const sourceId = c.req.param('id')
+  const d = await c.req.json<{ clubId?: unknown; licenseNumber?: unknown; licences?: unknown }>()
+  const clubId = typeof d.clubId === 'string' ? d.clubId : ''
+  if (!clubId || !administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
+
+  const source = await db.prepare('SELECT * FROM users WHERE id = ?').bind(sourceId).first<UserRow>()
+  if (!source || !bool(source.is_player)) return c.json(notFound, 404)
+  const club = await db.prepare('SELECT id FROM clubs WHERE id = ?').bind(clubId).first<{ id: string }>()
+  if (!club) return c.json(notFound, 404)
+  const refuseProfile = (reason: keyof typeof PROFILE_REFUSALS, existingId?: string) =>
+    c.json({ error: reason, message: PROFILE_REFUSALS[reason], ...(existingId ? { id: existingId } : {}) }, 409)
+  if (source.club_id === clubId) return refuseProfile('same_club')
+
+  // The person's profile there already (#655) — a second click, say.
+  if (source.person_id) {
+    const own = await db.prepare('SELECT id FROM users WHERE club_id = ? AND person_id = ?')
+      .bind(clubId, source.person_id).first<{ id: string }>()
+    if (own) return refuseProfile('already_in_club', own.id)
+  }
+  // Or a profile somebody made by hand with the same address: same name and
+  // same address in that club is this person already (#640).
+  if (source.email) {
+    const existing = await db.prepare(
+      `SELECT id FROM users WHERE club_id = ? AND email = ? COLLATE NOCASE
+         AND first_name = ? COLLATE NOCASE AND last_name = ? COLLATE NOCASE`,
+    ).bind(clubId, source.email, source.first_name ?? '', source.last_name ?? '').first<{ id: string }>()
+    if (existing) return refuseProfile('already_in_club', existing.id)
+  }
+
+  const id = newId('player')
+  const licenseNumber = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
+  // The new profile belongs to the same PERSON (#655): that is the link, and
+  // the copied fields below are only the mirror `users` still carries. A
+  // source written in the deploy window has no person yet — it gets one here,
+  // and both profiles share it.
+  let personId = source.person_id ?? null
+  if (!personId) {
+    personId = personIdFor(source.id)
+    await insertPerson(db, personId, {
+      firstName: source.first_name, lastName: source.last_name, email: source.email,
+      phone: source.phone, birthDate: source.birth_date, birthPlace: source.birth_place,
+    })
+    await db.prepare('UPDATE users SET person_id = ? WHERE id = ?').bind(personId, source.id).run()
+  }
+  await db.prepare(
+    `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+     VALUES (?, ?, 'player', 1, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+  ).bind(
+    id, source.email, source.first_name, source.last_name, licenseNumber,
+    source.phone ?? '', source.birth_date, source.birth_place, clubId, personId,
+  ).run()
+  await replaceLicences(db, id, d.licences)
+  return c.json({ ok: true, id })
+})
+
+// --- Delegation (#655) ---
+//
+// Benjamin manages Sacha: `person_delegates` (0064). What it opens is decided
+// in reach.ts, the one place the switcher, `/auth/switch` and the push fan-out
+// all read; these routes only say who may create and withdraw one.
+//
+// The person, the general admin — and the administrator of the person's club,
+// when they administer EVERY club of the person (4 bis): with one address per
+// person, a child has none, cannot sign in to name their parent, and would
+// otherwise wait on the general admin. Someone who also plays elsewhere is not
+// one club's to decide, the rule that guards a person's name and address. A
+// delegate may also step down — withdrawing what was given to them takes
+// nothing from anybody.
+
+interface DelegationPerson { id: string; firstName?: string; lastName?: string; email?: string }
+
+const serializePerson = (r: { id: string; first_name: string | null; last_name: string | null; email: string | null }): DelegationPerson => ({
+  id: r.id,
+  ...(r.first_name ? { firstName: r.first_name } : {}),
+  ...(r.last_name ? { lastName: r.last_name } : {}),
+  ...(r.email ? { email: r.email } : {}),
+})
+
+const DELEGATION_REFUSALS = {
+  no_account: "Aucun compte n'utilise cette adresse.",
+  ambiguous: "Plusieurs personnes partagent cette adresse : l'administrateur général peut désigner la bonne.",
+  self: 'On ne se délègue pas à soi-même.',
+} as const
+
+/** The session's person, or null — a profile written in the deploy window has none. */
+const sessionPersonId = (c: { get: (k: 'user') => UserRow | undefined }): string | null =>
+  c.get('user')?.person_id ?? null
+
+/** Whether the caller administers every club the person has a profile in — and they have one. */
+type DelegationContext = { get: (k: 'user') => UserRow | undefined; env: { DB: D1Database } }
+
+async function administersPerson(c: DelegationContext, personId: string): Promise<boolean> {
+  const viewer = managingViewer(c)
+  const clubs = (await c.env.DB.prepare('SELECT DISTINCT club_id FROM users WHERE person_id = ?')
+    .bind(personId).all<{ club_id: string | null }>()).results.map((r) => r.club_id)
+  return clubs.length > 0 && clubs.every((club) => !!club && administers(viewer, club))
+}
+
+/** Who may see and change a person's delegations: themselves, the general admin, or their club's admin. */
+const managesDelegations = async (c: DelegationContext, personId: string) =>
+  isGeneralAdmin(c) || sessionPersonId(c) === personId || await administersPerson(c, personId)
+
+app.get('/people/:personId/delegations', async (c) => {
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  if (!(await managesDelegations(c, personId))) return c.json(notAllowed, 403)
+  const [delegates, represents] = await Promise.all([
+    db.prepare(
+      `SELECT p.id, p.first_name, p.last_name, p.email FROM person_delegates d
+         JOIN people p ON p.id = d.delegate_id WHERE d.person_id = ? ORDER BY p.last_name, p.first_name`,
+    ).bind(personId).all<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>(),
+    db.prepare(
+      `SELECT p.id, p.first_name, p.last_name, p.email FROM person_delegates d
+         JOIN people p ON p.id = d.person_id WHERE d.delegate_id = ? ORDER BY p.last_name, p.first_name`,
+    ).bind(personId).all<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>(),
+  ])
+  return c.json({
+    delegates: delegates.results.map(serializePerson),
+    represents: represents.results.map(serializePerson),
+  })
+})
+
+/**
+ * Name a delegate: by person id (the general admin, picking a member), or by
+ * address (the person, from « Mon compte », typing their parent's).
+ */
+app.post('/people/:personId/delegates', async (c) => {
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  if (!(await managesDelegations(c, personId))) return c.json(notAllowed, 403)
+  const person = await db.prepare('SELECT id FROM people WHERE id = ?').bind(personId).first<{ id: string }>()
+  if (!person) return c.json(notFound, 404)
+  const refuseDelegation = (reason: keyof typeof DELEGATION_REFUSALS, status: 400 | 404 | 409) =>
+    c.json({ error: reason, message: DELEGATION_REFUSALS[reason] }, status)
+
+  const d = await c.req.json<{ delegateId?: unknown; email?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  let delegateId: string | null = null
+  if (typeof d.delegateId === 'string' && d.delegateId) {
+    // A member's id is accepted as well as a person's: the screens list members.
+    const found = await db.prepare(
+      `SELECT id FROM people WHERE id = ?
+       UNION SELECT person_id AS id FROM users WHERE id = ? AND person_id IS NOT NULL`,
+    ).bind(d.delegateId, d.delegateId).all<{ id: string }>()
+    delegateId = found.results[0]?.id ?? null
+    if (!delegateId) return c.json(notFound, 404)
+  } else if (typeof d.email === 'string' && d.email.trim()) {
+    const found = await db.prepare(
+      'SELECT id FROM people WHERE lower(trim(email)) = lower(trim(?)) AND id != ?',
+    ).bind(d.email, personId).all<{ id: string }>()
+    if (found.results.length === 0) return refuseDelegation('no_account', 404)
+    if (found.results.length > 1) return refuseDelegation('ambiguous', 409)
+    delegateId = found.results[0].id
+  } else {
+    return c.json({ error: 'bad_request' }, 400)
+  }
+  if (delegateId === personId) return refuseDelegation('self', 400)
+
+  await db.prepare(
+    'INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at) VALUES (?, ?, ?)',
+  ).bind(personId, delegateId, Date.now()).run()
+  const delegate = await db.prepare('SELECT id, first_name, last_name, email FROM people WHERE id = ?')
+    .bind(delegateId).first<{ id: string; first_name: string | null; last_name: string | null; email: string | null }>()
+  return c.json({ ok: true, delegate: delegate ? serializePerson(delegate) : { id: delegateId } })
+})
+
+app.delete('/people/:personId/delegates/:delegateId', async (c) => {
+  const personId = c.req.param('personId')
+  const delegateId = c.req.param('delegateId')
+  const mine = sessionPersonId(c)
+  if (mine !== delegateId && !(await managesDelegations(c, personId))) return c.json(notAllowed, 403)
+  await c.env.DB.prepare('DELETE FROM person_delegates WHERE person_id = ? AND delegate_id = ?')
+    .bind(personId, delegateId).run()
+  return c.json({ ok: true })
+})
+
+/**
+ * Settle an address two people share (#655, step 3): the delegate keeps it,
+ * and becomes the delegate of the person whose address is emptied — Sacha
+ * shares Benjamin's, so Benjamin manages Sacha. 0063 could not decide this:
+ * one address and two names is a parent and a child, or two spouses.
+ *
+ * The general admin's alone, as is naming a delegate for someone who cannot
+ * sign in. The address is re-read here rather than trusted from the screen:
+ * a list loaded an hour ago must not empty an address the person has since
+ * changed. Emptying and delegating land in one batch, so the profiles are
+ * never out of the delegate's reach between the two.
+ */
+app.post('/people/:personId/address-to-delegate', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  const d = await c.req.json<{ delegateId?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  if (typeof d.delegateId !== 'string' || !d.delegateId) return c.json({ error: 'bad_request' }, 400)
+  const delegateId = d.delegateId
+  if (delegateId === personId) return c.json({ error: 'self', message: DELEGATION_REFUSALS.self }, 400)
+
+  const found = await db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
+    .bind(personId, delegateId).all<{ id: string; email: string | null }>()
+  const person = found.results.find((r) => r.id === personId)
+  const delegate = found.results.find((r) => r.id === delegateId)
+  if (!person || !delegate) return c.json(notFound, 404)
+  const address = (r: { email: string | null }) => r.email?.trim().toLowerCase() ?? ''
+  if (!address(person) || address(person) !== address(delegate)) {
+    return c.json({ error: 'not_shared', message: "Ces deux personnes ne partagent plus d'adresse." }, 409)
+  }
+
+  await db.batch([
+    db.prepare('UPDATE people SET email = NULL WHERE id = ?').bind(personId),
+    // The person's fields are still mirrored on each club profile (#655, step 1).
+    db.prepare('UPDATE users SET email = NULL WHERE person_id = ?').bind(personId),
+    db.prepare('INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at) VALUES (?, ?, ?)')
+      .bind(personId, delegateId, Date.now()),
+  ])
+  return c.json({ ok: true })
+})
+
+/**
+ * Two people who are one (#655): the same human created twice — most often a
+ * general admin's profile, written without a name, beside the profiles they
+ * play under, which 0063 could not fold for want of the same name. `personId`
+ * joins `targetId`: its profiles, its delegations, and whatever it knew that
+ * the target left blank. The target's own fields win — it is the one chosen to
+ * stay.
+ *
+ * The general admin's alone, and only for two people who share an address —
+ * the one fact that says they might be one, re-read here like the hand-over
+ * above. Everything lands in one batch: half a merge is a profile pointing at
+ * a person who no longer exists.
+ */
+app.post('/people/:personId/merge-into', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const personId = c.req.param('personId')
+  const d = await c.req.json<{ targetId?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  if (typeof d.targetId !== 'string' || !d.targetId) return c.json({ error: 'bad_request' }, 400)
+  const targetId = d.targetId
+  if (targetId === personId) return c.json({ error: 'self' }, 400)
+
+  const found = await db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
+    .bind(personId, targetId).all<{ id: string; email: string | null }>()
+  const person = found.results.find((r) => r.id === personId)
+  const target = found.results.find((r) => r.id === targetId)
+  if (!person || !target) return c.json(notFound, 404)
+  const address = (r: { email: string | null }) => r.email?.trim().toLowerCase() ?? ''
+  if (!address(person) || address(person) !== address(target)) {
+    return c.json({ error: 'not_shared', message: "Ces deux personnes ne partagent plus d'adresse." }, 409)
+  }
+
+  const fill = (col: string) => `${col} = COALESCE(NULLIF(${col}, ''), (SELECT NULLIF(${col}, '') FROM people WHERE id = ?))`
+  await db.batch([
+    db.prepare(
+      `UPDATE people SET ${['first_name', 'last_name', 'birth_date', 'birth_place'].map(fill).join(', ')},
+         phone = COALESCE(NULLIF(phone, ''), (SELECT phone FROM people WHERE id = ?), '')
+       WHERE id = ?`,
+    ).bind(personId, personId, personId, personId, personId, targetId),
+    // Delegations follow the person, never onto themselves.
+    db.prepare(
+      `INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at)
+         SELECT ?, delegate_id, created_at FROM person_delegates WHERE person_id = ? AND delegate_id != ?`,
+    ).bind(targetId, personId, targetId),
+    db.prepare(
+      `INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at)
+         SELECT person_id, ?, created_at FROM person_delegates WHERE delegate_id = ? AND person_id != ?`,
+    ).bind(targetId, personId, targetId),
+    db.prepare('DELETE FROM person_delegates WHERE person_id = ? OR delegate_id = ?').bind(personId, personId),
+    db.prepare('UPDATE users SET person_id = ? WHERE person_id = ?').bind(targetId, personId),
+    // The person's fields are still mirrored on each club profile (#655, step 1).
+    db.prepare(
+      `UPDATE users SET
+         first_name = (SELECT first_name FROM people WHERE id = ?), last_name = (SELECT last_name FROM people WHERE id = ?),
+         email = (SELECT email FROM people WHERE id = ?), phone = (SELECT COALESCE(phone, '') FROM people WHERE id = ?),
+         birth_date = (SELECT birth_date FROM people WHERE id = ?), birth_place = (SELECT birth_place FROM people WHERE id = ?)
+       WHERE person_id = ?`,
+    ).bind(targetId, targetId, targetId, targetId, targetId, targetId, targetId),
+    db.prepare('DELETE FROM people WHERE id = ?').bind(personId),
+  ])
   return c.json({ ok: true })
 })
 
@@ -4502,26 +5817,27 @@ app.post('/clubs/:clubId/admins', async (c) => {
   const decision = canAddClubAdmin(users, clubId, fresh, viewer)
   if (!decision.ok) return c.json(refuse(decision.reason), decision.reason === 'not_allowed' ? 403 : 409)
 
-  // An address may sign in as several members since #640 — a parent who does
-  // not play, administering the club their licensed child plays in under the
-  // parent's address, is exactly who this form exists for. What it must not do
-  // is mint a second row for someone the address already names: same address
-  // and same name is that person, to be designated rather than invited.
-  const taken = await db
-    .prepare(
-      `SELECT id FROM users WHERE lower(email) = lower(?)
-          AND lower(trim(first_name)) = lower(?) AND lower(trim(last_name)) = lower(?)`,
-    )
-    .bind(email, firstName, lastName)
-    .first()
-  if (taken) return c.json(refuse('email_taken'), 409)
+  // One address, one person (#655, 4 bis). Someone the address already names
+  // under the same name IS that person — to be designated, not invited again;
+  // under another name, the address is theirs and not this invitee's (#640
+  // let a parent and a child share one; that is over).
+  const owner = await addressOwnerIn(db, email, null)
+  if (owner) {
+    const same = (owner.first_name ?? '').trim().toLowerCase() === firstName.toLowerCase()
+      && (owner.last_name ?? '').trim().toLowerCase() === lastName.toLowerCase()
+    return c.json(same ? refuse('email_taken') : addressTaken(owner), 409)
+  }
 
+  const personId = personIdFor(fresh.id)
+  await insertPerson(db, personId, {
+    firstName, lastName, email, phone: (body.phone ?? '').trim(), birthDate: null, birthPlace: null,
+  })
   await db
     .prepare(
-      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-       VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?)`,
+      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+       VALUES (?, ?, 'club_admin', 0, ?, ?, '', ?, NULL, NULL, 'active', ?, ?)`,
     )
-    .bind(fresh.id, email, firstName, lastName, (body.phone ?? '').trim(), clubId)
+    .bind(fresh.id, email, firstName, lastName, (body.phone ?? '').trim(), clubId, personId)
     .run()
   return c.json({ ok: true, userId: fresh.id })
 })
@@ -5004,14 +6320,19 @@ app.patch('/onboarding/requests/:id', async (c) => {
     // FFTT player import, which matches on licence: it would find nothing and
     // insert the same person a second time (#474). Given the licence here, the
     // import finds them and fills in the rest.
+    const personId = personIdFor(candidate.id)
+    await insertPerson(db, personId, {
+      firstName: row.first_name, lastName: row.last_name, email: row.email,
+      phone: row.phone, birthDate: null, birthPlace: null,
+    })
     await db
       .prepare(
-        `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id)
-         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?)`,
+        `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, birth_date, birth_place, status, club_id, person_id)
+         VALUES (?, ?, 'club_admin', ?, ?, ?, ?, ?, NULL, NULL, 'active', ?, ?)`,
       )
       .bind(
         candidate.id, row.email, licence ? 1 : 0, row.first_name, row.last_name,
-        licence, row.phone, clubId,
+        licence, row.phone, clubId, personId,
       )
       .run()
   }

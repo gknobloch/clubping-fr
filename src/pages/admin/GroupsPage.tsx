@@ -6,32 +6,50 @@ import { ModalShell } from '@/components/ModalShell'
 import { ImportGroupsModal } from '@/components/ImportGroupsModal'
 import { ImportGamesModal } from '@/components/ImportGamesModal'
 import { ImportScheduleDocumentModal } from '@/components/ImportScheduleDocumentModal'
+import { ImportFederationCalendarModal } from '@/components/ImportFederationCalendarModal'
 import { PageHeader } from '@/components/PageHeader'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
 import { RowActions, ACTIONS_HEADER, ACTIONS_CELL } from '@/components/RowActions'
-import { FileIcon, ImportIcon, PhaseSwitchButton, PlusIcon } from '@/components/icons'
+import { FileIcon, ImportIcon, PlusIcon } from '@/components/icons'
+import { PhasePager } from '@/components/PhasePager'
+import { FederationSelect } from '@/components/FederationSelect'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { groupOrganizationsByType } from '@/lib/ffttOrganizations'
+import { divisionIdsOfOrganization, filtersLocally, localOrganizationOptions } from '@/lib/organizationFilter'
 import { useConfirm } from '@/components/useConfirm'
+import { FFTT_FEDERATION_ID, divisionsOfFederation, federationChoices, federationOfDivision } from '@/lib/federations'
+import { phaseScope } from '@/lib/phaseScope'
+import { isLetteredDivision, poolName, poolTitle } from '@/lib/poolLabel'
+import { poolLetterOf } from '@/lib/agrScheduleDocument'
 
 export function GroupsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'general_admin' || user?.role === 'club_admin'
   const {
-    groups: allGroups, divisions, phases, teams, clubs,
+    groups: allGroups, divisions, phases, teams, clubs, competitions = [], federations = [], organizations = [],
     updateGroup, addGroup, archiveGroup, deleteGroup, resetGroupGames,
     fetchOrganizations, fetchDivisionsPreview,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
 
-  // Phase switcher — defaults to the active phase, chronological order (#237).
-  const orderedPhases = useMemo(
-    () => [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [phases],
-  )
-  const activePhase = phases.find((p) => p.status === 'active')
+  // Federation — first, because everything below it is one federation's: a
+  // general admin picks among all of them, a club admin among their club's
+  // (#660). Without it the division picker mixed "GE 3" with "Excellence".
+  const viewerClub = user?.role === 'general_admin' ? undefined : clubs.find((c) => c.id === user?.clubId)
+  const federationOptions = useMemo(() => federationChoices(federations, viewerClub), [federations, viewerClub])
+  const [chosenFederationId, setChosenFederationId] = useState('')
+  const federationId = federationOptions.some((f) => f.id === chosenFederationId)
+    ? chosenFederationId
+    : federationOptions[0]?.id ?? FFTT_FEDERATION_ID
+  const isFftt = federationId === FFTT_FEDERATION_ID
+
+  // Phase switcher — that federation's phases (#645), its active one by
+  // default, chronological order (#237).
+  const scope = phaseScope({ federations, phases, club: viewerClub, chosen: federationId })
+  const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? activePhase ?? orderedPhases[orderedPhases.length - 1]
+  const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   // Organization — optional filter narrowing the division picker to one FFTT
@@ -47,9 +65,25 @@ export function GroupsPage() {
     return () => { cancelled = true }
   }, [fetchOrganizations])
 
+  // From our own data wherever divisions know their organisation (#692); the
+  // FFTT is asked only for a phase whose divisions predate it.
+  const phaseDivisions = useMemo(
+    () => divisionsOfFederation(divisions, competitions, federationId).filter((d) => d.phaseId === phase?.id),
+    [divisions, competitions, federationId, phase?.id],
+  )
+  const local = filtersLocally(phaseDivisions, federationId)
+  const localOptions = useMemo(
+    () => localOrganizationOptions(organizations, phaseDivisions, federationId),
+    [organizations, phaseDivisions, federationId],
+  )
+
   useEffect(() => {
     const ffttPhaseId = phase ? ffttPhaseIdForName(phase.name) : null
-    if (!organizationId || !phase || !ffttPhaseId) {
+    if (local) {
+      setOrgDivisionIds(organizationId ? divisionIdsOfOrganization(phaseDivisions, organizationId) : null)
+      return
+    }
+    if (!isFftt || !organizationId || !phase || !ffttPhaseId) {
       setOrgDivisionIds(null)
       return
     }
@@ -63,22 +97,25 @@ export function GroupsPage() {
       )
     })
     return () => { cancelled = true }
-  }, [organizationId, phase, fetchDivisionsPreview])
+  }, [isFftt, local, organizationId, phase, phaseDivisions, fetchDivisionsPreview])
 
-  const orgGroups = useMemo(() => groupOrganizationsByType(orgs), [orgs])
+  const orgGroups = useMemo(
+    () => groupOrganizationsByType(local ? localOptions : orgs),
+    [local, localOptions, orgs],
+  )
 
   // Division — the actual scope of the page; reset whenever the phase or the
   // organization filter changes so a stale, now-hidden division can't linger.
   const [divisionId, setDivisionId] = useState('')
-  useEffect(() => { setDivisionId('') }, [phase?.id, organizationId])
+  useEffect(() => { setDivisionId('') }, [phase?.id, organizationId, federationId])
 
   const divisionsInPhase = useMemo(
     () =>
-      divisions
+      divisionsOfFederation(divisions, competitions, federationId)
         .filter((d) => d.phaseId === phase?.id && !d.isArchived)
         .filter((d) => !orgDivisionIds || orgDivisionIds.has(d.id))
         .sort((a, b) => a.rank - b.rank),
-    [divisions, phase?.id, orgDivisionIds],
+    [divisions, competitions, federationId, phase?.id, orgDivisionIds],
   )
   const division = divisionsInPhase.find((d) => d.id === divisionId)
 
@@ -87,12 +124,17 @@ export function GroupsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [importGamesFor, setImportGamesFor] = useState<Group | null>(null)
   const [importDocOpen, setImportDocOpen] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [importDocForGroup, setImportDocForGroup] = useState<Group | null>(null)
-  const [form, setForm] = useState({ divisionId: '', number: 1 })
+  const [form, setForm] = useState({ federationId: '', divisionId: '', number: 1 })
   const [showArchived, setShowArchived] = useState(false)
 
   const activeGroups = useMemo(() => allGroups.filter((g) => !g.isArchived), [allGroups])
-  const archivedGroups = useMemo(() => allGroups.filter((g) => g.isArchived), [allGroups])
+  // Counted where the list is: the division on screen (#645).
+  const archivedGroups = useMemo(
+    () => allGroups.filter((g) => g.isArchived && g.divisionId === division?.id),
+    [allGroups, division?.id],
+  )
   const visibleGroups = showArchived ? allGroups : activeGroups
   const groups = division
     ? visibleGroups.filter((g) => g.divisionId === division.id).sort((a, b) => a.number - b.number)
@@ -105,20 +147,59 @@ export function GroupsPage() {
     return `${club?.displayName ?? team.clubId} ${team.number}`
   }
 
+  /**
+   * What the dialog's division picker offers: one federation's divisions, of
+   * one phase — the page's when creating, the group's own when editing. It
+   * listed every division of every phase and federation, so "GE 3" appeared
+   * once per season beside the AGR's (#660).
+   */
+  // A federation's phase is its own (#645): the page's when the dialog is on
+  // the page's federation, that federation's default otherwise.
+  const phaseOfFederation = (fedId: string) => (fedId === federationId
+    ? phase?.id
+    : phaseScope({ federations, phases, chosen: fedId }).defaultPhase?.id)
+  const dialogPhaseId = editing
+    ? divisions.find((d) => d.id === editing.divisionId)?.phaseId
+    : phaseOfFederation(form.federationId)
+  const dialogDivisions = useMemo(
+    () =>
+      divisionsOfFederation(divisions, competitions, form.federationId)
+        .filter((d) => d.phaseId === dialogPhaseId && (!d.isArchived || d.id === form.divisionId))
+        .sort((a, b) => a.rank - b.rank),
+    [divisions, competitions, form.federationId, form.divisionId, dialogPhaseId],
+  )
+  // « Poule A » at the AGR, « Groupe 3 » at the FFTT (#696): the number is
+  // stored either way.
+  const nameOf = (g: Pick<Group, 'number' | 'divisionId'>) => poolName(g, { divisions, competitions })
+  const titleOf = (g: Pick<Group, 'number' | 'divisionId'>) => poolTitle(g, { divisions, competitions })
+  const lettered = !!division && isLetteredDivision(division, competitions)
+  const dialogLettered = form.federationId !== FFTT_FEDERATION_ID
+  const nextGroupNumber = (divId: string) => allGroups.filter((g) => g.divisionId === divId).length + 1
+
   const openEdit = (group: Group) => {
     setEditing(group)
     setCreating(false)
-    setForm({ divisionId: group.divisionId, number: group.number })
+    const groupDivision = divisions.find((d) => d.id === group.divisionId)
+    setForm({
+      federationId: groupDivision ? federationOfDivision(groupDivision, competitions) : federationId,
+      divisionId: group.divisionId,
+      number: group.number,
+    })
   }
 
   const openCreate = () => {
     setEditing(null)
     setCreating(true)
-    const divId = division?.id ?? divisions[0]?.id ?? ''
-    setForm({
-      divisionId: divId,
-      number: allGroups.filter((g) => g.divisionId === divId).length + 1,
-    })
+    const divId = division?.id ?? divisionsInPhase[0]?.id ?? ''
+    setForm({ federationId, divisionId: divId, number: nextGroupNumber(divId) })
+  }
+
+  /** A federation picked in the dialog starts over on its first division. */
+  const pickDialogFederation = (fedId: string) => {
+    const first = divisionsOfFederation(divisions, competitions, fedId)
+      .filter((d) => d.phaseId === phaseOfFederation(fedId) && !d.isArchived)
+      .sort((a, b) => a.rank - b.rank)[0]
+    setForm({ federationId: fedId, divisionId: first?.id ?? '', number: nextGroupNumber(first?.id ?? '') })
   }
 
   const closeModal = () => {
@@ -142,19 +223,19 @@ export function GroupsPage() {
   }
 
   const handleArchive = async (group: Group) => {
-    if (await confirm({ title: `Archiver le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
+    if (await confirm({ title: `Archiver le groupe "${division?.displayName ?? ''} - ${titleOf(group)}" ?`, message: `Il ne sera plus visible dans la liste active.`, confirmLabel: 'Archiver' })) {
       archiveGroup(group.id)
     }
   }
 
   const handleDelete = async (group: Group) => {
-    if (await confirm({ title: `Supprimer définitivement le groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
+    if (await confirm({ title: `Supprimer définitivement le groupe "${division?.displayName ?? ''} - ${titleOf(group)}" ?`, message: `Les équipes, journées, matchs, disponibilités et compositions associés seront également supprimés. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) {
       deleteGroup(group.id)
     }
   }
 
   const handleResetGames = async (group: Group) => {
-    if (await confirm({ title: `Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - Groupe ${group.number}" ?`, message: `Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`, confirmLabel: 'Réinitialiser' })) {
+    if (await confirm({ title: `Réinitialiser les matchs du groupe "${division?.displayName ?? ''} - ${titleOf(group)}" ?`, message: `Toutes les journées, tous les matchs et les disponibilités/compositions associées seront supprimés — les équipes du groupe seront conservées. Cette action est irréversible.`, confirmLabel: 'Réinitialiser' })) {
       resetGroupGames(group.id)
     }
   }
@@ -168,37 +249,46 @@ export function GroupsPage() {
           <>
             <HeaderAction variant="secondary" icon={<PlusIcon />} label="Ajouter un groupe" onClick={openCreate} />
             {isAdmin && (
-              <HeaderAction variant="secondary" icon={<FileIcon />} label="Importer depuis un fichier" onClick={() => setImportDocOpen(true)} />
+              <HeaderAction
+                variant="secondary"
+                icon={<FileIcon />}
+                label="Importer depuis un fichier"
+                // The FFTT's PDF export, or a poule calendar of a federation
+                // without an API — the AGR's (#647).
+                onClick={() => (federations.find((f) => f.id === federationId)?.isImported === false
+                  ? setCalendarOpen(true)
+                  : setImportDocOpen(true))}
+              />
             )}
-            {isAdmin && division && (
+            {isAdmin && division && isFftt && (
               <HeaderAction icon={<ImportIcon />} label="Importer les groupes FFTT" onClick={() => setImportOpen(true)} />
             )}
           </>
         }
         controls={
-          phase ? (
-            <div className="flex h-11 items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 md:h-9">
-              <PhaseSwitchButton
-                dir="prev"
-                disabled={phaseIndex <= 0}
-                onClick={() => phaseIndex > 0 && setPhaseId(orderedPhases[phaseIndex - 1].id)}
-              />
-              <span className="whitespace-nowrap font-display text-sm font-semibold text-slate-800">
-                Saison {phase.displayName}
-              </span>
-              <PhaseSwitchButton
-                dir="next"
-                disabled={phaseIndex >= orderedPhases.length - 1}
-                onClick={() => phaseIndex < orderedPhases.length - 1 && setPhaseId(orderedPhases[phaseIndex + 1].id)}
-              />
-            </div>
-          ) : undefined
+          <>
+          {/* The federation first, as on Divisions (#645): a switch, not a dropdown. */}
+          <FederationSwitch
+            options={federationOptions}
+            value={federationId}
+            onChange={(id) => { setChosenFederationId(id); setOrganizationId(''); setPhaseId(undefined) }}
+          />
+          {phase && (
+            <PhasePager
+              label={`Saison ${phase.displayName}`}
+              onPrev={phaseIndex > 0 ? () => setPhaseId(orderedPhases[phaseIndex - 1].id) : undefined}
+              onNext={phaseIndex < orderedPhases.length - 1 ? () => setPhaseId(orderedPhases[phaseIndex + 1].id) : undefined}
+            />
+          )}
+          </>
         }
       />
 
 
-      {/* Organization (optional filter) + Division pickers */}
+      {/* Organization (optional filter, FFTT only) + Division pickers */}
       <div className="flex flex-wrap items-end gap-3">
+        {/* Each federation's organisations narrow its own divisions (#692). */}
+        {orgGroups.length > 0 && (
         <div>
           <label htmlFor="groups-org" className="block text-sm font-medium text-slate-700">
             Organisation <span className="font-normal text-slate-400">(filtre optionnel)</span>
@@ -219,6 +309,7 @@ export function GroupsPage() {
             ))}
           </select>
         </div>
+        )}
         <div>
           <label htmlFor="groups-division" className="block text-sm font-medium text-slate-700">
             Division
@@ -261,7 +352,7 @@ export function GroupsPage() {
             <thead className="bg-slate-50">
               <tr>
                 <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
-                  N° groupe
+                  {lettered ? 'Poule' : 'N° groupe'}
                 </th>
                 <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-slate-700">
                   Équipes
@@ -275,7 +366,7 @@ export function GroupsPage() {
               {groups.map((group) => (
                 <tr key={group.id} className={`hover:bg-slate-50/50 ${group.isArchived ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                    {group.number}
+                    {nameOf(group)}
                     {group.isArchived && (
                       <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">
                         Archivé
@@ -287,7 +378,7 @@ export function GroupsPage() {
                   </td>
                   <td className={`px-4 py-3 text-right ${ACTIONS_CELL}`}>
                     <RowActions
-                      label={`Actions — groupe ${group.number}`}
+                      label={`Actions — ${titleOf(group).toLowerCase()}`}
                       actions={[
                         !group.isArchived && { label: 'Modifier', onClick: () => openEdit(group) },
                         !group.isArchived && isAdmin && {
@@ -342,7 +433,7 @@ export function GroupsPage() {
         <ImportGamesModal
           onClose={() => setImportGamesFor(null)}
           groupIds={[importGamesFor.id]}
-          context={`${division?.displayName ?? ''} · Groupe ${importGamesFor.number} — calendrier de cette poule`}
+          context={`${division?.displayName ?? ''} · ${titleOf(importGamesFor)} — calendrier de cette poule`}
         />
       )}
 
@@ -357,6 +448,14 @@ export function GroupsPage() {
         />
       )}
 
+      {calendarOpen && (
+        <ImportFederationCalendarModal
+          federationId={federationId}
+          viewerClubId={user?.role === 'general_admin' ? undefined : user?.clubId}
+          onClose={() => setCalendarOpen(false)}
+        />
+      )}
+
       {(editing || creating) && (
         <ModalShell
           onClose={closeModal}
@@ -367,6 +466,15 @@ export function GroupsPage() {
               {creating ? 'Ajouter un groupe' : 'Modifier le groupe'}
             </h2>
             <div className="mt-4 space-y-4">
+              {creating && (
+                <FederationSelect
+                  id="group-federationId"
+                  options={federationOptions}
+                  value={form.federationId}
+                  onChange={pickDialogFederation}
+                  wide
+                />
+              )}
               <div>
                 <label htmlFor="group-divisionId" className="block text-sm font-medium text-slate-700">
                   Division
@@ -374,26 +482,44 @@ export function GroupsPage() {
                 <select
                   id="group-divisionId"
                   value={form.divisionId}
-                  onChange={(e) => setForm((f) => ({ ...f, divisionId: e.target.value }))}
+                  onChange={(e) => {
+                    const divId = e.target.value
+                    setForm((f) => ({ ...f, divisionId: divId, number: creating ? nextGroupNumber(divId) : f.number }))
+                  }}
                   className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
                 >
-                  {divisions.map((d) => (
+                  {dialogDivisions.length === 0 && <option value="">Aucune division</option>}
+                  {dialogDivisions.map((d) => (
                     <option key={d.id} value={d.id}>{d.displayName}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label htmlFor="group-number" className="block text-sm font-medium text-slate-700">
-                  N° groupe
+                  {dialogLettered ? 'Poule' : 'N° groupe'}
                 </label>
-                <input
-                  id="group-number"
-                  type="number"
-                  min={1}
-                  value={form.number}
-                  onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                />
+                {dialogLettered ? (
+                  // A letter is picked, its number stored (#696).
+                  <select
+                    id="group-number"
+                    value={form.number}
+                    onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  >
+                    {Array.from({ length: Math.max(26, form.number) }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>{poolLetterOf(n)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="group-number"
+                    type="number"
+                    min={1}
+                    value={form.number}
+                    onChange={(e) => setForm((f) => ({ ...f, number: Number(e.target.value) || 1 }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  />
+                )}
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">

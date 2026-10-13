@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
@@ -36,6 +36,11 @@ import {
   type PlayerSyncField,
 } from '@shared/lib/ffttPlayers'
 import type { Player } from '@shared/types'
+import { activePhaseOf, clubAffiliations } from '@shared/lib/federations'
+import { isAgrPlayerList, parseAgrPlayerListLines } from '@shared/lib/agrPlayerList'
+import { readPdfLines } from '@/utils/api'
+import { pickPdf as pickPdfFile } from '@/utils/documentPicker'
+import type { ImportFederation } from '@shared/lib/ffttPlayers'
 
 // ---------------------------------------------------------------------------
 // Importer les licenciés FFTT, au doigt (#555)
@@ -59,6 +64,8 @@ import type { Player } from '@shared/types'
 // ---------------------------------------------------------------------------
 
 type Status =
+  /** A federation without an API (#681): waiting for its PDF. */
+  | { kind: 'pick'; message?: string }
   | { kind: 'loading' }
   /** FFTT unreachable — offline, or their proxy down. */
   | { kind: 'error' }
@@ -91,13 +98,28 @@ type Search =
 export default function ImportPlayersScreen() {
   const { user } = useAuth()
   const {
-    clubs, phases, players, users, playerPhasePoints, playerSeasonCategories,
-    setClubSeasonLicences, applyPlayerImport,
+    clubs, phases, seasons = [], players, users, playerPhasePoints, playerSeasonCategories,
+    setClubSeasonLicences, applyPlayerImport, federations = [],
   } = useAppData()
   const router = useRouter()
+  // `?federation=agr`: the club's list from that federation's PDF (#681) — the
+  // AGR has no API, so the deck comes from a file instead of the FFTT's
+  // listing. The review is the same; what differs is matched on the AGR
+  // licence, filed under the AGR phase, and never renames a person (#648).
+  const { federation: federationParam } = useLocalSearchParams<{ federation?: string }>()
+  const fromPdf = !!federationParam && federationParam !== 'fftt'
+  const federationShortName = federations.find((f) => f.id === federationParam)?.shortName
+  const importFederation = useMemo<ImportFederation | undefined>(
+    () => (fromPdf ? { id: federationParam!, shortName: federationShortName ?? federationParam! } : undefined),
+    [fromPdf, federationParam, federationShortName],
+  )
 
   const club = clubs.find((c) => c.id === user?.clubId)
-  const mayImport = !!user && !!club && canManageClub(user, club.id) && !!club.affiliationNumber
+  const affiliation = club && fromPdf
+    ? clubAffiliations(club).find((a) => a.federationId === federationParam)
+    : undefined
+  const mayImport = !!user && !!club && canManageClub(user, club.id)
+    && (fromPdf ? !!affiliation : !!club.affiliationNumber)
 
   // The phase the points land on, stated rather than chosen. The web offers a
   // picker; on a phone it would be one more decision in front of the thing the
@@ -105,11 +127,12 @@ export default function ImportPlayersScreen() {
   // but the handful of days around a phase change. It is named on screen, and
   // whoever needs the other one has the web.
   const phase = useMemo(() => {
+    if (fromPdf) return activePhaseOf(phases, federationParam)
     const ordered = [...phases].sort((a, b) => a.displayName.localeCompare(b.displayName))
-    return phases.find((p) => p.status === 'active') ?? ordered[ordered.length - 1]
-  }, [phases])
+    return activePhaseOf(phases) ?? ordered[ordered.length - 1]
+  }, [phases, seasons, fromPdf, federationParam])
 
-  const [status, setStatus] = useState<Status>({ kind: 'loading' })
+  const [status, setStatus] = useState<Status>(fromPdf ? { kind: 'pick' } : { kind: 'loading' })
   /** The licensees with something to write — the deck being reviewed. */
   const [deck, setDeck] = useState<PlayerImportRow[]>([])
   const [index, setIndex] = useState(0)
@@ -162,10 +185,11 @@ export default function ImportPlayersScreen() {
     // Every member of the club, archived included, as candidates for a name
     // match (#566). This argument was `[]` on both clients, which is why a
     // licensee already held under a wrong number was recreated beside himself.
-    const candidates = importCandidates(users, club?.id ?? '')
+    const candidates = importCandidates(users, club?.id ?? '', importFederation)
     const make = (links: ReadonlyMap<string, string>) => buildImportRows(
       licences, players, playerPhasePoints, phase?.id ?? '', candidates,
-      playerSeasonCategories, phase?.seasonId, links,
+      importFederation ? [] : playerSeasonCategories, importFederation ? undefined : phase?.seasonId, links,
+      importFederation,
     )
     rebuild.current = make
     setConfirmed(new Map())
@@ -176,7 +200,7 @@ export default function ImportPlayersScreen() {
     // Read at call time rather than depended on: a refetch landing mid-review
     // must not rebuild the deck under the member's finger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase?.id, phase?.seasonId, club?.id])
+  }, [phase?.id, phase?.seasonId, club?.id, importFederation?.id])
 
   /**
    * Accept or withdraw a suggested match (#566).
@@ -201,8 +225,46 @@ export default function ImportPlayersScreen() {
     })
   }
 
+  /**
+   * The federation's PDF (#681): picked, read by the API — Hermes runs no
+   * pdf.js —, then parsed here by the web's own parser. A list of another club
+   * is refused: it would move its licensees into this one.
+   */
+  const pickPdf = useCallback(async () => {
+    const picked = await pickPdfFile()
+    if (picked === null) return
+    if (picked === 'unavailable') {
+      return setStatus({
+        kind: 'pick',
+        message: 'Cette version de l’app ne sait pas ouvrir un fichier : mettez-la à jour depuis le store, ou importez la liste depuis le site.',
+      })
+    }
+    setStatus({ kind: 'loading' })
+    const read = await readPdfLines(picked)
+    if (!read.ok) return setStatus({ kind: 'pick', message: read.message })
+    if (!isAgrPlayerList(read.lines)) {
+      return setStatus({
+        kind: 'pick',
+        message: read.lines.length
+          ? `Ce fichier n’est pas une liste de joueurs de l’${importFederation?.shortName ?? 'AGR'}.`
+          : 'Ce PDF n’a pas de texte lisible : il faut la liste exportée, pas une photo.',
+      })
+    }
+    const list = parseAgrPlayerListLines(read.lines)
+    if ('error' in list) return setStatus({ kind: 'pick', message: list.error })
+    if (affiliation?.affiliationNumber && list.affiliationNumber && list.affiliationNumber !== affiliation.affiliationNumber) {
+      return setStatus({
+        kind: 'pick',
+        message: `Cette liste est celle de ${list.clubName} (n° ${list.affiliationNumber}), pas de ${club?.displayName}.`,
+      })
+    }
+    if (list.licences.length === 0) return setStatus({ kind: 'empty' })
+    setMissing([])
+    showRows(list.licences, 'club')
+  }, [affiliation?.affiliationNumber, club?.displayName, importFederation?.shortName, showRows])
+
   const load = useCallback(async () => {
-    if (!club?.affiliationNumber) return
+    if (fromPdf || !club?.affiliationNumber) return
     setStatus({ kind: 'loading' })
     setSearch({ kind: 'idle' })
     const licences = await fetchClubLicencesFromBrowser(club.affiliationNumber)
@@ -230,7 +292,7 @@ export default function ImportPlayersScreen() {
     }
     // `players` and the rest are read at call time — see `showRows`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [club?.id, club?.affiliationNumber, phase?.id, phase?.seasonId, showRows])
+  }, [club?.id, club?.affiliationNumber, phase?.id, phase?.seasonId, showRows, fromPdf])
 
   /**
    * One licence, by number (#557) — the half of #384 the app did not carry.
@@ -271,10 +333,11 @@ export default function ImportPlayersScreen() {
     () => playerImportWrites(deck, selected, {
       clubId: club?.id ?? '',
       phaseId: phase?.id ?? '',
-      seasonId: phase?.seasonId,
+      seasonId: fromPdf ? undefined : phase?.seasonId,
       newId: () => `player-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      ...(importFederation ? { federationId: importFederation.id } : {}),
     }),
-    [deck, selected, club?.id, phase?.id, phase?.seasonId],
+    [deck, selected, club?.id, phase?.id, phase?.seasonId, fromPdf, importFederation],
   )
 
   const nothingPicked = writes.created + writes.updated === 0
@@ -345,9 +408,11 @@ export default function ImportPlayersScreen() {
       <Screen>
         <View style={s.centre}>
           <Text style={s.notice}>
-            {club && !club.affiliationNumber
-              ? "Ce club n'a pas de numéro d'affiliation FFTT."
-              : "Seuls les administrateurs du club peuvent importer les licenciés."}
+            {club && fromPdf && !affiliation
+              ? `Ce club n'est pas affilié à l'${importFederation?.shortName}.`
+              : club && !fromPdf && !club.affiliationNumber
+                ? "Ce club n'a pas de numéro d'affiliation FFTT."
+                : "Seuls les administrateurs du club peuvent importer les licenciés."}
           </Text>
         </View>
       </Screen>
@@ -361,9 +426,34 @@ export default function ImportPlayersScreen() {
           <ActivityIndicator color={colors.accent} />
           <Text style={s.notice}>
             {status.kind === 'loading'
-              ? 'Lecture de la liste FFTT…'
+              ? `Lecture de la liste ${importFederation?.shortName ?? 'FFTT'}…`
               : 'Enregistrement…'}
           </Text>
+        </View>
+      </Screen>
+    )
+  }
+
+  if (status.kind === 'pick') {
+    return (
+      <Screen>
+        <View style={s.centre}>
+          <Text style={s.notice}>
+            {club?.displayName}{affiliation?.affiliationNumber ? ` · n° ${affiliation.affiliationNumber}` : ''}
+            {phase ? `\nClassement sur ${phase.displayName}` : ''}
+          </Text>
+          {!phase ? (
+            <Text style={s.searchWarn}>
+              Aucune phase active pour cette fédération : l’administrateur général la crée d’abord.
+            </Text>
+          ) : (
+            <TouchableOpacity testID="import-pick-pdf" style={s.primary} onPress={() => void pickPdf()}>
+              <Text style={s.primaryTxt}>Choisir le PDF de la liste {importFederation?.shortName}</Text>
+            </TouchableOpacity>
+          )}
+          {status.message ? (
+            <Text testID="import-pick-message" style={s.searchWarn} accessibilityRole="alert">{status.message}</Text>
+          ) : null}
         </View>
       </Screen>
     )
@@ -376,9 +466,15 @@ export default function ImportPlayersScreen() {
           <Text style={s.notice}>
             {status.kind === 'error'
               ? 'Impossible de contacter la FFTT. Réessayez plus tard.'
-              : `La FFTT ne liste aucun licencié pour le club n° ${club?.affiliationNumber}.`}
+              : fromPdf
+                ? 'Cette liste ne contient aucun licencié.'
+                : `La FFTT ne liste aucun licencié pour le club n° ${club?.affiliationNumber}.`}
           </Text>
-          <TouchableOpacity testID="import-retry" style={s.primary} onPress={load}>
+          <TouchableOpacity
+            testID="import-retry"
+            style={s.primary}
+            onPress={fromPdf ? () => setStatus({ kind: 'pick' }) : load}
+          >
             <Text style={s.primaryTxt}>Réessayer</Text>
           </TouchableOpacity>
         </View>
@@ -413,9 +509,12 @@ export default function ImportPlayersScreen() {
     <Screen>
       <ScrollView contentContainerStyle={[s.scroll, contentWidth()]} {...swipe}>
         <Text style={s.lede}>
-          {club?.displayName} · n° {club?.affiliationNumber}
+          {club?.displayName} · n° {fromPdf ? affiliation?.affiliationNumber : club?.affiliationNumber}
         </Text>
 
+        {/* One licence by number is an FFTT look-up (#557): a PDF list has no
+            such thing to ask. */}
+        {!fromPdf && (
         <View style={s.searchRow}>
           <TextInput
             testID="import-licence-input"
@@ -446,6 +545,7 @@ export default function ImportPlayersScreen() {
             )}
           </TouchableOpacity>
         </View>
+        )}
 
         {/* The field answers under itself and never replaces the review: a
             mistyped number must not cost the deck already on screen. */}
@@ -512,7 +612,7 @@ export default function ImportPlayersScreen() {
             <Text testID="import-empty-deck" style={s.emptyDeck}>
               {scope === 'licence'
                 ? 'Rien à écrire : ce licencié est déjà à jour.'
-                : 'Rien à écrire : tout ce que la FFTT liste est déjà à jour.'}
+                : `Rien à écrire : tout ce que ${importFederation ? `la liste ${importFederation.shortName}` : 'la FFTT'} liste est déjà à jour.`}
             </Text>
           </View>
         )}
@@ -534,7 +634,9 @@ export default function ImportPlayersScreen() {
             {/* Not the counts — those are the confirmation's. This is the one
                 thing the dialog cannot say, because it is a setting of the
                 import rather than a consequence of it. */}
-            <Text style={s.summaryMeta}>Points enregistrés sur {phase?.displayName}.</Text>
+            <Text style={s.summaryMeta}>
+              {importFederation ? 'Classement enregistré' : 'Points enregistrés'} sur {phase?.displayName}.
+            </Text>
             <TouchableOpacity
               testID="import-apply"
               style={[s.primary, nothingPicked && s.primaryOff]}

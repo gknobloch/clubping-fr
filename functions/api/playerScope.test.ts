@@ -116,7 +116,8 @@ describe('POST /players — creating a licensee', () => {
     const { db, writes } = fakeDb([clubAdmin], 'ca')
     const res = await send(db, '/players', 'POST', newPlayer(CLUB))
     expect(res.status).toBe(200)
-    expect(featureWrites(writes)[0].sql).toMatch(/INSERT INTO users/)
+    // A person first, then the club profile that names it (#655).
+    expect(featureWrites(writes).map((w) => w.sql.match(/INTO (\w+)/)?.[1])).toEqual(['people', 'users'])
   })
 
   // The club is named by the body, so this needs no lookup at all — and it is

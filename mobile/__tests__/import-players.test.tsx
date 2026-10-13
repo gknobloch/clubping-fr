@@ -47,7 +47,8 @@ jest.mock('@/components/Pager', () => ({
 
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }))
+jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }), useLocalSearchParams: () => ({}) }))
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }))
 
 const club: Club = {
   id: 'c1', affiliationNumber: '06680011', displayName: 'Rixheim PPA',

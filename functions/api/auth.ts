@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { UserRow } from './rows'
 import { sendEmail } from './email'
+import { profileReaches, reaches } from './reach'
 import { parsePreferences } from '../../src/lib/notificationPreferences'
 
 // Shared environment for the whole API. Secrets/vars are configured as
@@ -240,6 +241,9 @@ function serializeUser(r: UserRow) {
     ...(r.birth_place ? { birthPlace: r.birth_place } : {}),
     ...(r.status ? { status: r.status } : {}),
     ...(r.club_id ? { clubId: r.club_id } : {}),
+    // The person behind this club profile (#655) — what « Mon compte » manages
+    // delegations for.
+    ...(r.person_id ? { personId: r.person_id } : {}),
     // Always sent, never omitted: the mobile switch has to draw itself before
     // the member has ever touched it, and `undefined` would read as off (#495).
     // It rides here rather than in GET /api/data because this is the endpoint
@@ -266,15 +270,23 @@ function serializeUser(r: UserRow) {
  * Never seen at all breaks ties by id, which is arbitrary but stable — the
  * same address always opens on the same profile until one of them is used.
  */
-async function userByEmail(db: D1Database, email: string): Promise<UserRow | null> {
+/**
+ * The profile an address opens, and `origin_id` — the address's own profile,
+ * the one that signed in (#702). They differ when a delegate last acted as
+ * the person who delegated to them.
+ */
+async function userByEmail(db: D1Database, email: string): Promise<(UserRow & { origin_id: string }) | null> {
+  // Among every profile the address reaches (#655) — a delegate who last
+  // acted as their child reopens there, as a shared address did (#640).
   return db
     .prepare(
-      `SELECT * FROM users WHERE lower(email) = lower(?)
-        ORDER BY COALESCE(last_seen_at, 0) DESC, id
+      `SELECT u.*, o.id AS origin_id FROM users o JOIN users u ON ${reaches('o', 'u')}
+        WHERE lower(o.email) = lower(?)
+        ORDER BY COALESCE(u.last_seen_at, 0) DESC, u.id
         LIMIT 1`,
     )
     .bind(email)
-    .first<UserRow>()
+    .first<UserRow & { origin_id: string }>()
 }
 
 type ProfileRow = Pick<UserRow, 'id' | 'first_name' | 'last_name' | 'role' | 'club_id' | 'status'> & {
@@ -296,26 +308,33 @@ function serializeProfile(r: ProfileRow) {
 /**
  * Every profile the member's address signs in as, the member included (#640).
  *
+ * Read from who signed in (`rootId`, #702), not from the profile the session
+ * is now: Nathan acting as Chloé is offered Nathan back, and Chloé's own
+ * delegators stay out of his reach — one level (#655).
+ *
  * A member with no address has only themselves: an empty address is not
  * shared with the others that have none. And the member is in the answer
  * whatever the query says — the switcher must always be able to name who is
  * signed in.
  */
-async function profilesOf(db: D1Database, user: UserRow) {
-  const email = user.email?.trim() ?? ''
+async function profilesOf(db: D1Database, user: UserRow, rootId: string = user.id) {
   let found: ProfileRow[] = []
   // A supplement to the session, never a condition of it: a list that cannot
   // be read leaves a switcher with nothing to offer, not a member signed out.
   try {
+    // Every profile this one reaches (#655): the person's own in other clubs,
+    // those of whoever delegated to them, and — until they are cleaned up —
+    // the profiles sharing the address (#640).
     const rows = await db
       .prepare(
-        `SELECT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
+        `SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
                 c.display_name AS club_name
-           FROM users u
+           FROM users o
+           JOIN users u ON ${reaches('o', 'u')}
            LEFT JOIN clubs c ON c.id = u.club_id
-          WHERE u.id = ? OR (? != '' AND lower(u.email) = lower(?))`,
+          WHERE o.id = ?`,
       )
-      .bind(user.id, email, email)
+      .bind(rootId)
       .all<ProfileRow>()
     found = rows?.results ?? []
   } catch (e) {
@@ -323,18 +342,6 @@ async function profilesOf(db: D1Database, user: UserRow) {
   }
   const self: ProfileRow = found.find((r) => r.id === user.id) ?? { ...user, club_name: null }
   return [self, ...found.filter((r) => r.id !== user.id)].map(serializeProfile)
-}
-
-/**
- * Whether two members sign in with the same address — which is what lets one
- * switch to the other without a second code (#640). Case aside, as at sign-in;
- * and no address shares nothing, or every member without one would reach
- * every other.
- */
-export function sameAddress(a: Pick<UserRow, 'email'>, b: Pick<UserRow, 'email'>): boolean {
-  const x = a.email?.trim().toLowerCase()
-  const y = b.email?.trim().toLowerCase()
-  return !!x && x === y
 }
 
 /**
@@ -376,12 +383,19 @@ export const sessionKey = (token: string) => sha256Hex(token)
  * actually matched.
  */
 const SESSION_BY_TOKEN =
-  'SELECT token, user_id, expires_at FROM sessions WHERE token = ?'
+  'SELECT token, user_id, expires_at, origin_user_id FROM sessions WHERE token = ?'
 
 interface SessionRow {
   token: string
   user_id: string
   expires_at: number
+  /** Who signed in, when the session is someone they reach (#702). */
+  origin_user_id: string | null
+}
+
+/** The profile a session's reach is read from: who signed in (#702). */
+async function sessionRoot(db: D1Database, token: string, user: UserRow): Promise<string> {
+  return (await sessionByToken(db, token))?.origin_user_id ?? user.id
 }
 
 async function sessionByToken(db: D1Database, token: string) {
@@ -391,15 +405,16 @@ async function sessionByToken(db: D1Database, token: string) {
     .first<SessionRow>()
 }
 
-async function createSession(db: D1Database, userId: string): Promise<string> {
+async function createSession(db: D1Database, userId: string, originId?: string | null): Promise<string> {
   const token = randomToken()
   const now = Date.now()
   await db
     .prepare(
-      'INSERT INTO sessions (token, user_id, created_at, expires_at)' +
-      ' VALUES (?, ?, ?, ?)',
+      'INSERT INTO sessions (token, user_id, created_at, expires_at, origin_user_id)' +
+      ' VALUES (?, ?, ?, ?, ?)',
     )
-    .bind(await sessionKey(token), userId, now, now + SESSION_TTL_MS)
+    // No origin when the session is who signed in.
+    .bind(await sessionKey(token), userId, now, now + SESSION_TTL_MS, originId && originId !== userId ? originId : null)
     .run()
   // Expired sessions were never swept (#409): rows left only at logout, or
   // lazily when a dead token happened to be presented again, so a session that
@@ -556,9 +571,9 @@ export const authApp = new Hono<Env>()
  * Routing them both through here is what stops a new sign-in path from minting
  * a session and forgetting the cookie.
  */
-async function sessionResponse(c: Context<Env>, token: string, user: UserRow) {
+async function sessionResponse(c: Context<Env>, token: string, user: UserRow, rootId: string = user.id) {
   c.header('Set-Cookie', sessionCookieHeader(token, c.req.url))
-  return c.json({ token, user: serializeUser(user), profiles: await profilesOf(c.env.DB, user) })
+  return c.json({ token, user: serializeUser(user), profiles: await profilesOf(c.env.DB, user, rootId) })
 }
 
 // The store-review account, if configured (see the Env type). Both the email
@@ -611,8 +626,8 @@ authApp.post('/email/verify', async (c) => {
   if (isReviewEmail(c.env, email) && code === c.env.REVIEW_LOGIN_CODE) {
     const user = await userByEmail(c.env.DB, email)
     if (!user) return c.json({ error: 'no_account' }, 403)
-    const token = await createSession(c.env.DB, user.id)
-    return sessionResponse(c, token, user)
+    const token = await createSession(c.env.DB, user.id, user.origin_id)
+    return sessionResponse(c, token, user, user.origin_id)
   }
 
   const row = await c.env.DB.prepare(
@@ -636,8 +651,8 @@ authApp.post('/email/verify', async (c) => {
   if (!user) return c.json({ error: 'no_account' }, 403)
 
   await c.env.DB.prepare('DELETE FROM auth_otp WHERE email = lower(?)').bind(email).run()
-  const token = await createSession(c.env.DB, user.id)
-  return sessionResponse(c, token, user)
+  const token = await createSession(c.env.DB, user.id, user.origin_id)
+  return sessionResponse(c, token, user, user.origin_id)
 })
 
 // Sign in with a Google/Apple ID token.
@@ -666,21 +681,26 @@ authApp.post('/oauth', async (c) => {
     .first<{ user_id: string }>()
 
   let user: UserRow | null = null
+  let originId: string | undefined
   if (link) {
     user = await db.prepare('SELECT * FROM users WHERE id = ?').bind(link.user_id).first<UserRow>()
   } else if (claims.email) {
-    user = await userByEmail(db, claims.email)
-    if (user) {
+    const found = await userByEmail(db, claims.email)
+    user = found
+    originId = found?.origin_id
+    if (found) {
+      // Linked to the address's own profile, not to the one it landed on
+      // (#702): Nathan's Google account is Nathan's, even if it opened Chloé's.
       await db
         .prepare('INSERT OR IGNORE INTO auth_identities (provider, subject, user_id) VALUES (?, ?, ?)')
-        .bind(provider, claims.sub, user.id)
+        .bind(provider, claims.sub, found.origin_id)
         .run()
     }
   }
 
   if (!user) return c.json({ error: 'no_account' }, 403)
-  const token = await createSession(db, user.id)
-  return sessionResponse(c, token, user)
+  const token = await createSession(db, user.id, originId)
+  return sessionResponse(c, token, user, originId)
 })
 
 // Current user from either credential — the cookie is how the web restores a
@@ -692,7 +712,11 @@ authApp.get('/me', async (c) => {
   if (!user) return c.json({ error: 'unauthorized' }, 401)
   // The profiles too (#640): a boot that restores a session has signed in
   // without the sign-in response, and the switcher needs the list either way.
-  return c.json({ user: serializeUser(user), profiles: await profilesOf(c.env.DB, user) })
+  // From who signed in (#702), so a delegate is always offered their own.
+  return c.json({
+    user: serializeUser(user),
+    profiles: await profilesOf(c.env.DB, user, await sessionRoot(c.env.DB, token, user)),
+  })
 })
 
 /**
@@ -721,14 +745,22 @@ authApp.post('/switch', async (c) => {
 
   const { userId } = await c.req.json<{ userId?: unknown }>().catch(() => ({ userId: undefined }))
   if (typeof userId !== 'string' || !userId) return c.json({ error: 'invalid_request' }, 400)
-  if (userId === current.id) return sessionResponse(c, token, current)
+  // What is reachable is read from who signed in, not from the profile the
+  // session is now (#702): Nathan, acting as Chloé who delegated to him, goes
+  // back to Nathan — and never on to whoever delegated to Chloé.
+  const root = await sessionRoot(c.env.DB, token, current)
+  if (userId === current.id) return sessionResponse(c, token, current, root)
 
+  // Read now, not when the session opened: a delegation withdrawn, or a
+  // child given an address of their own, takes effect at once (#640, #655).
   const target = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first<UserRow>()
-  if (!target || !sameAddress(current, target)) return c.json({ error: 'not_allowed' }, 403)
+  if (!target || !(await profileReaches(c.env.DB, root, target.id))) {
+    return c.json({ error: 'not_allowed' }, 403)
+  }
 
-  const fresh = await createSession(c.env.DB, target.id)
+  const fresh = await createSession(c.env.DB, target.id, root)
   await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(await sessionKey(token)).run()
-  return sessionResponse(c, fresh, target)
+  return sessionResponse(c, fresh, target, root)
 })
 
 // Revoke the current session: the row goes, and so does the cookie — leaving

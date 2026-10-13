@@ -3,6 +3,7 @@ import { render as rtlRender, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import type {
+  Club,
   Competition, CompetitionGroup, Division, GameSelection, MemberGroup, Player,
   PlayerSeasonCategory, Team,
 } from '@/types'
@@ -30,6 +31,8 @@ const data = vi.hoisted(() => ({
   divisions: [] as Division[],
   gameSelections: [] as GameSelection[],
   playerSeasonCategories: [] as PlayerSeasonCategory[],
+  // An FFTT club (#643): its folded list offers the FFTT's championships.
+  clubs: [{ id: 'club-1', affiliationNumber: '06680011' }] as Club[],
 }))
 const auth = vi.hoisted(() => ({ user: null as unknown }))
 

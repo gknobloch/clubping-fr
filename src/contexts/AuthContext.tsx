@@ -143,6 +143,11 @@ interface AuthContextValue {
   profiles: Profile[]
   /** Become another of `profiles`. Rejects when the server refuses or is unreachable. */
   switchProfile: (userId: string) => Promise<void>
+  /**
+   * Ask the server again which profiles this session reaches — after a
+   * delegation is given up (#655), say. Silent when it cannot be reached.
+   */
+  refreshProfiles: () => Promise<void>
   /** Dev login (gated by DEV_LOGIN) */
   devUsers: DevUser[]
   devLoginAs: (userId: string) => Promise<void>
@@ -348,6 +353,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [realUser, devUser, devProfiles, realToken, applySession],
   )
 
+  const refreshProfiles = useCallback(async () => {
+    if (!realUser) return
+    try {
+      const me = await fetchMe(realToken ?? undefined)
+      setProfiles(me.profiles)
+    } catch {
+      // Offline keeps the list it had: a stale switcher is better than none.
+    }
+  }, [realUser, realToken])
+
   const devLoginAs = useCallback(
     async (userId: string) => {
       if (!DEV_LOGIN) return
@@ -378,13 +393,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loginWithIdToken,
       logout,
       profiles: realUser ? profiles : devProfiles,
+      refreshProfiles,
       switchProfile,
       devUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
     // devUsers matters: the list arrives asynchronously on a preview, and
     // omitting it would leave the picker showing the mock fallback forever.
-    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, realUser, profiles, devProfiles, switchProfile, devUsers, devLoginAs],
+    [user, realToken, loading, requestCode, verifyCode, loginWithIdToken, logout, realUser, profiles, devProfiles, switchProfile, refreshProfiles, devUsers, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

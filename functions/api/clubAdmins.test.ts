@@ -37,14 +37,12 @@ function fakeDb(users: Row[]) {
       bind: (...params: unknown[]) => ({
         first: async () => {
           if (/FROM clubs/.test(sql)) return params[0] === CLUB || params[0] === OTHER ? { id: params[0] } : null
-          if (/lower\(email\)/.test(sql)) {
-            const email = String(params[0]).toLowerCase()
-            // The invite matches the name as well since #640.
-            const named = /first_name/.test(sql)
-            const same = (a: string | null | undefined, b: unknown) =>
-              (a ?? '').trim().toLowerCase() === String(b).toLowerCase()
-            return users.find((u) => (u.email ?? '').toLowerCase() === email &&
-              (!named || (same(u.first_name, params[1]) && same(u.last_name, params[2])))) ?? null
+          // Whoever already signs in with an address (#655, 4 bis): a person,
+          // one per member row here.
+          if (/FROM people/.test(sql) && /lower\(trim\(email\)\)/.test(sql)) {
+            const email = String(params[0]).trim().toLowerCase()
+            const u = users.find((x) => (x.email ?? '').trim().toLowerCase() === email && `person-${x.id}` !== params[1])
+            return u ? { id: `person-${u.id}`, first_name: u.first_name ?? null, last_name: u.last_name ?? null } : null
           }
           return null
         },
@@ -148,8 +146,12 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
     expect(res.status).toBe(200)
     const insert = writes.find((w) => /INSERT INTO users/.test(w.sql))
     expect(insert?.sql).toContain("'club_admin', 0")
+    // A person of their own (#655), written before the profile that names it.
+    const person = writes.find((w) => /INSERT OR IGNORE INTO people/.test(w.sql))
+    expect(writes.indexOf(person!)).toBeLessThan(writes.indexOf(insert!))
+    expect(person?.params.slice(1, 4)).toEqual(['Virginie', 'Barlinge', 'v@example.com'])
     expect(insert?.params).toEqual([
-      expect.any(String), 'v@example.com', 'Virginie', 'Barlinge', '0686839957', CLUB,
+      expect.any(String), 'v@example.com', 'Virginie', 'Barlinge', '0686839957', CLUB, person?.params[0],
     ])
   })
 
@@ -165,17 +167,20 @@ describe('POST /clubs/:clubId/admins — inviting a non-licensee (#474)', () => 
     expect(writes).toEqual([])
   })
 
-  it('invites somebody else under an address a family member already uses (#640)', async () => {
-    // A parent who does not play, administering the club where their child
-    // plays under the parent's address.
+  it('refuses somebody else under an address another person uses — one address, one person (#655)', async () => {
+    // #640 allowed a parent to be invited under the address their child used;
+    // the child now has their own, or none and the parent as delegate.
     const { db, writes } = fakeDb([
       { ...admin('a0'), email: 'henaut@example.com', first_name: 'Sacha', last_name: 'Henaut' },
     ])
     const res = await send(db, `/clubs/${CLUB}/admins`, 'POST', {
       firstName: 'Benjamin', lastName: 'Henaut', email: 'henaut@example.com',
     })
-    expect(res.status).toBe(200)
-    expect(writes.find((w) => /INSERT INTO users/.test(w.sql))?.params[1]).toBe('henaut@example.com')
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({
+      error: 'address_taken', message: expect.stringMatching(/^Cette adresse est déjà celle de Sacha Henaut/),
+    })
+    expect(writes).toEqual([])
   })
 
   it('demands a name and an address — the address is the way in', async () => {

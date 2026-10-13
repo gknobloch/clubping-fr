@@ -1,0 +1,14 @@
+-- #702 — a session remembers who signed in, not only who it is now.
+--
+-- A delegate who opens the profile of the person who delegated to them gets
+-- a session for that profile (#640: a session is one member), and from there
+-- only what THAT profile reaches was offered — never the delegate's own. The
+-- way back was to sign out and ask for a new code.
+--
+-- `origin_user_id` is the profile the code (or the OAuth token) signed in;
+-- NULL when the session is that profile. What the switcher offers, and what
+-- /auth/switch admits, is what the origin reaches.
+--
+-- Additive, one deploy: the worker it replaces never names the column, and
+-- its sessions read as NULL — themselves — exactly as they behave today.
+ALTER TABLE sessions ADD COLUMN origin_user_id TEXT;

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
 import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { teamPhaseEntries } from '@/lib/teamPhases'
-import { gameDate, gameSchedule, isSlotConfirmed } from '@/lib/matchdays'
+import { gameDate, gameSchedule, isProvisionalSlot, isSlotConfirmed } from '@/lib/matchdays'
 import { getTeamName } from '@/lib/teamName'
 import { ClubLogo } from '@/components/ClubLogo'
 import { GameQuickView } from '@/components/GameQuickView'
@@ -20,6 +20,7 @@ import {
 } from '@/lib/phaseAvailability'
 import { unlicensedIds } from '@/lib/seasonLicences'
 import { activeSeasonId } from '@/lib/season'
+import { poolTitle } from '@/lib/poolLabel'
 
 // Player/captain-facing team detail: identity + a phase switcher paging the
 // phases this team (club + number) has played, each showing the phase
@@ -29,7 +30,7 @@ export function TeamDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const {
     teams, players, clubs, phases, divisions, groups, matchDays, games, gameSelections,
-    gameAvailabilities, seasons, playerSeasonLicences,
+    gameAvailabilities, seasons, playerSeasonLicences, competitions,
   } = useAppData()
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
@@ -56,6 +57,8 @@ export function TeamDetailPage() {
   const team = teams.find((t) => t.id === current?.teamId) ?? baseTeam
   const division = divisions.find((d) => d.id === team?.divisionId)
   const club = clubs.find((c) => c.id === team?.clubId)
+  // The poule of the phase on screen: each phase has its own (#718).
+  const group = groups.find((g) => g.id === team?.groupId)
   const games_ = useMemo(() => current?.games ?? [], [current])
   const totalGames = games_.length
 
@@ -146,6 +149,24 @@ export function TeamDetailPage() {
         keyTeam={lentKeyTeam(phaseGrid)}
       />
 
+      {/* What the federation's calendar says about the poule (#647): where a
+          club plays when not at home, where the sheets go, the deadline for
+          postponements. It was on every match page (#718), saying the same
+          thing on each: it is about the poule, so it lives with the team. */}
+      {group?.note && (
+        <section
+          aria-label="À savoir sur la poule"
+          className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm"
+        >
+          <h2 className="pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {poolTitle(group, { divisions, competitions })}
+          </h2>
+          <ul className="space-y-0.5 text-sm text-slate-600">
+            {group.note.split('\n').map((line) => <li key={line}>{line}</li>)}
+          </ul>
+        </section>
+      )}
+
       {/* No «Joueurs» list under the planning (#630): its rows were the
           grid's rows, its count the grid's «Sél.», its renforts the grid's
           Renforts row. */}
@@ -194,7 +215,7 @@ export function TeamDetailPage() {
                         phone: "19 sept. 16h00" is 110px, and set beside a
                         truncating opponent name it eats the name instead. */}
                     <span className="text-right text-sm text-slate-500">
-                      <MatchDate label={dateLabel} confirmed={confirmed} />
+                      <MatchDate label={dateLabel} confirmed={confirmed} provisional={isProvisionalSlot(g)} />
                       {time && (
                         <span className="block text-xs text-slate-400 md:ml-1 md:inline md:text-sm md:text-slate-500">
                           {time}

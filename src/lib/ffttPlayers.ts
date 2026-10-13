@@ -38,6 +38,24 @@
 import type { Player, PlayerPhasePoints, PlayerSeasonCategory, User } from '../types'
 import { normalizeFfttName } from './ffttClub'
 import { categoryFor } from './seasonCategories'
+import { FFTT_FEDERATION_ID } from './federations'
+import { licenceOf } from './licences'
+import { rankingLabel } from './ranking'
+
+/**
+ * The federation an import speaks for, when it is not the FFTT (#648): an
+ * AGR player list. Its licence is that federation's (`federation_licences`),
+ * its « points » are its classement, and it never renames a person who exists —
+ * the FFTT and the AGR spell names differently, and each import would undo the
+ * other's (#655).
+ */
+export interface ImportFederation {
+  id: string
+  shortName: string
+}
+
+const otherFederation = (federation?: ImportFederation) =>
+  federation && federation.id !== FFTT_FEDERATION_ID ? federation : undefined
 
 const LICENCES_URL = 'https://fftt.dafunker.com/v1/proxy/xml_licence_b.php'
 const TIMEOUT_MS = 15000
@@ -351,17 +369,22 @@ const nameChanged = (current: string, incoming: string) =>
   foldAccents(current) !== foldAccents(incoming)
 
 function field(
-  key: PlayerSyncFieldKey, incoming: string, current: string | null,
+  key: PlayerSyncFieldKey, incoming: string, current: string | null, federation?: ImportFederation,
 ): PlayerSyncField {
   const isName = key === 'lastName' || key === 'firstName'
   const same = current !== null
     && (isName ? !nameChanged(current, incoming) : current === incoming)
+  const other = otherFederation(federation)
+  const label = other && key === 'licenseNumber' ? `N° licence ${other.shortName}`
+    : other && key === 'points' ? rankingLabel(other.id)
+      : FIELD_LABELS[key]
   return {
     key,
-    label: FIELD_LABELS[key],
+    label,
     current,
     incoming: incoming || null,
-    unchanged: same,
+    // A person who exists keeps their name against another federation's list.
+    unchanged: same || (!!other && isName && current !== null),
     unavailable: !incoming,
   }
 }
@@ -374,13 +397,14 @@ function field(
 export function playerSyncFields(
   incoming: FfttLicence,
   current?: CurrentPlayerValues,
+  federation?: ImportFederation,
 ): PlayerSyncField[] {
   return [
-    field('lastName', incoming.lastName, current?.lastName ?? null),
-    field('firstName', incoming.firstName, current?.firstName ?? null),
-    field('licenseNumber', incoming.licence, current?.licenseNumber ?? null),
-    field('points', incoming.points, current ? current.points ?? null : null),
-    field('category', incoming.category, current ? current.category ?? null : null),
+    field('lastName', incoming.lastName, current?.lastName ?? null, federation),
+    field('firstName', incoming.firstName, current?.firstName ?? null, federation),
+    field('licenseNumber', incoming.licence, current?.licenseNumber ?? null, federation),
+    field('points', incoming.points, current ? current.points ?? null : null, federation),
+    field('category', incoming.category, current ? current.category ?? null : null, federation),
   ]
 }
 
@@ -472,7 +496,8 @@ export interface ImportCandidate {
  * up holding the same licensee twice: once archived under a wrong licence, once
  * created fresh beside them.
  */
-export function importCandidates(users: User[], clubId: string): ImportCandidate[] {
+export function importCandidates(users: User[], clubId: string, federation?: ImportFederation): ImportCandidate[] {
+  const other = otherFederation(federation)
   return users
     .filter((u) => u.clubId === clubId)
     .map((u) => ({
@@ -480,7 +505,8 @@ export function importCandidates(users: User[], clubId: string): ImportCandidate
       firstName: u.firstName,
       lastName: u.lastName,
       email: u.email,
-      licenseNumber: u.licenseNumber,
+      // The licence of the federation being imported (#648).
+      licenseNumber: other ? licenceOf(u, other.id) : u.licenseNumber,
       archived: u.status === 'archived',
     }))
 }
@@ -541,9 +567,13 @@ export function buildImportRows(
    * `creates`, with no second rule in `playerImportWrites` to keep in step.
    */
   confirmed: ReadonlyMap<string, string> = new Map(),
+  /** Another federation's list (#648): its licence is matched, its classement filed. */
+  federation?: ImportFederation,
 ): PlayerImportRow[] {
+  const other = otherFederation(federation)
+  const licenceOfPlayer = (p: Player) => (other ? licenceOf(p, other.id) : p.licenseNumber ?? '').trim()
   const byLicence = new Map(
-    players.filter((p) => p.licenseNumber).map((p) => [p.licenseNumber.trim(), p]),
+    players.filter((p) => licenceOfPlayer(p)).map((p) => [licenceOfPlayer(p), p]),
   )
   const byId = new Map(candidates.map((c) => [c.id, c]))
   // Whoever a licence of this very import has already taken is spoken for, and
@@ -560,15 +590,16 @@ export function buildImportRows(
   /** The row for a licence we are writing onto a member we already hold. */
   const against = (
     licence: FfttLicence,
-    member: { id: string; firstName?: string; lastName?: string; licenseNumber?: string },
+    member: { id: string; firstName?: string; lastName?: string; licenseNumber?: string; licences?: Player['licences'] },
   ): PlayerImportRow => {
     const fields = playerSyncFields(licence, {
       lastName: member.lastName ?? '',
       firstName: member.firstName ?? '',
-      licenseNumber: member.licenseNumber ?? '',
+      // A candidate already carries the federation's licence (`importCandidates`).
+      licenseNumber: other && 'licences' in member ? licenceOf(member, other.id) : member.licenseNumber ?? '',
       points: phasePoints.find((p) => p.phaseId === phaseId && p.playerId === member.id)?.points,
       category: categoryFor(seasonCategories, seasonId, member.id),
-    })
+    }, federation)
     return {
       licence,
       playerId: member.id,
@@ -593,7 +624,7 @@ export function buildImportRows(
       return {
         licence,
         status: 'new' as const,
-        fields: playerSyncFields(licence),
+        fields: playerSyncFields(licence, undefined, federation),
         link: {
           id: suggestion.id,
           on: 'name' as const,
@@ -603,7 +634,7 @@ export function buildImportRows(
         },
       }
     }
-    return { licence, status: 'new' as const, fields: playerSyncFields(licence) }
+    return { licence, status: 'new' as const, fields: playerSyncFields(licence, undefined, federation) }
   })
 }
 
@@ -640,12 +671,14 @@ export interface PlayerImportCreate {
   licenseNumber: string
   /** The club importing. A licensee is created in one, never in the abstract. */
   clubId: string
+  /** Another federation's licence (#648) — `licenseNumber` then stays empty: it is the FFTT's. */
+  licences?: Array<{ federationId: string; number: string }>
 }
 
 /** A licensee the import would correct, with only the ticked fields in it. */
 export interface PlayerImportUpdate {
   id: string
-  patch: { firstName?: string; lastName?: string; licenseNumber?: string }
+  patch: { firstName?: string; lastName?: string; licenseNumber?: string; licences?: Array<{ federationId: string; number: string }> }
 }
 
 /** Everything one reviewed import writes, and what it amounts to. */
@@ -669,6 +702,8 @@ export interface PlayerImportTarget {
   seasonId?: string
   /** Mints the id of a licensee being created. */
   newId: () => string
+  /** Another federation's list (#648): its licence goes to `licences`, never to the FFTT's number. */
+  federationId?: string
 }
 
 /**
@@ -683,8 +718,10 @@ export function playerImportWrites(
   rows: PlayerImportRow[],
   /** Ticked `licence:field` keys — see `fieldKey`. */
   selected: Set<string>,
-  { clubId, phaseId, seasonId, newId }: PlayerImportTarget,
+  { clubId, phaseId, seasonId, newId, federationId }: PlayerImportTarget,
 ): PlayerImportWrites {
+  const other = federationId && federationId !== FFTT_FEDERATION_ID ? federationId : undefined
+  const licencesFor = (number: string) => [{ federationId: other!, number }]
   const writes: PlayerImportWrites = {
     creates: [], updates: [], points: [], categories: [], created: 0, updated: 0,
   }
@@ -704,8 +741,9 @@ export function playerImportWrites(
         id: playerId,
         firstName: row.licence.firstName,
         lastName: row.licence.lastName,
-        licenseNumber: row.licence.licence,
+        licenseNumber: other ? '' : row.licence.licence,
         clubId,
+        ...(other ? { licences: licencesFor(row.licence.licence) } : {}),
       })
       writes.created += 1
     } else {
@@ -716,7 +754,10 @@ export function playerImportWrites(
       // its licence holds that number already, so the field reads as unchanged
       // and never reaches this. Here it is the correction itself — the wrong
       // number, 681243, giving way to FFTT's 6810333.
-      if (has('licenseNumber')) patch.licenseNumber = row.licence.licence
+      if (has('licenseNumber')) {
+        if (other) patch.licences = licencesFor(row.licence.licence)
+        else patch.licenseNumber = row.licence.licence
+      }
       if (Object.keys(patch).length) writes.updates.push({ id: playerId, patch })
       // Points and a category are corrections too: a player whose name we
       // already had right but whose ranking moved is one this import updated.

@@ -43,7 +43,17 @@ describe('MatchSheetView (#383)', () => {
   // rather than as an empty "pts".
   it('renders missing points as a dash', () => {
     setup({ players: [{ id: 'p1', firstName: 'Hugo', lastName: 'Bernard', points: '' }] })
-    expect(screen.getByText('— pts')).toBeInTheDocument()
+    // Two dashes: no licence on this line either.
+    expect(screen.getAllByText('—')).toHaveLength(2)
+    expect(screen.queryByText(/pts/)).not.toBeInTheDocument()
+  })
+
+  it('prints points at the FFTT and the classement at the AGR (#646)', () => {
+    const { unmount } = setup()
+    expect(screen.getByText('1200 pts')).toBeInTheDocument()
+    unmount()
+    setup({ federationId: 'agr', players: [{ id: 'p1', firstName: 'Hugo', lastName: 'Bernard', points: '45' }] })
+    expect(screen.getByText('Classement 45')).toBeInTheDocument()
   })
 
   it('defaults to A.. at home and ..Z away', () => {
@@ -89,5 +99,39 @@ describe('MatchSheetView (#383)', () => {
     setup({ players: [] })
     expect(screen.getByText(/Aucun joueur sélectionné/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'ABC' })).not.toBeInTheDocument()
+  })
+
+  describe('at the AGR (#650)', () => {
+    const four: MatchSheetPlayer[] = [
+      { id: 'a', firstName: 'Léa', lastName: 'Arnold', points: '45' },
+      { id: 'b', firstName: 'Marc', lastName: 'Bauer', points: '25' },
+      { id: 'c', firstName: 'Noé', lastName: 'Christ', points: '60' },
+      { id: 'd', firstName: 'Ugo', lastName: 'Dietrich', points: '30' },
+    ]
+
+    it('letters the away side from U, and opens with the best ranked in V', () => {
+      setup({ federationId: 'agr', isHome: false, players: four })
+      expect(letters()).toEqual(['U', 'V', 'W', 'X'])
+      expect(names()[1]).toContain('Marc')
+      expect(screen.getByText('Le mieux classé joue en A à domicile, en V à l’extérieur.')).toBeInTheDocument()
+    })
+
+    it('refuses a move that takes the best ranked off their line, and says why', async () => {
+      setup({ federationId: 'agr', isHome: true, players: four })
+      expect(names()[0]).toContain('Marc')
+      await userEvent.click(screen.getByRole('button', { name: /Descendre Marc/ }))
+      expect(names()[0]).toContain('Marc')
+      expect(screen.getByRole('alert')).toHaveTextContent('En A, le mieux classé de l’équipe (classement 25)')
+      // The rest moves freely.
+      await userEvent.click(screen.getByRole('button', { name: /Descendre Noé/ }))
+      expect(names()[3]).toContain('Noé')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('re-places the best ranked when the side changes', async () => {
+      setup({ federationId: 'agr', isHome: true, players: four })
+      await userEvent.click(screen.getByRole('button', { name: 'UVWX' }))
+      expect(names()[1]).toContain('Marc')
+    })
   })
 })

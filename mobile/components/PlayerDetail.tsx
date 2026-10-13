@@ -1,4 +1,5 @@
 import { ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { addressOwner } from '@shared/lib/addressOwner'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -11,17 +12,22 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { AvatarViewer } from '@/components/AvatarViewer'
 import { fonts } from '@/constants/typography'
-import { pointsFor } from '@shared/lib/phasePoints'
 import { categoryFor } from '@shared/lib/seasonCategories'
 import { categoryDisplay } from '@shared/lib/playerCategories'
 import { clubLicences } from '@shared/lib/seasonLicences'
 import { LicenceTag } from '@/components/LicenceTag'
 import { EmailRow, PhoneRow } from '@/components/ContactRows'
 import { ContactEditor, type ContactField } from '@/components/ContactEditor'
+import { DelegationsSection } from '@/components/DelegationsSection'
+import { mayEditPerson } from '@shared/lib/linkedProfiles'
 import { TeamBadge } from '@/components/TeamBadge'
 import { computeBrulage } from '@shared/lib/brulage'
 import { clubMemberGroups, groupsOfMember, mayManageMemberGroups } from '@shared/lib/memberGroups'
 import { ChecklistSheet } from '@/components/ChecklistSheet'
+import { licenceLabel, licencesOf } from '@shared/lib/licences'
+import { activeSeasonId } from '@shared/lib/season'
+import { activePhaseIdsOf, activePhaseOf, clubFederationIds } from '@shared/lib/federations'
+import { currentRankings } from '@shared/lib/ranking'
 
 // ---------------------------------------------------------------------------
 // La fiche joueur (#466)
@@ -54,9 +60,9 @@ export function PlayerDetail({
 }) {
   const id = playerId
   const {
-    players, teams, clubs, phases, seasons, playerPhasePoints,
+    players, users = [], teams, clubs, federations, phases, seasons, playerPhasePoints,
     playerSeasonCategories, playerSeasonLicences, matchDays, games, gameSelections,
-    updatePlayer, memberGroups, setGroupsOfMember,
+    updatePlayer, memberGroups, setGroupsOfMember, divisions, competitions,
   } = useAppData()
   const { user } = useAuth()
   const navigation = useNavigation()
@@ -68,12 +74,15 @@ export function PlayerDetail({
 
   const player = players.find((p) => p.id === id)
   const club = clubs.find((c) => c.id === player?.clubId)
-  const activeSeason = seasons.find((s) => s.status === 'active')
+  const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
 
   // Qui administre le club du licencié, et personne d'autre — la même question
   // que `administers` côté API, qui refuse déjà le reste depuis #558. Un
   // coéquipier qui lit la fiche ne voit donc pas le déclencheur.
+  // Et sur une personne qui joue aussi dans un autre club, ni l'un ni l'autre
+  // de ses administrateurs : ses coordonnées sont à elle (#655).
   const mayEditContact = !!user && !!player && canManageClub(user, player.clubId)
+    && mayEditPerson(player, user, players)
 
   // The club's groups (#602), and which of them this member is in. The payload
   // only carries the viewer's own club's, so another club's fiche shows none.
@@ -91,14 +100,21 @@ export function PlayerDetail({
     else router.push({ pathname: '/membres', params: { groupes: groupId } })
   }
 
-  const activePhase = phases.find((p) => p.status === 'active')
+  // Each federation of the club has its active phase (#645).
+  const playerFederations = club ? clubFederationIds(club) : ['fftt']
+  const activePhaseIds = activePhaseIdsOf(phases, playerFederations)
   const playerTeams = teams.filter(
-    (t) => t.phaseId === activePhase?.id && t.playerIds?.includes(id ?? ''),
+    (t) => activePhaseIds.includes(t.phaseId) && t.playerIds?.includes(id ?? ''),
   )
 
   // Points belong to (phase, player) since #384 — a player with no team this
-  // phase still has them.
-  const phasePoints = pointsFor(playerPhasePoints, activePhase?.id, id)
+  // phase still has them. One per federation, each under its own name: points
+  // at the FFTT, a classement at the AGR (#646).
+  const rankings = currentRankings({
+    playerId: id, federationIds: playerFederations, phases, rows: playerPhasePoints,
+  })
+  const rankingRowLabel = (r: { federationId: string; label: string }) =>
+    rankings.length > 1 ? `${r.label} ${federations.find((f) => f.id === r.federationId)?.shortName ?? r.federationId}` : r.label
 
   // A category belongs to a season, not to the licensee (#482): a cadet becomes
   // a junior, and last season's answer is not this season's.
@@ -113,19 +129,27 @@ export function PlayerDetail({
   //
   // Over the whole phase, with no `asOfMatchDayId`: a fiche is not being read
   // from inside one match-day, so the question is simply where they stand now.
+  // Each federation of the club in its own active phase, by its own rule — the
+  // AGR's counts the season (#651); the first that says something is shown.
   const brulageTeam = (() => {
-    if (!player || !activePhase) return null
-    const clubTeamsInPhase = teams.filter(
-      (t) => t.phaseId === activePhase.id && t.clubId === player.clubId,
-    )
-    // Defaulted: an offline cache written before these rode in `DataState`
-    // has none of them, and a fiche that cannot answer "burned?" should say
-    // nothing rather than fail to render at all (same rule as #498).
-    const info = computeBrulage(
-      player.id, clubTeamsInPhase, matchDays ?? [], games ?? [], gameSelections ?? [],
-    )
-    if (!info.burnedIntoTeamId) return null
-    return teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
+    if (!player) return null
+    for (const federationId of playerFederations) {
+      const activePhase = activePhaseOf(phases, federationId)
+      if (!activePhase) continue
+      const clubTeamsInPhase = teams.filter(
+        (t) => t.phaseId === activePhase.id && t.clubId === player.clubId,
+      )
+      // Defaulted: an offline cache written before these rode in `DataState`
+      // has none of them, and a fiche that cannot answer "burned?" should say
+      // nothing rather than fail to render at all (same rule as #498).
+      const info = computeBrulage(
+        player.id, clubTeamsInPhase, matchDays ?? [], games ?? [], gameSelections ?? [], null,
+        { teams, phases, divisions: divisions ?? [], competitions: competitions ?? [] },
+      )
+      const team = info.burnedIntoTeamId ? teams.find((t) => t.id === info.burnedIntoTeamId) : undefined
+      if (team) return team
+    }
+    return null
   })()
 
   // And whether the federation listed their licence at all this season (#488).
@@ -178,9 +202,12 @@ export function PlayerDetail({
         {/* Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informations</Text>
-          {player.licenseNumber && <InfoRow label="Licence" value={player.licenseNumber} />}
+          {/* One row per federation (#644): an FFTT and an AGR licence, say. */}
+          {licencesOf(player).map((l) => (
+            <InfoRow key={l.federationId} label={licenceLabel(l.federationId, federations)} value={l.number} />
+          ))}
           <InfoRow label="Catégorie" value={category || 'Inconnue'} />
-          {phasePoints && <InfoRow label="Points" value={phasePoints} />}
+          {rankings.map((r) => <InfoRow key={r.federationId} label={rankingRowLabel(r)} value={r.value} />)}
           {/* Same badge as the quick view, `danger` and all: the two screens
               show one licensee, and a rule that looked different depending on
               which you opened would be worse than one screen not showing it. */}
@@ -268,6 +295,14 @@ export function PlayerDetail({
           </View>
         )}
 
+        {/* Délégations (#682) — pour qui ne peut pas le demander lui-même (un
+            enfant sans adresse) : l'administrateur général, ou celui de tous
+            les clubs de la personne — la règle du web (`mayEditPerson`).
+            Chacun gère les siennes depuis « Mon compte ». */}
+        {!!player.personId && player.id !== user?.id && !!user && mayEditPerson(player, user, players) && (
+          <DelegationsSection personId={player.personId} mode="admin" />
+        )}
+
         {/* Active phase teams — list style, aligned with the team detail roster */}
         {playerTeams.length > 0 && (
           <View style={styles.sectionList}>
@@ -335,6 +370,7 @@ export function PlayerDetail({
           title="Modifier les coordonnées"
           fields={CONTACT_FIELDS}
           subject={player}
+          addressOwner={(email) => addressOwner(email, users, { personId: player.personId, id: player.id })}
           onSave={(patch) => updatePlayer(player.id, patch)}
           onClose={() => setEditingContact(false)}
         />

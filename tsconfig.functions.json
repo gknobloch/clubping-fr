@@ -38,5 +38,5 @@
     "paths": { "@/*": ["src/*"] }
   },
   "include": ["functions"],
-  "exclude": ["functions/**/*.test.ts", "functions/**/*.spec.ts"]
+  "exclude": ["functions/**/*.test.ts", "functions/**/*.spec.ts", "functions/**/*.testkit.ts"]
 }

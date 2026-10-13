@@ -8,6 +8,8 @@ const divisions = [
   { id: 'd3', phaseId: 'phase-26-1', displayName: 'GE 6 (old)', rank: 1, playersPerGame: 4, isArchived: false },
 ] as Division[]
 
+const competitions = [{ id: 'c-agr', federationId: 'agr' }]
+
 const groups = [
   { id: 'g-mine', divisionId: 'd1', number: 28, teamIds: [], isArchived: false },
   { id: 'g-theirs', divisionId: 'd2', number: 1, teamIds: [], isArchived: false },
@@ -26,29 +28,42 @@ const teams = [
 describe('importableGroupIds', () => {
   it('offers a club admin only the pools where their club has a team', () => {
     expect(importableGroupIds({
-      phaseId: 'phase-27-1', divisions, groups, teams, clubId: 'club-fftt-06680011',
+      phaseId: 'phase-27-1', divisions, competitions, groups, teams, clubId: 'club-fftt-06680011',
     })).toEqual(['g-mine'])
   })
 
   it('offers a general admin every populated pool of the phase', () => {
-    expect(importableGroupIds({ phaseId: 'phase-27-1', divisions, groups, teams }))
+    expect(importableGroupIds({ phaseId: 'phase-27-1', divisions, competitions, groups, teams }))
       .toEqual(['g-mine', 'g-theirs'])
   })
 
   it('never leaks a pool from another phase', () => {
-    const ids = importableGroupIds({ phaseId: 'phase-27-1', divisions, groups, teams })
+    const ids = importableGroupIds({ phaseId: 'phase-27-1', divisions, competitions, groups, teams })
     expect(ids).not.toContain('g-oldphase')
   })
 
   it('ignores archived teams', () => {
     expect(importableGroupIds({
-      phaseId: 'phase-27-1', divisions, groups,
+      phaseId: 'phase-27-1', divisions, competitions, groups,
       teams: [team('t-mine', 'club-fftt-06680011', 'g-mine', true)],
       clubId: 'club-fftt-06680011',
     })).toEqual([])
   })
 
   it('returns nothing without a phase', () => {
-    expect(importableGroupIds({ phaseId: '', divisions, groups, teams })).toEqual([])
+    expect(importableGroupIds({ phaseId: '', divisions, competitions, groups, teams })).toEqual([])
+  })
+
+  it('leaves out a pool of another federation — the FFTT has no calendar for it (#660)', () => {
+    const agr = { ...divisions[0], id: 'd-agr', displayName: 'Excellence', competitionId: 'c-agr' } as Division
+    const ids = importableGroupIds({
+      phaseId: 'phase-27-1',
+      divisions: [...divisions, agr],
+      competitions,
+      groups: [...groups, { id: 'g-agr', divisionId: 'd-agr', number: 1, teamIds: [], isArchived: false } as Group],
+      teams: [...teams, team('t-agr', 'club-fftt-06680011', 'g-agr')],
+      clubId: 'club-fftt-06680011',
+    })
+    expect(ids).toEqual(['g-mine'])
   })
 })

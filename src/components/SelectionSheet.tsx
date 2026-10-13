@@ -9,6 +9,7 @@ import {
 } from '@/lib/playerSearch'
 import { selectablePlayers } from '@/lib/playerVisibility'
 import { LicenceBadge } from '@/components/LicenceBadge'
+import { agrTitularityWarning, type AgrPickNote } from '@/lib/brulage'
 import type { AvailabilityStatus, Player } from '@/types'
 
 /**
@@ -35,6 +36,7 @@ export function SelectionSheet({
   committedElsewhere,
   /** Those the federation has not listed a licence for this season (#488). */
   unlicensed,
+  pickNote,
   onSave,
   onClose,
 }: {
@@ -46,6 +48,8 @@ export function SelectionSheet({
   availabilityOf: (playerId: string) => AvailabilityStatus | undefined
   committedElsewhere: Map<string, number>
   unlicensed?: ReadonlySet<string>
+  /** At the AGR, what fielding a player above their team counts toward (#683). */
+  pickNote?: (playerId: string) => AgrPickNote | null
   onSave: (playerIds: string[]) => void
   onClose: () => void
 }) {
@@ -63,6 +67,18 @@ export function SelectionSheet({
       .filter((p) => selection.includes(p.id) && unlicensed.has(p.id))
       .map((p) => `${p.firstName} ${p.lastName}`)
   }, [selection, roster, others, unlicensed])
+
+  // The fourth match above one's team moves the titularity (art. 29): allowed,
+  // and said by name before Enregistrer rather than discovered at the table.
+  const titularityWarning = useMemo(() => {
+    if (!pickNote) return null
+    return agrTitularityWarning([...roster, ...others]
+      .filter((p) => selection.includes(p.id))
+      .flatMap((p) => {
+        const team = pickNote(p.id)?.becomesTitularOf
+        return team ? [{ name: `${p.firstName} ${p.lastName}`, team }] : []
+      }))
+  }, [pickNote, selection, roster, others])
 
   const toggle = (playerId: string) => {
     setLimitHit(false)
@@ -99,6 +115,7 @@ export function SelectionSheet({
     const lockedTeam = picked ? undefined : committedElsewhere.get(player.id)
     const locked = lockedTeam !== undefined
     const status = availabilityOf(player.id)
+    const note = locked ? null : pickNote?.(player.id)
     return (
       <SelectionRow
         key={player.id}
@@ -107,7 +124,16 @@ export function SelectionSheet({
         dimmed={locked}
         onToggle={() => toggle(player.id)}
         label={`${player.firstName} ${player.lastName}`}
-        badge={unlicensed?.has(player.id) && <LicenceBadge />}
+        badge={(unlicensed?.has(player.id) || note) && (
+          <>
+            {unlicensed?.has(player.id) && <LicenceBadge />}
+            {note && (
+              <span className={`shrink-0 text-xs ${note.becomesTitularOf ? 'font-semibold text-amber-800' : 'text-slate-500'}`}>
+                {note.label}
+              </span>
+            )}
+          </>
+        )}
         trailing={
           locked ? (
             <span className="shrink-0 text-xs text-slate-500">Équipe {lockedTeam}</span>
@@ -138,6 +164,11 @@ export function SelectionSheet({
                 ? `${pickedUnlicensed[0]} n’a pas de licence validée pour cette saison à la FFTT.`
                 : `${pickedUnlicensed.length} joueurs alignés n’ont pas de licence validée pour cette saison à la FFTT : ${pickedUnlicensed.join(', ')}.`}
               {' '}Vérifiez avant la rencontre.
+            </p>
+          )}
+          {titularityWarning && (
+            <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {titularityWarning}
             </p>
           )}
           {limitHit && (

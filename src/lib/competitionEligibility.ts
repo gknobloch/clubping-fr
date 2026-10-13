@@ -25,6 +25,7 @@
 
 import type { Competition, CompetitionEligibility, CompetitionGroup, MemberGroup } from '../types'
 import { normalizeCategory, type PlayerCategory } from './playerCategories'
+import { federationOfCompetition } from './federations'
 
 /**
  * Why a player is, or is not, eligible. The club screen prints it: a member of
@@ -225,7 +226,10 @@ export function competitionOfDivision(
  * Played: one of its active teams sits in a division filed under it, or the
  * club has reserved it to a group — a choice it made is never hidden. The rest
  * are what a general admin configured for other clubs' championships, and the
- * club's screen folds them away rather than asking about each one.
+ * club's screen folds them away rather than asking about each one — and only
+ * those of a federation the club belongs to (#643): Landser, in the AGR alone,
+ * has no use for the FFTT's championships, folded or not. What it plays stays
+ * listed whatever the federation, for the reason a reserved one does.
  * Both lists keep the competitions' own order; archived ones are in neither.
  */
 export function competitionsOfClub(
@@ -234,6 +238,8 @@ export function competitionsOfClub(
   teams: Array<{ clubId: string; divisionId?: string; isArchived?: boolean }>,
   divisions: Array<{ id: string; competitionId?: string; categories?: PlayerCategory[] }>,
   competitionGroups: CompetitionGroup[],
+  /** The club's federations — `clubFederationIds(club)`. */
+  federationIds: readonly string[],
 ): { played: Competition[]; others: Competition[] } {
   const ids = new Set<string>()
   for (const t of teams) {
@@ -245,7 +251,7 @@ export function competitionsOfClub(
   const active = competitions.filter((c) => !c.isArchived).sort((a, b) => a.sortOrder - b.sortOrder)
   return {
     played: active.filter((c) => ids.has(c.id)),
-    others: active.filter((c) => !ids.has(c.id)),
+    others: active.filter((c) => !ids.has(c.id) && federationIds.includes(federationOfCompetition(c))),
   }
 }
 

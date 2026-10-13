@@ -8,7 +8,7 @@ import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { AVAIL } from '@/constants/availability'
-import { isPlayerEligibleForTeam } from '@shared/lib/brulage'
+import { agrPickNote, agrTitularityWarning, isPlayerEligibleForTeam } from '@shared/lib/brulage'
 import { PLAYER_SEARCH_THRESHOLD, filterPlayersBySearch } from '@shared/lib/playerSearch'
 import { selectablePlayers } from '@shared/lib/playerVisibility'
 import { clubLicences } from '@shared/lib/seasonLicences'
@@ -18,7 +18,7 @@ import { LicenceTag } from '@/components/LicenceTag'
 import { playersCommittedElsewhere } from '@/utils/matchdays'
 import type {
   AvailabilityStatus, Club, Player, Team, MatchDay, Game, GameSelection, PlayerSeasonLicence,
-  Division, Competition, CompetitionGroup, MemberGroup, PlayerSeasonCategory,
+  Division, Competition, CompetitionGroup, MemberGroup, PlayerSeasonCategory, Phase,
 } from '@shared/types'
 import { fonts } from '@/constants/typography'
 
@@ -44,6 +44,9 @@ export interface SelectionData {
   competitionGroups?: CompetitionGroup[]
   memberGroups?: MemberGroup[]
   playerSeasonCategories?: PlayerSeasonCategory[]
+  /** Every team and phase: the AGR's brûlage counts the whole season (#651). */
+  teams?: Team[]
+  phases?: Phase[]
 }
 
 // Bottom-sheet line-up picker for captains: this team's roster plus other
@@ -78,8 +81,9 @@ export function CaptainSelectionSheet({
     matchDayId, allClubPlayers, clubTeams, matchDays, games, gameSelections,
     playerSeasonLicences = [], seasonId,
     divisions = [], competitions = [], competitionGroups = [], memberGroups = [],
-    playerSeasonCategories = [],
+    playerSeasonCategories = [], teams = [], phases = [],
   } = selectionData
+  const brulageCtx = useMemo(() => ({ teams, phases, divisions, competitions }), [teams, phases, divisions, competitions])
 
   // Not a filter: an unvalidated licence is usually a renewal in flight, so the
   // sheet flags it beside the name rather than hiding the player (#488).
@@ -133,10 +137,10 @@ export function CaptainSelectionSheet({
         id: p.id,
         category: categoryFromIndex(categoryIndex, seasonId, p.id),
       })) return false
-      return isPlayerEligibleForTeam(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId)
+      return isPlayerEligibleForTeam(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId, brulageCtx)
     })
   }, [allClubPlayers, teamPlayers, initialSelection, team, clubTeams, matchDays, games,
-      gameSelections, matchDayId, eligibility, categoryIndex, seasonId])
+      gameSelections, matchDayId, eligibility, categoryIndex, seasonId, brulageCtx])
 
   // The filter earns its row of screen and its keyboard only on a long list,
   // so it is the whole sheet that is counted, not one section (#454).
@@ -149,8 +153,22 @@ export function CaptainSelectionSheet({
   const committedElsewhere = useMemo(() => {
     const round = matchDays.find((md) => md.id === matchDayId)?.number
     if (round === undefined) return new Map<string, number>()
-    return playersCommittedElsewhere(team.id, round, clubTeams, games, matchDays, gameSelections)
-  }, [team.id, clubTeams, games, matchDays, gameSelections, matchDayId])
+    // The AGR lets a player play twice in one journée from the fourth (#651).
+    return playersCommittedElsewhere(team.id, round, clubTeams, games, matchDays, gameSelections, { divisions, competitions })
+  }, [team.id, clubTeams, games, matchDays, gameSelections, matchDayId, divisions, competitions])
+
+  // At the AGR, how many times each player would now have played above their
+  // team this season — and, for the fourth, the titularity it moves (#683).
+  const pickNotes = useMemo(() => new Map(allClubPlayers.map((p) => [
+    p.id,
+    agrPickNote(p.id, team, clubTeams, matchDays, games, gameSelections, matchDayId, brulageCtx),
+  ])), [allClubPlayers, team, clubTeams, matchDays, games, gameSelections, matchDayId, brulageCtx])
+  const titularityWarning = agrTitularityWarning(allClubPlayers
+    .filter((p) => selection.includes(p.id))
+    .flatMap((p) => {
+      const to = pickNotes.get(p.id)?.becomesTitularOf
+      return to ? [{ name: `${p.firstName} ${p.lastName}`, team: to }] : []
+    }))
 
   function toggle(pid: string) {
     if (committedElsewhere.has(pid) && !selection.includes(pid)) return
@@ -170,6 +188,7 @@ export function CaptainSelectionSheet({
     const cfg = avail ? AVAIL[avail] : null
     const lockedTeam = !picked ? committedElsewhere.get(p.id) : undefined
     const locked = lockedTeam !== undefined
+    const note = locked ? null : pickNotes.get(p.id)
     return (
       // Two targets, not one (#585). The box alone picks; the name opens the
       // aperçu, as a name does everywhere else in the app. The row used to be
@@ -198,6 +217,11 @@ export function CaptainSelectionSheet({
               {p.firstName} {p.lastName}
             </Text>
             {unlicensed.has(p.id) && <LicenceTag />}
+            {note && (
+              <Text style={[sel.pickNote, note.becomesTitularOf !== null && sel.pickNoteFourth]} numberOfLines={1}>
+                {note.label}
+              </Text>
+            )}
           </View>
           {locked ? (
             <Text style={sel.lockedTxt}>Équipe {lockedTeam}</Text>
@@ -226,6 +250,7 @@ export function CaptainSelectionSheet({
           {' '}Vérifiez avant la rencontre.
         </Text>
       )}
+      {titularityWarning && <Text style={sel.licenceWarning}>{titularityWarning}</Text>}
       {searchable && <SelectionSearch value={query} onChangeText={setQuery} />}
       <SelectionList>
         {shownRoster.length > 0 && (
@@ -284,4 +309,6 @@ const sel = StyleSheet.create({
   noAvail: { fontSize: 12, color: colors.border },
   playerRowLocked: { opacity: 0.45 },
   lockedTxt: { fontSize: 11, fontStyle: 'italic', color: colors.textSecondary },
+  pickNote: { fontSize: 11, color: colors.textSecondary, flexShrink: 0 },
+  pickNoteFourth: { color: '#92400e', fontFamily: fonts.semiBold },
 })

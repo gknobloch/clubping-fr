@@ -3,7 +3,9 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAppData } from '@/contexts/DataContext'
 import { poolLabel } from '@shared/lib/poolLabel'
-import { orderPhases, defaultPhase } from '@shared/lib/phases'
+import { phaseScope } from '@shared/lib/phaseScope'
+import { federationOfPhase } from '@shared/lib/federations'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTeamName } from '@/utils/roles'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -38,7 +40,7 @@ import { fonts } from '@/constants/typography'
 // way out.
 // ---------------------------------------------------------------------------
 export default function EquipesScreen() {
-  const { teams, clubs, phases, divisions, groups, refreshing, refresh } = useAppData()
+  const { teams, clubs, phases, federations = [], divisions, competitions = [], groups, refreshing, refresh } = useAppData()
   const { user } = useAuth()
   const router = useRouter()
   const { isTwoPane } = useLayout()
@@ -49,12 +51,20 @@ export default function EquipesScreen() {
       ? teams
       : teams.filter((t) => t.clubId === user?.clubId)
 
-  // Phases ordered for the < > switcher (chronological by name); default active.
-  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
-  const fallbackPhase = useMemo(() => defaultPhase(phases), [phases])
+  // The federation first, then its phases (#645): ordered for the < >
+  // switcher (chronological by name), its active one by default.
+  const viewerClub = user?.role === 'general_admin' ? undefined : clubs.find((c) => c.id === user?.clubId)
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(undefined)
+  const scope = phaseScope({ federations, phases, club: viewerClub, chosen: chosenFederation })
+  const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
+  const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
+
+  function selectFederation(federationId: string) {
+    setChosenFederation(federationId)
+    setPhaseId(undefined)
+  }
 
   function selectPhase(next: number) {
     const p = orderedPhases[next]
@@ -73,7 +83,11 @@ export default function EquipesScreen() {
       // moment the team is asked for — as a standing effect it would fight the
       // switcher instead, undoing every move off the selected team's phase.
       const team = visibleTeams.find((t) => t.id === id)
-      if (team) setPhaseId(team.phaseId)
+      if (team) {
+        const teamPhase = phases.find((p) => p.id === team.phaseId)
+        if (teamPhase) setChosenFederation(federationOfPhase(teamPhase))
+        setPhaseId(team.phaseId)
+      }
       setPendingScroll(id)
     },
   })
@@ -116,7 +130,9 @@ export default function EquipesScreen() {
       contentContainerStyle={[styles.list, contentWidth()]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       ListHeaderComponent={
-        phase ? (
+        <View style={styles.header}>
+        <FederationSwitch options={scope.options} value={scope.federationId} onChange={selectFederation} />
+        {phase ? (
           <Switcher
             title={`Saison ${phase.displayName}`}
             onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
@@ -126,7 +142,8 @@ export default function EquipesScreen() {
                 : undefined
             }
           />
-        ) : null
+        ) : null}
+        </View>
       }
       ListEmptyComponent={
         phase ? <Text style={styles.empty}>Aucune équipe pour cette phase.</Text> : null
@@ -142,7 +159,7 @@ export default function EquipesScreen() {
       }}
       renderItem={({ item: team }) => {
         const division = divisions.find((d) => d.id === team.divisionId)
-        const pool = poolLabel(team, groups)
+        const pool = poolLabel(team, groups, { divisions, competitions })
         const isSelected = team.id === selectedTeam?.id
         return (
           <TouchableOpacity
@@ -196,6 +213,7 @@ export default function EquipesScreen() {
 
 const styles = StyleSheet.create({
   list: { padding: 16, gap: 8 },
+  header: { gap: 8 },
 
   split: { flexDirection: 'row' },
   listPane: {

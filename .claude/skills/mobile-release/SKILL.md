@@ -138,12 +138,19 @@ far has run over. If the section does not fit, add a `### Play` subsection to it
 test:run` fails on a version that fits neither, so this PR is where it surfaces.
 
 **Raise `CLIENT_LATEST_VERSION` in `wrangler.toml` to the same string** (#508).
-It is what tells builds already in members' hands that a newer one exists; left
-behind, it simply stops nudging, which costs nothing and is why this is a line
-in the release rather than an automation. `npm run test:run` fails if it ever
-runs *ahead* of `mobile/app.json` — a version nobody can install is a nag with
-no cure. Leave `CLIENT_MIN_VERSION` unset: it blocks, and a release is not a
-reason to block anybody.
+It is what tells builds already in members' hands that a newer one exists — but
+it is a **ceiling**, not an announcement (#708). It goes live with this PR's
+deploy, days before either store has approved anything, and on its own word it
+used to send every member to a store page with nothing new on it. The server
+now advertises the lower of the var and what the stores actually serve, read
+hourly by `.github/workflows/store-versions.yml`: an iPhone hears about the new
+version once the App Store serves it, an Android phone once Play does, and
+builds up to 1.7.0 — which cannot say which store they came from — once both
+do. So bumping it here is right, and nothing has to be remembered later.
+
+`npm run test:run` fails if it ever runs *ahead* of `mobile/app.json`. Leave
+`CLIENT_MIN_VERSION` unset: it blocks, and a release is not a reason to block
+anybody — and unlike the ceiling, it is not held back by the stores.
 
 **Leave `versionCode` and `buildNumber` alone.** `eas.json` sets
 `appVersionSource: "remote"`, so EAS owns them and increments each on its own at
@@ -290,6 +297,22 @@ Two things still need a human, and both belong in the report: pressing **Submit
 for review** in App Store Connect, and promoting off the Play `internal` track.
 The lanes create the version record, fill the text, attach the build and upload
 the images; they publish nothing.
+
+**The update banner follows on its own.** Once a store serves the version —
+Apple has released it, or a Play release on the track members install from
+(`production`, else `beta`, else `alpha`; never `internal`) is fully rolled out —
+the next hourly run of `store-versions.yml` records it and the banner appears
+for that store's builds. A staged Play rollout does not count until it reaches
+100 %: members outside the fraction would press the banner and find nothing.
+To skip the wait after a promotion:
+
+```bash
+gh workflow run store-versions.yml
+```
+
+Its log says what each store serves and from which Play track. A red run means
+a store could not be read — its last known version is kept, so the banner holds
+back rather than misleads, but say so in the report.
 
 If the version is over Play's 500 characters, the generator fails with the count
 and asks for a `### Play` subsection in the CHANGELOG — the short text, written

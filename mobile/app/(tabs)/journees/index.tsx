@@ -4,9 +4,11 @@ import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { orderPhases, defaultPhase } from '@shared/lib/phases'
+import { phaseScope } from '@shared/lib/phaseScope'
+import { FederationSwitch } from '@/components/FederationSwitch'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
+import { mayPlayBothInRound } from '@shared/lib/matchdays'
 import { getPhaseMatchDays, activeMatchDayNumber, formatMatchDayRange, gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import { Screen, contentWidth } from '@/components/Screen'
 import { MatchHeader } from '@/components/MatchHeader'
@@ -35,6 +37,9 @@ import { teamEligibility } from '@shared/lib/competitionEligibility'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import type { MatchDayGroup } from '@/utils/matchdays'
 import { fonts } from '@/constants/typography'
+import { federationOfTeam, licenceOf } from '@shared/lib/licences'
+import { FFTT_FEDERATION_ID, federationOfPhase } from '@shared/lib/federations'
+import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
 // Match card — consistent with the Accueil next-match header
@@ -107,7 +112,7 @@ function shortDate(iso: string): string {
 export default function JourneesScreen() {
   const { user } = useAuth()
   const {
-    clubs, seasons, teams, players, matchDays, games, phases, divisions, groups,
+    clubs, seasons, federations = [], teams, players, matchDays, games, phases, divisions, groups,
     gameAvailabilities, gameSelections, playerPhasePoints, playerSeasonLicences,
     playerSeasonCategories, competitions, competitionGroups, memberGroups,
     setAvailability, clearAvailability, setGameSelection, refreshing, refresh,
@@ -119,7 +124,7 @@ export default function JourneesScreen() {
   const unlicensed = useMemo(
     () => unlicensedIds(
       playerSeasonLicences,
-      seasons.find((se) => se.status === 'active')?.id,
+      activeSeasonId(seasons),
       players.filter((p) => p.clubId === user?.clubId),
     ),
     [playerSeasonLicences, seasons, players, user?.clubId],
@@ -130,20 +135,33 @@ export default function JourneesScreen() {
   const myClubId = user?.clubId
   const myPlayerId = user?.isPlayer ? user.id : undefined
 
-  // Phases ordered for the < > switcher (chronological by name); default active.
-  const orderedPhases = useMemo(() => orderPhases(phases), [phases])
-  const fallbackPhase = useMemo(() => defaultPhase(phases), [phases])
   // Opened on one journée (#608): the accueil's « Prochaines journées » pushes
   // this screen with the round it names. Read once, as the starting point —
   // the switchers are the member's from then on.
   const opened = useLocalSearchParams<{ phase?: string; journee?: string }>()
+  // The federation first, then its phases (#645) — the phase a link names
+  // opens on its own federation. Ordered for the < > switcher, active first.
+  const myClub = clubs.find((c) => c.id === user?.clubId)
+  const [chosenFederation, setChosenFederation] = useState<string | undefined>(() => {
+    const openedPhase = opened.phase ? phases.find((p) => p.id === opened.phase) : undefined
+    return openedPhase ? federationOfPhase(openedPhase) : undefined
+  })
+  const scope = phaseScope({
+    federations, phases, club: user?.role === 'general_admin' ? undefined : myClub, chosen: chosenFederation,
+  })
+  const orderedPhases = scope.phases
   const [phaseId, setPhaseId] = useState<string | undefined>(opened.phase || undefined)
-  const phase = phases.find((p) => p.id === phaseId) ?? fallbackPhase
+  const phase = orderedPhases.find((p) => p.id === phaseId) ?? scope.defaultPhase
   const phaseIndex = orderedPhases.findIndex((p) => p.id === phase?.id)
 
   const clubTeams = useMemo(
     () => (phase ? teams.filter((t) => t.clubId === myClubId && t.phaseId === phase.id) : []),
     [phase, teams, myClubId],
+  )
+  // The federation decides the brûlage rule — the AGR's counts the season (#651).
+  const brulageCtx = useMemo(
+    () => ({ teams, phases, divisions: divisions ?? [], competitions: competitions ?? [] }),
+    [teams, phases, divisions, competitions],
   )
 
   // --- Competition eligibility (#498) ----------------------------------------
@@ -155,7 +173,7 @@ export default function JourneesScreen() {
   //
   // A category is a fact about a season, and the season being played is the one
   // that decides (#482).
-  const eligibilitySeasonId = seasons.find((se) => se.status === 'active')?.id
+  const eligibilitySeasonId = activeSeasonId(seasons)
   const categoryIndex = useMemo(
     () => seasonCategoryIndex(playerSeasonCategories),
     [playerSeasonCategories],
@@ -203,6 +221,12 @@ export default function JourneesScreen() {
     if (!p) return
     setPhaseId(p.id)
     setMdNumber(null) // reset to the new phase's active match-day
+  }
+
+  function selectFederation(federationId: string) {
+    setChosenFederation(federationId)
+    setPhaseId(undefined)
+    setMdNumber(null)
   }
 
   // Division / playersPerGame helpers
@@ -341,15 +365,18 @@ export default function JourneesScreen() {
     )
     const fixtures = teamGames(team)
     const clubTeamsInPhase = clubTeams
+    // The team's federation decides which licence the row prints (#644).
+    const federationId = federationOfTeam(team, divisions, competitions)
     return roster.map((player) => {
-      const brulageInfo = computeBrulage(player.id, clubTeamsInPhase, matchDays, games, gameSelections)
+      const brulageInfo = computeBrulage(player.id, clubTeamsInPhase, matchDays, games, gameSelections, null, brulageCtx)
       const burnedInto = brulageInfo.burnedIntoTeamId
         ? teams.find((t) => t.id === brulageInfo.burnedIntoTeamId)
         : undefined
       return {
         player,
         isCaptain: team.captainId === player.id,
-        unlicensed: unlicensed.has(player.id),
+        licence: licenceOf(player, federationId),
+        unlicensed: unlicensed.has(player.id) && federationId === FFTT_FEDERATION_ID,
         points: pointsFor(playerPhasePoints, team.phaseId, player.id) || undefined,
         availableCount: fixtures.filter(
           (g) => availabilityOf(player.id, g.id) === 'available',
@@ -423,15 +450,18 @@ export default function JourneesScreen() {
     const composable = visibleGroups.map((group) =>
       clubTeams.some((t) => !!teamGame(t, group.matchDays).game && !!user && mayManageTeam(user, t)),
     )
+    // Nobody's team: the club's teams of this phase decide (#644).
+    const federationId = federationOfTeam(clubTeams[0], divisions, competitions)
     return shownOtherPlayers.map((player) => {
-      const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections)
+      const brulageInfo = computeBrulage(player.id, clubTeams, matchDays, games, gameSelections, null, brulageCtx)
       const burnedInto = brulageInfo.burnedIntoTeamId
         ? teams.find((t) => t.id === brulageInfo.burnedIntoTeamId)
         : undefined
       return {
         player,
         isCaptain: false,
-        unlicensed: unlicensed.has(player.id),
+        licence: licenceOf(player, federationId),
+        unlicensed: unlicensed.has(player.id) && federationId === FFTT_FEDERATION_ID,
         // Read on the phase, not on a team (#384): these players are in none,
         // and they have points all the same.
         points: phase ? pointsFor(playerPhasePoints, phase.id, player.id) || undefined : undefined,
@@ -491,7 +521,7 @@ export default function JourneesScreen() {
         // before an exclusion stays undoable rather than becoming a dead end.
         const eligible =
           t.id === current ||
-          (isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id)
+          (isPlayerEligibleForTeam(playerId, t, clubTeams, matchDays, games, gameSelections, matchDay.id, brulageCtx)
             && eligibility.mayField(t.id, asEligible(playerId)))
         if (!eligible) return []
         const isHome = game.homeTeamId === t.id
@@ -525,9 +555,15 @@ export default function JourneesScreen() {
    */
   async function compose(group: MatchDayGroup, playerId: string, targetTeamId: string | null) {
     setComposing(null)
+    // At the AGR a second line-up of the same journée may be allowed (art. 30,
+    // #651) — made from the match's sheet; picking a team here keeps it, as on
+    // the web. Choosing none still clears them all.
+    const target = clubTeams.find((t) => t.id === targetTeamId)
+    const roundCtx = { divisions: divisions ?? [], competitions: competitions ?? [] }
     for (const t of clubTeams) {
       const { game } = teamGame(t, group.matchDays)
       if (!game) continue
+      if (target && t.id !== target.id && mayPlayBothInRound(target, t, group.number, roundCtx)) continue
       const current = selectionOf(t.id, game.id)
       const next =
         t.id === targetTeamId
@@ -587,13 +623,18 @@ export default function JourneesScreen() {
     )
   }
 
-  const phaseSwitcher = phase ? (
-    <Switcher
-      title={`Saison ${phase.displayName}`}
-      onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
-      onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
-    />
-  ) : null
+  const phaseSwitcher = (
+    <>
+      <FederationSwitch options={scope.options} value={scope.federationId} onChange={selectFederation} />
+      {phase ? (
+        <Switcher
+          title={`Saison ${phase.displayName}`}
+          onPrev={phaseIndex > 0 ? () => selectPhase(phaseIndex - 1) : undefined}
+          onNext={phaseIndex < orderedPhases.length - 1 ? () => selectPhase(phaseIndex + 1) : undefined}
+        />
+      ) : null}
+    </>
+  )
 
   const sheet = editing && (
     <AvailabilitySheet

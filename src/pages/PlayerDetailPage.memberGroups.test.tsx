@@ -28,7 +28,7 @@ function renderPlayer(id: string, memberGroups: MemberGroup[] = mockMemberGroups
       <DataProvider
         initialData={{
           divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-          competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [],
+          competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [], federations: [],
           groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
           games: mockGames, gameAvailabilities: mockGameAvailabilities,
           gameSelections: mockGameSelections, users: mockUsers,

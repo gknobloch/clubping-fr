@@ -26,6 +26,7 @@ import {
   type GameSquad,
   type PushMessage,
 } from '../../src/lib/pushNotifications'
+import { householdIds, reaches } from './reach'
 
 /**
  * The push endpoints and the daily sweep (#495).
@@ -557,7 +558,7 @@ export async function notifyAvailabilityChange(
     // Nor anyone who shares the author's address (#640): a parent who changes
     // their child's answer from the child's profile is the captain being told
     // about their own tap, on the phone they just tapped it on.
-    const household = args.actorId ? await sameAddressIds(env.DB, args.actorId) : new Set<string>()
+    const household = args.actorId ? await householdIds(env.DB, args.actorId) : new Set<string>()
     const captains = captainsToAlert(context.teams, args.playerId, args.actorId)
       .filter((id) => !household.has(id))
     if (!captains.length) return
@@ -648,19 +649,6 @@ async function playerName(db: D1Database, playerId: string): Promise<string> {
   return name || 'Un joueur'
 }
 
-/**
- * The members who sign in with the same address as `userId`, `userId`
- * included (#640) — one household, as far as a device can tell.
- */
-async function sameAddressIds(db: D1Database, userId: string): Promise<Set<string>> {
-  const r = await db.prepare(
-    `SELECT s.id AS id FROM users u
-       JOIN users s ON s.id = u.id OR (COALESCE(u.email, '') != '' AND lower(s.email) = lower(u.email))
-      WHERE u.id = ?`,
-  ).bind(userId).all<{ id: string }>()
-  return new Set([userId, ...(r.results ?? []).map((x) => x.id)])
-}
-
 /** Send one message to several members, on every device each of them has. */
 async function pushTo(
   env: Env['Bindings'],
@@ -699,7 +687,7 @@ interface TokenRow {
   user_id: string
   first_name?: string | null
   notification_preferences?: string | null
-  /** How many members the device's address signs in as (#640). */
+  /** How many profiles the device's holder reaches (#640, #655). */
   profiles?: number | null
 }
 
@@ -722,15 +710,18 @@ function addressed(message: PushMessage, userId: string, device: Device): Outgoi
  * to (#608). Both are enforced here rather than at each call site, and the
  * category is a required argument, so no future sender can forget either.
  *
- * A device rings for every profile of the address it was registered under
- * (#640) — a parent's phone, for the child's matches as well as the parent's.
- * Derived here, at the send, rather than written as one row per profile: an
- * administrator who gives the child an address of their own takes the child
- * off the parent's phone that instant, and a phone signed into by somebody else
- * still moves over whole, as #495 requires. Each profile's own switches apply
- * — the child's preferences decide whether the child's matches ring.
+ * A device rings for every profile its holder REACHES (`reaches`, #655): their
+ * own in other clubs, those of whoever delegated to them, and those sharing
+ * their address (#640) — the very profiles the switcher on it offers. A
+ * parent's phone rings for the child's matches as well as the parent's.
+ * Derived here, at the send, rather than written as one row per profile: a
+ * delegation withdrawn, or a child given an address of their own, takes the
+ * child off the parent's phone that instant, and a phone signed into by
+ * somebody else still moves over whole, as #495 requires. Each profile's own
+ * switches apply — the child's preferences decide whether the child's matches
+ * ring.
  */
-async function tokensByUser(
+export async function tokensByUser(
   db: D1Database,
   category: NotificationCategory,
   userIds?: string[],
@@ -743,17 +734,15 @@ async function tokensByUser(
       byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), device])
     }
   }
-  // `o` registered the device; `u` is each member it rings for — `o` itself,
-  // and whoever shares `o`'s address. An empty address shares nothing.
+  // `o` registered the device; `u` is each profile it rings for — every one
+  // `o` reaches, `o` included.
   const base =
-    `SELECT p.token AS token, u.id AS user_id, u.first_name AS first_name,
+    `SELECT DISTINCT p.token AS token, u.id AS user_id, u.first_name AS first_name,
             u.notification_preferences AS notification_preferences,
-            (SELECT count(*) FROM users s
-              WHERE COALESCE(o.email, '') != '' AND lower(s.email) = lower(o.email)) AS profiles
+            (SELECT count(*) FROM users s WHERE ${reaches('o', 's')}) AS profiles
        FROM push_tokens p
        JOIN users o ON o.id = p.user_id
-       JOIN users u ON u.id = o.id
-                    OR (COALESCE(o.email, '') != '' AND lower(u.email) = lower(o.email))
+       JOIN users u ON ${reaches('o', 'u')}
       WHERE u.notifications_enabled = 1`
   if (!userIds) {
     const r = await db.prepare(base).all<TokenRow>()

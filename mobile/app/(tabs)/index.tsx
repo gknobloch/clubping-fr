@@ -22,7 +22,7 @@ import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { NextTrainingSection } from '@/components/NextTrainingSection'
 import { sortByName } from '@shared/lib/sortByName'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolBadge } from '@shared/lib/poolLabel'
 import { buildMatchEvent, type MatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { getMatchVenue, getVenue, getVenueAddress, type MatchVenue } from '@shared/lib/venue'
@@ -32,6 +32,8 @@ import {
 import { todayIso } from '@/utils/weeks'
 import type { AvailabilityStatus, Game, MatchDay, Player, Team } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { activeSeasonId } from '@shared/lib/season'
+import { activeTeamOf } from '@shared/lib/activeTeam'
 
 // ---------------------------------------------------------------------------
 // Home screen — player dashboard
@@ -79,18 +81,13 @@ export default function HomeScreen() {
   // address behind it (#426).
   const venueFor = (homeTeam: Team | undefined): string | undefined => getVenue(homeTeam, clubs)
 
-  const myTeamByPhase = useMemo(() => {
-    if (!myPlayerId) return new Map<string, Team>()
-    const map = new Map<string, Team>()
-    for (const t of teams) {
-      if (t.playerIds.includes(myPlayerId)) map.set(t.phaseId, t)
-    }
-    return map
-  }, [teams, myPlayerId])
-
-  const activeSeason = seasons.find((s) => s.status === 'active')
-  const activePhase = phases.find((p) => p.status === 'active')
-  const myActiveTeam = activePhase ? myTeamByPhase.get(activePhase.id) : undefined
+  const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
+  // In the active phase of any federation, not the FFTT's alone (#711).
+  const myActiveTeam = useMemo(
+    () => activeTeamOf(myPlayerId, teams, phases, games, mdMap, today),
+    [myPlayerId, teams, phases, games, mdMap, today],
+  )
+  const activePhase = phases.find((p) => p.id === myActiveTeam?.phaseId)
   const isCaptain = !!(user && myActiveTeam && mayManageTeam(user, myActiveTeam))
   const isPlayer = !!myPlayerId && !!myActiveTeam
 
@@ -133,7 +130,7 @@ export default function HomeScreen() {
     return grp ? divMap.get(grp.divisionId)?.displayName : undefined
   }
   function getPoolLabel(team: Team): string | undefined {
-    return poolLabel(team, groups)
+    return poolBadge(team, groups, { divisions, competitions })
   }
   function getPlayersPerGame(team: Team): number {
     const grp = groupMap.get(team.groupId)
@@ -499,13 +496,16 @@ export default function HomeScreen() {
             games,
             gameSelections,
             playerSeasonLicences,
-            seasonId: seasons.find((s) => s.status === 'active')?.id,
+            seasonId: activeSeasonId(seasons),
             // What this team's competition admits (#498).
             divisions,
             competitions,
             competitionGroups,
             memberGroups,
             playerSeasonCategories,
+            // The AGR's brûlage counts the season (#651).
+            teams,
+            phases,
           }}
           onSave={(ids) => setGameSelection(myActiveTeam.id, composeGame.id, ids)}
           onClose={() => setComposeGameId(null)}

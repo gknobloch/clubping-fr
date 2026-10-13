@@ -96,6 +96,12 @@ interface AuthContextValue {
   profiles: Profile[]
   /** Become another of `profiles`. Rejects when refused or unreachable. */
   switchProfile: (userId: string) => Promise<void>
+  /**
+   * Ask the server again which profiles this session reaches — after a
+   * delegation is given up (#655), whose profiles are no longer offered.
+   * Quiet when offline: the list simply stays as it was.
+   */
+  refreshProfiles: () => Promise<void>
   /** Dev login (gated by DEV_LOGIN) */
   availableUsers: DevUser[]
   devLoginAs: (userId: string) => Promise<void>
@@ -266,6 +272,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [realToken, applySession],
   )
 
+  const refreshProfiles = useCallback(async () => {
+    if (!realToken) return
+    try {
+      setProfiles((await fetchMe(realToken)).profiles)
+    } catch {
+      /* offline or refused: the next start asks again */
+    }
+  }, [realToken])
+
   // --- Dev login ---
   // Takes a real session like every other login path: a bare selection
   // authenticates nothing, and the local API rejects sessionless calls since
@@ -293,12 +308,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       logout,
       profiles,
       switchProfile,
+      refreshProfiles,
       availableUsers: DEV_LOGIN ? devUsers : [],
       devLoginAs,
     }),
     // devUsers matters: the list arrives asynchronously, and omitting it would
     // leave the picker empty for as long as the login screen stays mounted.
-    [user, loading, devUsers, requestCode, verifyCode, loginWithIdToken, loginWithApple, logout, profiles, switchProfile, devLoginAs],
+    [user, loading, devUsers, requestCode, verifyCode, loginWithIdToken, loginWithApple, logout, profiles, switchProfile, refreshProfiles, devLoginAs],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

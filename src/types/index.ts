@@ -27,9 +27,63 @@ export interface ClubChannel {
   sortOrder: number
 }
 
+/**
+ * A federation that runs championships (#643): the FFTT, and the AGR (Section
+ * du Haut-Rhin). Federation → competition → division → poule.
+ */
+export interface Federation {
+  /** 'fftt' | 'agr' — seeded by migration 0061. */
+  id: string
+  displayName: string
+  /** What the screens print beside a club or a competition: "FFTT", "AGR". */
+  shortName: string
+  /**
+   * Whether its data comes from an import (the FFTT's API). False means typed
+   * in by hand or read off its documents — which is what lets a club admin
+   * build its competitions (#647).
+   */
+  isImported: boolean
+  sortOrder: number
+}
+
+/**
+ * A club's affiliation to a federation other than the FFTT (#643) — the FFTT
+ * number stays `Club.affiliationNumber`. Read both together through
+ * `clubAffiliations` (src/lib/federations.ts), never one or the other.
+ */
+export interface ClubAffiliation {
+  federationId: string
+  /** That federation's number for the club ("680036"); may be blank. */
+  affiliationNumber: string
+  /** The club's organisation in that federation (#692): Landser is AGR Haut-Rhin. */
+  organizationId?: string
+  /**
+   * The club's name in that federation's documents ("KEMBS ASL TT"), what its
+   * calendars are matched against. Absent when it is the club's own name.
+   */
+  name?: string
+}
+
+/**
+ * A member's licence in a federation other than the FFTT (#644) — the FFTT
+ * licence stays `User.licenseNumber`. Read both through `licencesOf`
+ * (src/lib/licences.ts), never one or the other.
+ */
+export interface FederationLicence {
+  federationId: string
+  number: string
+}
+
 export interface Club {
   id: string
+  /** The FFTT affiliation number; blank for a club outside the FFTT (#643). */
   affiliationNumber: string
+  /**
+   * Affiliations to every federation but the FFTT (#643). The payload always
+   * fills it; absent — an older cache, a fixture — means none, which is what
+   * every club was until a second federation existed.
+   */
+  affiliations?: ClubAffiliation[]
   displayName: string
   isArchived: boolean
   addresses: Address[]
@@ -46,9 +100,11 @@ export interface Organization {
   id: string
   /** FFTT @type: 'Federation' | 'Zone' | 'League' | 'Committee'. */
   type: string
-  /** FFTT short code, e.g. "L06" (league) or "D68" (committee). */
+  /** FFTT short code, e.g. "L06" (league) or "D68" (committee); the AGR's department number. */
   identifier: string
   name: string
+  /** Whose organisation it is (#692): the FFTT's cached list, or the AGR's Haut-Rhin and Bas-Rhin. */
+  federationId?: string
 }
 
 /** Shared 3-state lifecycle used by seasons and phases (#227). */
@@ -56,21 +112,26 @@ export type LifecycleStatus = 'active' | 'upcoming' | 'archived'
 export type SeasonStatus = LifecycleStatus
 
 export interface Season {
-  /** FFTT-aligned numeric id as text: endYear − 2000 (e.g. "26" for 2025/2026). */
+  /** Numeric id as text: endYear − 2000 (e.g. "26" for 2025/2026). Shared by every federation (#645). */
   id: string
   displayName: string
-  /** At most one season is 'active' at a time. */
+  /** At most one season is 'active' at a time — for every federation (#645). */
   status: SeasonStatus
 }
 
 export interface Phase {
-  /** "phase-{seasonId}-{ffttPhaseId}", e.g. "phase-27-1" (2026/2027 Phase 1). */
+  /**
+   * "phase-{seasonId}-{n}", e.g. "phase-27-1" (2026/2027 Phase 1); another
+   * federation's carries its prefix, "phase-agr-27-1" (`phaseIdFor`, #645).
+   */
   id: string
   seasonId: string
   name: string
   displayName: string
-  /** At most one phase is 'active' at a time, across seasons. */
+  /** At most one phase is 'active' at a time in each federation, across its seasons (#645). */
   status: LifecycleStatus
+  /** The federation whose calendar this phase is (#645); absent means the FFTT. */
+  federationId?: string
 }
 
 export interface Division {
@@ -99,6 +160,18 @@ export interface Division {
    * restricts nobody, since there is no place for a club's derogations to hang.
    */
   categories?: PlayerCategory[]
+  /**
+   * What phase 2 of this (phase-1) division is (#649): the same poules
+   * mirrored, home and away swapped — or new poules, known after phase 1.
+   * Absent: not known yet, and nothing is prepared.
+   */
+  secondPhase?: 'return_leg' | 'new_groups'
+  /**
+   * The organisation that runs it (#692) — an FFTT league or committee, the
+   * AGR's Haut-Rhin. A division's and not a competition's: one FFTT
+   * championship spans a league's divisions and a committee's.
+   */
+  organizationId?: string
 }
 
 /**
@@ -112,6 +185,12 @@ export interface Division {
 export interface Competition {
   id: string
   displayName: string
+  /**
+   * The federation that runs it (#643). Always in the payload; absent — a
+   * cache or fixture predating it — means the FFTT, which every competition
+   * was. Read through `federationOfCompetition`.
+   */
+  federationId?: string
   /**
    * The categories admitted by default. **Empty means every category** — the
    * senior championship does not enumerate seventeen codes to say "anyone".
@@ -187,6 +266,12 @@ export interface Group {
    * FFTT identity of the group itself.
    */
   groupId?: string
+  /**
+   * What the federation's calendar says about the poule (#647): where a club
+   * plays, who the match sheets go to, the deadline for postponements — one
+   * line each. Shown on the match screen.
+   */
+  note?: string
 }
 
 /**
@@ -419,7 +504,7 @@ export interface Game {
    * for an import, 'manual' once a human set the slot — which no import then
    * overwrites. Absent for games predating the field.
    */
-  source?: 'fftt' | 'document' | 'manual'
+  source?: 'fftt' | 'document' | 'manual' | 'mirror'
   /** FFTT match id, when this game came from FFTT (#282). */
   gameId?: string
 }
@@ -445,6 +530,14 @@ export interface GameSelection {
  * still go missing from the payload without a type error — see #292.
  */
 export interface DataState {
+  /** The federations (#643), ordered — reference data, the same for everyone. */
+  federations: Federation[]
+  /**
+   * The organisations that mean something here (#692): another federation's
+   * (the AGR's Haut-Rhin and Bas-Rhin) and the FFTT's a division names.
+   * Optional: absent from a cache written before it, and from the app's payload.
+   */
+  organizations?: Organization[]
   divisions: Division[]
   competitions: Competition[]
   /**
@@ -491,7 +584,14 @@ export interface DataState {
  * (admins) are not players. Person fields are populated when isPlayer is true.
  */
 export interface User {
+  /** The club profile — one per (person, club) since #655. */
   id: string
+  /**
+   * The person behind this club profile (#655): Gilles is one person with a
+   * Rixheim and a Landser profile. Absent on a cache predating it, or on a
+   * profile written in the deploy window — each is then its own person.
+   */
+  personId?: string
   /**
    * Absent when the member has no address on file (#315). E-mail is also the
    * sign-in identifier, so such a member cannot log in — which was already
@@ -502,7 +602,13 @@ export interface User {
   isPlayer: boolean
   firstName?: string
   lastName?: string
+  /** The FFTT licence; blank for a member who holds none (#644). */
   licenseNumber?: string
+  /**
+   * Licences in every federation but the FFTT (#644). The payload always
+   * fills it for a player; absent — an older cache, a fixture — means none.
+   */
+  licences?: FederationLicence[]
   phone?: string
   birthDate?: string
   birthPlace?: string
@@ -550,6 +656,23 @@ export interface DevUser extends User {
   clubName?: string
   /** Numbers of the teams this member captains, ascending. Absent if none. */
   captainOf?: number[]
+}
+
+/** A person as a delegation names them (#655). */
+export interface DelegationPerson {
+  id: string
+  firstName?: string
+  lastName?: string
+  email?: string
+}
+
+/**
+ * A person's delegations (#655): who may open their profiles, and whose
+ * profiles they may open.
+ */
+export interface Delegations {
+  delegates: DelegationPerson[]
+  represents: DelegationPerson[]
 }
 
 /**

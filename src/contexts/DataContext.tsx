@@ -12,10 +12,15 @@ import type { Division } from '@/types'
 import type {
   Address,
   Club,
+  ClubAffiliation,
   ClubChannel,
+  DelegationPerson,
+  Delegations,
+  FederationLicence,
   Competition,
   CompetitionGroup,
   DataState,
+  Federation,
   Organization,
   Season,
   SeasonStatus,
@@ -55,6 +60,7 @@ import {
   mockGameSelections,
   mockUsers,
   mockCompetitions,
+  mockFederations,
   mockCompetitionGroups,
   mockMemberGroups,
   mockTrainings,
@@ -64,10 +70,14 @@ import {
 import { clearCache, readCache, writeCache } from '@/lib/offlineCache'
 import { fillVenuesFromFftt, type ClubVenue, type VenueFillResult } from '@/lib/clubVenues'
 import { fetchClubDetailXmlFromBrowser } from '@/lib/ffttClub'
+import { withoutDivision } from '@/lib/ffttDivisions'
 import { seasonIdFromName } from '@/lib/season'
-import { ffttPhaseIdForName, localPhaseId, phaseOrderKey } from '@/lib/ffttPhases'
+import { ffttPhaseIdForName, phaseIdFor } from '@/lib/ffttPhases'
+import { withActivePhase, withActiveSeason, withPhaseAlignedToSeason } from '@/lib/seasonActivation'
+import type { AgrScheduleJournee } from '@/lib/agrScheduleDocument'
 import { fetchFfttCurrentSeasonFromBrowser, fetchTextFromBrowser, ffttGraphqlFromBrowser } from '@/lib/ffttClient'
 import { clubIdFromAffiliation, gameIdFor, teamIdFor } from '@/lib/entityIds'
+import { clubIdForAffiliation } from '@/lib/federations'
 import { parsePoolOpponents, poolOpponentsQuery, type FfttClubTeam, type FfttPoolOpponentNode } from '@/lib/ffttTeams'
 import { divisionPoolsQuery, parseDivisionPools, selectPoolForGroup, type FfttDivisionPoolsData, type FfttPool } from '@/lib/ffttGames'
 import {
@@ -83,10 +93,6 @@ import {
   type TrainingDraft, type TrainingResult,
 } from '@/lib/trainings'
 
-// Chronology-aware demotion (#227): what stops being active is archived when
-// older than what becomes active, back to 'upcoming' when newer (rollback).
-const demotedSeasonStatus = (seasonId: string, newSeasonId: string): SeasonStatus =>
-  Number(seasonId) < Number(newSeasonId) ? 'archived' : 'upcoming'
 
 // DataState moved to src/types (#285): it is the GET /api/data contract, so
 // the API is annotated with the same declaration this file asserts against.
@@ -360,6 +366,47 @@ export interface ScheduleDocImportInput {
   journees: ScheduleDocImportJournee[]
 }
 
+/** What POST /api/federation-schedules/import takes (#647): the reviewed calendar. */
+export interface FederationScheduleImportInput {
+  federationId: string
+  phaseId: string
+  competitionId: string
+  division: string
+  /** An existing division of the phase to put the poule in (#647); absent, it is found by name or created. */
+  divisionId?: string
+  /** The organisation the poule is played in (#692) — the AGR's Haut-Rhin or Bas-Rhin. */
+  organizationId?: string
+  poolNumber: number
+  playersPerGame: number
+  /** What phase 2 of this division is (#649) — asked when importing phase 1. */
+  secondPhase?: 'return_leg' | 'new_groups'
+  notes: string[]
+  /** Each name of the calendar: an existing club, or null to create it bare. */
+  clubs: Array<{ name: string; clubId: string | null }>
+  journees: AgrScheduleJournee[]
+}
+
+/** What it answers: what was created, and what was found again. */
+export interface FederationScheduleImportSummary {
+  divisionId: string
+  groupId: string
+  created: { division: boolean; group: boolean; clubs: number; teams: number; matchDays: number; games: number }
+  updatedGames: number
+  /** The return leg built into phase 2 alongside (#649), when phase 2 exists. */
+  returnLeg?: ReturnLegCreated
+}
+
+/** What preparing a return leg created (#649). */
+export interface ReturnLegCreated {
+  division: boolean; group: boolean; teams: number; matchDays: number; games: number
+}
+
+export type ReturnLegResult = { ok: true; created: ReturnLegCreated } | { ok: false; message: string }
+
+export type FederationScheduleImportResult =
+  | { ok: true; summary: FederationScheduleImportSummary }
+  | { ok: false; message: string }
+
 /** Response of POST /api/schedule-documents/import (#260). */
 export interface ScheduleDocImportResult {
   createdPhases: Phase[]
@@ -439,6 +486,20 @@ async function memberGroupWrite(path: string, method: 'POST' | 'PATCH', body: un
  */
 export type ClubAdminResult = { ok: true } | { ok: false; message: string }
 
+/** What `addProfileInClub` writes on the receiving club (#644). */
+export interface ProfileInClub {
+  clubId: string
+  /** Its FFTT licence, when the receiving club is in the FFTT. */
+  licenseNumber?: string
+  licences?: FederationLicence[]
+}
+
+/** A delegate named, or why not — the API's sentence (#655). */
+export type DelegateResult = { ok: true; delegate: DelegationPerson } | { ok: false; message: string }
+
+/** The new profile's id, or why there is none — `id` names one already there. */
+export type ProfileResult = { ok: true; id: string } | { ok: false; message: string; id?: string }
+
 /** Who to appoint: a member the club already has, or someone new by name. */
 export type ClubAdminTarget =
   | { userId: string }
@@ -463,6 +524,32 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   archiveDivision: (id: string) => void
   deleteDivision: (id: string) => void
   updateClub: (id: string, patch: Partial<Club>) => void
+  /**
+   * Give a licensee a profile in another club, copied from this one and linked
+   * to it by the same address (#644). Waits for the API: it creates a person.
+   */
+  addProfileInClub: (playerId: string, profile: ProfileInClub) => Promise<ProfileResult>
+  /**
+   * A person's delegations (#655) — not part of the payload: only the person
+   * and a general admin read them, from « Mon compte » and the fiche. Null when
+   * they cannot be read.
+   */
+  fetchDelegations: (personId: string) => Promise<Delegations | null>
+  /** Name a delegate, by member (general admin) or by address (the person). */
+  addDelegate: (personId: string, target: { delegateId: string } | { email: string }) => Promise<DelegateResult>
+  /** Withdraw a delegation, or step down from one. False when it did not land. */
+  removeDelegate: (personId: string, delegateId: string) => Promise<boolean>
+  /** A shared address settled (#655): `delegateId` keeps it and becomes the delegate of `personId`, whose address is emptied. */
+  addressToDelegate: (personId: string, delegateId: string) => Promise<{ ok: true } | { ok: false; message: string }>
+  /** Two people found to be one (#655): `personId` joins `targetId`, profiles and all. */
+  mergePeople: (personId: string, targetId: string) => Promise<{ ok: true } | { ok: false; message: string }>
+  /**
+   * Declare or correct the club's affiliation to a federation other than the
+   * FFTT (#643) — the FFTT number goes through `updateClub`.
+   */
+  setClubAffiliation: (clubId: string, affiliation: ClubAffiliation) => void
+  /** Leave a federation; what the club plays there is not touched. */
+  removeClubAffiliation: (clubId: string, federationId: string) => void
   archiveClub: (id: string) => void
   deleteClub: (id: string) => void
   addClubAddress: (clubId: string, data: Omit<Address, 'id'>) => Address
@@ -517,6 +604,10 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   importFfttGroups: (divisionId: string) => Promise<FfttGroupsImportResult | null>
   /** Import schedule documents (PDF/image, #260) confirmed by the admin; null on failure. */
   importScheduleDocuments: (schedules: ScheduleDocImportInput[], updateSlots?: boolean, removeObsolete?: boolean) => Promise<ScheduleDocImportResult | null>
+  /** A poule calendar of a federation without an API (#647); the data is fetched again once written. */
+  importFederationSchedule: (input: FederationScheduleImportInput) => Promise<FederationScheduleImportResult>
+  /** Mirror a phase-1 poule into phase 2, home and away swapped (#649); the data is fetched again once written. */
+  prepareReturnLeg: (groupId: string) => Promise<ReturnLegResult>
   updatePhase: (id: string, patch: Partial<Phase>) => void
   archivePhase: (id: string) => void
   deletePhase: (id: string) => void
@@ -625,6 +716,9 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const { token, logout, user, loading: authLoading } = useAuth()
   const [divisions, setDivisions] = useState<Division[]>(initialData?.divisions ?? [])
   const [competitions, setCompetitions] = useState<Competition[]>(initialData?.competitions ?? [])
+  const [federations, setFederations] = useState<Federation[]>(initialData?.federations ?? [])
+  // Reference data (#692): another federation's organisations, and the FFTT's a division names.
+  const [organizations, setOrganizations] = useState<Organization[]>(initialData?.organizations ?? [])
   const [competitionGroups, setCompetitionGroups] = useState<CompetitionGroup[]>(
     initialData?.competitionGroups ?? [],
   )
@@ -692,6 +786,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       setPhases(data.phases)
       setDivisions(data.divisions)
       setCompetitions(data.competitions ?? [])
+      // A cache written before #643 knows no federation; every screen reads a
+      // missing one as the FFTT, which is what that data was.
+      setFederations(data.federations ?? [])
+      setOrganizations(data.organizations ?? [])
       // Defaulted: a cache written before #604 carries none, and "no club has
       // restricted anything" is the right reading of that.
       setCompetitionGroups(data.competitionGroups ?? [])
@@ -720,6 +818,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       console.warn('API unavailable, falling back to mock data (no persistence)')
       setPersist(false)
       applyData({
+        federations: mockFederations,
         seasons: mockSeasons, phases: mockPhases, divisions: mockDivisions,
         competitions: mockCompetitions,
         competitionGroups: mockCompetitionGroups,
@@ -807,56 +906,32 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [initialData])
 
   // --- Seasons ---
-  // Mirrors the API's single-active invariant: activating a season demotes
-  // the previously active one (archived when older, 'upcoming' when newer).
-  const applySeasonPatch = (prev: Season[], id: string, patch: Partial<Season>): Season[] =>
-    prev.map((s) => {
-      if (s.id === id) return { ...s, ...patch }
-      if (patch.status === 'active' && s.status === 'active') return { ...s, status: demotedSeasonStatus(s.id, id) }
-      return s
-    })
-
-  // Season→phase cascade (#227), symmetric with the phase→season one: keep
-  // the active phase when it belongs to the newly activated season, otherwise
-  // switch to that season's most recent phase, Phase 2 over Phase 1 (or none
-  // when it has no phases).
-  const alignActivePhaseToSeason = useCallback((seasonId: string) => {
-    setPhases((prev) => {
-      const actives = prev.filter((p) => p.status === 'active')
-      if (actives.length > 0 && actives.every((p) => p.seasonId === seasonId)) return prev
-      const latest = prev
-        .filter((p) => p.seasonId === seasonId && p.status !== 'archived')
-        .sort((a, b) => b.name.localeCompare(a.name))[0]
-      const newKey = phaseOrderKey(seasonId, latest?.name ?? '')
-      return prev.map((p) => {
-        if (latest && p.id === latest.id) return { ...p, status: 'active' as const }
-        if (p.status !== 'active') return p
-        return { ...p, status: phaseOrderKey(p.seasonId, p.name) < newKey ? 'archived' as const : 'upcoming' as const }
-      })
-    })
-  }, [])
-
+  // Mirrors the API's rule (src/lib/seasonActivation.ts): one active season for
+  // every federation and one active phase in each (#645), the previous one
+  // archived when older and 'upcoming' when newer, every active phase in the
+  // active season.
   const updateSeason = useCallback((id: string, patch: Partial<Season>) => {
-    setSeasons((prev) => applySeasonPatch(prev, id, patch))
-    if (patch.status === 'active') alignActivePhaseToSeason(id)
+    const next = (() => {
+      const patched = seasons.map((s) => (s.id === id ? { ...s, ...patch } : s))
+      return patch.status === 'active' ? withActiveSeason(patched, id) : patched
+    })()
+    setSeasons(next)
+    if (patch.status === 'active') setPhases((prev) => withPhaseAlignedToSeason(prev, id))
     if (persist) api(`/seasons/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
-  }, [persist, alignActivePhaseToSeason])
+  }, [persist, seasons])
 
   const addSeason = useCallback((data: Omit<Season, 'id'>): Season | null => {
-    // Season ids are derived from the name, aligned with FFTT (#217).
+    // Season ids are derived from the name, aligned with FFTT (#217) — one
+    // season for every federation (#645).
     const id = seasonIdFromName(data.displayName)
     if (!id) return null
     const season: Season = { ...data, displayName: data.displayName.trim(), id }
-    setSeasons((prev) => [
-      ...(season.status === 'active'
-        ? prev.map((s) => (s.status === 'active' ? { ...s, status: demotedSeasonStatus(s.id, id) } : s))
-        : prev),
-      season,
-    ])
-    if (season.status === 'active') alignActivePhaseToSeason(id)
+    const next = season.status === 'active' ? withActiveSeason([...seasons, season], id) : [...seasons, season]
+    setSeasons(next)
+    if (season.status === 'active') setPhases((prev) => withPhaseAlignedToSeason(prev, id))
     if (persist) api('/seasons', { method: 'POST', body: JSON.stringify(season) })
     return season
-  }, [persist, alignActivePhaseToSeason])
+  }, [persist, seasons])
 
   const archiveSeason = useCallback((id: string) => {
     setSeasons((prev) => prev.map((s) => (s.id === id ? { ...s, status: 'archived' } : s)))
@@ -882,17 +957,15 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       })
       if (!r.ok) return null
       const { season } = (await r.json()) as { season: Season }
-      setSeasons((prev) => [
-        ...prev.map((s) => (s.status === 'active' ? { ...s, status: demotedSeasonStatus(s.id, season.id) } : s)),
-        season,
-      ])
-      // A freshly imported season has no phases yet → no phase stays active.
-      alignActivePhaseToSeason(season.id)
+      const next = withActiveSeason([...seasons, season], season.id)
+      setSeasons(next)
+      // A freshly imported season has no phases yet → no FFTT phase stays active.
+      setPhases((prev) => withPhaseAlignedToSeason(prev, season.id))
       return season
     } catch {
       return null
     }
-  }, [alignActivePhaseToSeason])
+  }, [seasons])
 
   // --- FFTT divisions import (#219) ---
   const fetchOrganizations = useCallback(async (refresh = false): Promise<Organization[] | null> => {
@@ -902,8 +975,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         headers: authHeaders(),
       })
       if (!r.ok) return null
-      const { organizations } = (await r.json()) as { organizations: Organization[] }
-      return organizations
+      const body = (await r.json()) as { organizations: Organization[] }
+      return body.organizations
     } catch {
       return null
     }
@@ -1335,6 +1408,47 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }
   }, [applyImportDeletions, fillMissingClubVenues])
 
+  // --- A federation's calendar read off its PDF (#647) ---
+  // Awaited, never optimistic: one call writes a whole poule — clubs, teams,
+  // journées —, and only the server knows what it found again rather than
+  // created. So the data is fetched again once it lands.
+  const importFederationSchedule = useCallback(
+    async (input: FederationScheduleImportInput): Promise<FederationScheduleImportResult> => {
+      if (!persist) return { ok: false, message: 'Import indisponible hors connexion au serveur.' }
+      try {
+        const r = await fetch('/api/federation-schedules/import', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify(input),
+        })
+        const body = (await r.json().catch(() => null)) as (FederationScheduleImportSummary & { message?: string }) | null
+        if (!r.ok || !body) return { ok: false, message: body?.message ?? "L'import a échoué." }
+        setRetryNonce((n) => n + 1)
+        return { ok: true, summary: body }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
+
+  // Awaited for the same reason: a whole poule's return leg at once (#649).
+  const prepareReturnLeg = useCallback(
+    async (groupId: string): Promise<ReturnLegResult> => {
+      if (!persist) return { ok: false, message: 'Indisponible hors connexion au serveur.' }
+      try {
+        const r = await fetch(`/api/groups/${encodeURIComponent(groupId)}/return-leg`, {
+          method: 'POST', headers: authHeaders(), body: '{}',
+        })
+        const body = (await r.json().catch(() => null)) as { created?: ReturnLegCreated; message?: string } | null
+        if (!r.ok || !body?.created) return { ok: false, message: body?.message ?? 'La préparation a échoué.' }
+        setRetryNonce((n) => n + 1)
+        return { ok: true, created: body.created }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
+
   const deleteSeason = useCallback((id: string) => {
     // Cascade: find phases → divisions → groups → teams, match days, games, avail, selections
     const phaseIds = phases.filter((p) => p.seasonId === id).map((p) => p.id)
@@ -1357,54 +1471,37 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   }, [persist, phases, divisions, groups, teams, matchDays, games])
 
   // --- Phases ---
-  // Mirrors the API's single-active invariant (#221): activating a phase
-  // demotes the previously active one — archived when older, back to
-  // 'upcoming' when newer (rollback).
-  const demoteActivePhases = (prev: Phase[], exceptId: string, newKey: number) =>
-    prev.map((p) => {
-      if (p.id === exceptId || p.status !== 'active') return p
-      return { ...p, status: phaseOrderKey(p.seasonId, p.name) < newKey ? 'archived' as const : 'upcoming' as const }
-    })
-
-  // Cascade (#227): the active (season · phase) combination stays coherent —
-  // activating a phase also activates its season and demotes the other one.
-  const activatePhaseSeason = useCallback((seasonId: string) => {
-    setSeasons((prev) => prev.map((s) => {
-      if (s.id === seasonId) return s.status === 'active' ? s : { ...s, status: 'active' as const }
-      return s.status === 'active' ? { ...s, status: demotedSeasonStatus(s.id, seasonId) } : s
-    }))
-  }, [])
-
+  // The same rule as the seasons above (src/lib/seasonActivation.ts):
+  // activating a phase steps its federation's previous one down (#221, #645)
+  // and activates its season (#227).
   const updatePhase = useCallback((id: string, patch: Partial<Phase>) => {
     const target = phases.find((p) => p.id === id)
     if (patch.status === 'active' && target) {
-      activatePhaseSeason(target.seasonId)
+      setSeasons((prev) => withActiveSeason(prev, target.seasonId))
     }
     setPhases((prev) => {
-      const next = patch.status === 'active' && target
-        ? demoteActivePhases(prev, id, phaseOrderKey(target.seasonId, target.name))
-        : prev
-      return next.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      const patched = prev.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      return patch.status === 'active' && target
+        ? withPhaseAlignedToSeason(withActivePhase(patched, id), target.seasonId)
+        : patched
     })
     if (persist) api(`/phases/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
-  }, [persist, phases, activatePhaseSeason])
+  }, [persist, phases])
 
   const addPhase = useCallback((data: Omit<Phase, 'id'>) => {
-    // Deterministic FFTT-aligned id when the name is a known FFTT phase
-    // ("Phase 1" for season 27 → "phase-27-1"), random fallback otherwise.
-    const ffttId = ffttPhaseIdForName(data.name)
-    const id = ffttId ? localPhaseId(data.seasonId, ffttId) : nextId('phase')
+    // Deterministic id when the name is a known phase ("Phase 1" for season
+    // 27 → "phase-27-1", the AGR's "phase-agr-27-1"), random fallback otherwise.
+    const n = ffttPhaseIdForName(data.name)
+    const id = n ? phaseIdFor(data.federationId, data.seasonId, n) : nextId('phase')
     const phase: Phase = { ...data, id }
-    if (phase.status === 'active') activatePhaseSeason(phase.seasonId)
-    setPhases((prev) => [
-      ...(phase.status === 'active'
-        ? demoteActivePhases(prev, id, phaseOrderKey(phase.seasonId, phase.name))
-        : prev),
-      phase,
-    ])
+    if (phase.status === 'active') setSeasons((prev) => withActiveSeason(prev, phase.seasonId))
+    // Its season becoming active moves the other federations' phases onto it too.
+    setPhases((prev) => (phase.status === 'active'
+      ? withPhaseAlignedToSeason(withActivePhase([...prev, phase], id), phase.seasonId)
+      : [...prev, phase]))
     if (persist) api('/phases', { method: 'POST', body: JSON.stringify(phase) })
     return phase
-  }, [persist, activatePhaseSeason])
+  }, [persist])
 
   const archivePhase = useCallback((id: string) => {
     setPhases((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'archived' } : p)))
@@ -1544,7 +1641,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     setMatchDays((prev) => prev.filter((md) => !divMatchDayIds.includes(md.id)))
     setTeams((prev) => prev.filter((t) => !divTeamIds.includes(t.id)))
     setGroups((prev) => prev.filter((g) => !divGroupIds.includes(g.id)))
-    setDivisions((prev) => prev.filter((d) => d.id !== id))
+    // Its children move up to its parent, as the API does (#694).
+    setDivisions((prev) => withoutDivision(prev, id))
 
     if (persist) api(`/divisions/${id}`, { method: 'DELETE' })
   }, [persist, groups, teams, matchDays, games])
@@ -1561,8 +1659,40 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   // up. Falls back to a generated id when there is no usable number, or when
   // the FFTT-aligned one is already taken (the caller is expected to have
   // offered the existing club instead; a duplicate id would just fail to save).
+  const setClubAffiliation = useCallback((clubId: string, affiliation: ClubAffiliation) => {
+    setClubs((prev) => prev.map((c) => c.id !== clubId ? c : {
+      ...c,
+      affiliations: [
+        ...(c.affiliations ?? []).filter((a) => a.federationId !== affiliation.federationId),
+        affiliation,
+      ],
+    }))
+    if (persist) {
+      api(`/clubs/${clubId}/affiliations/${affiliation.federationId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          affiliationNumber: affiliation.affiliationNumber, name: affiliation.name ?? null,
+          organizationId: affiliation.organizationId ?? null,
+        }),
+      })
+    }
+  }, [persist])
+
+  const removeClubAffiliation = useCallback((clubId: string, federationId: string) => {
+    setClubs((prev) => prev.map((c) => c.id !== clubId ? c : {
+      ...c,
+      affiliations: (c.affiliations ?? []).filter((a) => a.federationId !== federationId),
+    }))
+    if (persist) api(`/clubs/${clubId}/affiliations/${federationId}`, { method: 'DELETE' })
+  }, [persist])
+
+  // A club outside the FFTT takes its id from its first affiliation instead
+  // (`club-agr-680036`, #643) — same reasoning, its own federation's id space.
   const addClub = useCallback((data: Omit<Club, 'id'>) => {
-    const preferred = clubIdFromAffiliation(data.affiliationNumber)
+    const firstOther = data.affiliations?.[0]
+    const preferred = data.affiliationNumber?.trim() || !firstOther
+      ? clubIdFromAffiliation(data.affiliationNumber)
+      : clubIdForAffiliation(firstOther.federationId, firstOther.affiliationNumber)
     const id = preferred && !clubs.some((c) => c.id === preferred) ? preferred : nextId('club')
     const club: Club = { ...data, id }
     setClubs((prev) => [...prev, club])
@@ -1908,6 +2038,139 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     if (persist) api('/players', { method: 'POST', body: JSON.stringify(player) })
     return player
   }, [persist])
+
+  const addProfileInClub = useCallback(
+    async (playerId: string, profile: ProfileInClub): Promise<ProfileResult> => {
+      const source = players.find((p) => p.id === playerId)
+      if (!source) return { ok: false, message: 'Licencié introuvable.' }
+      let id = nextId('player')
+      if (persist) {
+        try {
+          const res = await fetch(`/api/players/${encodeURIComponent(playerId)}/profiles`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify(profile),
+          })
+          const body = (await res.json().catch(() => null)) as { id?: string; message?: string } | null
+          if (!res.ok) return { ok: false, message: body?.message ?? "L'opération a échoué.", ...(body?.id ? { id: body.id } : {}) }
+          if (body?.id) id = body.id
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // What the server copied, so the list shows it before the next fetch.
+      const created: Player = {
+        id, clubId: profile.clubId, status: 'active',
+        // The same person (#655): that is what links the two profiles.
+        ...(source.personId ? { personId: source.personId } : {}),
+        firstName: source.firstName, lastName: source.lastName,
+        licenseNumber: profile.licenseNumber?.trim() ?? '',
+        licences: (profile.licences ?? []).filter((l) => l.number.trim()),
+        phone: source.phone,
+        ...(source.email ? { email: source.email } : {}),
+        ...(source.birthDate ? { birthDate: source.birthDate } : {}),
+        ...(source.birthPlace ? { birthPlace: source.birthPlace } : {}),
+      }
+      setPlayers((prev) => [...prev, created])
+      setUsers((prev) => [...prev, { ...created, role: 'player', isPlayer: true }])
+      return { ok: true, id }
+    },
+    [persist, players],
+  )
+
+  // --- Delegation (#655) ---
+  // Awaited, like the club admins below: the API decides who may, and an
+  // optimistic list would show a delegation the person never got.
+  const fetchDelegations = useCallback(async (personId: string): Promise<Delegations | null> => {
+    if (!persist) return { delegates: [], represents: [] }
+    try {
+      const res = await fetch(`/api/people/${encodeURIComponent(personId)}/delegations`, { headers: authHeaders() })
+      return res.ok ? ((await res.json()) as Delegations) : null
+    } catch {
+      return null
+    }
+  }, [persist])
+
+  const addDelegate = useCallback(
+    async (personId: string, target: { delegateId: string } | { email: string }): Promise<DelegateResult> => {
+      if (!persist) return { ok: true, delegate: { id: 'delegateId' in target ? target.delegateId : target.email } }
+      try {
+        const res = await fetch(`/api/people/${encodeURIComponent(personId)}/delegates`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify(target),
+        })
+        const body = (await res.json().catch(() => null)) as { delegate?: DelegationPerson; message?: string } | null
+        if (!res.ok || !body?.delegate) return { ok: false, message: body?.message ?? "L'opération a échoué." }
+        return { ok: true, delegate: body.delegate }
+      } catch {
+        return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+      }
+    },
+    [persist],
+  )
+
+  const removeDelegate = useCallback(async (personId: string, delegateId: string): Promise<boolean> => {
+    if (!persist) return true
+    try {
+      const res = await fetch(
+        `/api/people/${encodeURIComponent(personId)}/delegates/${encodeURIComponent(delegateId)}`,
+        { method: 'DELETE', headers: authHeaders() },
+      )
+      return res.ok
+    } catch {
+      return false
+    }
+  }, [persist])
+
+  const addressToDelegate = useCallback(
+    async (personId: string, delegateId: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (persist) {
+        try {
+          const res = await fetch(`/api/people/${encodeURIComponent(personId)}/address-to-delegate`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ delegateId }),
+          })
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null
+            return { ok: false, message: body?.message ?? "L'opération a échoué." }
+          }
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // What the API emptied: the person's address, on every profile of theirs.
+      setUsers((prev) => prev.map((u) => (u.personId === personId ? { ...u, email: undefined } : u)))
+      setPlayers((prev) => prev.map((p) => (p.personId === personId ? { ...p, email: undefined } : p)))
+      return { ok: true }
+    },
+    [persist],
+  )
+
+  const mergePeople = useCallback(
+    async (personId: string, targetId: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (persist) {
+        try {
+          const res = await fetch(`/api/people/${encodeURIComponent(personId)}/merge-into`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ targetId }),
+          })
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null
+            return { ok: false, message: body?.message ?? "L'opération a échoué." }
+          }
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      // The merged profiles now read the target person's fields; blanks the
+      // target had are filled server side, and the next fetch brings them.
+      const join = <T extends { personId?: string; firstName?: string; lastName?: string; email?: string }>(list: T[]) => {
+        const target = list.find((x) => x.personId === targetId)
+        return list.map((x) => (x.personId === personId
+          ? { ...x, personId: targetId, ...(target ? { firstName: target.firstName, lastName: target.lastName, email: target.email } : {}) }
+          : x))
+      }
+      setUsers((prev) => join(prev))
+      setPlayers((prev) => join(prev))
+      return { ok: true }
+    },
+    [persist],
+  )
 
   // --- Club admins (#474) ---
   // Unlike every other mutation here, these wait for the API and report back:
@@ -2364,6 +2627,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const value = useMemo<DataContextValue>(
     () => ({
       staleSince,
+      federations,
+      organizations,
       divisions,
       competitions,
       competitionGroups,
@@ -2386,6 +2651,14 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       deleteCompetition,
       setCompetitionGroup,
       updateClub,
+      addProfileInClub,
+      fetchDelegations,
+      addDelegate,
+      removeDelegate,
+      addressToDelegate,
+      mergePeople,
+      setClubAffiliation,
+      removeClubAffiliation,
       archiveClub,
       deleteClub,
       addClubAddress,
@@ -2415,6 +2688,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       fetchGroupsPreview,
       importFfttGroups,
       importScheduleDocuments,
+      importFederationSchedule,
+      prepareReturnLeg,
       updatePhase,
       archivePhase,
       deletePhase,
@@ -2475,7 +2750,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     }),
     [
       staleSince,
-      divisions, competitions, competitionGroups,
+      federations, organizations, divisions, competitions, competitionGroups,
       clubs, seasons, phases, groups, teams, players, playerPhasePoints,
       playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
       playerSeasonLicences, setClubSeasonLicences,
@@ -2486,10 +2761,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, archiveClub, deleteClub, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
-      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
+      fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, importFederationSchedule, prepareReturnLeg, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,
       addClub, addSeason, addPhase, addDivision, addGroup, addTeam,
       moveDivisionUp, moveDivisionDown,
       users, updatePlayer, addPlayer, addClubAdmin, removeClubAdmin,

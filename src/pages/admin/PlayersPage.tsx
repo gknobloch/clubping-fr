@@ -3,11 +3,14 @@ import { Link, useSearchParams } from 'react-router-dom'
 import type { Player as PlayerType } from '@/types'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
-import { ImportIcon, PlusIcon } from '@/components/icons'
+import { FileIcon, ImportIcon, PlusIcon } from '@/components/icons'
+import { clubIsIn } from '@/lib/federations'
+import { ImportFederationPlayersModal } from '@/components/ImportFederationPlayersModal'
 import { ImportPlayersModal } from '@/components/ImportPlayersModal'
 import { HeaderAction, NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
+import { addressOwner, addressTakenMessage } from '@/lib/addressOwner'
 import { sortByName } from '@/lib/sortByName'
 import { PLAYER_SEARCH_LABEL } from '@/lib/playerSearch'
 import { formatLastSeen, hasVisited, lastSeenSentence } from '@/lib/lastSeen'
@@ -23,6 +26,9 @@ import { ModalShell } from '@/components/ModalShell'
 import { Toggle } from '@/components/Toggle'
 import { GroupMatchToggle, MemberGroupFilter } from '@/components/MemberGroupFilter'
 import { clubMemberGroups, memberGroupFilter, type GroupMatch } from '@/lib/memberGroups'
+import { FFTT_FEDERATION_ID, clubFederationIds } from '@/lib/federations'
+import { LicenceNumbers } from '@/components/LicenceNumbers'
+import { linkedProfiles, mayEditPerson } from '@/lib/linkedProfiles'
 
 const STATUS_LABELS: Record<PlayerType['status'], string> = {
   active: 'Actif',
@@ -32,7 +38,7 @@ const STATUS_LABELS: Record<PlayerType['status'], string> = {
 export function PlayersPage() {
   const { user } = useAuth()
   const {
-    players: allPlayers, clubs, seasons, updatePlayer, addPlayer,
+    players: allPlayers, users = [], clubs, federations = [], seasons, updatePlayer, addPlayer,
     playerSeasonCategories, setPlayerSeasonCategories, clearPlayerSeasonCategory,
     playerSeasonLicences, memberGroups,
   } = useAppData()
@@ -63,6 +69,8 @@ export function PlayersPage() {
     firstName: '',
     lastName: '',
     licenseNumber: '',
+    /** Licence numbers outside the FFTT, by federation (#644). */
+    otherLicences: {} as Record<string, string>,
     category: '',
     email: '',
     phone: '',
@@ -71,6 +79,41 @@ export function PlayersPage() {
     status: 'active' as PlayerType['status'],
     clubId: '',
   })
+  // One address, one person (#655, 4 bis): said under the field, before an
+  // optimistic save the API would refuse out of sight. Only an address that
+  // changes is judged — a pair from before the rule keeps theirs until the
+  // general admin settles it.
+  const emailChanged = form.email.trim().toLowerCase() !== (editing?.email ?? '').trim().toLowerCase()
+  const emailOwner = emailChanged
+    ? addressOwner(form.email, users, { personId: editing?.personId, id: editing?.id })
+    : undefined
+
+  // A licence box per federation of the member's club (#644). The FFTT's stays
+  // offered to a member who already holds one, whatever the club: a number on
+  // file is never hidden. Licences the club's federations do not show are kept
+  // as they are, being in the map from the start (#602's rule for replacements).
+  const formFederationIds = (() => {
+    const club = clubs.find((c) => c.id === form.clubId)
+    return club ? clubFederationIds(club) : [FFTT_FEDERATION_ID]
+  })()
+  const showFfttLicence = formFederationIds.includes(FFTT_FEDERATION_ID) || form.licenseNumber.trim() !== ''
+  const otherLicenceIds = [...new Set([
+    ...formFederationIds.filter((id) => id !== FFTT_FEDERATION_ID),
+    ...Object.keys(form.otherLicences).filter((id) => form.otherLicences[id].trim()),
+  ])]
+  // Name and coordinates belong to the PERSON, shared by every club profile of
+  // theirs (#655): on someone who also plays elsewhere, they are the person's
+  // own to change, or a general admin's — the rule PATCH /players/:id applies.
+  const personLocked = !!editing && !mayEditPerson(editing, user, allPlayers)
+  const otherClubNames = editing
+    ? linkedProfiles(editing, allPlayers)
+      .map((p) => clubs.find((c) => c.id === p.clubId)?.displayName ?? p.clubId).join(', ')
+    : ''
+  const shortNameOf = (id: string) =>
+    federations.find((f) => f.id === id)?.shortName ?? id.toUpperCase()
+  const licencesOfForm = () => Object.entries(form.otherLicences)
+    .filter(([, number]) => number.trim())
+    .map(([federationId, number]) => ({ federationId, number: number.trim() }))
 
   const isClubAdmin = user?.role === 'club_admin'
   const hasClubScope =
@@ -153,6 +196,12 @@ export function PlayersPage() {
   // Back on this list since #604: it brings the roster in, and this is where
   // a club checks what it brought.
   const canImport = canEditPlayers && !!scopedClub?.affiliationNumber
+  // A federation without an API publishes its player lists as PDFs (#648):
+  // one import per such federation the club is in — the AGR for Landser and Kembs.
+  const listFederations = canEditPlayers && scopedClub
+    ? federations.filter((f) => !f.isImported && clubIsIn(scopedClub, f.id))
+    : []
+  const [importingList, setImportingList] = useState<string | null>(null)
 
   // Adoption (#406). `lastSeenAt` only reaches people who administer these
   // members, so the column and the count are theirs alone — for anyone else the
@@ -178,6 +227,7 @@ export function PlayersPage() {
       firstName: player.firstName,
       lastName: player.lastName,
       licenseNumber: player.licenseNumber,
+      otherLicences: Object.fromEntries((player.licences ?? []).map((l) => [l.federationId, l.number])),
       category: categoryFor(playerSeasonCategories, seasonId, player.id) ?? '',
       email: player.email ?? '',
       phone: player.phone ?? '',
@@ -195,6 +245,7 @@ export function PlayersPage() {
       firstName: '',
       lastName: '',
       licenseNumber: '',
+      otherLicences: {},
       category: '',
       email: '',
       phone: '',
@@ -226,13 +277,18 @@ export function PlayersPage() {
     const email = form.email.trim()
     if (editing) {
       updatePlayer(editing.id, {
-        firstName: form.firstName,
-        lastName: form.lastName,
+        // Only what this admin may write: the person's fields stay out of the
+        // patch when they belong to the person (#655).
+        ...(personLocked ? {} : {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email,
+          phone: form.phone || undefined,
+          birthDate: form.birthDate || undefined,
+          birthPlace: form.birthPlace || undefined,
+        }),
         licenseNumber: form.licenseNumber,
-        email,
-        phone: form.phone || undefined,
-        birthDate: form.birthDate || undefined,
-        birthPlace: form.birthPlace || undefined,
+        licences: licencesOfForm(),
         status: form.status,
       })
       saveCategory(editing.id)
@@ -244,6 +300,7 @@ export function PlayersPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         licenseNumber: form.licenseNumber,
+        licences: licencesOfForm(),
         email,
         phone: form.phone,
         birthDate: form.birthDate || undefined,
@@ -271,7 +328,7 @@ export function PlayersPage() {
                   alone: `adaptive` gives it the filled look back at that width
                   rather than leaving the page with no filled action. */}
               <HeaderAction
-                variant={canImport ? 'adaptive' : 'primary'}
+                variant={canImport || listFederations.length > 0 ? 'adaptive' : 'primary'}
                 icon={<PlusIcon />}
                 label="Ajouter un joueur"
                 onClick={openCreate}
@@ -284,6 +341,15 @@ export function PlayersPage() {
                   onClick={() => setImporting(true)}
                 />
               )}
+              {listFederations.map((f) => (
+                <HeaderAction
+                  key={f.id}
+                  desktopOnly
+                  icon={<FileIcon />}
+                  label={`Importer la liste ${f.shortName}`}
+                  onClick={() => setImportingList(f.id)}
+                />
+              ))}
             </>
           )
         }
@@ -394,7 +460,7 @@ export function PlayersPage() {
                       the first. Caught by the "rien de rogné" check in
                       e2e/mobile-touch-targets-detail.spec.ts. */}
                   <p className="text-xs text-slate-500">
-                    <span className="font-mono">{player.licenseNumber}</span>
+                    <LicenceNumbers member={player} />
                     {categoryOf(player.id) && ` · ${categoryOf(player.id)}`}
                     {!hasClubScope && ` · ${getClubName(player.clubId)}`}
                     {showLastSeen && (
@@ -489,8 +555,8 @@ export function PlayersPage() {
                     )}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-600 font-mono">
-                  {player.licenseNumber}
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  <LicenceNumbers member={player} />
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {categoryOf(player.id) || '—'}
@@ -529,6 +595,13 @@ export function PlayersPage() {
       </div>
 
 
+      {importingList && scopedClub && (
+        <ImportFederationPlayersModal
+          clubId={scopedClub.id}
+          federationId={importingList}
+          onClose={() => setImportingList(null)}
+        />
+      )}
       {importing && scopedClub && (
         <ImportPlayersModal clubId={scopedClub.id} onClose={() => setImporting(false)} />
       )}
@@ -543,6 +616,12 @@ export function PlayersPage() {
               {creating ? 'Ajouter un joueur' : 'Modifier le joueur'}
             </h2>
             <div className="mt-4 space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {personLocked && (
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  Joue aussi à {otherClubNames} : son nom et ses coordonnées se modifient
+                  par le joueur lui-même, depuis « Mon compte », ou par l’administrateur général.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="player-firstName" className="block text-sm font-medium text-slate-700">Prénom</label>
@@ -551,7 +630,8 @@ export function PlayersPage() {
                     type="text"
                     value={form.firstName}
                     onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
                 <div>
@@ -561,20 +641,42 @@ export function PlayersPage() {
                     type="text"
                     value={form.lastName}
                     onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
               </div>
-              <div>
-                <label htmlFor="player-licenseNumber" className="block text-sm font-medium text-slate-700">N° licence</label>
-                <input
-                  id="player-licenseNumber"
-                  type="text"
-                  value={form.licenseNumber}
-                  onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
-                />
-              </div>
+              {showFfttLicence && (
+                <div>
+                  <label htmlFor="player-licenseNumber" className="block text-sm font-medium text-slate-700">
+                    N° licence{federations.length > 1 && ' FFTT'}
+                  </label>
+                  <input
+                    id="player-licenseNumber"
+                    type="text"
+                    value={form.licenseNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  />
+                </div>
+              )}
+              {otherLicenceIds.map((federationId) => (
+                <div key={federationId}>
+                  <label htmlFor={`player-licence-${federationId}`} className="block text-sm font-medium text-slate-700">
+                    N° licence {shortNameOf(federationId)}
+                  </label>
+                  <input
+                    id={`player-licence-${federationId}`}
+                    type="text"
+                    inputMode="numeric"
+                    value={form.otherLicences[federationId] ?? ''}
+                    onChange={(e) => setForm((f) => ({
+                      ...f, otherLicences: { ...f.otherLicences, [federationId]: e.target.value },
+                    }))}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  />
+                </div>
+              ))}
               <div>
                 <label htmlFor="player-category" className="block text-sm font-medium text-slate-700">
                   Catégorie
@@ -604,8 +706,16 @@ export function PlayersPage() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  readOnly={personLocked}
+                  aria-invalid={!!emailOwner}
+                  aria-describedby={emailOwner ? 'player-email-taken' : undefined}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                 />
+                {emailOwner && (
+                  <p id="player-email-taken" role="alert" className="mt-1 text-sm text-red-600">
+                    {addressTakenMessage(emailOwner)}
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="player-phone" className="block text-sm font-medium text-slate-700">Téléphone</label>
@@ -614,7 +724,8 @@ export function PlayersPage() {
                   type="text"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                  readOnly={personLocked}
+                  className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -628,7 +739,8 @@ export function PlayersPage() {
                     value={form.birthDate}
                     onChange={(e) => setForm((f) => ({ ...f, birthDate: e.target.value }))}
                     placeholder="JJ/MM/AAAA"
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
                 <div>
@@ -640,7 +752,8 @@ export function PlayersPage() {
                     type="text"
                     value={form.birthPlace}
                     onChange={(e) => setForm((f) => ({ ...f, birthPlace: e.target.value }))}
-                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20"
+                    readOnly={personLocked}
+                    className="mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20 read-only:bg-slate-50 read-only:text-slate-600"
                   />
                 </div>
               </div>
@@ -697,7 +810,8 @@ export function PlayersPage() {
                 disabled={
                   !form.firstName ||
                   !form.lastName ||
-                  (creating && !form.clubId)
+                  (creating && !form.clubId) ||
+                  !!emailOwner
                 }
                 className={PRIMARY_BUTTON_CLASS}
               >

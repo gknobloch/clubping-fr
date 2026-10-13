@@ -4,6 +4,8 @@
 //   { phases { edges { node { id name } } } }
 // As of 2026-07-13 it returns /api/phases/1..3. Ids follow the same
 // FFTT-alignment idea as seasons: the numeric part of the IRI, as text.
+import { seasonNumber } from './season'
+
 export const FFTT_PHASES: ReadonlyArray<{ id: string; name: string }> = [
   { id: '1', name: 'Phase 1' },
   { id: '2', name: 'Phase 2' },
@@ -19,6 +21,18 @@ export function localPhaseId(seasonId: string | number, ffttPhaseId: string | nu
   return `phase-${seasonId}-${ffttPhaseId}`
 }
 
+/**
+ * A phase's id in any federation (#645): the FFTT's is `localPhaseId`'s
+ * ("phase-27-1"), another federation's carries its prefix ("phase-agr-27-1")
+ * — two federations play a Phase 1 in the same season, and team ids derive
+ * from the phase (#282).
+ */
+export function phaseIdFor(federationId: string | undefined, seasonId: string | number, phaseNumber: string | number): string {
+  return !federationId || federationId === 'fftt'
+    ? localPhaseId(seasonId, phaseNumber)
+    : `phase-${federationId}-${seasonId}-${phaseNumber}`
+}
+
 /** FFTT phase id for a phase name ("Phase 2" → "2"), or null when unknown. */
 export function ffttPhaseIdForName(name: string): string | null {
   return FFTT_PHASES.find((p) => p.name === name)?.id ?? null
@@ -26,12 +40,12 @@ export function ffttPhaseIdForName(name: string): string | null {
 
 /**
  * Chronological key for a phase (#227): season first (FFTT-aligned numeric
- * ids — 26 < 27), then phase number (Phase 1 < Phase 2). Used to decide what
+ * ids — 26 < 27; "agr-27" counts as 27, #645), then phase number (Phase 1 <
+ * Phase 2). Only ever compared within one federation. Used to decide what
  * a demoted phase becomes: archived when older than the newly active one,
  * back to 'upcoming' when newer (rollback).
  */
 export function phaseOrderKey(seasonId: string, phaseName: string): number {
-  const season = Number(seasonId)
   const phase = Number(ffttPhaseIdForName(phaseName) ?? 0)
-  return (Number.isFinite(season) ? season : 0) * 10 + phase
+  return seasonNumber(seasonId) * 10 + phase
 }

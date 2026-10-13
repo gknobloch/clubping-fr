@@ -92,6 +92,12 @@ INSERT INTO club_addresses (id, club_id, label, street, postal_code, city, is_de
   ('addr-ballons', 'club-fftt-06880064', 'Salle', '1 rue du Sport', '68000', 'Ballons des Vosges', 1),
   ('addr-mutt', 'club-fftt-06680105', 'Salle', '1 rue du Sport', '68000', 'Mulhouse', 1);
 
+-- club_federations (#643)
+-- Kembs plays the AGR too, under the name the AGR prints. The federations
+-- themselves are seeded by migration 0061.
+INSERT INTO club_federations (club_id, federation_id, affiliation_number, name) VALUES
+  ('club-fftt-06680140', 'agr', '680021', 'KEMBS ASL TT');
+
 -- groups
 -- group_id (FFTT pool id, #278) is NULL here: the seed's groups are local,
 -- not imported from FFTT.
@@ -379,14 +385,15 @@ INSERT INTO users (id, email, role, is_player, first_name, last_name, license_nu
   ('p2-player-6', 'christian.buchi@example.com', 'player', 1, 'Christian', 'Buchi', '6815117', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-10', 'olivier.philippe@example.com', 'player', 1, 'Olivier', 'Philippe', '683975', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-7', 'herve.ceroni@example.com', 'player', 1, 'Hervé', 'Ceroni', '684545', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  -- Fabrice and Bastien Dangelser share one address, a parent and a child's (#640).
+  -- Fabrice and Bastien Dangelser, a parent and a child: one address, the
+  -- parent's, and the child none — Fabrice is his delegate (#655).
   ('p2-player-9', 'famille.dangelser@example.com', 'player', 1, 'Fabrice', 'Dangelser', '682480', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-8', 'cedric.cunin@example.com', 'player', 1, 'Cédric', 'Cunin', '6810711', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-12', 'sebastien.rentz@example.com', 'player', 1, 'Sébastien', 'Rentz', '687433', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-13', 'sebastien.schatt@example.com', 'player', 1, 'Sébastien', 'Schatt', '685143', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-14', 'yannick.schill@example.com', 'player', 1, 'Yannick', 'Schill', '6814304', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-11', 'nello.cristini@example.com', 'player', 1, 'Nello', 'Cristini', '683787', '', NULL, NULL, 'active', 'club-fftt-06680011'),
-  ('p2-player-17', 'famille.dangelser@example.com', 'player', 1, 'Bastien', 'Dangelser', '684113', '', NULL, NULL, 'active', 'club-fftt-06680011'),
+  ('p2-player-17', NULL, 'player', 1, 'Bastien', 'Dangelser', '684113', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-16', 'didier.clement@example.com', 'player', 1, 'Didier', 'Clément', '392885', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-19', 'mathieu.mougey@example.com', 'player', 1, 'Mathieu', 'Mougey', '6810243', '', NULL, NULL, 'active', 'club-fftt-06680011'),
   ('p2-player-18', 'bertrand.decoatpont@example.com', 'player', 1, 'Bertrand', 'De Coatpont', '6813454', '', NULL, NULL, 'active', 'club-fftt-06680011'),
@@ -515,3 +522,14 @@ INSERT INTO training_availabilities (training_id, date, player_id, status) VALUE
 INSERT INTO user_avatars (user_id, data, content_type, updated_at) VALUES
   ('p2-player-24', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'image/png', '2026-01-01T00:00:00.000Z');
 
+
+-- people (#655) — a person behind every club profile seeded above, as 0063
+-- does for a migrated database: the seed runs after the migrations, so its
+-- members arrive without one. Bastien Dangelser has no address of his own,
+-- and his father Fabrice is his delegate: the profile switcher shows the pair.
+INSERT OR IGNORE INTO people (id, first_name, last_name, email, phone, birth_date, birth_place)
+  SELECT 'person-' || id, first_name, last_name, email, phone, birth_date, birth_place
+    FROM users WHERE person_id IS NULL;
+UPDATE users SET person_id = 'person-' || id WHERE person_id IS NULL;
+INSERT OR IGNORE INTO person_delegates (person_id, delegate_id, created_at)
+  VALUES ('person-p2-player-17', 'person-p2-player-9', 0);

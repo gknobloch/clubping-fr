@@ -7,6 +7,7 @@ import {
   filterPlayersBySearch,
 } from '@/lib/playerSearch'
 import type { Player } from '@/types'
+import { licencesOf } from '@/lib/licences'
 
 /**
  * "+ Ajouter un joueur", as a searchable sheet rather than a `<select>` (#454).
@@ -95,9 +96,10 @@ export function PlayerPicker({
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-800">
                       {player.firstName} {player.lastName}
                     </span>
-                    {player.licenseNumber && (
+                    {/* Every licence the member holds (#644) — the picker knows no team. */}
+                    {licencesOf(player).length > 0 && (
                       <span className="shrink-0 text-xs text-slate-400">
-                        {player.licenseNumber}
+                        {licencesOf(player).map((l) => l.number).join(' · ')}
                       </span>
                     )}
                   </button>

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { Season, SeasonStatus } from '@/types'
 import { useAppData, type FfttCurrentSeason } from '@/contexts/DataContext'
-import { seasonIdFromName } from '@/lib/season'
+import { seasonIdFromName, seasonNumber } from '@/lib/season'
+import { FFTT_FEDERATION_ID, activePhaseOf, federationOfPhase } from '@/lib/federations'
 import { phaseOrderKey } from '@/lib/ffttPhases'
 import { STATUS_BADGES, STATUS_LABELS } from '@/lib/status'
 import { StatusRadioGroup } from '@/components/StatusRadioGroup'
@@ -14,9 +15,11 @@ import { useConfirm } from '@/components/useConfirm'
 
 export function SeasonsPage() {
   const {
-    seasons: allSeasons, phases, updateSeason, addSeason, archiveSeason, deleteSeason,
+    seasons: allSeasons, phases, federations = [], updateSeason, addSeason, archiveSeason, deleteSeason,
     checkFfttSeason, importFfttSeason,
   } = useAppData()
+  // A season is every federation's (#645); each has its own phases in it.
+  const shortNameOf = (id: string) => federations.find((f) => f.id === id)?.shortName ?? id
   const [editing, setEditing] = useState<Season | null>(null)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<{ displayName: string; status: SeasonStatus }>({
@@ -88,7 +91,7 @@ export function SeasonsPage() {
   const handleSave = () => {
     if (!canSave) return
     if (editing) {
-      updateSeason(editing.id, form)
+      updateSeason(editing.id, { displayName: form.displayName, status: form.status })
       setEditing(null)
     } else if (creating) {
       addSeason(form)
@@ -289,25 +292,29 @@ export function SeasonsPage() {
                   onChange={(status) => setForm((f) => ({ ...f, status }))}
                 />
                 {form.status === 'active' && editing?.status !== 'active' && (() => {
-                  // Resulting active (season · phase) combination (#227): the
+                  // Resulting active combination (#227): each federation's
                   // active phase follows the season — kept when it belongs to
-                  // it, otherwise switched to the season's most recent phase.
+                  // it, otherwise switched to its most recent phase there, or
+                  // none (#645: one season, one active phase per federation).
                   const targetId = editing?.id ?? derivedId
-                  const activePhase = phases.find((p) => p.status === 'active')
-                  const coherent = !!activePhase && activePhase.seasonId === targetId
-                  const resulting = coherent
-                    ? activePhase
-                    : phases
-                        .filter((p) => p.seasonId === targetId && p.status !== 'archived')
-                        .sort((a, b) => b.name.localeCompare(a.name))[0]
-                  const currentActive = allSeasons.find(
-                    (s) => s.status === 'active' && s.id !== editing?.id,
-                  )
-                  const seasonDemotion = currentActive && targetId && Number(currentActive.id) < Number(targetId)
-                    ? 'sera archivée'
-                    : 'repassera à « À venir »'
-                  const phaseDemotion = activePhase && targetId
-                    && phaseOrderKey(activePhase.seasonId, activePhase.name) < phaseOrderKey(targetId, resulting?.name ?? '')
+                  const feds = [...new Set([FFTT_FEDERATION_ID, ...phases.map(federationOfPhase)])]
+                  const outcomes = feds.map((fed) => {
+                    const activePhase = activePhaseOf(phases, fed)
+                    const coherent = !!activePhase && activePhase.seasonId === targetId
+                    const resulting = coherent
+                      ? activePhase
+                      : phases
+                          .filter((p) => p.seasonId === targetId && federationOfPhase(p) === fed && p.status !== 'archived')
+                          .sort((a, b) => b.name.localeCompare(a.name))[0]
+                    const phaseDemotion = activePhase && targetId
+                      && phaseOrderKey(activePhase.seasonId, activePhase.name) < phaseOrderKey(targetId, resulting?.name ?? '')
+                      ? 'sera archivée'
+                      : 'repassera à « À venir »'
+                    return { fed, activePhase, coherent, resulting, phaseDemotion }
+                  }).filter((o, i) => i === 0 || o.activePhase || o.resulting)
+                  const several = outcomes.length > 1
+                  const currentActive = allSeasons.find((s) => s.status === 'active' && s.id !== editing?.id)
+                  const seasonDemotion = currentActive && targetId && seasonNumber(currentActive.id) < seasonNumber(targetId)
                     ? 'sera archivée'
                     : 'repassera à « À venir »'
                   return (
@@ -315,16 +322,17 @@ export function SeasonsPage() {
                       <p>
                         Après enregistrement, la combinaison active sera :{' '}
                         <span className="font-semibold">
-                          {form.displayName || '…'} · {resulting ? resulting.name : 'aucune phase active'}
+                          {form.displayName || '…'} ·{' '}
+                          {outcomes.map((o) => `${several ? `${shortNameOf(o.fed)} ` : ''}${o.resulting ? o.resulting.name : 'aucune phase active'}`).join(' · ')}
                         </span>.
                         {currentActive && ` La saison ${currentActive.displayName} ${seasonDemotion}.`}
                       </p>
-                      {!coherent && activePhase && (
-                        <p className="mt-1">
-                          La phase {activePhase.displayName} {phaseDemotion}
-                          {resulting ? ` et ${resulting.displayName} sera activée` : ''}.
+                      {outcomes.filter((o) => !o.coherent && o.activePhase).map((o) => (
+                        <p key={o.fed} className="mt-1">
+                          La phase {o.activePhase!.displayName}{several ? ` (${shortNameOf(o.fed)})` : ''} {o.phaseDemotion}
+                          {o.resulting ? ` et ${o.resulting.displayName} sera activée` : ''}.
                         </p>
-                      )}
+                      ))}
                     </div>
                   )
                 })()}

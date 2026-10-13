@@ -99,7 +99,9 @@ echo "→ verifying no production data survived"
 # Each term must be 0. Beyond the person-level checks: the image tables have to
 # be empty, every club must carry a synthetic 99-prefixed affiliation number
 # (which is what proves the club rename ran rather than silently no-op'd), and
-# no club channel may still point at a resolvable host (#359).
+# no club channel may still point at a resolvable host (#359). People (#655),
+# licences in other federations (#644) and clubs' other affiliations (#643)
+# carry the same identities and are checked the same way.
 REMAINING=$(npx wrangler d1 execute "$DEV_DB" --remote --json \
   --command "SELECT (SELECT count(*) FROM users WHERE email NOT LIKE '%@example.invalid') \
     + (SELECT count(*) FROM sessions) + (SELECT count(*) FROM auth_otp) \
@@ -109,7 +111,10 @@ REMAINING=$(npx wrangler d1 execute "$DEV_DB" --remote --json \
     + (SELECT count(*) FROM club_logos) \
     + (SELECT count(*) FROM clubs WHERE affiliation_number NOT LIKE '99%') \
     + (SELECT count(*) FROM club_channels WHERE link NOT LIKE '%example.invalid%') \
-    + (SELECT count(*) FROM fftt_club_teams_cache) + (SELECT count(*) FROM fftt_season_cache) AS n" \
+    + (SELECT count(*) FROM fftt_club_teams_cache) + (SELECT count(*) FROM fftt_season_cache) \
+    + (SELECT count(*) FROM people WHERE email IS NOT NULL AND email NOT LIKE '%@example.invalid') \
+    + (SELECT count(*) FROM federation_licences WHERE number NOT LIKE '98%') \
+    + (SELECT count(*) FROM club_federations WHERE affiliation_number NOT LIKE '98%' OR name IS NOT NULL) AS n" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["results"][0]["n"])')
 if [ "$REMAINING" != "0" ]; then
   echo "✘ ${REMAINING} row(s) still hold real data in ${DEV_DB} — do NOT deploy a preview against it"

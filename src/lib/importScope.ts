@@ -1,4 +1,5 @@
-import type { Division, Group, Team } from '@/types'
+import type { Competition, Division, Group, Team } from '@/types'
+import { FFTT_FEDERATION_ID, federationOfDivision } from './federations'
 
 /**
  * Groups of a phase whose FFTT calendar is worth offering to import (#287).
@@ -10,12 +11,14 @@ import type { Division, Group, Team } from '@/types'
  * · Poule 1" with nothing to import.
  *
  * Archived teams never count: an archived entry is not a reason to fetch a
- * calendar.
+ * calendar. Nor does a division of another federation (#660): the FFTT has no
+ * calendar for an AGR poule.
  */
 export function importableGroupIds(
-  { phaseId, divisions, groups, teams, clubId }: {
+  { phaseId, divisions, competitions, groups, teams, clubId }: {
     phaseId: string
     divisions: Division[]
+    competitions: ReadonlyArray<Pick<Competition, 'id' | 'federationId'>>
     groups: Group[]
     teams: Team[]
     /** The club to scope to; omit for a general admin (no scope). */
@@ -23,7 +26,11 @@ export function importableGroupIds(
   },
 ): string[] {
   if (!phaseId) return []
-  const divIds = new Set(divisions.filter((d) => d.phaseId === phaseId).map((d) => d.id))
+  const divIds = new Set(
+    divisions
+      .filter((d) => d.phaseId === phaseId && federationOfDivision(d, competitions) === FFTT_FEDERATION_ID)
+      .map((d) => d.id),
+  )
   const populated = new Set(
     teams.filter((t) => !t.isArchived && (!clubId || t.clubId === clubId)).map((t) => t.groupId),
   )

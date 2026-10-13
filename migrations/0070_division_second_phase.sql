@@ -1,0 +1,11 @@
+-- 0070 — what phase 2 of a division is (#649)
+--
+--   divisions.second_phase   'return_leg' | 'new_groups' | NULL
+--
+-- At the AGR, phase 2 of a division is one of two things. A RETURN LEG: the
+-- same teams, the same journées mirrored — journée 8 is journée 1 with home
+-- and away swapped, and so on to 14 —, only the dates being new. Or NEW
+-- POULES, known only once phase 1 is over (Excellence: the composition
+-- depends on the results). Said on the phase-1 division; NULL is « not
+-- known yet », which prepares nothing.
+ALTER TABLE divisions ADD COLUMN second_phase TEXT;

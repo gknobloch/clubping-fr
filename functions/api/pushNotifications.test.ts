@@ -137,7 +137,10 @@ function fakeDb(f: DbFixture) {
             const scoped = params.length ? rows.filter((r) => params.includes(r.user_id)) : rows
             return { results: scoped.filter((r) => notifiable.has(r.user_id)) }
           }
-          if (sql.includes('JOIN users s')) {
+          // The household (`householdIds`, reach.ts): by address here, which
+          // is all these fixtures share — delegation is pinned against a real
+          // schema in reach.test.ts.
+          if (sql.includes('FROM users a JOIN users u')) {
             return { results: householdOf(String(params[0])).map((u) => ({ id: u.id })) }
           }
           if (sql.includes('FROM push_receipts')) {

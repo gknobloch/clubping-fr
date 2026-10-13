@@ -1,4 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
+import { formatRanking } from '@shared/lib/ranking'
+import {
+  placeBestRanked, reservedLine, reservedLineNote, sheetLetters, sheetOrderRefusal, type SheetSide,
+} from '@shared/lib/matchSheet'
 import {
   ScrollView, StyleSheet, Text, TouchableOpacity, View,
   PanResponder, type PanResponderInstance,
@@ -21,31 +25,54 @@ const ROW_H = 60
 // Read-only "feuille de match" — club identity + the selected line-up with
 // licences and phase points, to help fill the official sheet on site.
 // Players can be reordered by dragging the handle (local only, not persisted).
+// Letters and placement are the federation's (`@shared/lib/matchSheet`, #650):
+// at the AGR, four a side, the best ranked holds A or V, and a drag that
+// would put anyone else there springs back, saying why.
 export function MatchSheet({
   matchup,
   clubName,
   affiliationNumber,
   players,
+  isHome = true,
+  federationId,
   onClose,
 }: {
   matchup: string
   clubName: string
   affiliationNumber: string
   players: MatchSheetPlayer[]
+  /** Which side's letters the sheet opens on. */
+  isHome?: boolean
+  /** Whose ranking the values are: « 1731 pts », or « Classement 45 » at the AGR (#646). */
+  federationId?: string
   onClose: () => void
 }) {
   const byKey = useMemo(() => new Map(players.map((p, i) => [String(i), p])), [players])
-  const [order, setOrder] = useState<string[]>(() => players.map((_, i) => String(i)))
+  const keyed = useMemo(() => players.map((p, i) => ({ key: String(i), points: p.points })), [players])
+  const placed = (keys: string[], side: SheetSide) =>
+    placeBestRanked(keys.map((k) => keyed[Number(k)]), federationId, side).map((p) => p.key)
+  const refusalOf = (keys: string[], side: SheetSide) =>
+    sheetOrderRefusal(keys.map((k) => keyed[Number(k)]), federationId, side)
+  const [side, setSide] = useState<SheetSide>(isHome ? 'home' : 'away')
+  const [order, setOrder] = useState<string[]>(() => placed(players.map((_, i) => String(i)), isHome ? 'home' : 'away'))
   const [dragKey, setDragKey] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<string | null>(null)
 
-  // Positional labels: A.. (from the start) or ..Z (ending at Z), e.g. ABCD /
-  // WXYZ for 4, ABC / XYZ for 3. The letter follows the row position, so
-  // reordering reassigns letters while A,B,C,D stay top-to-bottom.
+  // The letter follows the row position, so reordering reassigns letters
+  // while the set stays top-to-bottom.
   const n = players.length
-  const firstSet = Array.from({ length: n }, (_, i) => String.fromCharCode(65 + i))
-  const lastSet = Array.from({ length: n }, (_, i) => String.fromCharCode(90 - n + 1 + i))
-  const [letterMode, setLetterMode] = useState<'first' | 'last'>('first')
-  const activeSet = letterMode === 'first' ? firstSet : lastSet
+  const homeSet = sheetLetters(federationId, n, 'home')
+  const awaySet = sheetLetters(federationId, n, 'away')
+  const activeSet = side === 'home' ? homeSet : awaySet
+  const reserved = reservedLine(federationId, n, side)
+  const note = reservedLineNote(federationId, n)
+  const sideRef = useRef(side)
+  sideRef.current = side
+  const changeSide = (next: SheetSide) => {
+    setSide(next)
+    setOrder((prev) => placed(prev, next))
+    setRefusal(null)
+  }
 
   const orderRef = useRef(order)
   orderRef.current = order
@@ -69,8 +96,17 @@ export function MatchSheet({
           next.splice(to, 0, key)
           setOrder(next)
         },
-        onPanResponderRelease: () => setDragKey(null),
-        onPanResponderTerminate: () => setDragKey(null),
+        // A drop the federation refuses goes back where it started.
+        onPanResponderRelease: () => {
+          const why = refusalOf(orderRef.current, sideRef.current)
+          setRefusal(why)
+          if (why) setOrder(baseOrderRef.current)
+          setDragKey(null)
+        },
+        onPanResponderTerminate: () => {
+          setOrder(baseOrderRef.current)
+          setDragKey(null)
+        },
       })
     }
     return pansRef.current[key]
@@ -101,16 +137,16 @@ export function MatchSheet({
           {n > 0 && (
             <View style={s.toggle}>
               <TouchableOpacity
-                style={[s.toggleBtn, letterMode === 'first' && s.toggleBtnActive]}
-                onPress={() => setLetterMode('first')}
+                style={[s.toggleBtn, side === 'home' && s.toggleBtnActive]}
+                onPress={() => changeSide('home')}
               >
-                <Text style={[s.toggleTxt, letterMode === 'first' && s.toggleTxtActive]}>{firstSet.join('')}</Text>
+                <Text style={[s.toggleTxt, side === 'home' && s.toggleTxtActive]}>{homeSet.join('')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[s.toggleBtn, letterMode === 'last' && s.toggleBtnActive]}
-                onPress={() => setLetterMode('last')}
+                style={[s.toggleBtn, side === 'away' && s.toggleBtnActive]}
+                onPress={() => changeSide('away')}
               >
-                <Text style={[s.toggleTxt, letterMode === 'last' && s.toggleTxtActive]}>{lastSet.join('')}</Text>
+                <Text style={[s.toggleTxt, side === 'away' && s.toggleTxtActive]}>{awaySet.join('')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -123,19 +159,21 @@ export function MatchSheet({
               <View style={s.dragHandle} {...pan.panHandlers}>
                 <Ionicons name="reorder-three-outline" size={24} color={colors.textSecondary} />
               </View>
-              <Text style={s.letter}>{activeSet[i]}</Text>
+              <Text style={[s.letter, i === reserved && s.letterReserved]}>{activeSet[i]}</Text>
               <View style={s.playerName}>
                 <Text style={s.firstName} numberOfLines={1}>{p.firstName}</Text>
                 <Text style={s.lastName} numberOfLines={1}>{p.lastName}</Text>
               </View>
               <View style={s.playerMeta}>
                 <Text style={s.license}>{p.license ?? '—'}</Text>
-                <Text style={s.points}>{p.points ?? '—'} pts</Text>
+                <Text style={s.points}>{formatRanking(p.points, federationId)}</Text>
               </View>
             </View>
           )
         })}
         {order.length === 0 && <Text style={s.empty}>Aucun joueur sélectionné.</Text>}
+        {refusal && <Text style={s.refusal} accessibilityRole="alert">{refusal}</Text>}
+        {note && order.length > 0 && <Text style={s.rule}>{note}</Text>}
         {order.length > 0 && (
           <Text style={s.note}>L&apos;ordre est indicatif et n&apos;est pas enregistré.</Text>
         )}
@@ -168,6 +206,9 @@ const s = StyleSheet.create({
   toggleTxt: { fontSize: 13, fontFamily: fonts.bold, color: colors.textSecondary, letterSpacing: 1 },
   toggleTxtActive: { color: '#fff' },
   letter: { width: 22, fontSize: 16, fontFamily: fonts.bold, color: colors.accent, textAlign: 'center' },
+  letterReserved: { backgroundColor: colors.bg, borderRadius: 4, overflow: 'hidden' },
+  refusal: { fontSize: 14, color: colors.danger, marginTop: 12 },
+  rule: { fontSize: 13, color: colors.textSecondary, marginTop: 12 },
   kvRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   label: { fontSize: 15, color: colors.textSecondary },
   value: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary, flexShrink: 1, textAlign: 'right' },

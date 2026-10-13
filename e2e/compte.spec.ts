@@ -6,8 +6,9 @@ test.describe('Player — Compte', () => {
     await loginAs(page, 'knobloch')
   })
 
-  test('reachable from the header name and shows identity', async ({ page }) => {
-    await page.getByRole('link', { name: /Gilles Knobloch/ }).click()
+  test('reachable from the header’s account menu and shows identity', async ({ page }) => {
+    await page.getByRole('banner').getByRole('button', { name: 'Gilles Knobloch' }).click()
+    await page.locator('#account-menu').getByRole('link', { name: /Mon compte/ }).click()
     await expect(page).toHaveURL('/compte')
     await expect(page.getByRole('heading', { name: 'Gilles Knobloch' })).toBeVisible()
     await expect(page.getByText('Joueur', { exact: true })).toBeVisible()

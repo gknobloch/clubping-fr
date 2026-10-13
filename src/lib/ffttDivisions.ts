@@ -183,3 +183,32 @@ export function canMoveDivisionDown(division: RankedDivision, inPhase: RankedDiv
   if (idx < 0 || idx >= inPhase.length - 1) return false
   return inPhase[idx + 1].parentId !== division.id
 }
+
+/**
+ * The divisions `division` may take as its parent once it exists: those ranked
+ * above it. A parent always ranks above its child (see canMoveDivisionUp), so
+ * this both keeps that true and rules out a cycle — every descendant ranks
+ * below. `inPhase` is sorted by rank ascending and scoped to the same phase.
+ */
+export function parentCandidates<D extends RankedDivision>(division: RankedDivision, inPhase: D[]): D[] {
+  const idx = inPhase.findIndex((d) => d.id === division.id)
+  return idx < 0 ? [] : inPhase.slice(0, idx)
+}
+
+/**
+ * The divisions left once `deletedId` is gone: its children move up to its own
+ * parent — or to none, if it had none — rather than pointing at nothing. The
+ * same rule as `DELETE /divisions/:id`.
+ */
+export function withoutDivision<D extends { id: string; parentId?: string }>(divisions: D[], deletedId: string): D[] {
+  const deleted = divisions.find((d) => d.id === deletedId)
+  return divisions
+    .filter((d) => d.id !== deletedId)
+    .map((d) => {
+      if (d.parentId !== deletedId) return d
+      const moved = { ...d }
+      if (deleted?.parentId) moved.parentId = deleted.parentId
+      else delete moved.parentId
+      return moved
+    })
+}

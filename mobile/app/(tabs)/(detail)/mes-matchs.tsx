@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolBadge } from '@shared/lib/poolLabel'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -14,6 +14,8 @@ import { Switcher } from '@/components/Switcher'
 import { MatchHeader } from '@/components/MatchHeader'
 import { gameDate, gameTime, isSlotConfirmed } from '@/utils/matchdays'
 import type { Game, MatchDay, Team } from '@shared/types'
+import { activeTeamOf } from '@shared/lib/activeTeam'
+import { todayIso } from '@shared/lib/weeks'
 
 // ---------------------------------------------------------------------------
 // Player match list — the games a player was selected for in a phase, aligned
@@ -31,7 +33,7 @@ export default function MesMatchsScreen() {
   const { playerId } = useLocalSearchParams<{ playerId?: string }>()
   const { user } = useAuth()
   const {
-    clubs, teams, players, matchDays, games, phases, divisions, groups, gameSelections, refreshing, refresh,
+    clubs, teams, players, matchDays, games, phases, divisions, competitions = [], groups, gameSelections, refreshing, refresh,
   } = useAppData()
 
   // The player whose matches we show — the param, else the logged-in player.
@@ -87,7 +89,9 @@ export default function MesMatchsScreen() {
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [phases, participated],
   )
-  const activePhase = phases.find((p) => p.status === 'active')
+  // The phase of the team the home opens on — any federation's (#711).
+  const activePhase = phases.find((p) =>
+    p.id === activeTeamOf(targetPlayerId, teams, phases, games, mdMap, todayIso())?.phaseId)
   const fallbackPhase =
     activePhase && participated.has(activePhase.id)
       ? activePhase
@@ -169,7 +173,7 @@ export default function MesMatchsScreen() {
                     <MatchHeader
                       matchDayNumber={md.number}
                       divisionLabel={divMap.get(team.divisionId)?.displayName}
-                      poolLabel={poolLabel(team, groups)}
+                      poolLabel={poolBadge(team, groups, { divisions, competitions })}
                       teamColor={team.color}
                       teamNumber={team.number}
                       isHome={game.homeTeamId === team.id}

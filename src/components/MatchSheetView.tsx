@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { formatRanking } from '@/lib/ranking'
+import { placeBestRanked, reservedLine, reservedLineNote, sheetLetters, sheetOrderRefusal, type SheetSide } from '@/lib/matchSheet'
 import { ModalShell } from '@/components/ModalShell'
 import { NEUTRAL_BUTTON_CLASS } from '@/components/Button'
 
@@ -16,9 +18,12 @@ export interface MatchSheetPlayer {
  * mirroring the native app's MatchSheet: club identity, then the line-up with
  * each player's position letter, licence and phase points.
  *
- * The letters are the FFTT convention — the home side is A, B, C, D and the
- * visiting side W, X, Y, Z — so the set is a toggle rather than a guess, and
- * the letter follows the row, not the player.
+ * The letters are the federation's (`src/lib/matchSheet.ts`): A, B, C, D /
+ * W, X, Y, Z at the FFTT, A, B, C, D / U, V, W, X at the AGR — a toggle
+ * between the two sides rather than a guess, and the letter follows the row,
+ * not the player. At the AGR, four a side, the best ranked holds A or V
+ * (#650): the sheet opens with them there and refuses a move that would put
+ * anyone else there, saying why.
  *
  * Nothing here is written. The order is a convenience for copying onto paper,
  * which is why it resets on close and why the sheet says so.
@@ -30,6 +35,7 @@ export function MatchSheetView({
   players,
   /** Home side defaults to A..; the visiting side to ..Z. */
   isHome = true,
+  federationId,
   onClose,
 }: {
   matchup: string
@@ -37,27 +43,40 @@ export function MatchSheetView({
   affiliationNumber?: string
   players: MatchSheetPlayer[]
   isHome?: boolean
+  /** Whose ranking the values are: « 1731 pts », or « Classement 45 » at the AGR (#646). */
+  federationId?: string
   onClose: () => void
 }) {
-  const [order, setOrder] = useState(players)
-  const [fromStart, setFromStart] = useState(isHome)
+  const [side, setSide] = useState<SheetSide>(isHome ? 'home' : 'away')
+  const [order, setOrder] = useState(() => placeBestRanked(players, federationId, isHome ? 'home' : 'away'))
+  const [refusal, setRefusal] = useState<string | null>(null)
 
   const n = order.length
-  const firstSet = Array.from({ length: n }, (_, i) => String.fromCharCode(65 + i))
-  const lastSet = Array.from({ length: n }, (_, i) => String.fromCharCode(90 - n + 1 + i))
-  const letters = fromStart ? firstSet : lastSet
+  const homeSet = sheetLetters(federationId, n, 'home')
+  const awaySet = sheetLetters(federationId, n, 'away')
+  const letters = side === 'home' ? homeSet : awaySet
+  const reserved = reservedLine(federationId, n, side)
+  const note = reservedLineNote(federationId, n)
+
+  // The other side has its own reserved line: switching re-places the best
+  // ranked there rather than refusing the order the sheet itself set up.
+  const changeSide = (next: SheetSide) => {
+    setSide(next)
+    setOrder((prev) => placeBestRanked(prev, federationId, next))
+    setRefusal(null)
+  }
 
   // Buttons rather than the app's drag: a dependable touch drag is a lot of
   // code for an occasional gesture and leaves keyboard users out, and moving a
   // row by one is already how /divisions reorders (#383).
   const move = (from: number, to: number) => {
     if (to < 0 || to >= order.length) return
-    setOrder((prev) => {
-      const next = prev.slice()
-      const [row] = next.splice(from, 1)
-      next.splice(to, 0, row)
-      return next
-    })
+    const next = order.slice()
+    const [row] = next.splice(from, 1)
+    next.splice(to, 0, row)
+    const why = sheetOrderRefusal(next, federationId, side)
+    setRefusal(why)
+    if (!why) setOrder(next)
   }
 
   const toggleClass = (active: boolean) =>
@@ -96,11 +115,11 @@ export function MatchSheetView({
             </p>
             {n > 0 && (
               <div className="flex w-40 gap-1" role="group" aria-label="Jeu de lettres">
-                <button type="button" onClick={() => setFromStart(true)} className={toggleClass(fromStart)}>
-                  {firstSet.join('')}
+                <button type="button" onClick={() => changeSide('home')} className={toggleClass(side === 'home')}>
+                  {homeSet.join('')}
                 </button>
-                <button type="button" onClick={() => setFromStart(false)} className={toggleClass(!fromStart)}>
-                  {lastSet.join('')}
+                <button type="button" onClick={() => changeSide('away')} className={toggleClass(side === 'away')}>
+                  {awaySet.join('')}
                 </button>
               </div>
             )}
@@ -118,7 +137,9 @@ export function MatchSheetView({
                     key={player.id}
                     className="flex items-center gap-3 border-b border-slate-100 py-2 last:border-b-0"
                   >
-                    <span className="w-5 shrink-0 text-center font-display text-base font-bold text-accent-600">
+                    <span
+                      className={`w-5 shrink-0 text-center font-display text-base font-bold ${i === reserved ? 'rounded bg-accent-50 text-accent-700' : 'text-accent-600'}`}
+                    >
                       {letters[i]}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -131,7 +152,7 @@ export function MatchSheetView({
                       {/* `||`, not `??`: unset points come through as '' from
                           the roster, which `??` would happily render. */}
                       <span className="block font-mono">{player.license || '—'}</span>
-                      <span className="block">{player.points || '—'} pts</span>
+                      <span className="block">{formatRanking(player.points, federationId)}</span>
                     </span>
                     <span className="flex shrink-0 flex-col">
                       <button
@@ -156,6 +177,8 @@ export function MatchSheetView({
                   </li>
                 ))}
               </ul>
+              {refusal && <p role="alert" className="mt-3 text-sm text-red-600">{refusal}</p>}
+              {note && <p className="mt-3 text-xs text-slate-600">{note}</p>}
               <p className="mt-3 text-xs text-slate-500">
                 L'ordre est indicatif et n'est pas enregistré.
               </p>

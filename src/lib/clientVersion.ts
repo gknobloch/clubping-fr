@@ -21,12 +21,24 @@
  */
 export type ClientVersionVerdict = 'ok' | 'update-available' | 'unsupported'
 
-/** What `GET /api/client-version` answers. Both halves are optional. */
+/** The two store clients. */
+export type StorePlatform = 'ios' | 'android'
+
+/** What `GET /api/client-version` answers. Every part is optional. */
 export interface VersionFloor {
   /** Builds below this are refused. Absent = refuse nothing. */
   minSupported?: string
-  /** The newest published build. Absent = advertise nothing. */
+  /**
+   * The newest build BOTH stores serve (#708). Absent = advertise nothing.
+   * The only value builds up to 1.7.0 read, hence the slower of the two.
+   */
   latest?: string
+  /**
+   * The newest build each store serves, so a build can follow its own store
+   * rather than wait on the other's review (#708). Absent for a store the
+   * server has not read.
+   */
+  latestByPlatform?: Partial<Record<StorePlatform, string>>
 }
 
 // Dotted digits, nothing else: "1.3.0", "1.3", "2". A pre-release suffix
@@ -64,6 +76,9 @@ export const isUsableVersion = (value: string | null | undefined): boolean =>
 /**
  * What `current` should do about `floor`.
  *
+ * Given its `platform`, a build reads what its own store serves, and falls
+ * back to `latest` — what both serve — when the server names nothing for it.
+ *
  * The two halves are read independently: an unparseable `latest` must not cost
  * us a `minSupported` that reads fine, and vice versa. `unsupported` wins when
  * both would apply — being below the floor is the stronger statement.
@@ -71,6 +86,7 @@ export const isUsableVersion = (value: string | null | undefined): boolean =>
 export function versionVerdict(
   current: string | null | undefined,
   floor: VersionFloor | null | undefined,
+  platform?: StorePlatform,
 ): ClientVersionVerdict {
   const now = parseVersion(current)
   if (!now || !floor) return 'ok'
@@ -78,7 +94,8 @@ export function versionVerdict(
   const min = parseVersion(floor.minSupported)
   if (min && compareVersions(now, min) < 0) return 'unsupported'
 
-  const latest = parseVersion(floor.latest)
+  const own = platform ? floor.latestByPlatform?.[platform] : undefined
+  const latest = parseVersion(own ?? floor.latest)
   if (latest && compareVersions(now, latest) < 0) return 'update-available'
 
   return 'ok'

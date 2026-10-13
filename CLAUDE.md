@@ -485,6 +485,569 @@ invisible dans le diff comme dans la revue.
   minuit et 2 h. `src/lib/weeks.spec.ts` épingle une horloge française, sans
   quoi le défaut est invisible sur une CI en UTC.
 
+### Fédérations (#643, suivi dans #642)
+- **Fédération → compétition → division → poule.** La FFTT et l'AGR (Section
+  du Haut-Rhin), semées par 0061. La fédération pend à la **compétition**,
+  jamais à la division ni à l'équipe, pour la raison de #482 : une équipe dit
+  déjà sa division, une division sa compétition, et un championnat est d'une
+  seule fédération. Une division sans compétition est à la FFTT — ce qu'elle a
+  toujours été. `federationOfDivision` est la seule façon de le demander.
+- **Le numéro FFTT reste `clubs.affiliation_number`**, et `club_federations` ne
+  porte que les *autres* fédérations. Les imports, la salle (#613),
+  l'onboarding et la feuille de match lisent déjà la colonne : une ligne FFTT
+  à côté serait une seconde copie, que chacun des quatre chemins de création
+  d'un club devrait penser à écrire. `clubAffiliations` réunit les deux, et
+  **rien ne lit l'un sans l'autre**. L'API refuse une ligne `fftt`.
+- Un club **hors FFTT** n'a pas de numéro FFTT du tout et prend un id de sa
+  fédération : `club-agr-680036` (`clubIdForAffiliation`).
+- **Le nom d'un club dans une fédération** (`ClubAffiliation.name`) : l'AGR
+  imprime « KEMBS ASL TT », et c'est contre lui que ses calendriers seront
+  rapprochés (#647). Vide, c'est le nom du club (`clubNameIn`).
+- **Une compétition ne change de fédération que vide** : avec une seule
+  division rattachée, archivée comprise, l'API répond 409 — ses équipes, ses
+  poules et ses rencontres changeraient de championnat avec elle.
+- Déclarer ou retirer une affiliation suit `administers` (#558) : c'est la
+  décision du club. La retirer ne touche à rien de ce qu'il joue — les équipes
+  sont aux poules, pas à cette ligne — et la confirmation le dit comme un fait.
+- **Un club ne se voit proposer que les championnats de ses fédérations** :
+  la liste repliée de la section Compétitions de `/club` (`competitionsOfClub`,
+  web et app) ne garde que ceux-là — Landser, à l'AGR seule, n'a que faire des
+  compétitions FFTT. Ce que le club joue ou a réservé reste listé quoi qu'en
+  disent ses affiliations, pour la raison qui ne cache jamais un choix fait.
+- **Sur `/clubs`, chaque affiliation porte son étiquette**, la FFTT comprise,
+  dès qu'il existe une seconde fédération, et un filtre par fédération vit dans
+  l'URL (`?federation=agr`). Kembs est dans les deux listes.
+- `Club.affiliations` et `Competition.federationId` sont **optionnels dans le
+  type**, toujours présents dans le payload : leur absence (un cache, une
+  fixture) veut dire « FFTT seule », ce qu'était toute donnée avant. Lus
+  seulement par `src/lib/federations.ts`.
+- **Un sélecteur de division ne liste qu'une fédération** (#660) : celle
+  qu'on a choisie avant — `FederationSelect`, qui ne s'affiche que s'il y a un
+  choix à faire. `federationChoices` dit lesquelles : toutes pour un
+  administrateur général, celles du club sinon (Landser : l'AGR seule, sans
+  sélecteur ; Kembs : les deux, la FFTT d'abord). `divisionsOfFederation` est
+  le filtre. La fédération d'une équipe ou d'une poule existante se lit sur sa
+  division et ne se change pas.
+- **Les imports FFTT ne sont offerts que là où la FFTT a quelque chose** :
+  pas d'« Importer depuis la FFTT » pour un club sans numéro FFTT, ni d'import
+  de calendrier FFTT pour une poule d'une autre fédération (`importableGroupIds`,
+  « Importer les matchs » d'une équipe, « Importer les groupes FFTT »). Sur
+  `/clubs` filtré sur une autre fédération, ni l'import ni « Compléter depuis
+  la FFTT » ; la fiche d'un club de cette seule fédération n'offre pas de
+  synchronisation FFTT — il ne lui manque aucun numéro (#698).
+
+### Une licence par fédération (#644)
+- **La licence FFTT reste `users.license_number`**, et `federation_licences`
+  (0062) ne porte que les *autres* — la même règle que les affiliations d'un
+  club (#643), pour la même raison : cinq chemins l'écrivent (imports,
+  onboarding, fiche) et l'import FFTT apparie dessus. Une copie dans la table
+  serait à tenir au pas par chacun ; le jour où l'un oublie, l'import apparie
+  sur un numéro et l'écran en imprime un autre. Y ramener la licence FFTT et
+  supprimer la colonne est un changement en deux déploiements (#410), pour le
+  jour où plus rien ne la lit.
+- `licencesOf` réunit les deux, FFTT d'abord ; `licenceOf(membre, fédération)`
+  répond pour une seule. **Un écran ne lit jamais `licenseNumber` pour
+  afficher une licence** : il demande celle de la fédération dont il parle.
+  Les imports FFTT, eux, continuent de lire `licenseNumber` — c'est la FFTT.
+- **La fédération d'une équipe décide de la licence imprimée**
+  (`federationOfTeam`, par sa division et sa compétition) : feuille de match,
+  effectif, ligne de licence de la matrice, web et app. Une équipe AGR imprime
+  le numéro AGR. Les « autres joueurs », sans équipe, prennent celle des
+  équipes du club dans la phase.
+- **« Sans licence » (#488) n'est dit que sous une équipe FFTT** : c'est la
+  liste de la FFTT, qui ne dit rien d'une équipe AGR — même pour Kembs, dont
+  l'import FFTT a bien tourné.
+- **Les licences voyagent avec `POST` / `PATCH /players`**, en
+  remplacement, sous les gardes de #558 ; jamais depuis « Mon compte » — le
+  champ n'est pas dans `OWN_PROFILE_FIELDS`, une licence décidant où l'on
+  joue. Une entrée FFTT, une fédération inconnue ou un numéro vide sont
+  écartés.
+- **Le formulaire offre une case par fédération du club du licencié** :
+  Landser demande une licence AGR et aucune FFTT, Kembs les deux. La case
+  FFTT reste offerte à qui en a déjà une, et une licence qu'aucune case ne
+  montre est gardée telle quelle (la règle des remplacements de #602).
+- Sur la fiche et dans « Mon compte », une ligne par licence : « Licence »
+  tant que la FFTT est seule, « Licence AGR » dès qu'il y en a une autre
+  (`licenceLabel`).
+- **Jouer pour un second club, c'est un second profil** (#640) : Gilles a un
+  profil à Rixheim (FFTT) et un à Landser (AGR), reliés par la seule adresse.
+  « Ajouter à un autre club », sur la fiche, le crée : `POST
+  /players/:id/profiles` **copie côté serveur** nom, adresse, téléphone et
+  naissance depuis la ligne source — ressaisie à la main, une faute de frappe
+  dans l'adresse et le sélecteur ne propose jamais l'autre profil. L'appelant
+  ne dit que ce qui est au nouveau club : lequel, et ses licences.
+- Suit `administers` du club **qui reçoit** (#558) ; rien n'est écrit sur
+  celui d'origine. Même nom et même adresse déjà dans ce club : 409
+  `already_in_club`, avec l'id du profil existant, que le dialogue propose
+  d'ouvrir. Sans adresse, le dialogue prévient que rien ne reliera les deux.
+- `linkedProfiles` (même adresse, comparée comme à la connexion) et
+  `clubsToAddTo` (`src/lib/linkedProfiles.ts`) sont la règle de la section
+  « Autres clubs » de la fiche.
+
+### Une personne, ses profils de club (#655)
+- **Une ligne `users` est un profil de club** ; la personne derrière — nom,
+  adresse, téléphone, naissance — est une ligne `people` (0063), et
+  `users.person_id` les relie. Gilles est une personne, avec un profil à
+  Rixheim et un à Landser.
+- **`users` n'est ni renommée ni reconstruite** : une trentaine de colonnes,
+  six clés en cascade et trois tableaux JSON pointent vers `users.id` (le
+  piège de 0036, #604, 0060). La personne s'ajoute **à côté**, et chaque id
+  reste ce qu'il est.
+- **Les champs de la personne restent sur `users`, en miroir** : l'API les y
+  lit à une centaine d'endroits. Une écriture va à `people` **et** à chaque
+  profil de la personne (`PATCH /players/:id`) ; les lectures migreront plus
+  tard, puis les colonnes partiront, chaque étape dans son déploiement (#410).
+- **Le rattrapage** : une personne par ligne, puis les lignes de même adresse
+  **et** de même nom fusionnées — la règle de #640. La personne gardée est celle
+  du profil **le plus ancien** (son orthographe), et elle reprend le téléphone
+  et la naissance que l'un de ses profils connaissait. Un parent et un enfant
+  qui partagent une adresse restent deux personnes : rien ne dit lequel est le
+  parent.
+- **Toute création de profil écrit sa personne d'abord** (`insertPerson`,
+  `personIdFor`) : `POST /players`, l'invitation d'un administrateur,
+  l'approbation d'une demande (#474). « Ajouter à un autre club » rattache le
+  nouveau profil à la personne de la source — c'est le lien, la copie n'est que
+  le miroir.
+- **Qui écrit la personne** : elle-même (les quatre champs de « Mon compte »,
+  depuis n'importe lequel de ses profils) et l'administrateur général. Un
+  administrateur de club **seulement s'il administre tous les clubs de la
+  personne** : quelqu'un d'un seul club reste à corriger par son club (#600),
+  Gilles ne l'est ni par Rixheim ni par Landser. `mayEditPerson`
+  (`src/lib/linkedProfiles.ts`) côté écrans, la même règle dans l'API.
+- **Seul ce qui change est jugé** : les formulaires renvoient tous les champs,
+  et un administrateur qui corrige une licence ne doit pas être refusé pour une
+  adresse laissée telle quelle.
+- `linkedProfiles` relie par la **personne**, jamais par l'adresse — un parent
+  et un enfant ne sont pas deux clubs d'une même personne. L'adresse ne sert
+  plus que pour un cache d'avant #655.
+- **L'anonymisation de la base dev** donne un pseudonyme par personne (sinon
+  les deux profils de Gilles se liraient comme deux inconnus), réécrit
+  `people`, et anonymise aussi les licences des autres fédérations (#644) et
+  les affiliations des clubs (#643) ; `refresh-dev-db.sh` vérifie les trois.
+- Un profil écrit entre la migration et la bascule du worker n'a pas de
+  personne : il reste sa propre personne (`person_id` NULL, lu comme tel) et
+  garde ses champs sur sa ligne, comme avant.
+- **Ce qu'un profil atteint est une seule relation, `reaches`**
+  (`functions/api/reach.ts`) : les profils de sa personne et ceux des
+  personnes qui lui ont délégué. Plus ceux de la même adresse : depuis 0068
+  (index unique sur `people`), une adresse est à une seule personne, donc
+  même adresse veut dire même personne. Le sélecteur la liste, `/auth/switch` l'admet, la connexion ouvre le
+  plus récent de ce qu'elle atteint, et un appareil sonne pour elle
+  (`tokensByUser`). Un seul fragment SQL pour tous : un téléphone qui sonnerait
+  pour un profil que le sélecteur n'ouvre pas est le défaut qu'il empêche.
+- **La session reste un profil de club** : aucune règle d'autorisation ne
+  change. Ce que la personne ouvre au-delà, c'est `reaches`, relu à chaque
+  changement — une délégation retirée prend effet aussitôt.
+- **`reaches` se lit depuis qui s'est connecté, pas depuis le profil ouvert**
+  (#702, `sessions.origin_user_id`, 0074). Nathan, délégué de Chloé, ouvre son
+  profil : la session est celle de Chloé, et lue depuis Chloé elle n'offrait
+  pas Nathan — le retour passait par une déconnexion et un nouveau code. Et
+  elle offrait ceux qui ont délégué à Chloé : deux niveaux, ce que la
+  délégation interdit. La connexion par code ou OAuth note le profil de
+  l'adresse quand elle en ouvre un autre (le plus récent de ce qu'elle
+  atteint), `/auth/switch` le transmet, et le sélecteur comme le changement
+  lisent depuis lui. Une session d'avant 0074 n'a pas d'origine : elle est
+  elle-même, comme avant.
+- **La délégation** (`person_delegates`, 0064) : Benjamin ouvre les profils de
+  Sacha, Sacha n'ouvre pas ceux de Benjamin. **Un seul niveau**, par
+  construction : un délégué n'atteint jamais les délégations de celui qui
+  délègue. Plusieurs délégués par personne, plusieurs personnes par délégué.
+- **Qui délègue** : la personne (dans « Mon compte », par l'adresse de son
+  délégué — sur le web comme dans l'app, `DelegationsSection`), et, sur la
+  fiche en choisissant un membre, l'administrateur général **ou
+  l'administrateur de tous les clubs de la personne** (4 bis) — la règle qui
+  garde son nom et son adresse (`mayEditPerson`, `administersPerson`). Avec
+  une adresse par personne, un enfant n'en a pas et ne peut pas se connecter
+  pour nommer son parent : son club le fait. Quelqu'un qui joue aussi ailleurs
+  n'est pas l'affaire d'un seul club. Sur la fiche, **dans l'app aussi**
+  (#682) : `DelegationsSection` en mode `admin`, un membre choisi par
+  recherche, une entrée par personne — la liste et la condition du web. Un délégué peut **se retirer** (« Ne
+  plus gérer ») : rendre ce qu'on vous a confié ne prend rien à personne. Une
+  adresse qu'aucun compte n'utilise, ou que plusieurs personnes partagent
+  encore, est refusée avec sa raison.
+- `householdIds` est le foyer **dans les deux sens** — qui le profil atteint
+  et qui l'atteint : l'alerte capitaine épargne le parent qui a agi depuis le
+  profil de son enfant (#640), délégation ou adresse partagée.
+- **Le SQLite des tests compte les liaisons comme D1** : un `?` sans valeur
+  y lève (`migratedD1.testkit`). `node:sqlite` lie NULL en silence, et c'est
+  ainsi que les suppressions en cascade de #291 — une sous-requête répétée,
+  liée une fois — ont répondu 500 en production des mois durant, leurs tests
+  au vert, l'écran montrant la suppression jusqu'au rechargement.
+- **Les tests de cette relation tournent sur un vrai SQLite migré**
+  (`migratedD1.testkit.ts` : toutes les migrations, dans l'ordre). Une
+  jointure écrite contre la mauvaise colonne s'enregistre parfaitement dans un
+  faux qui reconnaît les requêtes à leur forme, et ne rend rien en production.
+  `*.testkit.ts` est du côté des tests dans les deux tsconfig, et n'est pas une
+  suite.
+- **Une adresse partagée se règle à la main, par l'administrateur général**
+  (étape 3). 0063 ne fusionnait qu'adresse **et** nom ; une adresse et deux
+  noms, c'est un parent et un enfant ou deux conjoints, et rien ne dit à qui
+  elle est. Sur `/demandes` (« Adresses partagées », tant qu'il en reste) et
+  sur la fiche, il désigne **qui la garde** : les autres n'ont plus d'adresse
+  et cette personne devient leur délégué (`POST
+  /people/:personId/address-to-delegate`) — le même accès qu'avant, par la
+  relation et non plus par une coïncidence de chaînes. `sharedAddresses` est
+  la seule dérivation des cas.
+- La route **relit l'adresse** plutôt que de croire l'écran (409 `not_shared`
+  si elle a changé depuis), et vide l'adresse et crée la délégation **dans un
+  seul batch** : entre les deux, l'enfant serait hors de portée du parent.
+- **Une adresse, une personne** (4 bis) : créer un licencié, inviter un
+  administrateur ou changer une adresse vers celle d'une **autre personne**
+  est refusé (409 `address_taken`, message nommant à qui elle est —
+  `addressOwner` / `addressTakenMessage`, `src/lib/addressOwner.ts`). Les
+  formulaires le disent **avant** d'enregistrer (le web écrit d'avance, et un
+  refus de l'API passerait inaperçu) ; l'API est le filet. Seule une adresse
+  **qui change** est jugée : une paire d'avant la règle garde la sienne
+  jusqu'à ce que l'administrateur général la règle. Un enfant n'a pas
+  d'adresse, ou la sienne — et son parent pour délégué. L'index unique
+  (0068) ne se déploie qu'une fois les adresses partagées réglées en
+  production — sinon la migration échoue, et le déploiement avec. Il est
+  donc **sorti de la livraison de #653** (#724) et revient dans sa propre PR
+  (#725) : #653 déployée, l'administrateur général règle les adresses
+  partagées sur /demandes, puis l'index. Entre les deux, un parent ne bascule
+  plus sur le profil de son enfant par l'adresse — `reaches` ne relie plus
+  par elle. La base dev l'a déjà ; wrangler ne rejouera pas une migration
+  enregistrée, et la PR la rapporte sous le même nom.
+- **Ou ce sont deux fiches d'une même personne** : « C'est la même personne »
+  (deux personnes seulement — à trois, lesquelles ?) fusionne l'une dans
+  l'autre (`POST /people/:personId/merge-into`) : ses profils, ses
+  délégations, et ce qu'elle savait là où l'autre n'avait rien. Celle qui reste
+  est celle qui a un nom, puis celle qui a le plus de profils
+  (`mergeTarget`). Même garde que la passation : administrateur général,
+  adresse relue, un seul batch.
+- **L'administration générale est un rôle de la personne** : c'est par cette
+  fusion qu'un profil d'administrateur général — souvent écrit sans nom, donc
+  laissé à part par 0063 — rejoint la personne qui joue à Rixheim et à
+  Landser. Le sélecteur le range sous « Administration générale », jamais sous
+  « Sans club » (`profilesByClub`) : Gilles passe de Rixheim à Landser à
+  l'administration sans se déconnecter.
+
+### Saisons communes, phases par fédération (#645)
+- **Une saison est à tout le monde ; une phase est à une fédération**
+  (`phases.federation_id`, 0071). 2026/2027 est la saison de la FFTT comme de
+  l'AGR — mêmes mois, mêmes catégories, même jeu de licences —, et ce qui
+  diffère, ce sont les phases que chacune y joue, et quand. Une division
+  arrive à sa fédération par sa compétition, une phase la porte elle-même
+  (`federationOfPhase`). Tout ce qui existait est à la FFTT, ce que le défaut
+  dit sans réécrire une ligne.
+- **Une première version donnait la fédération à la saison** (0065,
+  « agr-27 » à côté de « 27 ») : une même saison s'y retrouvait en deux
+  lignes. 0071 déplace la colonne sur la phase, fusionne la saison d'une
+  fédération dans la saison commune de même numéro et supprime
+  `seasons.federation_id` — sans risque dans le même déploiement : le worker
+  de production qu'il remplace ne l'a jamais lue.
+- **Les ids de phase d'une autre fédération portent son préfixe** :
+  `phase-agr-27-1`, dans la saison `27` (`phaseIdFor`). Deux fédérations
+  jouent une Phase 1 dans la même saison, et Kembs 1 FFTT et Kembs 1 AGR
+  restent deux équipes : leurs ids (club, phase, numéro — #282) ne changent
+  pas. Une phase est unique par (fédération, saison, nom).
+- **Une saison active, une phase active par fédération.** Activer une phase
+  ne rétrograde que celles de sa fédération : la phase 2 de l'AGR peut
+  commencer à une autre date que celle de la FFTT. **Toute phase active est
+  dans la saison active** : activer une phase active sa saison, et activer
+  une saison y amène la phase active de chaque fédération (sa plus récente
+  non archivée, ou aucune). `src/lib/seasonActivation.ts` est la règle côté
+  écrans (le `DataContext` l'applique d'avance), et l'API la même en SQL
+  (`demoteActiveSeasons`, `demoteActivePhases`, `alignActivePhasesToSeason`).
+- **« La phase active » se demande avec sa fédération** : `activePhaseOf`
+  (la FFTT par défaut), jamais `phases.find(active)`, qui rendrait la première
+  des deux. `activeSeasonId` est la saison active, tout court.
+- **Les apps jusqu'à 1.7.0 font exactement `phases.find(active)`** : elles
+  ne connaissent pas les fédérations. `/data` liste donc les phases de la
+  FFTT d'abord (#724), puis dans l'ordre de création : la première active
+  est celle de la FFTT, et un membre FFTT sur une vieille app ouvre sur sa
+  phase. Un club de l'AGR, lui, a besoin de 1.8.0 (accueil, brûlage,
+  lettres de la feuille, poules).
+- **« L'équipe d'un joueur » se cherche dans toutes les phases actives**
+  (`activeTeamOf`, #711) — jamais dans `activePhaseOf(phases)`, qui ne
+  répond que pour la FFTT : un joueur de Landser n'avait pas d'équipe, et
+  l'accueil lui montrait la vue générique, sans « Ma disponibilité ». Un
+  membre de Kembs en a une par fédération ; l'accueil (web et app) et « Mes
+  matchs » partent de celle dont le prochain match vient en premier.
+- **« La phase suivante » aussi** : la phase 2 d'une poule AGR (#649) et le
+  compte du brûlage AGR sur la saison (#651) ne lisent que les phases de la
+  même fédération — la phase 2 de la FFTT est dans la même saison.
+- L'administrateur général crée une saison sans fédération, puis ses phases
+  en choisissant la fédération (`/phases`) ; elle ne change plus ensuite —
+  l'id la porte.
+- **Une division est de la fédération de sa phase** : sa compétition doit
+  l'être aussi (aucune compétition = la FFTT, #643). Le formulaire de
+  Divisions n'offre que les phases et les compétitions de la fédération à
+  l'écran, et l'API refuse le reste (400 `federation_mismatch`,
+  `divisionFederationRefusal`). Sans cela, un championnat AGR créé dans la
+  phase de la FFTT — avant qu'une phase AGR existe — n'apparaissait sur aucune
+  page AGR. 0072 range ceux déjà mal classés dans la phase de leur fédération
+  (même saison, même nom), tant qu'aucune poule n'y pend.
+- **La fédération d'abord, puis la phase** : Journées, Équipes, Groupes et
+  Divisions passent par `phaseScope` — les fédérations proposées (celles du
+  club, toutes pour l'administrateur général), celle en vigueur, ses phases
+  dans l'ordre et celle qui s'ouvre. L'en-tête porte `FederationSwitch`
+  (« FFTT | AGR »), sur le web comme dans l'app (un `FederationSwitch` de
+  chaque côté) ; il ne s'affiche que s'il y a un choix, donc jamais pour
+  Landser ni pour Rixheim. Un lien qui nomme une phase (un match, une journée
+  de l'accueil) ouvre sur sa fédération. **Phases et Compétitions** aussi : le
+  même interrupteur filtre la liste, son compte d'archivées, et ce qu'on y
+  crée ; « Importer depuis la FFTT » n'est que sur la FFTT. **Un compte
+  d'archivées compte ce que la liste montre** : la phase à l'écran sur
+  Divisions, la division à l'écran sur Groupes.
+- Dans un dialogue, la phase suit la fédération du dialogue, pas celle de la
+  page : la phase de la FFTT n'a pas de division AGR.
+- **Fédération et phase vivent dans la barre de `PageHeader`** (`controls`),
+  sur chaque liste — Divisions et Clubs y sont venus en #700 : une carte à
+  part changeait la hauteur et l'espacement d'un écran à l'autre. La phase est
+  `PhasePager`, une seule pastille, plus une copie par page. Sur Clubs,
+  l'interrupteur commence par « Tous » : Kembs est des deux. Les deux
+  contrôles partagent contour et hauteur (`TOOLBAR_PILL_CLASS`, #706).
+
+### Division parente (#236, #694)
+- **Une division ne se classe jamais au-dessus de sa parente** : les chevrons
+  grisés sur Divisions sont ce verrou (`canMoveDivisionUp/Down`), pas une panne.
+- **La parente se change après la création** : le formulaire « Modifier » ne
+  propose que les divisions classées au-dessus (`parentCandidates`), ce qui
+  garde le verrou vrai et rend un cycle impossible. Une parente qu'il ne liste
+  pas — supprimée, archivée, ou une division FFTT pas encore importée — reste
+  ce qu'elle est (« Division introuvable ») : le formulaire n'envoie la parente
+  que si elle a changé.
+- **Supprimer une division rattache ses enfants à sa propre parente**, ou à
+  aucune (`withoutDivision` côté écran, le même `UPDATE` dans le batch de
+  l'API). Une parente introuvable ne verrouille rien, mais ne se corrigeait
+  plus.
+
+### Points et classement (#646)
+- **La FFTT classe par points (plus haut = mieux), l'AGR par un classement
+  (plus bas = mieux)**, 25 à 80 sur la liste de Landser. Les deux se rangent
+  dans `player_phase_points`, clé (phase, joueur) : une phase est à une seule
+  fédération (#645), donc la clé dit à qui est la valeur.
+- `src/lib/ranking.ts` est la règle : `rankingLabel` (« Points » /
+  « Classement »), `formatRanking` (« 1731 pts » / « Classement 45 », « — »
+  sans valeur) et **`compareRanking`, la seule comparaison** pour tout ce qui
+  trie ou désigne « le mieux classé » — égalités permises, sans valeur en
+  dernier. Une table dans le code plutôt que des colonnes : deux fédérations,
+  connues ; une troisième ajouterait une ligne.
+- **Une valeur par fédération du club** (`currentRankings`) : un membre de
+  Kembs a ses points FFTT et son classement AGR, chacun sous son nom (et le
+  nom de la fédération quand il y en a deux). Les équipes « de cette phase »
+  sont celles de la phase active de chaque fédération (`activePhaseIdsOf`).
+
+### Organisations par fédération (#692)
+- **Une organisation est celle d'une fédération** (`organizations.federation_id`,
+  0073) : la liste de la FFTT reste un cache rafraîchi depuis son API — et ce
+  rafraîchissement ne vide plus que les siennes —, l'AGR a les siennes écrites
+  une fois, **Haut-Rhin** (`agr-68`) et **Bas-Rhin** (`agr-67`). Tout ce
+  qu'il y avait d'AGR est du Haut-Rhin.
+- **L'organisation est celle d'une division, pas d'une compétition** : à la
+  FFTT, un même championnat porte les divisions régionales d'une ligue (GE 1 à
+  7) et les départementales d'un comité. L'import des divisions FFTT écrit
+  celle pour laquelle il tourne (et la complète au réimport, comme la
+  compétition) ; l'import d'un calendrier AGR, celle choisie dans la revue ;
+  le formulaire de Divisions la propose pour l'AGR. Une organisation d'une
+  autre fédération que la phase est refusée.
+- **Un club a une organisation dans une fédération**
+  (`club_federations.organization_id`) : Landser est AGR Haut-Rhin. Elle se
+  règle avec l'affiliation, sur la fiche du club. L'import d'un calendrier
+  part de celle du club de l'administrateur, propose le championnat de
+  l'organisation (« Championnat du Haut-Rhin »), et ne rapproche un nom que
+  des clubs de cette organisation ou d'aucune (`matchFederationClub`) — « SG »
+  ou « ASL » existent des deux côtés.
+- **Le filtre « Organisation » lit nos données** (`organizationFilter.ts`) :
+  toujours pour l'AGR, et pour la FFTT dès que toutes les divisions de la
+  phase connaissent la leur ; d'ici là la FFTT est encore interrogée, comme
+  avant. `/data` porte les organisations de l'AGR et celles de la FFTT qu'une
+  division nomme — pas la liste entière, que seuls les dialogues d'import
+  parcourent.
+- **Avec les saisons communes (#645), les imports FFTT cherchent leur phase
+  dans la FFTT** : une « Phase 1 » de l'AGR est dans la même saison, sous le
+  même nom.
+
+### Calendrier d'une fédération sans API (#647)
+- **L'AGR n'a pas d'API** : le calendrier d'une poule est un PDF à couche
+  texte propre. `src/lib/agrScheduleDocument.ts` le lit (en-tête, « Journée
+  N », une ligne par rencontre, notes de pied) à côté de l'analyseur FFTT,
+  sans rien en partager : pas de tableau d'effectif ni de numéro
+  d'affiliation, un club est son **nom AGR** suivi du numéro d'équipe.
+- **Chaque rencontre a sa date et son heure** (une journée s'étale du
+  mercredi au vendredi) ; **la phase 2 garde sa numérotation** (journées 8 à
+  14). **Les poules sont des lettres** : un numéro stocké, « Poule A »
+  affiché (`poolLabel` avec son contexte divisions / compétitions).
+- **Dans les pastilles d'un match de l'app, division et poule sont abrégées**
+  (#716) : « J3 · Excellence · Poule A · Équipe 1 » et « Dans 10 jours » ne
+  tenaient pas sur un téléphone, et le compte à rebours recouvrait l'équipe.
+  `divisionShortName` (Exc., PE, Hon., PH, D1 ; N1, PN, R2 à la FFTT — un nom
+  non reconnu reste entier) et `poolBadge` (« A », « P. 28 »), dans
+  `MatchHeader` et `GameSummary` seulement. Là où il y a la place — fiche
+  d'équipe, liste des Équipes, le web — le nom reste entier.
+- Les lignes de pied sont **la note de la poule** (`groups.note`, 0069) —
+  « RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT ». **Dans l'app, sur la fiche
+  d'équipe** (#718), sous le titre de la poule, entre « Calendrier » et
+  « Tous les matchs de cette équipe » : sur l'écran de chaque match, elle
+  disait la même chose d'un match à l'autre, entre l'en-tête et les
+  disponibilités. Sur le web, sur la fiche d'équipe aussi, avant « Matchs » :
+  celle de la poule de la phase affichée.
+- **La revue décide, l'API vérifie** (`POST /federation-schedules/import`) :
+  phase et compétition de la fédération, joueurs par rencontre (3 en
+  Division 2), et chaque nom rattaché à un club existant ou créé nu
+  (`matchFederationClub` : nom AGR, puis nom affiché). Le nom AGR est retenu
+  sur le club (`club_federations.name`, jamais écrasé), donc le second
+  calendrier retrouve tout.
+- **Un club créé par un import porte un nom lisible** (#704) : « INGERSHEIM ST
+  ALOYSE » devient « Ingersheim St Aloyse » (`clubNameFromFederation`, la
+  règle de `normalizeFfttName`), sur l'import AGR comme sur les imports de
+  rencontres et de PDF de la FFTT. Le nom imprimé reste celui de
+  `club_federations.name`, contre lequel on rapproche. Un club retrouvé dont le
+  nom est encore entièrement en capitales est renommé — personne ne l'a écrit
+  ainsi ; un nom qui porte une minuscule n'est jamais touché.
+- **Qui** : l'administrateur général, ou l'administrateur d'un club **de la
+  fédération que le calendrier nomme** — il construit la poule où son club
+  joue. Ensuite la règle de #577 vaut comme partout.
+- **La division se choisit dans la revue** : celle de la phase que le nom
+  désigne est proposée (`matchDivisionName`) — « Prom. HONNEUR » est
+  « Promotion Honneur », « DIVISION I » est « Division 1 » : abréviations,
+  capitales, articles et chiffres romains ramenés à une clé
+  (`divisionNameKey`, `src/lib/divisionNames.ts`) —, une autre peut être
+  prise, ou « Créer ». L'API prend celle choisie (refusée si elle n'est pas
+  de la phase) et, sans choix, cherche avec la même clé. Le miroir de la
+  phase retour (#649) aussi.
+- **La phase est celle que le calendrier nomme**, saison et numéro, et
+  aucune autre : un calendrier de phase 2 rangé en phase 1 empilerait ses
+  journées 8 à 14 sur celles de la phase 1. Absente, rien n'est choisi et la
+  revue le dit ; choisie à la main, l'écart est dit aussi.
+- **Idempotent** : division par (phase, nom), poule par (division, numéro),
+  équipe par (club, phase, numéro), journée par (poule, numéro), rencontre par
+  ses deux équipes. Landser puis Kembs importent la même Promotion Honneur :
+  le second ne crée rien. Une rencontre retrouvée prend la date et l'heure du
+  document, sauf si quelqu'un les a posées à la main.
+- Entrées : « Importer un calendrier » sur Équipes quand la fédération à
+  l'écran n'a pas d'import, et « Importer depuis un fichier » sur Groupes
+  dans ce cas. Les fixtures de test sont trois vrais calendriers, **le
+  contact du pied remplacé** (nom, adresse et e-mail d'un officiel).
+
+### Liste des joueurs d'une fédération sans API (#648)
+- L'AGR publie la liste d'un club en PDF (« Liste des joueurs » : licence,
+  NOM Prénom, classement). `src/lib/agrPlayerList.ts` la lit en
+  **enregistrements de licence FFTT** (`FfttLicence`) : la revue de #384 /
+  #566 la sert telle quelle, sans seconde copie.
+- **La revue prend la fédération** (`ImportFederation`, dernier argument de
+  `buildImportRows`, `importCandidates`, `federationId` de
+  `playerImportWrites`) : un membre est apparié sur **sa licence AGR**
+  (`federation_licences`), jamais sur un numéro FFTT ; la licence écrite va
+  dans `licences` ; la valeur s'appelle « Classement » et va dans la phase
+  AGR active ; et **le nom d'une personne existante n'est jamais proposé** —
+  la FFTT et l'AGR l'écrivent différemment (#655). Un homonyme reste une
+  question, jamais une fusion.
+- Une liste d'un autre club est refusée (numéro d'affiliation). Entrée :
+  « Importer la liste AGR » sur Joueurs, pour un club de cette fédération,
+  sur le web comme dans l'app (#681).
+- **Dans l'app, c'est l'API qui lit le PDF** (#681) : Hermes ne fait pas
+  tourner pdf.js (pas de `ReadableStream`). Le fichier choisi part à
+  `POST /pdf/lines` (octets bruts ou `file` en multipart, 4 Mo au plus,
+  administrateurs seulement) ; l'API rend ses lignes, rebâties par **le code
+  du navigateur** (`src/lib/pdfLines.ts`, sans DOM, partagé), et l'app passe
+  ces lignes au même analyseur et à la même revue — l'écran d'import des
+  licenciés avec `?federation=agr`. Rien n'est gardé côté serveur.
+- **pdf.js dans un Worker** : la build minifiée, importée au premier appel ;
+  pas de web worker, donc son « fake worker » reçoit le module directement
+  (`globalThis.pdfjsWorker`) ; `isEvalSupported: false` ; et des classes
+  inertes pour `DOMMatrix` / `Path2D` / `ImageData`, qu'il construit au
+  chargement sans jamais dessiner pour lire du texte. Le worker passe de
+  395 Ko à 3,4 Mo (741 Ko compressés).
+- **Le sélecteur de fichier est un module natif** (`expo-document-picker`,
+  livré à partir de 1.8.0) : une mise à jour OTA atteint aussi les binaires
+  qui ne l'ont pas, et le module lève à l'import. Il ne s'importe donc que
+  depuis `utils/documentPicker.ts`, dans un `try` comme
+  `expoNotifications.ts` ; un vieux binaire dit « mettez l'app à jour ».
+
+### Phase retour (#649)
+- Une division AGR joue sa phase 2 de deux façons : **les mêmes poules,
+  réception inversée** (« phase retour »), ou **de nouvelles poules** tirées du
+  classement de la phase 1. La division le dit (`divisions.second_phase`,
+  `Division.secondPhase` ; absent = pas encore connu), demandé à l'import du
+  calendrier de la phase 1 — prérempli par ce que la division dit déjà, sinon
+  par une note de la poule qui parle de « retour » — et modifiable sur
+  Divisions.
+- **En phase retour, tout est connu sauf les dates** : la poule est
+  **recopiée** dans la phase suivante dès que les deux phases existent — à
+  l'import si la phase 2 existe, sinon à sa création (`POST /phases`), ou à la
+  demande (« Préparer la phase retour » sur Équipes, `POST
+  /groups/:id/return-leg`). Division et poule retrouvées par nom et numéro,
+  équipes par (club, phase, numéro) avec capitaine, effectif et créneau,
+  journées numérotées à la suite (8 à 14, comme l'AGR), rencontres **inversées**.
+  Idempotent : rejoué, rien n'est recréé.
+- **Une rencontre recopiée n'a pas de date** : `source = 'mirror'`, `date`
+  nulle. Sa journée porte une date **provisoire** — celle de la journée aller,
+  décalée de la durée de la phase 1 plus trois semaines, ce qui tombe sur la
+  vraie première journée retour du calendrier AGR 2026/2027 —, et
+  `gameSchedule` n'en montre que la semaine, quel que soit le jour habituel du
+  club recevant : personne n'a annoncé ce jour-là. `isProvisionalSlot`, et un
+  libellé à lui (« Date provisoire »), parce que la raison n'est pas celle d'un
+  adversaire au jour inconnu.
+- **Le PDF de la phase 2 date ce qui existe** : son import retrouve les
+  journées par numéro et les rencontres par leurs deux équipes, écrit les
+  dates, et **prend aussi qui reçoit** sur une rencontre recopiée — l'inversion
+  est une supposition, le calendrier publié tranche. Il ne crée rien à côté.
+- Fédérations sans API seulement : la FFTT importe sa phase 2 comme le reste.
+
+### Feuille de match AGR (#650)
+- **Les lettres sont celles de la fédération** (`src/lib/matchSheet.ts`,
+  partagé par `MatchSheetView` et `MatchSheet`) : la FFTT finit l'extérieur à
+  Z (W X Y Z, X Y Z à trois) ; l'AGR part d'une lettre fixe des deux côtés —
+  A B C(D) à domicile, **U V W(X)** à l'extérieur.
+- **À quatre, l'AGR place le mieux classé** — le plus bas classement, ou l'un
+  d'eux à égalité (`compareRanking`, #646) — **en A à domicile et en V à
+  l'extérieur** : la *deuxième* ligne dehors. La feuille s'ouvre en l'y
+  plaçant (`placeBestRanked`, un seul échange), refuse un déplacement qui y
+  mettrait quelqu'un d'autre (`sheetOrderRefusal`, la phrase dit pourquoi ;
+  dans l'app, la ligne glissée revient à sa place), et changer de côté l'y
+  replace. À trois, et sans aucun classement connu, l'ordre est libre.
+- **Le N° club est celui de la fédération du match** (`affiliationNumberIn`) :
+  Kembs est 06680140 à la FFTT et 680021 à l'AGR.
+
+### Brûlage AGR (#651)
+- **L'AGR ne brûle pas comme la FFTT** (règlement CRTT, art. 26, 29, 92). Un
+  joueur est **titulaire** d'une équipe : celle que le club déclare — l'effectif
+  de l'équipe dans l'app —, à défaut celle de sa **première feuille de
+  rencontre**. Il ne joue **jamais en dessous** de son équipe (art. 92 :
+  parties perdues par pénalité). Au-dessus, **trois rencontres sur la saison**
+  gardent sa titularité ; la **quatrième** le rend titulaire de la plus basse
+  des équipes supérieures où il a joué (art. 29 : titulaire en 4, deux fois en
+  1, une en 2, une en 3 → titulaire en 3), et le compte continue au-dessus de
+  celle-là.
+- **La saison, pas la phase** : les rencontres de la phase 1 comptent en
+  phase 2. Une équipe est son numéro d'une phase à l'autre ; les journées se
+  rangent par phase puis par numéro.
+- `computeBrulage` / `isPlayerEligibleForTeam` restent la seule entrée, avec
+  un dernier argument `BrulageContext` (équipes, phases, divisions,
+  compétitions) : la fédération de l'équipe choisit la règle, et sans contexte
+  c'est celle de la FFTT — ce que faisait tout appelant avant. Tous les
+  appelants du web et de l'app le passent. `agrTitularity` dit où en est un
+  joueur, `agrPickConsequence` ce que ferait un choix au-dessus (la quatrième).
+- **Le brûlage affiché à l'AGR ne montre que ce que les matchs ont décidé** :
+  une titularité déclarée est l'effectif que le club a écrit lui-même, pas une
+  nouvelle.
+- La règle FFTT « deux équipes d'une même poule » ne s'applique pas à l'AGR.
+- **Une rencontre par journée, à l'AGR, seulement là où l'art. 30 l'exige** :
+  sur les trois premières journées, deux rencontres d'une même journée sont
+  refusées si les deux équipes jouent en division **départementale**
+  (Excellence, Promotion d'Excellence, Honneur — art. 22 ; la Promotion
+  d'Honneur et les Divisions I à III sont du secteur), ou dans **la même
+  division**. À partir de la quatrième, jamais. `mayPlayBothInRound` est la
+  règle, lue sur le nom de la division (`isAgrDepartmentalDivision`) ; la
+  FFTT garde une rencontre par journée, toujours.
+- `playersCommittedElsewhere` ne l'applique que si on lui passe un contexte :
+  les écrans qui demandent « qui peut encore jouer ici ? » (feuilles de
+  composition, état « joue en équipe N » de l'accueil, aperçu d'un match) le
+  passent ; le **planning de la phase** ne le passe pas — il montre où chacun
+  joue, ce qui reste vrai.
+- **La matrice des journées choisit une équipe par journée** : la seconde
+  composition d'une journée se fait depuis la feuille du match. Changer
+  l'équipe dans la matrice **garde** une composition que l'art. 30 permet à
+  côté, plutôt que de la défaire sans le dire ; « — » les retire toutes.
+- **La quatrième se dit avant d'enregistrer** (#683) : dans les feuilles de
+  composition (web et app), un joueur qui jouerait au-dessus de son équipe
+  porte « 2/3 au-dessus » à côté de son nom, et la quatrième « Titulaire en
+  éq. 3 » ; une fois cochée, une phrase la nomme en tête de la feuille
+  (`agrPickNote`, `agrTitularityWarning`). Un fait, jamais un refus : la
+  quatrième est permise, elle déplace la titularité.
+
 ### Competitions and player categories (#482)
 - **A competition is global; a division belongs to one.** Never team →
   competition: a team already declares a division, and a championship is what a
@@ -770,10 +1333,12 @@ invisible dans le diff comme dans la revue.
   *un* membre. Se connecter ouvre **le profil vu le plus récemment**
   (`last_seen_at`), décidé côté serveur pour valoir d'un appareil à l'autre.
 - **Changer de profil, c'est se reconnecter** (`POST /auth/switch`) : une
-  session neuve pour la cible, l'ancienne révoquée, et l'adresse est relue *au
+  session neuve pour la cible, l'ancienne révoquée, et la portée est relue *au
   moment du changement* — un enfant à qui l'on donne sa propre adresse sort de
-  la portée du parent aussitôt. Inconnu ou d'une autre adresse : le même 403.
-  Une adresse vide ne partage rien (`sameAddress`).
+  la portée du parent aussitôt, sauf délégation. Inconnu ou hors de portée : le
+  même 403. Une adresse vide ne partage rien. Depuis #655, la portée est
+  `reaches` : la personne, ses délégations, et l'adresse partagée en
+  transition.
 - **Ce n'est pas une déconnexion** : rien n'est vidé. Le cache refuse déjà
   l'entrée d'un autre membre (#387, #509) et le premier fetch réécrit ;
   `pp-club-user` est réécrit, sinon un démarrage sans réseau rouvrirait
@@ -782,8 +1347,19 @@ invisible dans le diff comme dans la revue.
 - `/auth/me` et chaque réponse de connexion portent `profiles` — le membre
   connecté compris, clubs nommés. Le sélecteur (`profilesByClub`) groupe par
   club ; il n'apparaît **qu'avec un autre profil à proposer**
-  (`hasOtherProfiles`) : en-tête et Mon compte sur le web, Mon compte dans
-  l'app. Après un changement, on revient à l'accueil : l'écran d'avant était
+  (`hasOtherProfiles`) : le menu du compte de l'en-tête et Mon compte, sur
+  le web comme dans l'app.
+- **L'avatar de l'en-tête ouvre le menu du compte** (`AccountMenu`, #720 dans
+  l'app, #722 sur le web — l'avatar et le nom sur ordinateur, l'avatar seul à
+  côté du bouton de menu sur un téléphone), accroché sous lui : nom, club et rôle du profil ouvert,
+  « Mon compte », puis les autres profils par club — un toucher en change.
+  Changer de profil était tout en bas de Compte, à deux écrans de l'endroit
+  où un parent ouvre les matchs de son enfant. Les lignes sont
+  `ProfileChoices` dans l'app, `ProfileList` sur le web — partagées avec
+  « Changer de profil » de Compte, qui reste. Dans l'app, le menu est un
+  `Modal` (#625) : il tourne avec le téléphone. Sur un téléphone, le web
+  l'étend sur la largeur de l'écran, 16 px en retrait : accroché à l'avatar,
+  il sortait par la gauche. Après un changement, on revient à l'accueil : l'écran d'avant était
   celui de l'autre profil, peut-être un écran d'administration.
 - **Un appareil sonne pour tous les profils de son adresse**, dérivé à l'envoi
   (`tokensByUser`) et non écrit une ligne par profil : `push_tokens` reste clé
@@ -804,11 +1380,11 @@ invisible dans le diff comme dans la revue.
 - **L'alerte capitaine épargne le foyer de l'auteur** : un parent capitaine
   qui change la réponse de son enfant depuis le profil de l'enfant serait
   prévenu de son propre geste, sur le téléphone qu'il tient.
-- **Inviter un administrateur sous une adresse déjà prise est permis**, pour
-  un autre nom : un parent sans licence qui administre le club de son enfant
-  est exactement ce cas. Même adresse **et** même nom, c'est la même personne
-  — `email_taken`, à désigner plutôt qu'à inviter. L'approbation d'une demande
-  d'administration (#474) suit la même règle.
+- ~~Inviter un administrateur sous une adresse déjà prise est permis~~ —
+  **plus depuis #655 (4 bis) : une adresse, une personne.** Même adresse et
+  même nom, c'est la même personne — `email_taken`, à désigner plutôt qu'à
+  inviter ; même adresse et un autre nom, l'adresse est à quelqu'un d'autre —
+  `address_taken`, qui dit à qui.
 - L'anonymisation de la base dev **garde partagée une adresse partagée**, pour
   qu'une préversion montre le sélecteur. Les fixtures (`src/mock/data.ts`) et
   `seed.sql` en portent une : Fabrice et Bastien Dangelser. Sans backend
@@ -1492,6 +2068,31 @@ invisible dans le diff comme dans la revue.
   devient un rappel sans remède** — `src/test/mobileConfig.spec.ts` casse le
   build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
   bloque, et ne se relève que pour une raison nommée dans le commit.
+- **`CLIENT_LATEST_VERSION` est un plafond, pas une annonce** (#708). Relevée
+  dans la PR de montée de version, elle était en ligne des jours avant que la
+  revue d'Apple ou de Google ne rende la version installable : chaque membre
+  voyait la barre, touchait « Mettre à jour » et trouvait au magasin la version
+  qu'il avait déjà. Le test de `mobileConfig.spec.ts` ne pouvait rien y voir —
+  il compare à `app.json`, et `app.json` n'est pas le magasin.
+- **`latest` est la plus petite de la variable et de ce que les magasins
+  servent** (`store_releases`, 0075). `.github/workflows/store-versions.yml` lit
+  les deux chaque heure (`scripts/store-versions.mjs`) ; le worker ne lit que la
+  table, et la clé du compte de service Play reste un secret GitHub. Les builds
+  jusqu'à 1.7.0 ne lisent que `latest` et ne savent pas de quel magasin ils
+  viennent : c'est donc ce que servent **les deux**. Les suivants lisent
+  `latestByPlatform`, leur magasin à eux — un iPhone n'attend pas la revue de
+  Play.
+- **App Store** : la recherche publique (`itunes.apple.com/lookup`), sans
+  identifiant ; elle retarde de quelques heures, ce qui va dans le bon sens.
+  **Play** : l'API Developer, la piste la plus publique qui porte une version
+  (`production`, puis `beta`, puis `alpha` — l'app est en test fermé et la
+  production était vide au moment de #708), **jamais `internal`**, où chaque
+  build atterrit d'abord. Seule une release `completed` compte : un déploiement
+  progressif n'est pas installable hors de sa fraction, même à la main.
+- **Ne pas savoir n'annonce rien** : un magasin pas encore lu, une table
+  illisible, une base absente — pas de version pour ce magasin, et la route
+  répond quand même (le plancher n'en dépend pas). Un magasin que le workflow
+  n'arrive pas à lire garde sa dernière valeur et rend l'exécution rouge.
 
 ### Captures d'écran des stores (#520)
 - **Maestro, pas `snapshot`/`screengrab`.** Les outils de capture de fastlane

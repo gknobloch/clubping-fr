@@ -11,6 +11,8 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { GameQuickView } from '@/components/GameQuickView'
 import { HomeIcon, AwayIcon, InfoIcon, PhaseSwitchButton } from '@/components/icons'
 import type { Team } from '@/types'
+import { rankingLabel } from '@/lib/ranking'
+import { federationOfPhase } from '@/lib/federations'
 import { ICON_TARGET_CLASS, TEXT_TARGET_CLASS } from '@/components/Button'
 
 type HistoryEntry = {
@@ -32,6 +34,8 @@ type PhaseBlock = {
   team?: Team
   isCaptain: boolean
   points?: string
+  /** « Points » or « Classement »: the phase's federation decides (#646). */
+  pointsLabel: string
   brulageTeam: Team | null
   /** Played / total past games for `team` this phase — undefined with no rostered team. */
   played?: number
@@ -48,7 +52,7 @@ type PhaseBlock = {
 export function PlayerPhaseHistory({ playerId, title }: { playerId: string; title?: string }) {
   const {
     players, teams, clubs, phases, seasons, matchDays, games, gameSelections,
-    playerPhasePoints, playerSeasonCategories,
+    playerPhasePoints, playerSeasonCategories, divisions, competitions,
   } = useAppData()
   const [quickGame, setQuickGame] = useState<{ gameId: string; teamId: string } | null>(null)
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined)
@@ -75,7 +79,10 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           (t) => t.clubId === player.clubId && t.phaseId === ph.id,
         )
         const rosterTeam = clubTeamsInPhase.find((t) => t.playerIds?.includes(playerId))
-        const info = computeBrulage(playerId, clubTeamsInPhase, matchDays, games, gameSelections)
+        // The federation's own rule: at the AGR, the season's titularity (#651).
+        const info = computeBrulage(playerId, clubTeamsInPhase, matchDays, games, gameSelections, null, {
+          teams, phases, divisions, competitions,
+        })
         const brulageTeam = info.burnedIntoTeamId
           ? teams.find((t) => t.id === info.burnedIntoTeamId) ?? null
           : null
@@ -141,6 +148,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           // Points follow the phase, not the roster (#384), so a phase where
           // the player had no team still shows what they were worth.
           points: pointsFor(playerPhasePoints, ph.id, playerId),
+          pointsLabel: rankingLabel(federationOfPhase(ph)),
           brulageTeam,
           played,
           total,
@@ -148,7 +156,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
           history: rows.sort((a, b) => a.raw.localeCompare(b.raw)).map((r) => r.e),
         }
       })
-  }, [player, playerId, teams, phases, matchDays, games, gameSelections, playerPhasePoints, clubs, today])
+  }, [player, playerId, teams, phases, seasons, matchDays, games, gameSelections, playerPhasePoints, clubs, today, divisions, competitions])
 
   if (phaseBlocks.length === 0) return null
 
@@ -159,10 +167,10 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
   // keeps that ordering.
   const orderedSeasonIds: string[] = []
   for (const b of phaseBlocks) if (!orderedSeasonIds.includes(b.seasonId)) orderedSeasonIds.push(b.seasonId)
-  const activeSeasonId = seasons.find((s) => s.status === 'active')?.id
-  const fallbackSeasonId =
-    (activeSeasonId && orderedSeasonIds.includes(activeSeasonId) ? activeSeasonId : undefined) ??
-    orderedSeasonIds[orderedSeasonIds.length - 1]
+  // The active season among those the player's teams played in — whichever
+  // federation's it is (#645): an AGR profile's history is AGR seasons.
+  const activeSeasonId = seasons.find((s) => s.status === 'active' && orderedSeasonIds.includes(s.id))?.id
+  const fallbackSeasonId = activeSeasonId ?? orderedSeasonIds[orderedSeasonIds.length - 1]
   const currentSeasonId =
     selectedSeasonId && orderedSeasonIds.includes(selectedSeasonId) ? selectedSeasonId : fallbackSeasonId
   const seasonIndex = orderedSeasonIds.indexOf(currentSeasonId)
@@ -217,7 +225,7 @@ export function PlayerPhaseHistory({ playerId, title }: { playerId: string; titl
               )}
             </div>
             <dl className="divide-y divide-slate-100 px-5">
-              {b.points && <InfoRow label="Points" value={b.points} />}
+              {b.points && <InfoRow label={b.pointsLabel} value={b.points} />}
               {b.team && (
                 <TeamRow
                   label="Équipe"

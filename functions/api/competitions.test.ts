@@ -67,6 +67,10 @@ function fakeDb(
           if (sql.includes('FROM member_groups WHERE id = ? AND club_id = ?')) {
             return GROUPS.find((g) => g.id === params[0] && g.club_id === params[1]) ?? null
           }
+          // A competition names its federation (#643), seeded by 0061.
+          if (sql.includes('FROM federations WHERE id = ?')) {
+            return ['fftt', 'agr'].includes(params[0] as string) ? { id: params[0] } : null
+          }
           if (sql.includes('FROM competitions')) {
             return competitions.find((c) => c.id === params[0]) ?? null
           }
@@ -150,7 +154,8 @@ describe('competitions are a general admin\'s to create (#482)', () => {
     })
     expect(res.status).toBe(200)
     const write = writes.find((w) => /INSERT INTO competitions/.test(w.sql))!
-    expect(write.params).toEqual(['comp-1', 'Championnat jeunes', '["B","M","C"]', 2, 0])
+    // The FFTT's, since the caller named no federation (#643).
+    expect(write.params).toEqual(['comp-1', 'Championnat jeunes', '["B","M","C"]', 2, 0, 'fftt'])
   })
 
   // The lock is gone (#604) and its column dropped (0059): a write naming it

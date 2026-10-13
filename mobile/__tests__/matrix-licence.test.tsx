@@ -14,9 +14,10 @@ const player = (id: string, firstName: string, licenseNumber?: string): Player =
 
 const team = { id: 't1', clubId: 'c1', number: 5, captainId: 'p1' } as Team
 
-const row = (p: Player, unlicensed?: boolean): MatrixRow => ({
+const row = (p: Player, unlicensed?: boolean, licence = p.licenseNumber): MatrixRow => ({
   player: p,
   isCaptain: false,
+  licence,
   unlicensed,
   availableCount: 0,
   playedCount: 0,
@@ -55,5 +56,15 @@ describe('MatchDayMatrix — licence non validée (#488)', () => {
   it('still says it when the member has no licence number on file', () => {
     renderMatrix([row(player('p3', 'Paul'), true)])
     expect(screen.getByText('Sans licence')).toBeTruthy()
+  })
+})
+
+// #644 — the line prints the licence the row's federation holds, which the
+// screen resolves; an AGR team's row prints the AGR number, not the FFTT one.
+describe('MatchDayMatrix — the licence of the section\'s federation (#644)', () => {
+  it('prints the licence it is given, whatever the FFTT one is', () => {
+    renderMatrix([row(player('p4', 'Gilles', '6810333'), false, '1251178')])
+    expect(screen.getByText('1251178')).toBeTruthy()
+    expect(screen.queryByText(/6810333/)).toBeNull()
   })
 })

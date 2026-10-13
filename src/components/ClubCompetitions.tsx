@@ -17,6 +17,7 @@ import {
   playerEligibility,
   type EligiblePlayer,
 } from '@/lib/competitionEligibility'
+import { clubFederationIds } from '@/lib/federations'
 import { assignmentSummary, assignmentsByPlayer, type CompetitionAssignment } from '@/lib/competitionAssignments'
 import { clubMemberGroups, mayManageMemberGroups } from '@/lib/memberGroups'
 import type { Competition, MemberGroup } from '@/types'
@@ -52,7 +53,7 @@ export function ClubCompetitions({
 }) {
   const { user } = useAuth()
   const {
-    competitions, players, teams, divisions, gameSelections, playerSeasonCategories, seasons,
+    clubs, competitions, players, teams, divisions, gameSelections, playerSeasonCategories, seasons,
     memberGroups, competitionGroups, setCompetitionGroup, setMemberGroupMembers,
   } = useAppData()
   const [confirm, confirmDialog] = useConfirm()
@@ -63,9 +64,12 @@ export function ClubCompetitions({
   const canManage = mayManageMemberGroups(user, clubId)
   const groups = clubMemberGroups(memberGroups, clubId)
 
+  // The folded list only offers the club's own federations' championships (#643).
+  const club = clubs.find((c) => c.id === clubId)
+  const federationIds = useMemo(() => (club ? clubFederationIds(club) : []), [club])
   const { played, others } = useMemo(
-    () => competitionsOfClub(clubId, competitions, teams, divisions, competitionGroups),
-    [clubId, competitions, teams, divisions, competitionGroups],
+    () => competitionsOfClub(clubId, competitions, teams, divisions, competitionGroups, federationIds),
+    [clubId, competitions, teams, divisions, competitionGroups, federationIds],
   )
 
   // The category is a fact about a season (#482); the one that decides who may

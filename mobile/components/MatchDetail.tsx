@@ -22,13 +22,16 @@ import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
 import { gameAxisFromParam, gameNeighbours, type GameStep } from '@shared/lib/gameNeighbours'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolBadge } from '@shared/lib/poolLabel'
 import { sortByName } from '@shared/lib/sortByName'
 import { getMatchVenue, getVenue, getVenueAddress } from '@shared/lib/venue'
 import { pointsFor } from '@shared/lib/phasePoints'
 import { todayIso } from '@/utils/weeks'
 import type { Player } from '@shared/types'
 import { fonts } from '@/constants/typography'
+import { federationOfTeam, licenceOf } from '@shared/lib/licences'
+import { affiliationNumberIn } from '@shared/lib/federations'
+import { activeSeasonId } from '@shared/lib/season'
 
 // ---------------------------------------------------------------------------
 // Match detail — one team's view of a game: availabilities (editable by the
@@ -178,7 +181,7 @@ export function MatchDetail({
     const clubIds = allClubPlayers.map((p) => p.id)
     const { statusOf } = clubLicences(
       playerSeasonLicences,
-      seasons.find((s) => s.status === 'active')?.id,
+      activeSeasonId(seasons),
       clubIds,
     )
     return new Set(clubIds.filter((playerId) => statusOf(playerId) === 'missing'))
@@ -190,6 +193,8 @@ export function MatchDetail({
 
   const committed = playersCommittedElsewhere(
     team.id, matchDay.number, clubTeamsInPhase, games, matchDays, gameSelections,
+    // The AGR's art. 30 (#651).
+    { divisions: divisions ?? [], competitions: competitions ?? [] },
   )
 
   const canManage = !!(user && mayManageTeam(user, team))
@@ -229,7 +234,7 @@ export function MatchDetail({
             <MatchHeader
               matchDayNumber={matchDay.number}
               divisionLabel={div?.displayName}
-              poolLabel={poolLabel(team, groups)}
+              poolLabel={poolBadge(team, groups, { divisions, competitions })}
               teamColor={team.color}
               teamNumber={team.number}
               isHome={isHome}
@@ -393,13 +398,16 @@ export function MatchDetail({
             games,
             gameSelections,
             playerSeasonLicences,
-            seasonId: seasons.find((s) => s.status === 'active')?.id,
+            seasonId: activeSeasonId(seasons),
             // What this team's competition admits (#498).
             divisions,
             competitions,
             competitionGroups,
             memberGroups,
             playerSeasonCategories,
+            // The AGR's brûlage counts the season (#651).
+            teams,
+            phases,
           }}
           onSave={(ids) => setGameSelection(team.id, game.id, ids)}
           onClose={() => setShowCompose(false)}
@@ -426,7 +434,8 @@ export function MatchDetail({
           .map((p) => ({
             firstName: p.firstName,
             lastName: p.lastName,
-            license: p.licenseNumber,
+            // The licence of the federation this match is played in (#644).
+            license: licenceOf(p, federationOfTeam(team, divisions, competitions)),
             // A renfort brings their own points: they hang off the phase, not
             // off whichever team fields them (#384).
             points: pointsFor(playerPhasePoints, team.phaseId, p.id),
@@ -435,8 +444,10 @@ export function MatchDetail({
           <MatchSheet
             matchup={matchup}
             clubName={club?.displayName ?? ''}
-            affiliationNumber={club?.affiliationNumber ?? ''}
+            affiliationNumber={affiliationNumberIn(club, federationOfTeam(team, divisions, competitions))}
             players={sheetPlayers}
+            isHome={isHome}
+            federationId={federationOfTeam(team, divisions, competitions)}
             onClose={() => setShowSheet(false)}
           />
         )

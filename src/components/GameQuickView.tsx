@@ -14,7 +14,7 @@ import { MatchDate } from '@/components/MatchDate'
 import { getTeamName } from '@/lib/teamName'
 import { getMatchVenue } from '@/lib/venue'
 import { MatchVenueLink } from '@/components/MatchVenueLink'
-import { gameDate, gameSchedule, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
+import { gameDate, gameSchedule, isProvisionalSlot, isSlotConfirmed, playersCommittedElsewhere } from '@/lib/matchdays'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 
 // Read-only quick view of a single game from one team's perspective — match
@@ -31,7 +31,7 @@ export function GameQuickView({
 }) {
   const { user } = useAuth()
   const {
-    clubs, teams, players, groups, divisions, matchDays, games,
+    clubs, teams, players, groups, divisions, competitions, matchDays, games,
     gameAvailabilities, gameSelections, playerSeasonLicences, seasons,
     setGameAvailability, clearGameAvailability,
   } = useAppData()
@@ -58,8 +58,9 @@ export function GameQuickView({
   const committed = useMemo(() => {
     if (!team || !matchDay) return new Map<string, number>()
     const clubTeams = teams.filter((t) => t.clubId === team.clubId && t.phaseId === team.phaseId)
-    return playersCommittedElsewhere(team.id, matchDay.number, clubTeams, games, matchDays, gameSelections)
-  }, [team, matchDay, teams, games, matchDays, gameSelections])
+    // The AGR lets a player play twice in one journée from the fourth (#651).
+    return playersCommittedElsewhere(team.id, matchDay.number, clubTeams, games, matchDays, gameSelections, { divisions, competitions })
+  }, [team, matchDay, teams, games, matchDays, gameSelections, divisions, competitions])
 
   if (!game || !team || !matchDay) return null
 
@@ -123,7 +124,7 @@ export function GameQuickView({
         <div className="mt-1 flex items-center justify-between gap-2">
           <div className="min-w-0 space-y-1">
             <p className="text-sm text-slate-500">
-              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} />
+              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(game, matchDay, homeTeam)} provisional={isProvisionalSlot(game)} />
               {time ? ` · ${time}` : ''}
             </p>
             <MatchVenueLink venue={venue} />

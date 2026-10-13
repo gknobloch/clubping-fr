@@ -1,4 +1,4 @@
-import type { User, Club, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionGroup, Training, TrainingSession, TrainingAvailability } from '@/types'
+import type { User, Club, Federation, Season, Phase, Division, Group, Team, Player, PlayerPhasePoints, PlayerSeasonCategory, PlayerSeasonLicence, MemberGroup, Address, MatchDay, Game, GameAvailability, GameSelection, Competition, CompetitionGroup, Training, TrainingSession, TrainingAvailability } from '@/types'
 import { addDays } from '@/lib/trainings'
 import { todayIso } from '@/lib/weeks'
 
@@ -38,13 +38,24 @@ const baseClubs: Omit<Club, 'channels'>[] = [
   { id: 'club-fftt-06680138', affiliationNumber: '06680138', displayName: 'Soultz', isArchived: false, addresses: opponentAddr('addr-soultz', 'Soultz') },
   { id: 'club-fftt-06680118', affiliationNumber: '06680118', displayName: 'Wittelsheim', isArchived: false, addresses: opponentAddr('addr-wittelsheim', 'Wittelsheim') },
   { id: 'club-fftt-06680006', affiliationNumber: '06680006', displayName: 'FC Mulhouse', isArchived: false, addresses: opponentAddr('addr-fcm', 'Mulhouse') },
-  { id: 'club-fftt-06680140', affiliationNumber: '06680140', displayName: 'Kembs', isArchived: false, addresses: opponentAddr('addr-kembs', 'Kembs') },
+  // In both federations, as the real Kembs is (#643) — the AGR prints its own name.
+  {
+    id: 'club-fftt-06680140', affiliationNumber: '06680140', displayName: 'Kembs', isArchived: false,
+    addresses: opponentAddr('addr-kembs', 'Kembs'),
+    affiliations: [{ federationId: 'agr', affiliationNumber: '680021', name: 'KEMBS ASL TT' }],
+  },
   { id: 'club-fftt-06680123', affiliationNumber: '06680123', displayName: 'Ensisheim TTMC', isArchived: false, addresses: opponentAddr('addr-ensisheim', 'Ensisheim') },
   { id: 'club-fftt-06880064', affiliationNumber: '06880064', displayName: 'Ballons des Vosges', isArchived: false, addresses: opponentAddr('addr-ballons', 'Ballons des Vosges') },
   { id: 'club-fftt-06680105', affiliationNumber: '06680105', displayName: 'Mulhouse TT', isArchived: false, addresses: opponentAddr('addr-mutt', 'Mulhouse') },
 ]
 
 export const mockClubs: Club[] = baseClubs.map((c) => ({ ...c, channels: [] }))
+
+/** As migration 0061 seeds them (#643). */
+export const mockFederations: Federation[] = [
+  { id: 'fftt', displayName: 'Fédération française de tennis de table', shortName: 'FFTT', isImported: true, sortOrder: 0 },
+  { id: 'agr', displayName: 'AGR Tennis de table — Section du Haut-Rhin', shortName: 'AGR', isImported: false, sortOrder: 1 },
+]
 
 // ---------------------------------------------------------------------------
 // Season & Phase
@@ -268,20 +279,20 @@ export const mockCompetitions: Competition[] = [
     // categories, so nothing is restricted until a general admin says so. The
     // contest's name is stored beside its identifier because the identifier
     // alone is not unique (see migration 0048).
-    id: 'comp-seniors', displayName: 'Championnat par équipes',
+    id: 'comp-seniors', displayName: 'Championnat par équipes', federationId: 'fftt',
     categories: [], sortOrder: 1, isArchived: false,
     ffttContestIdentifier: '1',
     ffttContestName: 'FED_Championnat de France par Equipes Masculin',
   },
   {
-    id: 'comp-jeunes', displayName: 'Championnat jeunes',
+    id: 'comp-jeunes', displayName: 'Championnat jeunes', federationId: 'fftt',
     categories: ['P', 'B', 'M', 'C', 'J'],
     sortOrder: 2, isArchived: false,
     ffttContestIdentifier: '4',
     ffttContestName: 'FED_Championnat par Equipes Jeunes',
   },
   {
-    id: 'comp-veterans', displayName: 'Championnat vétérans',
+    id: 'comp-veterans', displayName: 'Championnat vétérans', federationId: 'fftt',
     categories: ['V50', 'V55', 'V60', 'V65', 'V70', 'V75', 'V80', 'V85', 'V90'],
     sortOrder: 3, isArchived: false,
   },

@@ -69,7 +69,7 @@ function baseData() {
     competitionGroups: [] as CompetitionGroup[],
     memberGroups: [] as MemberGroup[],
     divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-    competitions: mockCompetitions, competitionEligibilities: [],
+    competitions: mockCompetitions, competitionEligibilities: [], federations: [],
     groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,

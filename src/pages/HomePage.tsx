@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { agrPickNote } from '@/lib/brulage'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
@@ -24,11 +25,12 @@ import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
 import {
-  formatRoundDates, gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere,
+  formatRoundDates, gameDate, gameTime, isProvisionalSlot, isSlotConfirmed, playersCommittedElsewhere,
   upcomingRounds, upcomingTeamGames,
 } from '@/lib/matchdays'
 import type { AvailabilityStatus, Team } from '@/types'
 import { NextTrainings } from '@/components/NextTrainings'
+import { activeTeamOf } from '@/lib/activeTeam'
 
 export function HomePage() {
   const { user, displayName, roleLabel } = useAuth()
@@ -56,17 +58,14 @@ export function HomePage() {
   const me = myPlayerId ? players.find((p) => p.id === myPlayerId) : undefined
   const myClub = clubs.find((c) => c.id === (me?.clubId ?? user?.clubId))
 
-  const activeSeason = seasons.find((s) => s.status === 'active')
-  const activePhase = phases.find((p) => p.status === 'active')
-  const myActiveTeam = useMemo(
-    () =>
-      myPlayerId && activePhase
-        ? teams.find((t) => t.phaseId === activePhase.id && t.playerIds.includes(myPlayerId))
-        : undefined,
-    [teams, activePhase, myPlayerId],
-  )
-
+  const activeSeason = seasons.find((s) => s.id === activeSeasonId(seasons))
   const mdMap = useMemo(() => new Map(matchDays.map((md) => [md.id, md])), [matchDays])
+  // In the active phase of any federation, not the FFTT's alone (#711).
+  const myActiveTeam = useMemo(
+    () => activeTeamOf(myPlayerId, teams, phases, games, mdMap, today),
+    [myPlayerId, teams, phases, games, mdMap, today],
+  )
+  const activePhase = phases.find((p) => p.id === myActiveTeam?.phaseId)
 
   const teamGames = useMemo(
     () =>
@@ -104,7 +103,7 @@ export function HomePage() {
     if (!myPlayerId || !myActiveTeam) return undefined
     const md = mdMap.get(games.find((g) => g.id === gameId)?.matchDayId ?? '')
     if (!md) return undefined
-    return playersCommittedElsewhere(myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections).get(myPlayerId)
+    return playersCommittedElsewhere(myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections, { divisions, competitions }).get(myPlayerId)
   }
 
   const { canEditAvailability, canEditGameSelection, isEligibleForTeam, isOverride } =
@@ -243,6 +242,7 @@ export function HomePage() {
                 )
                 const composeCommittedElsewhere = playersCommittedElsewhere(
                   myActiveTeam.id, md.number, clubTeamsInActivePhase, games, matchDays, gameSelections,
+                  { divisions, competitions },
                 )
                 return (
                   <>
@@ -270,7 +270,7 @@ export function HomePage() {
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <div className="min-w-0 space-y-1">
                             <p className="text-sm text-slate-500">
-                              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} />
+                              <MatchDate label={dateLabel} confirmed={isSlotConfirmed(g, md, homeTeam)} provisional={isProvisionalSlot(g)} />
                               {time ? ` · ${time}` : ''}
                             </p>
                             {/* Where, in full and one tap from the route (#611) —
@@ -441,6 +441,10 @@ export function HomePage() {
                         availabilityOf={(playerId) => statusOf(g.id, playerId)}
                         committedElsewhere={composeCommittedElsewhere}
                         unlicensed={unlicensedInMyClub}
+                        pickNote={(playerId) => agrPickNote(
+                          playerId, myActiveTeam, clubTeamsInActivePhase, matchDays, games, gameSelections, md.id,
+                          { teams, phases, divisions, competitions },
+                        )}
                         onSave={(playerIds) => setGameSelection(g.id, myActiveTeam.id, playerIds)}
                         onClose={() => setComposing(false)}
                       />
