@@ -346,7 +346,11 @@ app.get('/data', async (c) => {
     federationsR, clubFederationsR, federationLicencesR, organizationsR,
   ] = await Promise.all([
     db.prepare('SELECT * FROM seasons').all<SeasonRow>(),
-    db.prepare('SELECT * FROM phases').all<PhaseRow>(),
+    // The FFTT's first (#724): apps up to 1.7.0 take « the » active phase as
+    // the first active one in this list, and with the AGR's active beside it
+    // an FFTT member would open on the AGR's phase — no team, no matches. In
+    // creation order otherwise, which is what they have always read.
+    db.prepare("SELECT * FROM phases ORDER BY CASE COALESCE(federation_id, 'fftt') WHEN 'fftt' THEN 0 ELSE 1 END, rowid").all<PhaseRow>(),
     db.prepare('SELECT * FROM divisions').all<DivisionRow>(),
     db.prepare('SELECT * FROM clubs').all<ClubRow>(),
     db.prepare('SELECT * FROM club_addresses').all<ClubAddressRow>(),

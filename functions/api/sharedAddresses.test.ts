@@ -16,7 +16,7 @@ function world() {
   const d1 = migratedD1()
   // Data from before 0068: what the cleanup exists to settle cannot be
   // written once an address is one person's, so the index is set aside here.
-  d1.exec('DROP INDEX people_email_unique')
+  d1.exec('DROP INDEX IF EXISTS people_email_unique')
   addMember(d1.exec, { id: 'benjamin', firstName: 'Benjamin', email: 'henaut@example.fr', clubId: 'club-a' })
   addMember(d1.exec, { id: 'sacha', firstName: 'Sacha', email: 'Henaut@example.fr', clubId: 'club-a' })
   // Sacha plays in a second club too: both profiles mirror the address.

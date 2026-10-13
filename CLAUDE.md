@@ -701,7 +701,13 @@ invisible dans le diff comme dans la revue.
   jusqu'à ce que l'administrateur général la règle. Un enfant n'a pas
   d'adresse, ou la sienne — et son parent pour délégué. L'index unique
   (0068) ne se déploie qu'une fois les adresses partagées réglées en
-  production — sinon la migration échoue, et le déploiement avec.
+  production — sinon la migration échoue, et le déploiement avec. Il est
+  donc **sorti de la livraison de #653** (#724) et revient dans sa propre PR
+  (#725) : #653 déployée, l'administrateur général règle les adresses
+  partagées sur /demandes, puis l'index. Entre les deux, un parent ne bascule
+  plus sur le profil de son enfant par l'adresse — `reaches` ne relie plus
+  par elle. La base dev l'a déjà ; wrangler ne rejouera pas une migration
+  enregistrée, et la PR la rapporte sous le même nom.
 - **Ou ce sont deux fiches d'une même personne** : « C'est la même personne »
   (deux personnes seulement — à trois, lesquelles ?) fusionne l'une dans
   l'autre (`POST /people/:personId/merge-into`) : ses profils, ses
@@ -746,6 +752,12 @@ invisible dans le diff comme dans la revue.
 - **« La phase active » se demande avec sa fédération** : `activePhaseOf`
   (la FFTT par défaut), jamais `phases.find(active)`, qui rendrait la première
   des deux. `activeSeasonId` est la saison active, tout court.
+- **Les apps jusqu'à 1.7.0 font exactement `phases.find(active)`** : elles
+  ne connaissent pas les fédérations. `/data` liste donc les phases de la
+  FFTT d'abord (#724), puis dans l'ordre de création : la première active
+  est celle de la FFTT, et un membre FFTT sur une vieille app ouvre sur sa
+  phase. Un club de l'AGR, lui, a besoin de 1.8.0 (accueil, brûlage,
+  lettres de la feuille, poules).
 - **« L'équipe d'un joueur » se cherche dans toutes les phases actives**
   (`activeTeamOf`, #711) — jamais dans `activePhaseOf(phases)`, qui ne
   répond que pour la FFTT : un joueur de Landser n'avait pas d'équipe, et
