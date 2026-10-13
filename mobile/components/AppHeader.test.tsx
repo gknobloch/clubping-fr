@@ -16,12 +16,13 @@ import { AppHeader } from './AppHeader'
 // the title, the account button, and the back chevron that only the pushed
 // screens get.
 // ---------------------------------------------------------------------------
-const mockRouter = { push: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) }
-const mockAuth: { user: User | null } = { user: null }
+const mockRouter = { push: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), replace: jest.fn() }
+const mockAuth: { user: User | null; profiles: []; displayName: string; switchProfile: jest.Mock } =
+  { user: null, profiles: [], displayName: 'Bo Martin', switchProfile: jest.fn() }
 
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }))
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
-jest.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [] }) }))
+jest.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [], clubs: [] }) }))
 
 const member: User = { id: 'u1', role: 'player', isPlayer: true, firstName: 'Bo', lastName: 'Martin' }
 
@@ -57,10 +58,12 @@ it('shows the screen title', () => {
   expect(screen.getByText('Journées')).toBeTruthy()
 })
 
-it('offers the account button, which opens Compte', () => {
+it('offers the account button, whose menu leads to Compte (#720)', () => {
   renderHeader(<AppHeader title="Accueil" />)
 
   fireEvent.press(screen.getByLabelText('Mon compte'))
+  expect(mockRouter.push).not.toHaveBeenCalled()
+  fireEvent.press(screen.getByTestId('account-menu-compte'))
 
   expect(mockRouter.push).toHaveBeenCalledWith('/compte')
 })
