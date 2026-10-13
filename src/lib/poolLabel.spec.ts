@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { poolLabel, poolName, poolTitle } from './poolLabel'
+import { poolBadge, poolLabel, poolName, poolTitle } from './poolLabel'
 
 // #647 — the AGR names its poules by letter.
 
@@ -28,5 +28,14 @@ describe('poolName (#696)', () => {
     expect(poolName(groups[1])).toBe('1')
     expect(poolTitle(groups[1], context)).toBe('Poule A')
     expect(poolTitle(groups[0], context)).toBe('Groupe 28')
+  })
+})
+
+describe('poolBadge (#716)', () => {
+  it('is the letter alone at the AGR, and the FFTT’s badge unchanged', () => {
+    expect(poolBadge({ groupId: 'g-agr' }, groups, context)).toBe('A')
+    expect(poolBadge({ groupId: 'g-fftt' }, groups, context)).toBe('P. 28')
+    expect(poolBadge({ groupId: 'g-agr' }, groups)).toBe('P. 1')
+    expect(poolBadge({ groupId: 'nope' }, groups, context)).toBeUndefined()
   })
 })

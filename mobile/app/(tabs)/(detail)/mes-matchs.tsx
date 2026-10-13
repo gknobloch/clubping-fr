@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { poolLabel } from '@shared/lib/poolLabel'
+import { poolBadge } from '@shared/lib/poolLabel'
 import { getTeamName } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { Screen, contentWidth } from '@/components/Screen'
@@ -173,7 +173,7 @@ export default function MesMatchsScreen() {
                     <MatchHeader
                       matchDayNumber={md.number}
                       divisionLabel={divMap.get(team.divisionId)?.displayName}
-                      poolLabel={poolLabel(team, groups, { divisions, competitions })}
+                      poolLabel={poolBadge(team, groups, { divisions, competitions })}
                       teamColor={team.color}
                       teamNumber={team.number}
                       isHome={game.homeTeamId === team.id}

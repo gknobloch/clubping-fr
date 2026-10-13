@@ -7,6 +7,7 @@ import { todayIso } from '@/utils/weeks'
 import { fonts } from '@/constants/typography'
 import { mapsQueryUrl } from '@/utils/club'
 import { venueText, type MatchVenue } from '@shared/lib/venue'
+import { divisionShortName } from '@shared/lib/divisionNames'
 
 /**
  * Days-until label from a YYYY-MM-DD match date, and `null` for a match that
@@ -97,7 +98,7 @@ export function MatchHeader({
       <View style={s.badgeRow}>
         <View style={s.badges}>
           <Text style={s.badge}>J{matchDayNumber}</Text>
-          {divisionLabel ? <Text style={s.badge}>{divisionLabel}</Text> : null}
+          {divisionLabel ? <Text style={s.badge}>{divisionShortName(divisionLabel)}</Text> : null}
           {poolLabel ? <Text style={s.badge}>{poolLabel}</Text> : null}
           <TeamBadge color={teamColor} label={`Équipe ${teamNumber}`} />
           {label ? (
