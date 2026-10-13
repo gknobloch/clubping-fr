@@ -1,0 +1,47 @@
+name: Store versions
+
+# What each store actually serves (#708), for GET /api/client-version.
+#
+# CLIENT_LATEST_VERSION is raised in the release's bump PR, days before Apple
+# and Google approve the build it names, and advertising it on its own word
+# sent every member to a store page with nothing new on it. The server now
+# advertises the lower of the var and what this workflow last read.
+#
+# Here and not on Cloudflare for the reason notify.yml gives: Pages Functions
+# have no cron trigger. It also keeps the Play service account out of the
+# worker — the key stays a GitHub secret, and the worker only reads a table.
+#
+# Replaying it is harmless: it writes what the stores say, nothing more. Run it
+# by hand after promoting a release to skip the wait for the next hour.
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: store-versions
+  cancel-in-progress: false
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+        env:
+          npm_config_registry: 'https://registry.npmjs.org/'
+      # A store it cannot read keeps its last known row and turns the run red;
+      # the other store is still written. Unknown never becomes a version.
+      - name: Read both stores and record what they serve
+        run: node scripts/store-versions.mjs --apply
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT: ${{ secrets.CLUBPING_FR_GOOGLE_PLAY_SERVICE_ACCOUNT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLUBPING_FR_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLUBPING_FR_CLOUDFLARE_ACCOUNT_ID }}

@@ -2034,6 +2034,31 @@ invisible dans le diff comme dans la revue.
   devient un rappel sans remède** — `src/test/mobileConfig.spec.ts` casse le
   build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
   bloque, et ne se relève que pour une raison nommée dans le commit.
+- **`CLIENT_LATEST_VERSION` est un plafond, pas une annonce** (#708). Relevée
+  dans la PR de montée de version, elle était en ligne des jours avant que la
+  revue d'Apple ou de Google ne rende la version installable : chaque membre
+  voyait la barre, touchait « Mettre à jour » et trouvait au magasin la version
+  qu'il avait déjà. Le test de `mobileConfig.spec.ts` ne pouvait rien y voir —
+  il compare à `app.json`, et `app.json` n'est pas le magasin.
+- **`latest` est la plus petite de la variable et de ce que les magasins
+  servent** (`store_releases`, 0075). `.github/workflows/store-versions.yml` lit
+  les deux chaque heure (`scripts/store-versions.mjs`) ; le worker ne lit que la
+  table, et la clé du compte de service Play reste un secret GitHub. Les builds
+  jusqu'à 1.7.0 ne lisent que `latest` et ne savent pas de quel magasin ils
+  viennent : c'est donc ce que servent **les deux**. Les suivants lisent
+  `latestByPlatform`, leur magasin à eux — un iPhone n'attend pas la revue de
+  Play.
+- **App Store** : la recherche publique (`itunes.apple.com/lookup`), sans
+  identifiant ; elle retarde de quelques heures, ce qui va dans le bon sens.
+  **Play** : l'API Developer, la piste la plus publique qui porte une version
+  (`production`, puis `beta`, puis `alpha` — l'app est en test fermé et la
+  production était vide au moment de #708), **jamais `internal`**, où chaque
+  build atterrit d'abord. Seule une release `completed` compte : un déploiement
+  progressif n'est pas installable hors de sa fraction, même à la main.
+- **Ne pas savoir n'annonce rien** : un magasin pas encore lu, une table
+  illisible, une base absente — pas de version pour ce magasin, et la route
+  répond quand même (le plancher n'en dépend pas). Un magasin que le workflow
+  n'arrive pas à lire garde sa dernière valeur et rend l'exécution rouge.
 
 ### Captures d'écran des stores (#520)
 - **Maestro, pas `snapshot`/`screengrab`.** Les outils de capture de fastlane

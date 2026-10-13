@@ -59,10 +59,16 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 # release and without waiting on a store review. Neither is a secret — both
 # numbers already travel inside every published build.
 #
-#   CLIENT_LATEST_VERSION  The newest published build. Anything older gets a
-#                          dismissible "une mise à jour est disponible". Bump it
-#                          with mobile/app.json on each release; left stale it
-#                          simply stops nudging, which costs nothing.
+#   CLIENT_LATEST_VERSION  A CEILING on the newest build advertised (#708).
+#                          Anything older gets a dismissible "une mise à jour
+#                          est disponible" — but only once the stores serve it:
+#                          what is advertised is the lower of this and the
+#                          store_releases table, which
+#                          .github/workflows/store-versions.yml writes hourly.
+#                          So it is bumped with mobile/app.json in the release's
+#                          bump PR, days before review, and nobody is told too
+#                          early. Left stale it simply stops nudging. Unset, the
+#                          stores are not even read.
 #   CLIENT_MIN_VERSION     Builds below this are refused outright. UNSET, and it
 #                          should stay unset: it is an interrupter, not an
 #                          update policy. Set it only for a named reason — a

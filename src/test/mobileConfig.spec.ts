@@ -91,9 +91,12 @@ describe('mobile/app.json — Android push is wired or absent (#497)', () => {
 // cure, or, for CLIENT_MIN_VERSION, as a wall in front of everybody including
 // whoever is holding the newest build.
 //
-// Only "ahead of app.json" is an error. Trailing behind is the normal state:
-// the bump PR merges before EAS has built anything, and a stale
-// CLIENT_LATEST_VERSION simply stops nudging, which costs nothing.
+// Only "ahead of app.json" is an error. Trailing behind costs nothing: a
+// stale CLIENT_LATEST_VERSION simply stops nudging.
+//
+// Equal to app.json is NOT "installable", and this test cannot know better:
+// the bump PR merges before EAS has built anything. That half is the server's
+// — it advertises no more than the stores serve (#708, store_releases).
 // ---------------------------------------------------------------------------
 describe('wrangler.toml — the floor never outruns the app (#508)', () => {
   const toml = readFileSync(resolve(process.cwd(), 'wrangler.toml'), 'utf8')

@@ -58,7 +58,9 @@ export function useClientVersionVerdict(): ClientVersionVerdict {
   useEffect(() => {
     let cancelled = false
     clientVersionFloor().then((floor) => {
-      if (!cancelled) setVerdict(versionVerdict(CLIENT_VERSION, floor))
+      // Its own store's version (#708): an iPhone need not wait on Play's review.
+      const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : undefined
+      if (!cancelled) setVerdict(versionVerdict(CLIENT_VERSION, floor, platform))
     })
     return () => {
       cancelled = true
