@@ -84,6 +84,19 @@ describe('one season, phases per federation (#645)', () => {
     expect((await ga('/phases', 'POST', { ...body, federationId: 'xyz' })).status).toBe(400)
   })
 
+  it('lists the FFTT’s phases first, which is the active phase an app up to 1.7.0 opens on (#724)', async () => {
+    const d1 = world()
+    // The AGR's phase 1 created before the FFTT's phase 2, which then becomes active.
+    d1.exec("DELETE FROM phases WHERE id = 'phase-27-2'")
+    d1.exec("UPDATE phases SET status = 'archived' WHERE id = 'phase-27-1'")
+    d1.exec("INSERT INTO phases (id, season_id, name, display_name, status, federation_id) VALUES ('phase-27-2', '27', 'Phase 2', 'Phase 2', 'active', 'fftt')")
+    const ca = await as(d1, 'ca')
+    const data = await (await ca('/data', 'GET')).json() as { phases: Array<{ id: string; status: string }> }
+    // What an old app does: the first active phase.
+    expect(data.phases.find((p) => p.status === 'active')?.id).toBe('phase-27-2')
+    expect(data.phases.map((p) => p.id)).toEqual(['phase-27-1', 'phase-27-2', 'phase-agr-27-1', 'phase-agr-27-2'])
+  })
+
   it('carries the federation of each phase in /data, and none on a season', async () => {
     const d1 = world()
     const ca = await as(d1, 'ca')

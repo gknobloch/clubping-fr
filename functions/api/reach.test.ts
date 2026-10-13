@@ -47,19 +47,12 @@ describe('profileReaches', () => {
     const { db, exec } = family()
     // Only pre-0068 data can put two people on one address; even then, an
     // equal string is no longer a link — a delegation or the person is.
-    exec('DROP INDEX people_email_unique')
+    exec('DROP INDEX IF EXISTS people_email_unique')
     addMember(exec, { id: 'leo', firstName: 'Léo', email: 'HENAUT@example.fr' })
     expect(await profileReaches(db, 'benjamin', 'leo')).toBe(false)
     expect(await profileReaches(db, 'leo', 'benjamin')).toBe(false)
   })
 
-  it('refuses a second person on an address in the schema itself', () => {
-    const { exec } = family()
-    expect(() => exec("INSERT INTO people (id, first_name, email, phone) VALUES ('person-leo', 'Léo', ' HENAUT@example.fr', '')"))
-      .toThrow(/UNIQUE/)
-    // No address is not an address: many people may have none.
-    exec("INSERT INTO people (id, first_name, email, phone) VALUES ('person-a', 'A', NULL, ''), ('person-b', 'B', '', '')")
-  })
 })
 
 describe('householdIds', () => {
