@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import {
@@ -30,11 +30,11 @@ const { TeamDetailPage } = await import('./TeamDetailPage')
 const TEAM_ID = 'team-1'
 const CLUB_ID = 'club-fftt-06680011'
 
-function baseTestData(clubs = mockClubs) {
+function baseTestData(clubs = mockClubs, groups = mockGroups) {
   return {
     divisions: mockDivisions, clubs, seasons: mockSeasons, phases: mockPhases,
     competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [], federations: [],
-    groups: mockGroups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
+    groups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,
     playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
@@ -43,10 +43,10 @@ function baseTestData(clubs = mockClubs) {
   }
 }
 
-function renderTeam(clubs = mockClubs) {
+function renderTeam(clubs = mockClubs, groups = mockGroups) {
   return render(
     <MemoryRouter initialEntries={[`/equipes/${TEAM_ID}`]}>
-      <DataProvider initialData={baseTestData(clubs)}>
+      <DataProvider initialData={baseTestData(clubs, groups)}>
         <Routes>
           <Route path="/equipes/:id" element={<TeamDetailPage />} />
         </Routes>
@@ -155,5 +155,25 @@ describe('TeamDetailPage — unconfirmed dates (#429)', () => {
     // Every fixture is marked but one: g1-8, team-1 at home with a date and a
     // time of its own. The rest are away at clubs the import created.
     expect(marked).toHaveLength(rows.length - 1)
+  })
+})
+
+// The federation's word on the poule (#647). It was on every match page,
+// saying the same thing on each; it is about the poule, so it is here (#718).
+describe('TeamDetailPage — la note de la poule (#718)', () => {
+  const note = 'RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT\nLIMITE DES REPORTS DE MATCH : 10/01/2027'
+
+  it('names the poule and gives its note, one line each', () => {
+    renderTeam(mockClubs, mockGroups.map((g) => (g.id === 'group-1' ? { ...g, note } : g)))
+
+    const section = screen.getByRole('region', { name: 'À savoir sur la poule' })
+    expect(within(section).getByText('Groupe 1')).toBeInTheDocument()
+    expect(within(section).getByText('RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT')).toBeInTheDocument()
+    expect(within(section).getByText('LIMITE DES REPORTS DE MATCH : 10/01/2027')).toBeInTheDocument()
+  })
+
+  it('shows nothing for a poule without a note', () => {
+    renderTeam()
+    expect(screen.queryByRole('region', { name: 'À savoir sur la poule' })).toBeNull()
   })
 })

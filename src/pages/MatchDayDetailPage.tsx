@@ -42,14 +42,13 @@ export function MatchDayDetailPage() {
 
   const { user } = useAuth()
   const {
-    teams, players, clubs, matchDays, games, divisions, groups = [], gameSelections, playerPhasePoints,
+    teams, players, clubs, matchDays, games, divisions, gameSelections, playerPhasePoints,
     competitions, competitionGroups, memberGroups, setGameSelection,
     playerSeasonCategories, playerSeasonLicences, seasons, phases,
   } = useAppData()
 
   const game = games.find((g) => g.id === gameId)
   const team = teams.find((t) => t.id === teamId)
-  const poolNote = team ? groups.find((g) => g.id === team.groupId)?.note : undefined
   const matchDay = game ? matchDays.find((md) => md.id === game.matchDayId) : undefined
 
   const {
@@ -231,15 +230,6 @@ export function MatchDayDetailPage() {
           </div>
           <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
         </div>
-
-        {/* What the federation's calendar says about the poule (#647) — where
-            a club plays when it is not at home, the deadline for postponements:
-            what a visiting captain needs on the evening. */}
-        {poolNote && (
-          <ul aria-label="À savoir sur la poule" className="mt-2 space-y-0.5 text-xs text-slate-500">
-            {poolNote.split('\n').map((line) => <li key={line}>{line}</li>)}
-          </ul>
-        )}
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
           <span

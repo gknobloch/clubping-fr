@@ -862,7 +862,8 @@ invisible dans le diff comme dans la revue.
   d'équipe** (#718), sous le titre de la poule, entre « Calendrier » et
   « Tous les matchs de cette équipe » : sur l'écran de chaque match, elle
   disait la même chose d'un match à l'autre, entre l'en-tête et les
-  disponibilités. Sur le web, elle est encore sur l'écran du match.
+  disponibilités. Sur le web, sur la fiche d'équipe aussi, avant « Matchs » :
+  celle de la poule de la phase affichée.
 - **La revue décide, l'API vérifie** (`POST /federation-schedules/import`) :
   phase et compétition de la fédération, joueurs par rencontre (3 en
   Division 2), et chaque nom rattaché à un club existant ou créé nu
