@@ -51,3 +51,19 @@ export function poolLabel(
   return division && isLetteredDivision(division, context!.competitions)
     ? `Poule ${poolLetterOf(g.number)}` : `P. ${g.number}`
 }
+
+/**
+ * The poule as a match's badge names it in the app (#716): the letter alone at
+ * the AGR — « A » beside « Exc. » needs no word —, «P. 28» at the FFTT. A
+ * match's badge row (journée, division, poule, équipe, compte à rebours) did
+ * not fit a phone with « Poule A » in it. The web keeps `poolLabel`.
+ */
+export function poolBadge(
+  team: Pick<Team, 'groupId'>,
+  groups: Pick<Group, 'id' | 'number' | 'divisionId'>[],
+  context?: PoolContext,
+): string | undefined {
+  const g = groups.find((x) => x.id === team.groupId)
+  if (!g) return undefined
+  return /^\d+$/.test(poolName(g, context)) ? `P. ${g.number}` : poolName(g, context)
+}

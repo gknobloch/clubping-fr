@@ -857,6 +857,13 @@ invisible dans le diff comme dans la revue.
   mercredi au vendredi) ; **la phase 2 garde sa numérotation** (journées 8 à
   14). **Les poules sont des lettres** : un numéro stocké, « Poule A »
   affiché (`poolLabel` avec son contexte divisions / compétitions).
+- **Dans les pastilles d'un match de l'app, division et poule sont abrégées**
+  (#716) : « J3 · Excellence · Poule A · Équipe 1 » et « Dans 10 jours » ne
+  tenaient pas sur un téléphone, et le compte à rebours recouvrait l'équipe.
+  `divisionShortName` (Exc., PE, Hon., PH, D1 ; N1, PN, R2 à la FFTT — un nom
+  non reconnu reste entier) et `poolBadge` (« A », « P. 28 »), dans
+  `MatchHeader` et `GameSummary` seulement. Là où il y a la place — fiche
+  d'équipe, liste des Équipes, le web — le nom reste entier.
 - Les lignes de pied sont **la note de la poule** (`groups.note`, 0069) —
   « RIEDISHEIM 1 JOUE DANS LA SALLE DU MTT ». **Dans l'app, sur la fiche
   d'équipe** (#718), sous le titre de la poule, entre « Calendrier » et
