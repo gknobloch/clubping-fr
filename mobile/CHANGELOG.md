@@ -27,6 +27,45 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.8.0 — 13 octobre 2026
+
+L'AGR à côté de la FFTT, et plusieurs profils derrière une même adresse.
+
+- **Deux fédérations.** Un club peut jouer à la FFTT, à l'AGR, ou aux deux.
+  Pour un club des deux, un interrupteur « FFTT | AGR » en tête des Équipes et
+  des Journées choisit le championnat ; chaque fédération a ses phases.
+  L'accueil s'ouvre sur l'équipe dont le prochain match vient en premier.
+- **Les règles de l'AGR.** Les poules s'appellent par leur lettre (« Poule A »),
+  la valeur d'un joueur est son classement, la feuille de match prend les
+  lettres de l'AGR (A B C D et U V W X, le mieux classé en A ou en V), et le
+  brûlage suit son règlement : en composant l'équipe, un joueur qui jouerait
+  au-dessus de son équipe affiche « 2/3 au-dessus », et la quatrième rencontre
+  est annoncée avant d'enregistrer.
+- **Importer la liste des joueurs AGR** depuis son PDF, sur l'onglet Joueurs.
+- **Plusieurs profils derrière une adresse** : un parent et son enfant, ou
+  quelqu'un qui joue dans deux clubs. Un toucher sur l'avatar, en haut de
+  l'écran, montre qui est connecté, mène à « Mon compte » et propose les
+  autres profils : un toucher en change, sans nouveau code.
+- **Les délégations.** Dans « Mon compte », on donne à quelqu'un l'accès à ses
+  profils — un parent pour son enfant ; un administrateur de club peut le faire
+  depuis la fiche d'un licencié. Le délégué revient à son propre profil depuis
+  le même menu.
+- **La note de la poule** (« joue dans la salle du… ») est sur la fiche de
+  l'équipe, et les pastilles d'un match abrègent division et poule pour tenir
+  sur un téléphone.
+
+### Play
+
+L'AGR à côté de la FFTT, et plusieurs profils derrière une même adresse.
+
+- Deux fédérations : un interrupteur « FFTT | AGR » pour un club des deux.
+- Les règles de l'AGR : poules par lettre, classement, feuille de match,
+  brûlage.
+- Import de la liste des joueurs AGR depuis son PDF.
+- Un toucher sur l'avatar : qui est connecté, « Mon compte » et les autres
+  profils.
+- Les délégations : un parent ouvre les profils de son enfant.
+
 ## 1.7.0 — 4 octobre 2026
 
 Le planning de toute la phase pour un capitaine, et des feuilles qui tiennent
