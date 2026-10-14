@@ -18,7 +18,7 @@ import { GENERAL_ADMINISTRATION, hasOtherProfiles } from '@/lib/profiles'
  */
 export function AccountMenu({ compact = false }: { compact?: boolean }) {
   const { user, displayName, profiles } = useAuth()
-  const { players, clubs } = useAppData()
+  const { players, users, clubs } = useAppData()
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -37,7 +37,8 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
   }, [open])
 
   if (!user) return null
-  const avatarUpdatedAt = players.find((p) => p.id === user.id)?.avatarUpdatedAt
+  // The person's photo (#741) — on `users` too, for a profile that does not play.
+  const avatarUpdatedAt = (players.find((p) => p.id === user.id) ?? users.find((u) => u.id === user.id))?.avatarUpdatedAt
   const clubName = user.role === 'general_admin'
     ? GENERAL_ADMINISTRATION
     : profiles.find((p) => p.id === user.id)?.clubName ?? clubs.find((c) => c.id === user.clubId)?.displayName

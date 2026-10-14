@@ -35,10 +35,11 @@ export function AccountMenu({ top, onClose }: {
   const insets = useSafeAreaInsets()
   const { width, height } = useWindowDimensions()
   const { user, profiles, displayName } = useAuth()
-  const { players, clubs } = useAppData()
+  const { players, users, clubs } = useAppData()
   if (!user) return null
 
-  const player = players.find((p) => p.id === user.id)
+  // The person's photo (#741) — on `users` too, for a profile that does not play.
+  const player = players.find((p) => p.id === user.id) ?? users.find((u) => u.id === user.id)
   const clubName = user.role === 'general_admin'
     ? GENERAL_ADMINISTRATION
     : profiles.find((p) => p.id === user.id)?.clubName ?? clubs.find((c) => c.id === user.clubId)?.displayName

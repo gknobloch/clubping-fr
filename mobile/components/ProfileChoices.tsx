@@ -30,7 +30,7 @@ export function ProfileChoices({
   onSwitched: () => void
 }) {
   const { user, profiles, switchProfile } = useAuth()
-  const { players } = useAppData()
+  const { players, users } = useAppData()
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -69,7 +69,7 @@ export function ProfileChoices({
               >
                 <Avatar
                   playerId={p.id}
-                  avatarUpdatedAt={players.find((x) => x.id === p.id)?.avatarUpdatedAt}
+                  avatarUpdatedAt={(players.find((x) => x.id === p.id) ?? users.find((x) => x.id === p.id))?.avatarUpdatedAt}
                   firstName={p.firstName}
                   lastName={p.lastName}
                   size={36}

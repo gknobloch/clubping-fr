@@ -23,10 +23,12 @@ export function AccountHeaderButton({ menuTop }: {
 }) {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
-  const { players } = useAppData()
+  const { players, users } = useAppData()
 
   if (!user) return null
-  const player = user.isPlayer ? players.find((p) => p.id === user.id) : undefined
+  // The person's photo (#741), whatever the profile: a general admin profile
+  // joined to its person shows the photo set from a club profile.
+  const avatarUpdatedAt = (players.find((p) => p.id === user.id) ?? users.find((u) => u.id === user.id))?.avatarUpdatedAt
 
   return (
     <>
@@ -38,10 +40,12 @@ export function AccountHeaderButton({ menuTop }: {
         accessibilityLabel="Mon compte"
         accessibilityState={{ expanded: open }}
       >
-        {user.isPlayer ? (
+        {/* Initials for a player; for a profile that does not play, the
+            generic icon until the person has a photo. */}
+        {user.isPlayer || avatarUpdatedAt ? (
           <Avatar
             playerId={user.id}
-            avatarUpdatedAt={player?.avatarUpdatedAt}
+            avatarUpdatedAt={avatarUpdatedAt}
             firstName={user.firstName}
             lastName={user.lastName}
             size={30}

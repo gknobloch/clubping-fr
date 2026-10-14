@@ -292,12 +292,7 @@ export interface Group {
  * admin, say — need not.
  */
 export type Player = Omit<User, 'role' | 'isPlayer'> &
-  Required<Pick<User, 'firstName' | 'lastName' | 'licenseNumber' | 'phone' | 'status' | 'clubId'>> & {
-    /** ISO timestamp of the player's avatar, or undefined if none. The image
-     *  itself is fetched separately via GET /api/users/:id/avatar; this acts as
-     *  a cache-busting version. */
-    avatarUpdatedAt?: string
-  }
+  Required<Pick<User, 'firstName' | 'lastName' | 'licenseNumber' | 'phone' | 'status' | 'clubId'>>
 
 export interface Team {
   /** Derived at creation from (club, phase, number) (#282); opaque thereafter. */
@@ -604,6 +599,13 @@ export interface User {
   lastName?: string
   /** The FFTT licence; blank for a member who holds none (#644). */
   licenseNumber?: string
+  /**
+   * ISO timestamp of the person's photo (#741: one per person, whichever
+   * profile set it), or undefined if none. The image itself is fetched via
+   * GET /api/users/:id/avatar; this acts as a cache-busting version. Every
+   * member carries it, players or not.
+   */
+  avatarUpdatedAt?: string
   /**
    * Licences in every federation but the FFTT (#644). The payload always
    * fills it for a player; absent — an older cache, a fixture — means none.

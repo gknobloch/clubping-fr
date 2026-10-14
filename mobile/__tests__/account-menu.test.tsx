@@ -22,7 +22,7 @@ const mockAuth = {
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }))
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
 jest.mock('@/contexts/DataContext', () => ({
-  useAppData: () => ({ players: [], clubs: [{ id: 'landser', displayName: 'ASL Landser' }] }),
+  useAppData: () => ({ players: [], users: [], clubs: [{ id: 'landser', displayName: 'ASL Landser' }] }),
 }))
 
 const metrics = {

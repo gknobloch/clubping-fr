@@ -1485,6 +1485,18 @@ invisible dans le diff comme dans la revue.
 - Qu'un administrateur puisse retirer une image inconvenante est une **décision
   à prendre**, pas une conséquence de la règle — et `administers` dit déjà
   comment l'écrire le jour où on la prend.
+- **« Soi-même », c'est la personne** (#741) : une photo est celle de la
+  personne (#655), pas d'un profil de club. `user_avatars` reste clé sur le
+  profil, mais se lit et s'écrit par la personne (`samePerson`) : un profil
+  montre la photo la plus récente de ses profils, en mettre une retire celles
+  des autres (dans le même batch), en retirer une les retire toutes, et
+  n'importe lequel des profils de la personne peut le faire
+  (`mayChangePhoto`) — un délégué qui agit comme elle en tient un. Même URL,
+  par profil : aucune version de l'app. `/data` porte `avatarUpdatedAt` sur
+  `users` aussi, pour qu'un profil qui ne joue pas — l'administration
+  générale rattachée à la personne — montre la photo dans l'en-tête. Une
+  fusion de deux personnes garde la photo de celle qui reste. 0077 n'a gardé
+  qu'une photo par personne, la plus récente.
 - **La lecture reste publique**, et c'est le piège à ne pas refermer par
   mégarde : un `<img>` ne porte pas d'en-tête `Authorization`, donc `GET` est
   hors `needsSession` (#320) et une erreur ici ferait disparaître tous les

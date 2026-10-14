@@ -26,7 +26,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }))
 
-vi.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [] }) }))
+vi.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [], users: [] }) }))
 
 function renderList() {
   return render(<MemoryRouter><ProfileList /></MemoryRouter>)

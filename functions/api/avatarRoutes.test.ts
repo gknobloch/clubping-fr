@@ -117,6 +117,10 @@ function sessionDb(users: UserRow[], viewerId: string | null) {
         async run() { writes.push({ sql, params: [] }); return { success: true } },
       }
     },
+    // The write is a batch since #741: the photo, and its siblings' removal.
+    async batch(stmts: Array<{ run: () => Promise<unknown> }>) {
+      return Promise.all(stmts.map((st) => st.run()))
+    },
   } as unknown as D1Database
   return { db, writes }
 }
