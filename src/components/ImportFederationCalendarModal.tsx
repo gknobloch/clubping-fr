@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { Club } from '@/types'
 import { useAppData, type FederationScheduleImportSummary } from '@/contexts/DataContext'
 import { ModalShell } from '@/components/ModalShell'
 import { NEUTRAL_BUTTON_CLASS, PRIMARY_BUTTON_CLASS } from '@/components/Button'
@@ -94,13 +95,16 @@ export function ImportFederationCalendarModal({
     }
   }
 
-  // The clubs a name may be attached to: those of the federation, by name.
-  const fedClubs = useMemo(
-    () => clubs
-      .filter((c) => !c.isArchived && (c.affiliations ?? []).some((a) => a.federationId === federationId))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')),
-    [clubs, federationId],
-  )
+  // The clubs a name may be attached to: those of the federation first, then
+  // every other (#730). Listing only the federation's left the FFTT's « Kembs
+  // TT » out of reach, and « Créer » made a second Kembs beside it.
+  const { fedClubs, otherClubs } = useMemo(() => {
+    const live = clubs
+      .filter((c) => !c.isArchived)
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'))
+    const inFed = (c: Club) => (c.affiliations ?? []).some((a) => a.federationId === federationId)
+    return { fedClubs: live.filter(inFed), otherClubs: live.filter((c) => !inFed(c)) }
+  }, [clubs, federationId])
 
   async function read(file: File) {
     setReading(true)
@@ -347,9 +351,18 @@ export function ImportFederationCalendarModal({
                           when the import uses it. The printed name, beside, is the
                           one the federation knows it by. */}
                       <option value="">Créer « {clubNameFromFederation(name)} »</option>
-                      {[...fedClubs, ...clubs.filter((c) => c.id === clubIds[name] && !fedClubs.includes(c))].map((c) => (
-                        <option key={c.id} value={c.id}>{clubNameFromFederation(c.displayName)}</option>
-                      ))}
+                      {fedClubs.length > 0 && (
+                        <optgroup label={`Clubs ${federation?.shortName ?? ''}`.trim()}>
+                          {fedClubs.map((c) => (
+                            <option key={c.id} value={c.id}>{clubNameFromFederation(c.displayName)}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label={fedClubs.length > 0 ? 'Autres clubs' : 'Clubs'}>
+                        {otherClubs.map((c) => (
+                          <option key={c.id} value={c.id}>{clubNameFromFederation(c.displayName)}</option>
+                        ))}
+                      </optgroup>
                     </select>
                   </li>
                 ))}

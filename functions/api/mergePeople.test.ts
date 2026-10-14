@@ -87,3 +87,41 @@ describe('merging two people who are one (#655)', () => {
     expect(d1.rows("SELECT id FROM people WHERE id = 'person-g-admin'")).toHaveLength(1)
   })
 })
+
+// #731 — the AGR list of Landser created people with no address beside the
+// ones Rixheim already had: Enzo Lotz, twice, and nothing to tie the two.
+describe('merging namesakes in two clubs (#731)', () => {
+  function namesakes() {
+    const d1 = world()
+    addMember(d1.exec, { id: 'enzo-rix', firstName: 'Enzo', lastName: 'Lotz', email: 'enzo@example.fr', clubId: 'club-a' })
+    addMember(d1.exec, { id: 'enzo-lan', firstName: 'Enzo', lastName: 'Lotz', email: null, clubId: 'club-b' })
+    return d1
+  }
+
+  it('joins the Landser profile to the person who signs in, address included', async () => {
+    const d1 = namesakes()
+    const ga = await as(d1, 'ga')
+    expect((await ga('person-enzo-lan', 'person-enzo-rix')).status).toBe(200)
+    expect(d1.rows("SELECT person_id, email FROM users WHERE id = 'enzo-lan'"))
+      .toEqual([{ person_id: 'person-enzo-rix', email: 'enzo@example.fr' }])
+    expect(await profileReaches(d1.db, 'enzo-rix', 'enzo-lan')).toBe(true)
+  })
+
+  it('keeps the person with the address: the other way round is refused', async () => {
+    const d1 = namesakes()
+    const ga = await as(d1, 'ga')
+    const res = await ga('person-enzo-rix', 'person-enzo-lan')
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: 'keep_other' })
+  })
+
+  it('refuses two people with a profile in the same club, and writes nothing', async () => {
+    const d1 = namesakes()
+    addMember(d1.exec, { id: 'enzo-rix-2', firstName: 'Enzo', lastName: 'Lotz', email: null, clubId: 'club-a', personId: 'person-enzo-lan' })
+    const ga = await as(d1, 'ga')
+    const res = await ga('person-enzo-lan', 'person-enzo-rix')
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: 'same_club' })
+    expect(d1.rows("SELECT person_id FROM users WHERE id = 'enzo-lan'")).toEqual([{ person_id: 'person-enzo-lan' }])
+  })
+})

@@ -86,3 +86,39 @@ describe('Import of an AGR list (#681)', () => {
     expect(await screen.findByTestId('import-pick-message')).toHaveTextContent('Impossible de lire ce fichier.')
   })
 })
+
+// #731 — Nicolas Bernard already plays the FFTT at Rixheim: the AGR list asks,
+// and a yes adds his Landser profile to that person instead of a second one.
+describe('A licensee of another club (#731)', () => {
+  const rixheim = { id: 'rixheim', affiliationNumber: '06680011', displayName: 'Rixheim PPA', isArchived: false, addresses: [], channels: [] } as Club
+  const nicolas = {
+    id: 'nicolas-rix', personId: 'person-nicolas', firstName: 'Nicolas', lastName: 'Bernard', licenseNumber: '6810001',
+    phone: '', status: 'active', clubId: 'rixheim', email: 'nicolas@example.fr', role: 'player', isPlayer: true,
+  } as User
+  const saved = { clubs: mockData.clubs, users: mockData.users }
+  beforeEach(() => {
+    mockData.clubs = [landser, rixheim]
+    mockData.users = [...saved.users, nicolas]
+  })
+  afterEach(() => Object.assign(mockData, saved))
+
+  it('asks, and writes a profile on the person once confirmed', async () => {
+    mockRead.mockResolvedValue({ ok: true, lines: AGR_PLAYER_LIST })
+    render(<ImportPlayersScreen />)
+    fireEvent.press(screen.getByTestId('import-pick-pdf'))
+    expect(await screen.findByText(/Nicolas Bernard joue déjà à Rixheim PPA/)).toBeTruthy()
+    fireEvent.press(screen.getByTestId('import-link-351100'))
+    expect(screen.getByText(/Profil ajouté à Nicolas Bernard, qui joue aussi à Rixheim PPA/)).toBeTruthy()
+
+    fireEvent.press(screen.getByTestId('import-apply'))
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as Array<{ text: string; onPress?: () => void }>
+    buttons.find((b) => b.text === 'Importer')!.onPress!()
+    await waitFor(() => expect(applyPlayerImport).toHaveBeenCalled())
+    const writes = applyPlayerImport.mock.calls[0][0]
+    expect(writes.profiles).toEqual([expect.objectContaining({
+      sourceId: 'nicolas-rix', clubId: 'landser', licences: [{ federationId: 'agr', number: '351100' }],
+    })])
+    expect(writes.creates).toHaveLength(4)
+    expect(writes.points.some((p) => p.playerId === writes.profiles[0].id)).toBe(true)
+  })
+})

@@ -6,7 +6,7 @@ import { PlayerImportPreview } from '@/components/PlayerImportPreview'
 import { extractPdfScheduleLines } from '@/lib/pdfScheduleText'
 import { isAgrPlayerList, parseAgrPlayerListLines } from '@/lib/agrPlayerList'
 import {
-  buildImportRows, defaultImportSelection, fieldKey, importCandidates, playerImportWrites, writableFields,
+  buildImportRows, defaultImportSelection, fieldKey, importCandidates, personCandidates, playerImportWrites, writableFields,
   type FfttLicence, type ImportFederation,
 } from '@/lib/ffttPlayers'
 import { activePhaseOf, clubAffiliations } from '@/lib/federations'
@@ -31,7 +31,7 @@ export function ImportFederationPlayersModal({
 }) {
   const {
     clubs, phases, federations = [], players, users = [], playerPhasePoints,
-    addPlayer, updatePlayer, setPlayerPhasePoints,
+    addPlayer, updatePlayer, setPlayerPhasePoints, addProfileInClub,
   } = useAppData()
   const club = clubs.find((c) => c.id === clubId)
   const federation = federations.find((f) => f.id === federationId)
@@ -45,15 +45,18 @@ export function ImportFederationPlayersModal({
   const [confirmed, setConfirmed] = useState<Map<string, string>>(new Map())
   const [reading, setReading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ created: number; updated: number } | null>(null)
+  const [done, setDone] = useState<{ created: number; updated: number; failed: string[] } | null>(null)
+  const [applying, setApplying] = useState(false)
 
   const candidates = useMemo(() => importCandidates(users, clubId, importFederation), [users, clubId, federationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // People of other clubs (#731): the FFTT licensee at Rixheim this list names.
+  const persons = useMemo(() => personCandidates(users, clubs, clubId, importFederation), [users, clubs, clubId, federationId]) // eslint-disable-line react-hooks/exhaustive-deps
   const build = (forLicences: FfttLicence[], links: Map<string, string>) =>
-    buildImportRows(forLicences, players, playerPhasePoints, phase?.id ?? '', candidates, [], undefined, links, importFederation)
+    buildImportRows(forLicences, players, playerPhasePoints, phase?.id ?? '', candidates, [], undefined, links, importFederation, persons)
   const rows = useMemo(
     () => build(licences, confirmed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [licences, confirmed, players, playerPhasePoints, phase?.id, candidates],
+    [licences, confirmed, players, playerPhasePoints, phase?.id, candidates, persons],
   )
 
   async function read(file: File) {
@@ -122,11 +125,22 @@ export function ImportFederationPlayersModal({
     })
   }
 
-  function apply() {
+  async function apply() {
     if (!phase) return
     const writes = playerImportWrites(rows, selected, {
       clubId, phaseId: phase.id, newId: () => nextId('player'), federationId,
     })
+    // A profile on a person of another club is awaited (#731): the API may
+    // refuse it — one already there —, and its classement must not land on
+    // a profile that was never written.
+    setApplying(true)
+    const results = await Promise.all(writes.profiles.map(async (p) => ({
+      p, r: await addProfileInClub(p.sourceId, { id: p.id, clubId: p.clubId, licenseNumber: p.licenseNumber, licences: p.licences }),
+    })))
+    setApplying(false)
+    const failedIds = new Set(results.filter(({ r }) => !r.ok).map(({ p }) => p.id))
+    const failed = results.filter(({ r }) => !r.ok)
+      .map(({ p, r }) => `${rows.find((row) => row.join?.sourceId === p.sourceId)?.join?.name ?? p.sourceId} : ${r.ok ? '' : r.message}`)
     for (const c of writes.creates) {
       addPlayer({
         id: c.id, firstName: c.firstName, lastName: c.lastName, licenseNumber: c.licenseNumber,
@@ -134,11 +148,11 @@ export function ImportFederationPlayersModal({
       })
     }
     for (const u of writes.updates) updatePlayer(u.id, u.patch)
-    setPlayerPhasePoints(writes.points)
+    setPlayerPhasePoints(writes.points.filter((pt) => !failedIds.has(pt.playerId)))
     setLicences([])
     setSelected(new Set())
     setConfirmed(new Map())
-    setDone({ created: writes.created, updated: writes.updated })
+    setDone({ created: writes.created - failedIds.size, updated: writes.updated, failed })
   }
 
   return (
@@ -178,6 +192,11 @@ export function ImportFederationPlayersModal({
               {done.created} joueur{done.created > 1 ? 's' : ''} créé{done.created > 1 ? 's' : ''} · {done.updated} mis à jour.
             </p>
           )}
+          {done && done.failed.length > 0 && (
+            <p role="alert" className="text-sm text-red-600">
+              Non ajouté{done.failed.length > 1 ? 's' : ''} : {done.failed.join(' ; ')}
+            </p>
+          )}
 
           {rows.length > 0 && (
             <div className="space-y-3">
@@ -202,8 +221,8 @@ export function ImportFederationPlayersModal({
               )}
               <button
                 type="button"
-                onClick={apply}
-                disabled={selected.size === 0}
+                onClick={() => void apply()}
+                disabled={selected.size === 0 || applying}
                 className={`w-full ${PRIMARY_BUTTON_CLASS}`}
               >
                 Importer la sélection

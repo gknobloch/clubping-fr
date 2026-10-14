@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Player, User } from '@/types'
-import { buildImportRows, defaultImportSelection, importCandidates, playerImportWrites, type ImportFederation } from './ffttPlayers'
+import { buildImportRows, defaultImportSelection, importCandidates, personCandidates, playerImportWrites, writableFields, type ImportFederation } from './ffttPlayers'
 import { parseAgrPlayerListLines, type AgrPlayerList } from './agrPlayerList'
 import { AGR_PLAYER_LIST } from './__fixtures__/agrPlayerList'
 
@@ -58,5 +58,42 @@ describe('the import review, for an AGR list (#648)', () => {
       clubId: 'landser', phaseId: 'phase-agr-27-1', newId: () => 'n', federationId: 'agr',
     })
     expect(writes.updates.find((u) => u.id === 'joris')?.patch).toEqual({ licences: [{ federationId: 'agr', number: '353200' }] })
+  })
+})
+
+// #731 — someone the AGR list names already plays the FFTT in another club.
+describe('a person of another club, for an AGR list (#731)', () => {
+  const bernard = list.find((l) => l.licence === '351100')!
+  const rixheim = { ...player({ id: 'p-rix', clubId: 'rixheim' }), firstName: bernard.firstName, lastName: bernard.lastName, email: 'b@example.fr', personId: 'person-b' }
+  const everyone = [...users, { ...rixheim, role: 'player', isPlayer: true } as User]
+  const clubs = [{ id: 'rixheim', displayName: 'Rixheim PPA' }, { id: 'landser', displayName: 'ASL Landser' }]
+  const persons = personCandidates(everyone, clubs, 'landser', AGR)
+  const build = (links: Map<string, string>) =>
+    buildImportRows(list, players, [], 'phase-agr-27-1', importCandidates(users, 'landser', AGR), [], undefined, links, AGR, persons)
+
+  it('asks whether the licensee is the person who plays at Rixheim', () => {
+    expect(build(new Map()).find((x) => x.licence.licence === '351100')?.link)
+      .toMatchObject({ id: 'person-b', on: 'person', clubNames: ['Rixheim PPA'] })
+  })
+
+  it('confirmed, adds a profile on that person — licence and classement under the minted id', () => {
+    const r = build(new Map([['351100', 'person-b']]))
+    const row = r.find((x) => x.licence.licence === '351100')!
+    expect(row.join).toMatchObject({ personId: 'person-b', sourceId: 'p-rix' })
+    // The person keeps their name: only the licence and the classement are written.
+    expect(writableFields(row.fields).map((f) => f.key)).toEqual(['licenseNumber', 'points'])
+    const writes = playerImportWrites(r, defaultImportSelection(r), {
+      clubId: 'landser', phaseId: 'phase-agr-27-1', newId: () => 'minted', federationId: 'agr',
+    })
+    expect(writes.profiles).toEqual([
+      { id: 'minted', sourceId: 'p-rix', clubId: 'landser', licences: [{ federationId: 'agr', number: '351100' }] },
+    ])
+    expect(writes.creates.find((c) => c.licences?.[0].number === '351100')).toBeUndefined()
+    expect(writes.points).toContainEqual(expect.objectContaining({ playerId: 'minted' }))
+  })
+
+  it('is never offered for an FFTT list, nor for someone already in the club', () => {
+    expect(personCandidates(everyone, clubs, 'landser')).toEqual([])
+    expect(personCandidates(everyone, clubs, 'rixheim', AGR).find((p) => p.personId === 'person-b')).toBeUndefined()
   })
 })

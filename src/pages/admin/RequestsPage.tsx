@@ -30,6 +30,8 @@ import {
 import { decideClubAdminRequest, fetchClubAdminRequests } from '@/lib/onboardingApi'
 import { SharedAddresses } from '@/components/SharedAddresses'
 import { sharedAddresses } from '@/lib/sharedAddresses'
+import { Namesakes } from '@/components/Namesakes'
+import { namesakes } from '@/lib/namesakes'
 
 /**
  * "Demandes d'accès" — where a general admin decides who administers a club
@@ -51,6 +53,7 @@ export function RequestsPage() {
   const { user, token } = useAuth()
   const { clubs, users = [] } = useAppData()
   const sharedCount = useMemo(() => sharedAddresses(users).length, [users])
+  const namesakeCount = useMemo(() => namesakes(users).length, [users])
   const [requests, setRequests] = useState<ClubAdminRequest[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showDecided, setShowDecided] = useState(false)
@@ -163,6 +166,22 @@ export function RequestsPage() {
             même personne — un profil d’administration générale sans nom, par exemple —, réunissez-les.
           </p>
           <SharedAddresses />
+        </section>
+      )}
+
+      {/* #731 — the same name in two clubs: an AGR list imported beside the
+          FFTT profiles of the same people. Shown only while there are some. */}
+      {namesakeCount > 0 && (
+        <section aria-labelledby="namesakes-title" className="space-y-3">
+          <h2 id="namesakes-title" className="font-display text-lg font-semibold text-slate-800">
+            Mêmes noms dans plusieurs clubs ({namesakeCount})
+          </h2>
+          <p className="text-sm text-slate-600">
+            Deux personnes portent le même nom dans deux clubs — souvent un licencié FFTT et sa licence
+            AGR, importée sans adresse. Si c’est la même personne, réunissez-les : elle ouvrira ses deux
+            profils avec sa propre adresse. Deux homonymes, eux, restent tels quels.
+          </p>
+          <Namesakes />
         </section>
       )}
 

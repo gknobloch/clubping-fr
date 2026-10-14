@@ -597,7 +597,7 @@ describe('playerImportWrites', () => {
   it('skips a row with nothing ticked — that is what ignoring one means', () => {
     const rows = buildImportRows([incoming()], [], [], 'phase-1')
     expect(playerImportWrites(rows, new Set(), { ...target, newId: ids() })).toEqual({
-      creates: [], updates: [], points: [], categories: [], created: 0, updated: 0,
+      creates: [], profiles: [], updates: [], points: [], categories: [], created: 0, updated: 0,
     })
   })
 

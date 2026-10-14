@@ -917,6 +917,33 @@ invisible dans le diff comme dans la revue.
   dans ce cas. Les fixtures de test sont trois vrais calendriers, **le
   contact du pied remplacé** (nom, adresse et e-mail d'un officiel).
 
+### Deux fiches pour un club (#730)
+- **Les imports AGR ont dédoublé des clubs** : « Landser ASL » à côté de
+  « ASL Landser » (l'un les membres, l'autre les équipes), « Kembs ASL TT » à
+  côté du « Kembs TT » de la FFTT. **« Fusionner… »** sur `/clubs`
+  (administrateur général, `POST /clubs/:id/merge-into`) les réunit : équipes,
+  membres, adresses (le défaut du club gardé reste le seul), canaux, logo,
+  affiliations (les blancs du gardé comblés — nom AGR, organisation), groupes,
+  réservations, entraînements, demandes d'onboarding ; puis la ligne part, dans
+  **un seul batch**.
+- **Le club gardé n'est pas au choix** (`clubMergeKeeper`,
+  `src/lib/clubMerge.ts`) : celui dont l'id se dérive d'un numéro —
+  `club-fftt-…`, puis `club-<fédération>-…` — parce que c'est sous cet id que
+  les imports le cherchent ; supprimé, le prochain import FFTT le recréerait.
+  L'API refuse l'autre sens (409 `keep_other`), le dialogue le dit d'avance.
+- **Ce qui demande une décision est refusé avec sa raison**
+  (`clubMergeRefusal`, la même règle des deux côtés) : deux numéros FFTT, deux
+  numéros d'une même fédération, deux équipes d'un même numéro dans une même
+  phase, deux groupes de même nom, une compétition réservée des deux côtés.
+- Les ids d'équipe restent ce qu'ils sont (#282) : une équipe change de club
+  sans changer d'id, ses rencontres la suivent.
+- **La revue d'un calendrier propose tous les clubs**, ceux de la fédération
+  d'abord : n'offrir que ceux déjà affiliés laissait « Kembs TT » hors
+  d'atteinte, et « Créer » faisait le second. `matchFederationClub` lit aussi
+  les mots dans le désordre (« LANDSER ASL » = « ASL Landser ») et propose le
+  **seul** club d'une ville (`townKey`) — jamais un club que la fédération
+  connaît déjà sous un autre nom. Une suggestion, comme le reste.
+
 ### Liste des joueurs d'une fédération sans API (#648)
 - L'AGR publie la liste d'un club en PDF (« Liste des joueurs » : licence,
   NOM Prénom, classement). `src/lib/agrPlayerList.ts` la lit en
@@ -951,6 +978,36 @@ invisible dans le diff comme dans la revue.
   qui ne l'ont pas, et le module lève à l'import. Il ne s'importe donc que
   depuis `utils/documentPicker.ts`, dans un `try` comme
   `expoNotifications.ts` ; un vieux binaire dit « mettez l'app à jour ».
+
+### Une même personne dans deux fédérations, sans adresse commune (#731)
+- **L'import de la liste AGR de Landser a créé seize personnes, dont neuf
+  jouaient déjà à Rixheim** : deux personnes pour un même licencié, et le
+  profil de Landser sans adresse — personne ne pouvait l'ouvrir. « C'est la
+  même personne » (#655) n'était offert qu'à deux personnes partageant une
+  adresse.
+- **`personMergeRefusal` est la règle de `POST /people/:id/merge-into`**
+  (`src/lib/namesakes.ts`, la même des deux côtés) : refusé pour deux adresses
+  différentes, pour une adresse du côté supprimé (`keep_other` : la personne
+  gardée est celle qui se connecte, `personMergeTarget`), et pour un profil
+  dans un même club des deux côtés — un doublon se supprime, il ne se réunit
+  pas. Une adresse partagée reste le cas de départ.
+- **`namesakes` liste les paires** de même nom (accents, casse et traits
+  d'union à part, `personNameKey`) dans deux clubs, que la règle admet. Trois
+  personnes d'un même nom ne sont pas listées : lesquelles ? Sur `/demandes`
+  (« Mêmes noms dans plusieurs clubs ») et sur la fiche, pour
+  l'administrateur général. **Une question, jamais une fusion** : un père et
+  son fils portent un même nom.
+- **L'import d'une liste d'une autre fédération le demande d'avance**
+  (`personCandidates`, dernier argument de `buildImportRows`) : après les
+  homonymes du club, une personne d'un autre club de même nom est proposée
+  (`link.on: 'person'`). Confirmée, la ligne écrit un **profil sur cette
+  personne** (`writes.profiles`, `POST /players/:sourceId/profiles`, qui
+  copie nom, adresse et téléphone côté serveur) — la personne garde son nom,
+  seuls la licence et le classement sont de la liste. L'id est frappé par
+  l'appelant, comme pour `POST /players`, pour que le classement s'y range
+  dans la même passe ; pris, il est refusé. Jamais pour une liste FFTT : une
+  licence FFTT est une personne dans un club, le même nom ailleurs est un
+  transfert ou un homonyme.
 
 ### Phase retour (#649)
 - Une division AGR joue sa phase 2 de deux façons : **les mêmes poules,

@@ -20,6 +20,7 @@ import { clubsToAddTo, linkedProfiles, mayEditPerson } from '@/lib/linkedProfile
 import { AddToClubDialog } from '@/components/AddToClubDialog'
 import { PersonDelegates } from '@/components/PersonDelegates'
 import { SharedAddresses } from '@/components/SharedAddresses'
+import { Namesakes } from '@/components/Namesakes'
 import { LicenceNumbers } from '@/components/LicenceNumbers'
 
 export function PlayerDetailPage() {
@@ -224,6 +225,8 @@ export function PlayerDetailPage() {
             {user?.role === 'general_admin' && (
               <SharedAddresses personId={player.personId} onSettled={() => setDelegatesVersion((v) => v + 1)} />
             )}
+            {/* The same name in another club, nothing to tie them (#731). */}
+            {user?.role === 'general_admin' && <Namesakes personId={player.personId} />}
             <PersonDelegates key={delegatesVersion} personId={player.personId} mode="admin" idPrefix="player" />
           </div>
         </section>

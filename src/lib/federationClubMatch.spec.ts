@@ -38,3 +38,31 @@ describe('matchFederationClub within an organisation (#692)', () => {
     expect(matchFederationClub('ASL', [both[0]], 'agr', 'agr-68')).toBeUndefined()
   })
 })
+
+describe('matchFederationClub beyond the exact name (#730)', () => {
+  const fftt = [
+    club('club-fftt-06680140', 'Kembs TT', { affiliationNumber: '06680140' }),
+    club('club-fftt-06680091', 'Illzach TTSJB', { affiliationNumber: '06680091' }),
+    club('club-agr-680036', 'ASL Landser', { affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }] }),
+    club('mulhouse-1', 'Mulhouse TT', {}),
+    club('mulhouse-2', 'ASPTT Mulhouse', {}),
+  ]
+
+  it('reads the words in any order — « LANDSER ASL » is « ASL Landser »', () => {
+    expect(matchFederationClub('LANDSER ASL', fftt, 'agr')?.id).toBe('club-agr-680036')
+  })
+
+  it('proposes the only club of the town: the FFTT’s Kembs and Illzach', () => {
+    expect(matchFederationClub('KEMBS ASL TT', fftt, 'agr')?.id).toBe('club-fftt-06680140')
+    expect(matchFederationClub('ILLZACH ST JEAN BAPTISTE', fftt, 'agr')?.id).toBe('club-fftt-06680091')
+  })
+
+  it('guesses nothing when the town has two clubs', () => {
+    expect(matchFederationClub('MULHOUSE CHAMPS', fftt, 'agr')).toBeUndefined()
+  })
+
+  it('never takes a club the federation knows under another name', () => {
+    const known = [club('k', 'Kembs TT', { affiliations: [{ federationId: 'agr', affiliationNumber: '', name: 'KEMBS ASL TT' }] })]
+    expect(matchFederationClub('KEMBS LOISIRS', known, 'agr')).toBeUndefined()
+  })
+})

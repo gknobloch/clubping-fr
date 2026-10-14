@@ -27,6 +27,8 @@ import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
 import { pdfTextLines } from '../../src/lib/pdfLines'
 import { divisionNameKey } from '../../src/lib/divisionNames'
 import { clubNameFromFederation } from '../../src/lib/ffttNames'
+import { clubMergeKeeper, clubMergeRefusal } from '../../src/lib/clubMerge'
+import { personMergeRefusal } from '../../src/lib/namesakes'
 import { divisionDisplayName, ffttIdFromIri, isFfttContestIdentifier, orderDivisions, playersPerGameFor, FFTT_CHAMPIONSHIP_CONTEST_IDENTIFIER, PLAYERS_PER_GAME_DEFAULT, type FfttDivision } from '../../src/lib/ffttDivisions'
 import { clubIdFromAffiliation, gameIdFor, homeGameDate, teamIdFor } from '../../src/lib/entityIds'
 import { FFTT_PHASES, ffttPhaseIdForName, localPhaseId, phaseIdFor, phaseOrderKey } from '../../src/lib/ffttPhases'
@@ -4305,6 +4307,108 @@ app.delete('/clubs/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+/**
+ * Fold one club into another (#730): the AGR calendar import created bare
+ * clubs beside ones that already existed, one holding the members and the
+ * other the teams. Everything the removed row owns moves onto the kept one,
+ * then the removed row goes — in one batch, since half a merge is teams
+ * pointing at a club that no longer exists.
+ *
+ * The general admin's alone: two clubs are nobody's property (#570). Which
+ * row stays is not the caller's to choose freely — the one whose id the
+ * imports look up must survive (`clubMergeKeeper`) — and every case that
+ * needs a decision first is refused with its reason (`clubMergeRefusal`),
+ * the same rule the dialog applied before sending.
+ */
+app.post('/clubs/:id/merge-into', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const removeId = c.req.param('id')
+  const d = await c.req.json<{ targetId?: unknown }>().catch(() => ({} as Record<string, unknown>))
+  if (typeof d.targetId !== 'string' || !d.targetId) return c.json({ error: 'bad_request' }, 400)
+  const keepId = d.targetId
+
+  const [clubRows, fedRows, teamRows, groupRows, reservedRows] = await Promise.all([
+    db.prepare('SELECT id, display_name, affiliation_number FROM clubs WHERE id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, federation_id, affiliation_number FROM club_federations WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, phase_id, number FROM teams WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, display_name FROM member_groups WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, competition_id FROM club_competition_groups WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+  ])
+  const feds = fedRows.results as Array<{ club_id: string; federation_id: string; affiliation_number: string | null }>
+  const clubOf = (id: string) => {
+    const r = (clubRows.results as Array<{ id: string; display_name: string; affiliation_number: string | null }>)
+      .find((x) => x.id === id)
+    return r && {
+      id: r.id, displayName: r.display_name, affiliationNumber: r.affiliation_number ?? '',
+      affiliations: feds.filter((f) => f.club_id === id)
+        .map((f) => ({ federationId: f.federation_id, affiliationNumber: f.affiliation_number ?? '' })),
+    }
+  }
+  const remove = clubOf(removeId)
+  const keep = clubOf(keepId)
+  if (!remove || !keep) return c.json(notFound, 404)
+  if (clubMergeKeeper(remove, keep).keep.id !== keep.id) {
+    return c.json({ error: 'keep_other', message: `C’est « ${remove.displayName} » qui doit être gardé.` }, 409)
+  }
+  const refusal = clubMergeRefusal(keep, remove, {
+    teams: (teamRows.results as Array<{ club_id: string; phase_id: string; number: number }>)
+      .map((t) => ({ clubId: t.club_id, phaseId: t.phase_id, number: t.number })),
+    memberGroups: (groupRows.results as Array<{ club_id: string; display_name: string }>)
+      .map((g) => ({ clubId: g.club_id, displayName: g.display_name })),
+    competitionGroups: (reservedRows.results as Array<{ club_id: string; competition_id: string }>)
+      .map((g) => ({ clubId: g.club_id, competitionId: g.competition_id })),
+  })
+  if (refusal) return c.json({ error: refusal.reason, message: refusal.message }, 409)
+
+  const fromRemoved = (col: string) =>
+    `(SELECT NULLIF(r.${col}, '') FROM club_federations r WHERE r.club_id = ? AND r.federation_id = club_federations.federation_id)`
+  const move = (table: string) => db.prepare(`UPDATE ${table} SET club_id = ? WHERE club_id = ?`).bind(keepId, removeId)
+  await db.batch([
+    // The kept club keeps its default address; the incoming ones arrive as others.
+    db.prepare(
+      `UPDATE club_addresses SET is_default = 0
+         WHERE club_id = ? AND EXISTS (SELECT 1 FROM club_addresses k WHERE k.club_id = ? AND k.is_default = 1)`,
+    ).bind(removeId, keepId),
+    move('club_addresses'),
+    move('club_channels'),
+    // club_id is the logo's key: it moves only onto a club that has none,
+    // and a second logo goes with the deleted row.
+    db.prepare(
+      'UPDATE club_logos SET club_id = ? WHERE club_id = ? AND NOT EXISTS (SELECT 1 FROM club_logos k WHERE k.club_id = ?)',
+    ).bind(keepId, removeId, keepId),
+    // An affiliation both hold keeps the kept club's values, its blanks filled
+    // — « LANDSER ASL », the name the next calendar is matched against, and
+    // the organisation. One only the removed club holds moves over whole.
+    db.prepare(
+      `UPDATE club_federations SET
+         affiliation_number = COALESCE(NULLIF(affiliation_number, ''), ${fromRemoved('affiliation_number')}, ''),
+         name = COALESCE(NULLIF(name, ''), ${fromRemoved('name')}),
+         organization_id = COALESCE(NULLIF(organization_id, ''), ${fromRemoved('organization_id')})
+       WHERE club_id = ?`,
+    ).bind(removeId, removeId, removeId, keepId),
+    db.prepare(
+      `INSERT OR IGNORE INTO club_federations (club_id, federation_id, affiliation_number, name, organization_id)
+         SELECT ?, federation_id, affiliation_number, name, organization_id FROM club_federations WHERE club_id = ?`,
+    ).bind(keepId, removeId),
+    db.prepare(
+      `UPDATE clubs SET affiliation_number = (SELECT affiliation_number FROM clubs WHERE id = ?)
+         WHERE id = ? AND COALESCE(affiliation_number, '') = ''`,
+    ).bind(removeId, keepId),
+    // Team ids were derived at creation and are never recomputed (#282):
+    // a team changes club without changing id, and its games follow it.
+    move('teams'),
+    move('users'),
+    move('member_groups'),
+    move('club_competition_groups'),
+    move('trainings'),
+    move('club_admin_requests'),
+    db.prepare('DELETE FROM fftt_club_teams_cache WHERE club_id = ?').bind(removeId),
+    db.prepare('DELETE FROM clubs WHERE id = ?').bind(removeId),
+  ])
+  return c.json({ ok: true })
+})
+
 // --- Club Addresses ---
 app.post('/clubs/:clubId/addresses', async (c) => {
   if (!administers(managingViewer(c), c.req.param('clubId'))) return c.json(notAllowed, 403)
@@ -5466,7 +5570,7 @@ const PROFILE_REFUSALS = {
 app.post('/players/:id/profiles', async (c) => {
   const db = c.env.DB
   const sourceId = c.req.param('id')
-  const d = await c.req.json<{ clubId?: unknown; licenseNumber?: unknown; licences?: unknown }>()
+  const d = await c.req.json<{ id?: unknown; clubId?: unknown; licenseNumber?: unknown; licences?: unknown }>()
   const clubId = typeof d.clubId === 'string' ? d.clubId : ''
   if (!clubId || !administers(managingViewer(c), clubId)) return c.json(notAllowed, 403)
 
@@ -5494,7 +5598,14 @@ app.post('/players/:id/profiles', async (c) => {
     if (existing) return refuseProfile('already_in_club', existing.id)
   }
 
-  const id = newId('player')
+  // The caller may name the id, as POST /players lets it (#731): an import
+  // files the classement under it in the same pass. Taken, it is refused
+  // rather than overwritten.
+  const wanted = typeof d.id === 'string' && /^[\w-]{1,80}$/.test(d.id) ? d.id : null
+  if (wanted && await db.prepare('SELECT 1 FROM users WHERE id = ?').bind(wanted).first()) {
+    return c.json({ error: 'id_taken' }, 409)
+  }
+  const id = wanted ?? newId('player')
   const licenseNumber = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
   // The new profile belongs to the same PERSON (#655): that is the link, and
   // the copied fields below are only the mirror `users` still carries. A
@@ -5689,10 +5800,12 @@ app.post('/people/:personId/address-to-delegate', async (c) => {
  * the target left blank. The target's own fields win — it is the one chosen to
  * stay.
  *
- * The general admin's alone, and only for two people who share an address —
- * the one fact that says they might be one, re-read here like the hand-over
- * above. Everything lands in one batch: half a merge is a profile pointing at
- * a person who no longer exists.
+ * The general admin's alone. First offered for two people sharing an address;
+ * since #731 also for namesakes in two clubs, which nothing else ties — the
+ * AGR gives no address. What still stops it (`personMergeRefusal`): two
+ * different addresses, an address on the side that would be deleted, or a
+ * profile in one club on both sides. Everything lands in one batch: half a
+ * merge is a profile pointing at a person who no longer exists.
  */
 app.post('/people/:personId/merge-into', async (c) => {
   if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
@@ -5703,15 +5816,27 @@ app.post('/people/:personId/merge-into', async (c) => {
   const targetId = d.targetId
   if (targetId === personId) return c.json({ error: 'self' }, 400)
 
-  const found = await db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
-    .bind(personId, targetId).all<{ id: string; email: string | null }>()
-  const person = found.results.find((r) => r.id === personId)
-  const target = found.results.find((r) => r.id === targetId)
-  if (!person || !target) return c.json(notFound, 404)
-  const address = (r: { email: string | null }) => r.email?.trim().toLowerCase() ?? ''
-  if (!address(person) || address(person) !== address(target)) {
-    return c.json({ error: 'not_shared', message: "Ces deux personnes ne partagent plus d'adresse." }, 409)
+  const [found, profiles] = await Promise.all([
+    db.prepare('SELECT id, email FROM people WHERE id IN (?, ?)')
+      .bind(personId, targetId).all<{ id: string; email: string | null }>(),
+    db.prepare('SELECT id, club_id, person_id FROM users WHERE person_id IN (?, ?)')
+      .bind(personId, targetId).all<{ id: string; club_id: string | null; person_id: string }>(),
+  ])
+  const mergeable = (id: string) => {
+    const r = found.results.find((x) => x.id === id)
+    return r && {
+      personId: r.id, email: r.email ?? undefined,
+      profiles: profiles.results.filter((u) => u.person_id === id)
+        .map((u) => ({ userId: u.id, clubId: u.club_id ?? undefined })),
+    }
   }
+  const person = mergeable(personId)
+  const target = mergeable(targetId)
+  if (!person || !target) return c.json(notFound, 404)
+  // Re-read, like the hand-over above: an address added since the screen
+  // loaded, or a profile in a common club, is a reason to stop (#731).
+  const refusal = personMergeRefusal(target, person)
+  if (refusal) return c.json({ error: refusal.reason, message: refusal.message }, 409)
 
   const fill = (col: string) => `${col} = COALESCE(NULLIF(${col}, ''), (SELECT NULLIF(${col}, '') FROM people WHERE id = ?))`
   await db.batch([
