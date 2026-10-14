@@ -816,7 +816,9 @@ invisible dans le diff comme dans la revue.
   fédération (#645), donc la clé dit à qui est la valeur.
 - `src/lib/ranking.ts` est la règle : `rankingLabel` (« Points » /
   « Classement »), `formatRanking` (« 1731 pts » / « Classement 45 », « — »
-  sans valeur) et **`compareRanking`, la seule comparaison** pour tout ce qui
+  sans valeur) — et `formatRankingShort` sur la feuille de match, où la valeur
+  se répète à chaque ligne : « 45 » seul à l'AGR, le mot rognait le nom du
+  joueur sur un téléphone (#735) et **`compareRanking`, la seule comparaison** pour tout ce qui
   trie ou désigne « le mieux classé » — égalités permises, sans valeur en
   dernier. Une table dans le code plutôt que des colonnes : deux fédérations,
   connues ; une troisième ajouterait une ligne.

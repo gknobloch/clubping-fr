@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Phase } from '@/types'
-import { compareRanking, currentRankings, formatRanking, rankingLabel, rankingRule } from './ranking'
+import { compareRanking, currentRankings, formatRanking, formatRankingShort, rankingLabel, rankingRule } from './ranking'
 
 // #646 — the FFTT's points (higher is better) and the AGR's classement (lower is better).
 
@@ -17,6 +17,12 @@ describe('rankingRule', () => {
     expect(formatRanking('45', 'agr')).toBe('Classement 45')
     expect(formatRanking(undefined, 'agr')).toBe('—')
     expect(formatRanking('1731', undefined)).toBe('1731 pts')
+  })
+
+  it('prints the AGR value alone on the match sheet, where it repeats on every line (#735)', () => {
+    expect(formatRankingShort('70', 'agr')).toBe('70')
+    expect(formatRankingShort('1731', 'fftt')).toBe('1731 pts')
+    expect(formatRankingShort(undefined, 'agr')).toBe('—')
   })
 })
 

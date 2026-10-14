@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { formatRanking } from '@shared/lib/ranking'
+import { formatRankingShort } from '@shared/lib/ranking'
 import {
   placeBestRanked, reservedLine, reservedLineNote, sheetLetters, sheetOrderRefusal, type SheetSide,
 } from '@shared/lib/matchSheet'
@@ -43,7 +43,7 @@ export function MatchSheet({
   players: MatchSheetPlayer[]
   /** Which side's letters the sheet opens on. */
   isHome?: boolean
-  /** Whose ranking the values are: « 1731 pts », or « Classement 45 » at the AGR (#646). */
+  /** Whose ranking the values are: « 1731 pts », or « 45 » at the AGR (#646, #735). */
   federationId?: string
   onClose: () => void
 }) {
@@ -166,7 +166,7 @@ export function MatchSheet({
               </View>
               <View style={s.playerMeta}>
                 <Text style={s.license}>{p.license ?? '—'}</Text>
-                <Text style={s.points}>{formatRanking(p.points, federationId)}</Text>
+                <Text style={s.points}>{formatRankingShort(p.points, federationId)}</Text>
               </View>
             </View>
           )

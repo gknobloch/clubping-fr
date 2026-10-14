@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatRanking } from '@/lib/ranking'
+import { formatRankingShort } from '@/lib/ranking'
 import { placeBestRanked, reservedLine, reservedLineNote, sheetLetters, sheetOrderRefusal, type SheetSide } from '@/lib/matchSheet'
 import { ModalShell } from '@/components/ModalShell'
 import { NEUTRAL_BUTTON_CLASS } from '@/components/Button'
@@ -43,7 +43,7 @@ export function MatchSheetView({
   affiliationNumber?: string
   players: MatchSheetPlayer[]
   isHome?: boolean
-  /** Whose ranking the values are: « 1731 pts », or « Classement 45 » at the AGR (#646). */
+  /** Whose ranking the values are: « 1731 pts », or « 45 » at the AGR (#646, #735). */
   federationId?: string
   onClose: () => void
 }) {
@@ -152,7 +152,7 @@ export function MatchSheetView({
                       {/* `||`, not `??`: unset points come through as '' from
                           the roster, which `??` would happily render. */}
                       <span className="block font-mono">{player.license || '—'}</span>
-                      <span className="block">{formatRanking(player.points, federationId)}</span>
+                      <span className="block">{formatRankingShort(player.points, federationId)}</span>
                     </span>
                     <span className="flex shrink-0 flex-col">
                       <button

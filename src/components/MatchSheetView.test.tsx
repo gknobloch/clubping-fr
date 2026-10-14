@@ -48,12 +48,13 @@ describe('MatchSheetView (#383)', () => {
     expect(screen.queryByText(/pts/)).not.toBeInTheDocument()
   })
 
-  it('prints points at the FFTT and the classement at the AGR (#646)', () => {
+  it('prints points at the FFTT and the classement alone at the AGR (#646, #735)', () => {
     const { unmount } = setup()
     expect(screen.getByText('1200 pts')).toBeInTheDocument()
     unmount()
     setup({ federationId: 'agr', players: [{ id: 'p1', firstName: 'Hugo', lastName: 'Bernard', points: '45' }] })
-    expect(screen.getByText('Classement 45')).toBeInTheDocument()
+    expect(screen.getByText('45')).toBeInTheDocument()
+    expect(screen.queryByText(/Classement/)).not.toBeInTheDocument()
   })
 
   it('defaults to A.. at home and ..Z away', () => {

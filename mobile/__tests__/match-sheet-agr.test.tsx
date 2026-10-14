@@ -36,6 +36,9 @@ describe('MatchSheet at the AGR (#650)', () => {
     const lastNames = screen.getAllByText(/^(Arnold|Bauer|Christ|Dietrich)$/).map((n) => n.props.children)
     expect(lastNames).toEqual(['Arnold', 'Bauer', 'Christ', 'Dietrich'])
     expect(screen.getByText('Le mieux classé joue en A à domicile, en V à l’extérieur.')).toBeTruthy()
+    // The value alone, where it repeats on every line (#735).
+    expect(screen.getByText('45')).toBeTruthy()
+    expect(screen.queryByText(/Classement \d/)).toBeNull()
   })
 
   it('opens at home with the best ranked in A', () => {
