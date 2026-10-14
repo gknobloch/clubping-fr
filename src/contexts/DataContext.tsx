@@ -546,6 +546,11 @@ interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
   /** Two people found to be one (#655): `personId` joins `targetId`, profiles and all. */
   mergePeople: (personId: string, targetId: string) => Promise<{ ok: true } | { ok: false; message: string }>
   /**
+   * Delete a profile nobody ever used (#733) — a duplicate made by mistake.
+   * Awaited: whether it was ever used is the API's to say.
+   */
+  deleteUnusedProfile: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>
+  /**
    * Declare or correct the club's affiliation to a federation other than the
    * FFTT (#643) — the FFTT number goes through `updateClub`.
    */
@@ -2197,6 +2202,26 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     [persist],
   )
 
+  const deleteUnusedProfile = useCallback(
+    async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (persist) {
+        try {
+          const res = await fetch(`/api/players/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() })
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as { message?: string } | null
+            return { ok: false, message: body?.message ?? "La suppression a échoué." }
+          }
+        } catch {
+          return { ok: false, message: 'Connexion indisponible. Réessayez plus tard.' }
+        }
+      }
+      setPlayers((prev) => prev.filter((p) => p.id !== id))
+      setUsers((prev) => prev.filter((u) => u.id !== id))
+      return { ok: true }
+    },
+    [persist],
+  )
+
   const mergePeople = useCallback(
     async (personId: string, targetId: string): Promise<{ ok: true } | { ok: false; message: string }> => {
       if (persist) {
@@ -2712,6 +2737,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       removeDelegate,
       addressToDelegate,
       mergePeople,
+      deleteUnusedProfile,
       mergeClubs,
       setClubAffiliation,
       removeClubAffiliation,
@@ -2817,7 +2843,7 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
       matchDays, games,
       updateDivision, archiveDivision, deleteDivision,
       addCompetition, updateCompetition, deleteCompetition, setCompetitionGroup,
-      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, archiveClub, deleteClub, mergeClubs, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
+      updateClub, addProfileInClub, fetchDelegations, addDelegate, removeDelegate, addressToDelegate, mergePeople, deleteUnusedProfile, archiveClub, deleteClub, mergeClubs, setClubAffiliation, removeClubAffiliation, addClubAddress, fillMissingClubVenues, updateClubAddress, deleteClubAddress,
       setClubLogo, removeClubLogo, addClubChannel, updateClubChannel, deleteClubChannel, reorderClubChannels,
       updateSeason, archiveSeason, deleteSeason, checkFfttSeason, importFfttSeason,
       fetchOrganizations, fetchCompetitionsPreview, importFfttCompetitions, fetchDivisionsPreview, importFfttDivisions, fetchTeamsPreview, importFfttTeams, fetchGamesPreview, importFfttGames, fetchGroupsPreview, importFfttGroups, importScheduleDocuments, importFederationSchedule, prepareReturnLeg, updatePhase, archivePhase, deletePhase, updateGroup, archiveGroup, deleteGroup, resetGroupGames, updateTeam, moveTeamToGroup, archiveTeam, deleteTeam,

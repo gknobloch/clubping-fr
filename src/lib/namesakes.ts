@@ -114,3 +114,32 @@ export function namesakes(members: readonly Member[]): Namesake[] {
     .sort((x, y) => x.key.localeCompare(y.key))
     .map(({ name, people }) => ({ name, people }))
 }
+
+/** Edits between two strings — insertions, deletions, substitutions. */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i]
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = row
+  }
+  return prev[b.length]
+}
+
+/**
+ * People whose name is this one's, give or take a letter or two (#733): the
+ * FFTT's Vincent Rambeau is the AGR's Vincent Rambeaux. What the merge picker
+ * offers before anything is typed — a suggestion, the admin decides.
+ */
+export function similarPeople(person: MergeablePerson, people: readonly MergeablePerson[]): MergeablePerson[] {
+  const key = personNameKey(person.firstName, person.lastName)
+  if (!key) return []
+  return people
+    .filter((p) => p.personId !== person.personId)
+    .map((p) => ({ p, d: editDistance(key, personNameKey(p.firstName, p.lastName)) }))
+    .filter(({ d }) => d <= Math.min(2, Math.floor(key.length / 8)))
+    .sort((x, y) => x.d - y.d)
+    .map(({ p }) => p)
+}

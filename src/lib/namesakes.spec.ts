@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { namesakes, personMergeRefusal, personMergeTarget, personNameKey } from './namesakes'
+import { namesakes, personMergeRefusal, personMergeTarget, personNameKey, similarPeople } from './namesakes'
 
 // #731 — Landser's AGR list, imported beside the FFTT profiles of Rixheim.
 
@@ -45,5 +45,18 @@ describe('personMergeTarget and personMergeRefusal', () => {
   it('refuses to delete the side with the address', () => {
     expect(personMergeRefusal(without, withAddress)?.reason).toBe('keep_other')
     expect(personMergeRefusal(withAddress, without)).toBeNull()
+  })
+})
+
+describe('similarPeople (#733)', () => {
+  const p = (personId: string, firstName: string, lastName: string) => ({ personId, firstName, lastName, profiles: [] })
+  it('finds the FFTT’s Rambeau for the AGR’s Rambeaux, the exact name first', () => {
+    const rambeaux = p('lan', 'Vincent', 'Rambeaux')
+    const people = [p('rix', 'Vincent', 'Rambeau'), p('x', 'Vincent', 'Rambeaux'), p('far', 'Vincent', 'Durand'), rambeaux]
+    expect(similarPeople(rambeaux, people).map((x) => x.personId)).toEqual(['x', 'rix'])
+  })
+
+  it('stays strict on a short name', () => {
+    expect(similarPeople(p('a', 'Li', 'Wu'), [p('b', 'Li', 'Xu')])).toEqual([])
   })
 })

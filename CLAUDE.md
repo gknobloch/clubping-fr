@@ -1009,6 +1009,21 @@ invisible dans le diff comme dans la revue.
   licence FFTT est une personne dans un club, le même nom ailleurs est un
   transfert ou un homonyme.
 
+- **Deux orthographes, une personne** (#733) : la FFTT écrit « Rambeau », l'AGR
+  « Rambeaux », et aucune liste de noms identiques ne les rapprochera. Sur la
+  fiche, **« Réunir avec une autre personne… »** (administrateur général)
+  propose d'abord les noms proches (`similarPeople` : une ou deux lettres
+  d'écart selon la longueur) puis cherche n'importe qui ; même règle
+  (`personMergeRefusal`, `personMergeTarget`). Le nom gardé est celui de la
+  personne gardée, à corriger ensuite sur la fiche.
+- **Un profil jamais utilisé se supprime** (`DELETE /players/:id`,
+  administrateur général) : jamais connecté, dans aucun effectif, aucune
+  composition, aucune dispo, aucun entraînement dirigé. Tout autre profil a un
+  passé et s'archive. La personne part avec son dernier profil.
+- **« Ajouter à un autre club » refuse une licence déjà prise dans ce club**
+  (409 `licence_taken`, avec l'id du profil qui la porte) : c'est ainsi qu'un
+  troisième Vincent était né à Rixheim, sous la licence du premier.
+
 ### Phase retour (#649)
 - Une division AGR joue sa phase 2 de deux façons : **les mêmes poules,
   réception inversée** (« phase retour »), ou **de nouvelles poules** tirées du

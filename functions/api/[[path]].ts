@@ -5588,6 +5588,29 @@ app.post('/players/:id/profiles', async (c) => {
       .bind(clubId, source.person_id).first<{ id: string }>()
     if (own) return refuseProfile('already_in_club', own.id)
   }
+  // Or the licence it would carry is already somebody's there (#733): « Ajouter
+  // à un autre club » from Landser made a second Rixheim profile under the
+  // FFTT number the first one held. Named, so the screen can open it.
+  const fftt = typeof d.licenseNumber === 'string' ? d.licenseNumber.trim() : ''
+  const others = Array.isArray(d.licences)
+    ? (d.licences as Array<{ federationId?: unknown; number?: unknown }>)
+      .filter((l) => typeof l?.federationId === 'string' && typeof l?.number === 'string' && l.number.trim())
+      .map((l) => ({ federationId: l.federationId as string, number: (l.number as string).trim() }))
+    : []
+  const holder = (fftt && await db.prepare(
+    `SELECT id, first_name, last_name FROM users WHERE club_id = ? AND status != 'archived' AND license_number = ?`,
+  ).bind(clubId, fftt).first<{ id: string; first_name: string | null; last_name: string | null }>())
+    || (others.length && await db.prepare(
+      `SELECT u.id, u.first_name, u.last_name FROM users u JOIN federation_licences f ON f.user_id = u.id
+         WHERE u.club_id = ? AND u.status != 'archived' AND f.federation_id = ? AND f.number = ?`,
+    ).bind(clubId, others[0].federationId, others[0].number).first<{ id: string; first_name: string | null; last_name: string | null }>())
+  if (holder) {
+    const name = [holder.first_name, holder.last_name].filter(Boolean).join(' ')
+    return c.json({
+      error: 'licence_taken', id: holder.id,
+      message: `Cette licence est déjà celle de ${name || 'un licencié'} dans ce club : réunissez plutôt les deux personnes.`,
+    }, 409)
+  }
   // Or a profile somebody made by hand with the same address: same name and
   // same address in that club is this person already (#640).
   if (source.email) {
@@ -5629,6 +5652,50 @@ app.post('/players/:id/profiles', async (c) => {
   ).run()
   await replaceLicences(db, id, d.licences)
   return c.json({ ok: true, id })
+})
+
+/**
+ * Delete a profile nobody ever used (#733) — a duplicate made by mistake,
+ * like the third Vincent that « Ajouter à un autre club » left at Rixheim.
+ * The general admin's alone, and only for a profile with no history at all:
+ * never signed in, in no roster, line-up or availability, leading no
+ * training. Anything else is somebody's past, and is archived instead.
+ * The person goes with it when it was their only profile.
+ */
+app.delete('/players/:id', async (c) => {
+  if (!isGeneralAdmin(c)) return c.json(notAllowed, 403)
+  const db = c.env.DB
+  const id = c.req.param('id')
+  const row = await db.prepare('SELECT id, role, person_id, last_seen_at, first_login_at FROM users WHERE id = ?')
+    .bind(id).first<{ id: string; role: string; person_id: string | null; last_seen_at: number | null; first_login_at: string | null }>()
+  if (!row) return c.json(notFound, 404)
+  const used = row.role !== 'player' || row.last_seen_at != null || row.first_login_at != null
+    || await db.prepare(
+      `SELECT 1 WHERE
+         EXISTS (SELECT 1 FROM game_availabilities WHERE player_id = ? OR overridden_by = ?)
+         OR EXISTS (SELECT 1 FROM game_selections, json_each(game_selections.player_ids) j WHERE j.value = ?)
+         OR EXISTS (SELECT 1 FROM teams WHERE captain_id = ?)
+         OR EXISTS (SELECT 1 FROM teams, json_each(teams.player_ids) j WHERE j.value = ?)
+         OR EXISTS (SELECT 1 FROM trainings, json_each(trainings.manager_ids) j WHERE j.value = ?)
+         OR EXISTS (SELECT 1 FROM training_availabilities WHERE player_id = ?)
+         OR EXISTS (SELECT 1 FROM sessions WHERE user_id = ? OR origin_user_id = ?)
+         OR EXISTS (SELECT 1 FROM auth_identities WHERE user_id = ?)`,
+    ).bind(...Array<string>(10).fill(id)).first()
+  if (used) {
+    return c.json({
+      error: 'in_use',
+      message: 'Ce profil a déjà servi — connexion, effectif, composition ou disponibilité : archivez-le plutôt.',
+    }, 409)
+  }
+  await db.batch([
+    db.prepare('DELETE FROM player_phase_points WHERE player_id = ?').bind(id),
+    db.prepare('DELETE FROM users WHERE id = ?').bind(id),
+    // The person, when nothing else is theirs.
+    db.prepare(
+      `DELETE FROM people WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE person_id = people.id)`,
+    ).bind(row.person_id ?? ''),
+  ])
+  return c.json({ ok: true })
 })
 
 // --- Delegation (#655) ---
