@@ -44,6 +44,8 @@ function fakeDb(viewerId: string, existingProfile?: string) {
       return params.includes(key) ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR } : null
     }
     if (sql.includes('FROM profiles WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
+    // Whether an id is taken (#731) is asked of the table the ids live on.
+    if (sql.includes('FROM users WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
     if (sql.includes('FROM clubs WHERE id = ?')) return CLUBS.includes(params[0] as string) ? { id: params[0] } : null
     if (sql.includes('FROM profiles WHERE club_id = ? AND email = ?')) return existingProfile ? { id: existingProfile } : null
     return null

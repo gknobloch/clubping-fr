@@ -5594,10 +5594,11 @@ app.post('/players/:id/profiles', async (c) => {
       .map((l) => ({ federationId: l.federationId as string, number: (l.number as string).trim() }))
     : []
   const holder = (fftt && await db.prepare(
-    `SELECT id, first_name, last_name FROM users WHERE club_id = ? AND status != 'archived' AND license_number = ?`,
+    // The holder's name is the person's, through `profiles` (#655, step 4).
+    `SELECT id, first_name, last_name FROM profiles WHERE club_id = ? AND status != 'archived' AND license_number = ?`,
   ).bind(clubId, fftt).first<{ id: string; first_name: string | null; last_name: string | null }>())
     || (others.length && await db.prepare(
-      `SELECT u.id, u.first_name, u.last_name FROM users u JOIN federation_licences f ON f.user_id = u.id
+      `SELECT u.id, u.first_name, u.last_name FROM profiles u JOIN federation_licences f ON f.user_id = u.id
          WHERE u.club_id = ? AND u.status != 'archived' AND f.federation_id = ? AND f.number = ?`,
     ).bind(clubId, others[0].federationId, others[0].number).first<{ id: string; first_name: string | null; last_name: string | null }>())
   if (holder) {
