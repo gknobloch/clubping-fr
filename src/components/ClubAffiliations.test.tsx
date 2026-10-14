@@ -8,7 +8,7 @@ import { ClubAffiliations } from './ClubAffiliations'
 // the API's suite (functions/api/federations.test.ts); here, the screen.
 
 const FFTT: Federation = { id: 'fftt', displayName: 'Fédération française de tennis de table', shortName: 'FFTT', isImported: true, sortOrder: 0 }
-const AGR: Federation = { id: 'agr', displayName: 'AGR Tennis de table — Section du Haut-Rhin', shortName: 'AGR', isImported: false, sortOrder: 1 }
+const AGR: Federation = { id: 'agr', displayName: 'AGR Tennis de Table', shortName: 'AGR', isImported: false, sortOrder: 1 }
 
 const data = vi.hoisted(() => ({
   federations: [] as Federation[],

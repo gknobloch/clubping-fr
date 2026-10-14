@@ -112,8 +112,8 @@ describe('federationOptionLabel', () => {
   it('names the federation once', () => {
     expect(federationOptionLabel({ shortName: 'FFTT', displayName: 'Fédération française de tennis de table' }))
       .toBe('FFTT — Fédération française de tennis de table')
-    expect(federationOptionLabel({ shortName: 'AGR', displayName: 'AGR Tennis de table — Section du Haut-Rhin' }))
-      .toBe('AGR Tennis de table — Section du Haut-Rhin')
+    expect(federationOptionLabel({ shortName: 'AGR', displayName: 'AGR Tennis de Table' }))
+      .toBe('AGR Tennis de Table')
   })
 })
 

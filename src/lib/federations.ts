@@ -181,8 +181,8 @@ export function affiliationsLine(
 
 /**
  * A federation as a picker offers it: "FFTT — Fédération française de tennis
- * de table", but "AGR Tennis de table — Section du Haut-Rhin" — the short
- * name is not repeated when the full one already starts with it.
+ * de table", but "AGR Tennis de Table" — the short name is not repeated when
+ * the full one already starts with it.
  */
 export function federationOptionLabel(federation: Pick<Federation, 'shortName' | 'displayName'>): string {
   return federation.displayName.startsWith(federation.shortName)

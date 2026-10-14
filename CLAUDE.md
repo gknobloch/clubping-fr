@@ -486,8 +486,9 @@ invisible dans le diff comme dans la revue.
   quoi le défaut est invisible sur une CI en UTC.
 
 ### Fédérations (#643, suivi dans #642)
-- **Fédération → compétition → division → poule.** La FFTT et l'AGR (Section
-  du Haut-Rhin), semées par 0061. La fédération pend à la **compétition**,
+- **Fédération → compétition → division → poule.** La FFTT et l'AGR (« AGR
+  Tennis de Table » depuis 0076, #739 : le Haut-Rhin et le Bas-Rhin sont ses
+  organisations, #692, pas son nom), semées par 0061. La fédération pend à la **compétition**,
   jamais à la division ni à l'équipe, pour la raison de #482 : une équipe dit
   déjà sa division, une division sa compétition, et un championnat est d'une
   seule fédération. Une division sans compétition est à la FFTT — ce qu'elle a

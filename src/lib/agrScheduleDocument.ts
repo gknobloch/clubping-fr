@@ -3,7 +3,7 @@
 // Shared domain logic — no DOM, no network: fed the text lines that
 // `extractPdfScheduleLines` reconstructs from the PDF's text layer.
 //
-// The AGR (Section du Haut-Rhin) has no API: a poule's calendar is a PDF,
+// The AGR has no API: a poule's calendar is a PDF,
 // « Calendrier de 1ère Phase », with a clean and regular text layer —
 //
 //   Championnat MESSIEURS

@@ -54,7 +54,7 @@ export const mockClubs: Club[] = baseClubs.map((c) => ({ ...c, channels: [] }))
 /** As migration 0061 seeds them (#643). */
 export const mockFederations: Federation[] = [
   { id: 'fftt', displayName: 'Fédération française de tennis de table', shortName: 'FFTT', isImported: true, sortOrder: 0 },
-  { id: 'agr', displayName: 'AGR Tennis de table — Section du Haut-Rhin', shortName: 'AGR', isImported: false, sortOrder: 1 },
+  { id: 'agr', displayName: 'AGR Tennis de Table', shortName: 'AGR', isImported: false, sortOrder: 1 },
 ]
 
 // ---------------------------------------------------------------------------

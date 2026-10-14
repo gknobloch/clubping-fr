@@ -87,3 +87,10 @@ describe('organisations per federation (#692)', () => {
     expect(d1.rows('SELECT organization_id FROM club_federations')).toEqual([{ organization_id: 'agr-67' }])
   })
 })
+
+describe('the AGR’s name (#739)', () => {
+  it('is « AGR Tennis de Table » — the Haut-Rhin is one of its organisations, not its name', () => {
+    const d1 = migratedD1()
+    expect(d1.rows("SELECT display_name FROM federations WHERE id = 'agr'")).toEqual([{ display_name: 'AGR Tennis de Table' }])
+  })
+})
