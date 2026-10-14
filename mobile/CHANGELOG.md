@@ -54,9 +54,13 @@ L'AGR à côté de la FFTT, et plusieurs profils derrière une même adresse.
   l'équipe, et les pastilles d'un match abrègent division et poule pour tenir
   sur un téléphone.
 
-Mise à jour du 14 octobre 2026 (sans passer par les magasins) : la feuille de
-match d'une équipe AGR montre le classement seul (« 70 ») plutôt que
-« Classement 70 », qui rognait le nom des joueurs.
+Mises à jour du 14 octobre 2026 (sans passer par les magasins) :
+
+- la feuille de match d'une équipe AGR montre le classement seul (« 70 »)
+  plutôt que « Classement 70 », qui rognait le nom des joueurs ;
+- une photo est celle de la personne, sur tous ses profils : l'en-tête la
+  montre aussi pour un profil qui ne joue pas, comme celui de l'administration
+  générale.
 
 ### Play
 
