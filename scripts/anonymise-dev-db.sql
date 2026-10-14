@@ -18,22 +18,29 @@
 -- reach this database. The deletes at the foot of this file are a safety net
 -- for a load that bypassed that flag, not the primary mechanism (#359).
 
--- Members who share a real address (#640 — a parent and a child) keep sharing
--- one, so a preview can show the profile switcher. Each address is mapped to
--- the lowest rowid among its members BEFORE the update below rewrites it:
--- read from the table being updated, the grouping would see half-rewritten
--- rows. Dropped again at the foot of the file.
+-- Since 0066 the person (#655) is the truth for name, address and phone: the
+-- API reads them from `people`, and the copies on `users` are stale. So the
+-- PERSON is pseudonymised, and every profile's copy is then overwritten from it
+-- — the stale copies hold real data too, and must not survive either.
+
+-- People who share a real address (#640 — a parent and a child, until the
+-- general admin settles it) keep sharing one, so a preview can show the
+-- profile switcher. Each address is mapped to the oldest profile among its
+-- people BEFORE the update below rewrites it: read from the table being
+-- updated, the grouping would see half-rewritten rows. Dropped again at the
+-- foot of the file.
 DROP TABLE IF EXISTS anonymise_shared_emails;
 CREATE TABLE anonymise_shared_emails AS
-  SELECT lower(trim(email)) AS address, min(rowid) AS first_rowid
-    FROM users
-   WHERE email IS NOT NULL AND trim(email) != ''
-   GROUP BY lower(trim(email));
+  SELECT lower(trim(p.email)) AS address, min(u.rowid) AS first_rowid
+    FROM people p
+    JOIN users u ON u.person_id = p.id
+   WHERE p.email IS NOT NULL AND trim(p.email) != ''
+   GROUP BY lower(trim(p.email));
 
--- One pseudonym per PERSON (#655): Gilles at Rixheim and at Landser is one
--- person, and a preview that named his two profiles differently would show
--- them as strangers. Keyed on the person's oldest profile, read before the
--- update below, like the addresses above.
+-- One pseudonym per PERSON: Gilles at Rixheim and at Landser is one person,
+-- and a preview that named his two profiles differently would show them as
+-- strangers. Keyed on the person's oldest profile, so a given person keeps the
+-- same identity across refreshes.
 DROP TABLE IF EXISTS anonymise_person_rows;
 CREATE TABLE anonymise_person_rows AS
   SELECT person_id, min(rowid) AS first_rowid
@@ -43,25 +50,37 @@ CREATE TABLE anonymise_person_rows AS
 
 -- Pseudonyms rather than "Joueur 12": names of realistic length are what
 -- surface wrapping and truncation bugs, which is half the point of previewing
--- on a phone. 12 x 12 combinations, deterministic on rowid so a given row keeps
--- the same identity across refreshes.
-UPDATE users SET
-  first_name = CASE COALESCE((SELECT first_rowid FROM anonymise_person_rows WHERE person_id = users.person_id), rowid) % 12
+-- on a phone. 12 x 12 combinations. A person with no profile at all (none
+-- should exist) falls back on its own rowid.
+UPDATE people SET
+  first_name = CASE COALESCE((SELECT first_rowid FROM anonymise_person_rows WHERE person_id = people.id), rowid) % 12
     WHEN 0 THEN 'Camille' WHEN 1 THEN 'Lucas'  WHEN 2  THEN 'Manon'
     WHEN 3 THEN 'Hugo'    WHEN 4 THEN 'Léa'    WHEN 5  THEN 'Nathan'
     WHEN 6 THEN 'Chloé'   WHEN 7 THEN 'Théo'   WHEN 8  THEN 'Inès'
     WHEN 9 THEN 'Louis'   WHEN 10 THEN 'Jade'  ELSE 'Paul' END,
-  last_name = CASE (COALESCE((SELECT first_rowid FROM anonymise_person_rows WHERE person_id = users.person_id), rowid) / 12) % 12
+  last_name = CASE (COALESCE((SELECT first_rowid FROM anonymise_person_rows WHERE person_id = people.id), rowid) / 12) % 12
     WHEN 0 THEN 'Martin'  WHEN 1 THEN 'Bernard' WHEN 2  THEN 'Dubois'
     WHEN 3 THEN 'Thomas'  WHEN 4 THEN 'Robert'  WHEN 5  THEN 'Richard'
     WHEN 6 THEN 'Petit'   WHEN 7 THEN 'Durand'  WHEN 8  THEN 'Leroy'
     WHEN 9 THEN 'Moreau'  WHEN 10 THEN 'Simon'  ELSE 'Laurent' END,
   -- .invalid is reserved by RFC 2606: guaranteed never to resolve, so a stray
-  -- send from a preview cannot reach a real inbox.
-  email = 'membre' || COALESCE(
-    (SELECT first_rowid FROM anonymise_shared_emails WHERE address = lower(trim(users.email))),
+  -- send from a preview cannot reach a real inbox. No address stays no
+  -- address: a person the general admin emptied (#655) is reached through a
+  -- delegate, and the preview should show exactly that.
+  email = CASE WHEN email IS NULL OR trim(email) = '' THEN NULL ELSE 'membre' || COALESCE(
+    (SELECT first_rowid FROM anonymise_shared_emails WHERE address = lower(trim(people.email))),
     rowid
-  ) || '@example.invalid',
+  ) || '@example.invalid' END,
+  phone = '0600000000',
+  birth_date = NULL,
+  birth_place = NULL;
+
+-- Every profile's copy, overwritten from its person; a profile with no person
+-- (none should exist since 0066) is emptied rather than left holding real data.
+UPDATE users SET
+  first_name = (SELECT p.first_name FROM people p WHERE p.id = users.person_id),
+  last_name = (SELECT p.last_name FROM people p WHERE p.id = users.person_id),
+  email = (SELECT p.email FROM people p WHERE p.id = users.person_id),
   phone = '0600000000',
   -- An FFTT licence number identifies a real person through the federation's
   -- public directory, so it goes even though the name is already fake. Cost:
@@ -75,17 +94,6 @@ UPDATE users SET
   -- stamps a fresh visit the moment anyone signs in as a row.
   first_login_at = NULL,
   last_seen_at = NULL;
-
--- The person behind each profile (#655) holds the same name, address and
--- phone: rewritten from the pseudonymised profiles, every one of which now
--- agrees with its siblings.
-UPDATE people SET
-  first_name = (SELECT u.first_name FROM users u WHERE u.person_id = people.id LIMIT 1),
-  last_name = (SELECT u.last_name FROM users u WHERE u.person_id = people.id LIMIT 1),
-  email = (SELECT u.email FROM users u WHERE u.person_id = people.id LIMIT 1),
-  phone = '0600000000',
-  birth_date = NULL,
-  birth_place = NULL;
 
 -- A licence in another federation (#644) identifies a real person in that
 -- federation's directory exactly as an FFTT one does.

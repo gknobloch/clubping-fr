@@ -132,7 +132,7 @@ function dbWithSession(expiresAt: number) {
                   ? { token: key, user_id: 'u1', expires_at: expiresAt }
                   : null
               }
-              if (sql.includes('FROM users')) return args[0] === 'u1' ? user : null
+              if (sql.includes('FROM profiles')) return args[0] === 'u1' ? user : null
               return null
             },
             async run() {

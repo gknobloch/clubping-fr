@@ -69,7 +69,7 @@ function fakeDb(opts: {
       }
       return requests.find((r) => r.id === params[0]) ?? null
     }
-    if (/FROM users/.test(sql)) {
+    if (/FROM profiles/.test(sql)) {
       if (/license_number = \?/.test(sql)) {
         return users.find((u) => (u.license_number ?? '') === params[0] && params[0] !== '') ?? null
       }
@@ -282,10 +282,10 @@ describe('PATCH /onboarding/requests/:id — deciding (#474)', () => {
     expect(club.params).toEqual([CLUB, AFFILIATION, 'Rixheim PPA'])
     expect(writes.find((w) => /INSERT INTO club_addresses/.test(w.sql))!.params).toContain('5, rue Vaclav Havel')
     // No licence was given, so they are created as someone who does not play:
-    // is_player is the 3rd bound value of that INSERT.
+    // is_player is the 2nd bound value of that INSERT.
     const user = writes.find((w) => /INSERT INTO users/.test(w.sql))!
     expect(user.sql).toContain("'club_admin'")
-    expect(user.params[2]).toBe(0)
+    expect(user.params[1]).toBe(0)
   })
 
   // The point of asking for a licence: created as a non-player, a licensee is
@@ -298,7 +298,7 @@ describe('PATCH /onboarding/requests/:id — deciding (#474)', () => {
     })
     expect(res.status).toBe(200)
     const user = writes.find((w) => /INSERT INTO users/.test(w.sql))!
-    expect(user.params[2]).toBe(1)
+    expect(user.params[1]).toBe(1)
     expect(user.params).toContain('425881')
   })
 

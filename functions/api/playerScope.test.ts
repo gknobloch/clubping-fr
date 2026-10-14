@@ -37,7 +37,7 @@ const theirs = member({ id: 'p-theirs', club_id: OTHER })
 /**
  * Enough D1 for the guard (a session, then the viewer) and for the club lookup
  * these routes now make, recording every write. The guard and `clubOfPlayer`
- * both read `FROM users WHERE id = ?`, and a whole row answers both.
+ * both read `FROM profiles WHERE id = ?`, and a whole row answers both.
  */
 function fakeDb(users: UserRow[], viewerId: string | null) {
   const writes: { sql: string; params: unknown[] }[] = []
@@ -54,7 +54,7 @@ function fakeDb(users: UserRow[], viewerId: string | null) {
               ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR }
               : null
           }
-          if (sql.includes('FROM users WHERE id = ?')) {
+          if (sql.includes('FROM profiles WHERE id = ?')) {
             return users.find((u) => u.id === params[0]) ?? null
           }
           return null

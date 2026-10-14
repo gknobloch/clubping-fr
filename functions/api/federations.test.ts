@@ -42,7 +42,7 @@ function fakeDb(viewerId: string, divisionsByCompetition: Record<string, string[
       const key = await sessionKey(TOKEN)
       return params.includes(key) ? { token: key, user_id: viewerId, expires_at: Date.now() + HOUR } : null
     }
-    if (sql.includes('FROM users WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
+    if (sql.includes('FROM profiles WHERE id = ?')) return USERS.find((u) => u.id === params[0]) ?? null
     if (sql.includes('FROM federations WHERE id = ?')) {
       return FEDERATIONS.includes(params[0] as string) ? { id: params[0] } : null
     }

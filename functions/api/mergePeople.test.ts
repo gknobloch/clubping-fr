@@ -56,8 +56,8 @@ describe('merging two people who are one (#655)', () => {
     expect(d1.rows("SELECT first_name, last_name, phone FROM people WHERE id = 'person-g'"))
       .toEqual([{ first_name: 'Gilles', last_name: 'Knobloch', phone: '0611' }])
     expect(d1.rows("SELECT id FROM people WHERE id = 'person-g-admin'")).toEqual([])
-    // The mirror on the profiles agrees with the person (#655, step 1).
-    expect(d1.rows("SELECT first_name, phone FROM users WHERE id = 'g-admin'"))
+    // Every profile of the person reads its fields — the admin one included.
+    expect(d1.rows("SELECT first_name, phone FROM profiles WHERE id = 'g-admin'"))
       .toEqual([{ first_name: 'Gilles', phone: '0611' }])
   })
 
@@ -102,7 +102,9 @@ describe('merging namesakes in two clubs (#731)', () => {
     const d1 = namesakes()
     const ga = await as(d1, 'ga')
     expect((await ga('person-enzo-lan', 'person-enzo-rix')).status).toBe(200)
-    expect(d1.rows("SELECT person_id, email FROM users WHERE id = 'enzo-lan'"))
+    // The address is the person's, read through `profiles` (#655, step 4): the
+    // copy on `users` is no longer written.
+    expect(d1.rows("SELECT person_id, email FROM profiles WHERE id = 'enzo-lan'"))
       .toEqual([{ person_id: 'person-enzo-rix', email: 'enzo@example.fr' }])
     expect(await profileReaches(d1.db, 'enzo-rix', 'enzo-lan')).toBe(true)
   })

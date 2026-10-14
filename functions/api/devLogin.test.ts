@@ -60,7 +60,7 @@ describe('dev login endpoints — enabled (#313)', () => {
         prepare(sql: string) {
           return {
             bind: (...args: unknown[]) => ({
-              first: async () => (sql.includes('FROM users') ? found : null),
+              first: async () => (sql.includes('FROM profiles') ? found : null),
               run: async () => {
                 inserted.push([sql, ...args])
                 return { success: true }
