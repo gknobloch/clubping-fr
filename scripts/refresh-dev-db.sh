@@ -101,10 +101,10 @@ echo "→ verifying no production data survived"
 # (which is what proves the club rename ran rather than silently no-op'd), and
 # no club channel may still point at a resolvable host (#359). People (#655),
 # licences in other federations (#644) and clubs' other affiliations (#643)
-# carry the same identities and are checked the same way.
+# carry the same identities and are checked the same way; since 0067 the
+# address is the person's alone, so `people` is where it is checked.
 REMAINING=$(npx wrangler d1 execute "$DEV_DB" --remote --json \
-  --command "SELECT (SELECT count(*) FROM users WHERE email NOT LIKE '%@example.invalid') \
-    + (SELECT count(*) FROM sessions) + (SELECT count(*) FROM auth_otp) \
+  --command "SELECT (SELECT count(*) FROM sessions) + (SELECT count(*) FROM auth_otp) \
     + (SELECT count(*) FROM auth_identities) \
     + (SELECT count(*) FROM push_tokens) \
     + (SELECT count(*) FROM user_avatars) + (SELECT count(*) FROM player_avatars_pre_0036) \

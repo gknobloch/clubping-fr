@@ -11,14 +11,23 @@ import { addMember, migratedD1 } from './migratedD1.testkit'
 const columns = (d1: ReturnType<typeof migratedD1>, table: string) =>
   d1.rows<{ name: string }>(`SELECT name FROM pragma_table_info('${table}')`).map((c) => c.name).sort()
 
-describe('the profiles view (0066)', () => {
-  it('has every column of users — a column added to users must be added to the view', () => {
+// The person's fields, which `users` no longer carries since 0067.
+const PERSON_FIELDS = ['birth_date', 'birth_place', 'email', 'first_name', 'last_name', 'phone']
+
+describe('the profiles view (0066, 0067)', () => {
+  it('is every column of users, plus the person — a column added to users must be added to the view', () => {
     const d1 = migratedD1()
     // email_pre_0060 is the emptied UNIQUE column 0060 left behind; nothing reads it.
-    expect(columns(d1, 'profiles')).toEqual(columns(d1, 'users').filter((c) => c !== 'email_pre_0060'))
+    const expected = [...columns(d1, 'users').filter((c) => c !== 'email_pre_0060'), ...PERSON_FIELDS].sort()
+    expect(columns(d1, 'profiles')).toEqual(expected)
   })
 
-  it("reads the person's fields from the person, not from the profile's copy", () => {
+  it("has dropped the person's copies from users (0067)", () => {
+    const d1 = migratedD1()
+    expect(columns(d1, 'users').filter((c) => PERSON_FIELDS.includes(c))).toEqual([])
+  })
+
+  it("reads the person's fields from the person, on every profile of theirs", () => {
     const d1 = migratedD1()
     addMember(d1.exec, { id: 'g-rix', firstName: 'Gilles', email: 'g@example.fr', clubId: 'club-a', personId: 'person-g' })
     addMember(d1.exec, { id: 'g-lan', firstName: 'Gilles', email: 'g@example.fr', clubId: 'club-b', personId: 'person-g' })
@@ -29,20 +38,10 @@ describe('the profiles view (0066)', () => {
     ])
   })
 
-  it("keeps a person's emptied address empty, whatever the profile's copy still says", () => {
+  it("keeps a person's emptied address empty", () => {
     const d1 = migratedD1()
     addMember(d1.exec, { id: 'sacha', firstName: 'Sacha', email: 'henaut@example.fr', clubId: 'club-a' })
     d1.exec("UPDATE people SET email = NULL WHERE id = 'person-sacha'")
     expect(d1.rows("SELECT email FROM profiles WHERE id = 'sacha'")).toEqual([{ email: null }])
-  })
-
-  it('shows a profile with no person through its own columns', () => {
-    const d1 = migratedD1()
-    d1.exec(
-      `INSERT INTO users (id, email, role, is_player, first_name, last_name, license_number, phone, status, club_id)
-       VALUES ('orphan', 'o@example.fr', 'player', 1, 'Olga', 'Orphan', '', '0600', 'active', 'club-a')`,
-    )
-    expect(d1.rows("SELECT first_name, email, phone FROM profiles WHERE id = 'orphan'"))
-      .toEqual([{ first_name: 'Olga', email: 'o@example.fr', phone: '0600' }])
   })
 })
