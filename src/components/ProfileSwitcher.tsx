@@ -21,7 +21,7 @@ export function ProfileList({ onSwitched, includeCurrent = true }: {
   includeCurrent?: boolean
 }) {
   const { user, profiles, switchProfile } = useAuth()
-  const { players } = useAppData()
+  const { players, users } = useAppData()
   const navigate = useNavigate()
   const [busy, setBusy] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
@@ -49,7 +49,7 @@ export function ProfileList({ onSwitched, includeCurrent = true }: {
           <ul className="mt-1 divide-y divide-slate-100">
             {club.profiles.map((p) => {
               const current = p.id === user?.id
-              const avatarUpdatedAt = players.find((x) => x.id === p.id)?.avatarUpdatedAt
+              const avatarUpdatedAt = (players.find((x) => x.id === p.id) ?? users.find((x) => x.id === p.id))?.avatarUpdatedAt
               return (
                 <li key={p.id}>
                   <button

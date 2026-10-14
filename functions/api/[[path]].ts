@@ -290,6 +290,14 @@ const isSelf = (c: { get: (k: 'user') => UserRow | undefined }, userId: string) 
 }
 
 /**
+ * SQL: profile `o` is one of profile `u`'s person (#741) — `u` itself, or any
+ * profile sharing its person. A profile written without a person (the deploy
+ * window of 0063) is only itself. Binds nothing.
+ */
+const samePerson = (u: string, o: string) =>
+  `(${o}.id = ${u}.id OR (${u}.person_id IS NOT NULL AND ${o}.person_id = ${u}.person_id))`
+
+/**
  * The caller as the match rules read them (#569), or `null` under
  * AUTH_GUARD_DISABLED.
  *
@@ -369,7 +377,13 @@ app.get('/data', async (c) => {
     db.prepare('SELECT * FROM profiles').all<UserRow>(),
     // Only the version marker — the image bytes are served separately so this
     // bulk payload stays light.
-    db.prepare('SELECT user_id, updated_at FROM user_avatars').all(),
+    // A photo is the person's (#741): each profile carries the most recent of
+    // its person's, so Gilles at Landser shows the one he set at Rixheim.
+    db.prepare(
+      `SELECT u.id AS user_id, MAX(a.updated_at) AS updated_at
+         FROM users u JOIN users o ON ${samePerson('u', 'o')} JOIN user_avatars a ON a.user_id = o.id
+        GROUP BY u.id`,
+    ).all(),
     db.prepare('SELECT club_id, updated_at FROM club_logos').all(),
     db.prepare('SELECT * FROM competitions ORDER BY sort_order').all<CompetitionRow>(),
     db.prepare('SELECT * FROM club_competition_groups').all<CompetitionGroupRow>(),
@@ -622,6 +636,11 @@ app.get('/data', async (c) => {
       ...(r.status ? { status: r.status } : {}),
       ...(r.club_id ? { clubId: r.club_id } : {}),
       ...lastSeenField(r, canSeeLastSeen),
+      // Every member, players or not (#741): a general admin's profile shows
+      // the person's photo in the header too.
+      ...(avatarUpdatedAt.has(r.id as string)
+        ? { avatarUpdatedAt: avatarUpdatedAt.get(r.id as string) }
+        : {}),
     })),
   }
   return c.json(payload)
@@ -5911,6 +5930,14 @@ app.post('/people/:personId/merge-into', async (c) => {
     ).bind(targetId, personId, targetId),
     db.prepare('DELETE FROM person_delegates WHERE person_id = ? OR delegate_id = ?').bind(personId, personId),
     // The profiles read the person's fields through `profiles` (0066): moving them is all it takes.
+    // One photo per person (#741): the kept person's wins; the other's stays
+    // only if the kept one had none. Before the profiles move, while they can
+    // still be told apart.
+    db.prepare(
+      `DELETE FROM user_avatars
+        WHERE user_id IN (SELECT id FROM users WHERE person_id = ?)
+          AND EXISTS (SELECT 1 FROM user_avatars a JOIN users u ON u.id = a.user_id WHERE u.person_id = ?)`,
+    ).bind(personId, targetId),
     db.prepare('UPDATE users SET person_id = ? WHERE person_id = ?').bind(targetId, personId),
     db.prepare('DELETE FROM people WHERE id = ?').bind(personId),
   ])
@@ -6516,13 +6543,33 @@ app.patch('/onboarding/requests/:id', async (c) => {
   return c.json({ ok: true, clubId, userId: candidate.id, createdClub })
 })
 
+/**
+ * Who may set or remove a profile's photo: the person it shows, from any of
+ * their profiles (#571, #741) — and nobody else, not even an administrator.
+ * A delegate acting as the person holds a session of one of the person's
+ * profiles, so is the person here, as everywhere.
+ */
+async function mayChangePhoto(c: { get: (k: 'user') => UserRow | undefined; env: { DB: D1Database } }, id: string) {
+  if (isSelf(c, id)) return true
+  const viewer = c.get('user')
+  if (!viewer?.person_id) return false
+  const row = await c.env.DB.prepare('SELECT 1 AS ok FROM users WHERE id = ? AND person_id = ?')
+    .bind(id, viewer.person_id).first<{ ok: number }>()
+  return !!row
+}
+
 // --- Player avatars (#124) ---
 // Images are stored base64 in D1 and served here so the bulk /api/data payload
 // stays light (it only carries avatarUpdatedAt for cache-busting).
 app.get('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
+  // The person's photo (#741), whichever of their profiles it was set from.
   const row = await c.env.DB
-    .prepare('SELECT data, content_type, updated_at FROM user_avatars WHERE user_id = ?')
+    .prepare(
+      `SELECT a.data, a.content_type, a.updated_at
+         FROM users u JOIN users o ON ${samePerson('u', 'o')} JOIN user_avatars a ON a.user_id = o.id
+        WHERE u.id = ? ORDER BY a.updated_at DESC LIMIT 1`,
+    )
     .bind(id)
     .first() as { data: string; content_type: string; updated_at: string } | null
   if (!row) return c.json({ error: 'not_found' }, 404)
@@ -6544,23 +6591,36 @@ app.put('/users/:id/avatar', async (c) => {
   // Authorization header (`authGuard.ts`) — and the writes "still require a
   // session", which was true and not enough: a session, yes, but anybody's
   // (#571).
-  if (!isSelf(c, id)) return c.json(notAllowed, 403)
+  if (!(await mayChangePhoto(c, id))) return c.json(notAllowed, 403)
   const body = await c.req.json() as { data?: string; contentType?: string }
   if (!body.data) return c.json({ error: 'missing data' }, 400)
   const updatedAt = new Date().toISOString()
-  await c.env.DB.prepare(
-    `INSERT INTO user_avatars (user_id, data, content_type, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET
-       data = excluded.data, content_type = excluded.content_type, updated_at = excluded.updated_at`
-  ).bind(id, body.data, body.contentType ?? 'image/jpeg', updatedAt).run()
+  // One photo per person (#741): it is stored on this profile, and whatever
+  // the person's other profiles held goes — in one batch, so the person never
+  // shows two.
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT INTO user_avatars (user_id, data, content_type, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         data = excluded.data, content_type = excluded.content_type, updated_at = excluded.updated_at`
+    ).bind(id, body.data, body.contentType ?? 'image/jpeg', updatedAt),
+    c.env.DB.prepare(
+      `DELETE FROM user_avatars WHERE user_id != ? AND user_id IN (
+         SELECT o.id FROM users u JOIN users o ON ${samePerson('u', 'o')} WHERE u.id = ?)`,
+    ).bind(id, id),
+  ])
   return c.json({ ok: true, avatarUpdatedAt: updatedAt })
 })
 
 app.delete('/users/:id/avatar', async (c) => {
   const id = c.req.param('id')
-  if (!isSelf(c, id)) return c.json(notAllowed, 403)
-  await c.env.DB.prepare('DELETE FROM user_avatars WHERE user_id = ?').bind(id).run()
+  if (!(await mayChangePhoto(c, id))) return c.json(notAllowed, 403)
+  // Removed for the person (#741): from every one of their profiles.
+  await c.env.DB.prepare(
+    `DELETE FROM user_avatars WHERE user_id IN (
+       SELECT o.id FROM users u JOIN users o ON ${samePerson('u', 'o')} WHERE u.id = ?)`,
+  ).bind(id).run()
   return c.json({ ok: true })
 })
 

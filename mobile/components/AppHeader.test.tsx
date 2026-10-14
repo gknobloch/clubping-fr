@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
-import { StyleSheet } from 'react-native'
+import { Image, StyleSheet } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import {
   PHONE_WIDTH,
@@ -22,7 +22,8 @@ const mockAuth: { user: User | null; profiles: []; displayName: string; switchPr
 
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }))
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
-jest.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [], clubs: [] }) }))
+const mockData: { players: []; users: Array<{ id: string; avatarUpdatedAt?: string }>; clubs: [] } = { players: [], users: [], clubs: [] }
+jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
 
 const member: User = { id: 'u1', role: 'player', isPlayer: true, firstName: 'Bo', lastName: 'Martin' }
 
@@ -66,6 +67,20 @@ it('offers the account button, whose menu leads to Compte (#720)', () => {
   fireEvent.press(screen.getByTestId('account-menu-compte'))
 
   expect(mockRouter.push).toHaveBeenCalledWith('/compte')
+})
+
+it('shows the person’s photo on a profile that does not play, once there is one (#741)', () => {
+  mockAuth.user = { id: 'ga', role: 'general_admin', isPlayer: false, firstName: 'Bo', lastName: 'Martin' }
+  // No photo: the generic icon, no image.
+  renderHeader(<AppHeader title="Accueil" />)
+  expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0)
+  screen.unmount()
+
+  // The person's photo, carried on `users` for a profile that does not play.
+  mockData.users = [{ id: 'ga', avatarUpdatedAt: '2026-10-14T00:00:00Z' }]
+  renderHeader(<AppHeader title="Accueil" />)
+  expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(1)
+  mockData.users = []
 })
 
 it('drops the account button where it would lead nowhere new', () => {
