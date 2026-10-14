@@ -19,7 +19,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 const federations: Federation[] = [
   { id: 'fftt', displayName: 'Fédération française de tennis de table', shortName: 'FFTT', isImported: true, sortOrder: 0 },
-  { id: 'agr', displayName: 'AGR Tennis de table — Section du Haut-Rhin', shortName: 'AGR', isImported: false, sortOrder: 1 },
+  { id: 'agr', displayName: 'AGR Tennis de Table', shortName: 'AGR', isImported: false, sortOrder: 1 },
 ]
 const landser: Club = {
   id: 'club-agr-680036', affiliationNumber: '', displayName: 'Landser ASL', isArchived: false,

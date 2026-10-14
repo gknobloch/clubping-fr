@@ -69,7 +69,7 @@ beforeEach(() => {
   setWindowSize(PHONE_WIDTH)
   mockData.federations = [
     { id: 'fftt', displayName: 'Fédération française de tennis de table', shortName: 'FFTT', isImported: true, sortOrder: 0 },
-    { id: 'agr', displayName: 'AGR Tennis de table — Section du Haut-Rhin', shortName: 'AGR', isImported: false, sortOrder: 1 },
+    { id: 'agr', displayName: 'AGR Tennis de Table', shortName: 'AGR', isImported: false, sortOrder: 1 },
   ]
   // One season; each federation's phase in it (#645).
   mockData.seasons = [{ id: '27', displayName: '2026/2027', status: 'active' }]
