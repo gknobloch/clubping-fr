@@ -49,6 +49,16 @@ export function formatRanking(value: string | undefined, federationId: string | 
     : `${value} pts`
 }
 
+/**
+ * The same value where it repeats on every line — the match sheet (#735):
+ * « 70 » at the AGR, the label being what pushed the player's name to an
+ * ellipsis on a phone; « 1731 pts » at the FFTT, as everywhere.
+ */
+export function formatRankingShort(value: string | undefined, federationId: string | undefined): string {
+  if (!value?.trim()) return '—'
+  return federationId && federationId !== FFTT_FEDERATION_ID && RULES[federationId] ? value.trim() : `${value} pts`
+}
+
 const numeric = (v: string | undefined): number | undefined => {
   const n = Number(v?.trim())
   return v?.trim() && Number.isFinite(n) ? n : undefined
