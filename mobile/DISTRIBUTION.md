@@ -564,8 +564,15 @@ bump — those are the binary, and an update that assumes them crashes on a buil
 does not have them.
 
 ```bash
-eas update --branch production --message "…"
+eas update --branch production --environment production --platform ios --message "…"
+eas update --branch production --environment production --platform android --message "…"
 ```
+
+**One platform at a time, and `--environment` named.** `--non-interactive`
+refuses to run without the environment, and the default `--platform all`
+includes the web, whose static export fails in `expo-router` — while iOS and
+Android export cleanly. Two update groups on the branch, one per store's
+installs; that is what the 1.8.0 fix of #735 went out as.
 
 Both stores allow it for fixes and content within what the app already does. Reserve it
 for that: an OTA has **no notes anywhere** (see below), no consent, and no trace on

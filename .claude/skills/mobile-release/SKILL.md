@@ -77,8 +77,10 @@ later launch. A crash fix or a wrong label is what OTA is for.
 
 If an OTA is the answer, one thing decides whether it works: `appVersion` policy
 means the runtime version *is* `expo.version`, so **publish before bumping**.
-`eas update --branch production --message "…"` while the repo still says 1.2.0
-reaches the 1.2.0 installs; run it after a bump to 1.3.0 and it targets a runtime
+`eas update --branch production --environment production --platform ios
+--message "…"` (then `--platform android`) while the repo still says 1.2.0
+reaches the 1.2.0 installs — one platform at a time: the default `all` includes
+the web, whose export fails; run it after a bump to 1.3.0 and it targets a runtime
 nobody has yet. Fold what went out into the current version's section of
 `mobile/CHANGELOG.md` either way. `mobile/DISTRIBUTION.md` has the rest.
 
