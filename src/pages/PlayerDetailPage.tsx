@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAppData } from '@/contexts/DataContext'
-import { TEXT_TARGET_CLASS } from '@/components/Button'
+import { SecondaryButton, TEXT_TARGET_CLASS } from '@/components/Button'
 import { Avatar } from '@/components/Avatar'
 import { ClubLogo } from '@/components/ClubLogo'
 import { IdentityCard } from '@/components/IdentityCard'
@@ -21,6 +21,8 @@ import { AddToClubDialog } from '@/components/AddToClubDialog'
 import { PersonDelegates } from '@/components/PersonDelegates'
 import { SharedAddresses } from '@/components/SharedAddresses'
 import { Namesakes } from '@/components/Namesakes'
+import { MergePersonDialog } from '@/components/MergePersonDialog'
+import { useConfirm } from '@/components/useConfirm'
 import { LicenceNumbers } from '@/components/LicenceNumbers'
 
 export function PlayerDetailPage() {
@@ -28,8 +30,12 @@ export function PlayerDetailPage() {
   const { user } = useAuth()
   const {
     players, clubs, federations = [], playerSeasonCategories, playerSeasonLicences, seasons,
-    memberGroups, setGroupsOfMember,
+    memberGroups, setGroupsOfMember, deleteUnusedProfile,
   } = useAppData()
+  const navigate = useNavigate()
+  const [confirm, confirmDialog] = useConfirm()
+  const [mergingPerson, setMergingPerson] = useState(false)
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const [zoom, setZoom] = useState(false)
   const [editingGroups, setEditingGroups] = useState(false)
   const [addingToClub, setAddingToClub] = useState(false)
@@ -231,6 +237,51 @@ export function PlayerDetailPage() {
           </div>
         </section>
       )}
+
+      {/* Two cards for one licensee (#733): the FFTT's Rambeau and the AGR's
+          Rambeaux, or a profile made by mistake. The general admin's. */}
+      {user?.role === 'general_admin' && player.personId && (
+        <section
+          aria-labelledby="player-duplicates-title"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          {confirmDialog}
+          <h2 id="player-duplicates-title" className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Fiche en double
+          </h2>
+          <p className="text-sm text-slate-600">
+            Le même licencié sous deux noms, d’une fédération à l’autre ? Réunissez les deux personnes. Un
+            profil créé par erreur, jamais utilisé, se supprime.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <SecondaryButton onClick={() => setMergingPerson(true)}>Réunir avec une autre personne…</SecondaryButton>
+            {!player.lastSeenAt && (
+              <SecondaryButton
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Supprimer ce profil ?',
+                    message: `Le profil de ${player.firstName} ${player.lastName} à ${club?.displayName ?? 'ce club'} est supprimé. ` +
+                      'Seul un profil qui n’a jamais servi peut l’être.',
+                    confirmLabel: 'Supprimer',
+                  })
+                  if (!ok) return
+                  setDuplicateError(null)
+                  const r = await deleteUnusedProfile(player.id)
+                  if (r.ok) navigate('/joueurs')
+                  else setDuplicateError(r.message)
+                }}
+              >
+                Supprimer ce profil
+              </SecondaryButton>
+            )}
+          </div>
+          {duplicateError && (
+            <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{duplicateError}</p>
+          )}
+        </section>
+      )}
+
+      {mergingPerson && <MergePersonDialog player={player} onClose={() => setMergingPerson(false)} />}
 
       {addingToClub && (
         <AddToClubDialog player={player} clubs={addableClubs} onClose={() => setAddingToClub(false)} />
