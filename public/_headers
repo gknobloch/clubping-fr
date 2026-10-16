@@ -1,3 +1,4 @@
 # Apple fetches this file without an extension and wants JSON (#747).
+# assetlinks.json has one, and Pages already serves it as JSON.
 /.well-known/apple-app-site-association
   Content-Type: application/json

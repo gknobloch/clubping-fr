@@ -287,6 +287,38 @@ invisible dans le diff comme dans la revue.
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
 
+### Partager un match (#747)
+- **Le lien est `/match/<id>?equipe=<équipe>`**, pas `/journees/<id>` : l'ouvrir
+  pose la question « sous quel profil ? », et passer d'un match à l'autre dans
+  l'app ne doit jamais la poser. C'est aussi le **seul chemin** que réclament
+  les liens universels (`apple-app-site-association`, `assetlinks.json`,
+  `associatedDomains` et `intentFilters` dans `mobile/app.json`) :
+  `src/test/universalLinks.spec.ts` tient les quatre d'accord. L'équipe n'est
+  qu'un indice — celle de qui partage.
+- **Le profil qui ouvre est une seule règle, `sharedGameOpening`**
+  (`src/lib/gameShare.ts`), web et app : parmi les profils que la session
+  atteint (`reaches`, délégations comprises), celui qui **joue** le match
+  (effectif, capitaine, ou nommé dans la composition — un renfort). Un seul :
+  on bascule. Plusieurs (un parent et son enfant dans la même équipe) : **on
+  demande**. Aucun : un profil d'un des deux clubs, le courant d'abord. Rien :
+  le profil courant. Le club tranche, et la fédération vient avec : Gilles
+  resté sur Rixheim ouvre un match AGR sous Landser.
+- **WhatsApp ne sait pas écrire dans un groupe donné** : un lien d'invitation
+  ne fait que l'ouvrir. « Dans le groupe de l'équipe » (`whatsappLink`) copie
+  donc le message, puis ouvre le groupe, et dit de coller. Sur le web, la copie
+  part dans le clic même : après un `await`, Safari bloque l'ouverture et la
+  page n'a plus le focus pour écrire dans le presse-papiers.
+- **Dans l'app, un lien n'est pas une route** : `+native-intent` le retient
+  (`utils/sharedGameLink.ts`) et envoie le navigateur à l'accueil ;
+  `SharedGameLinks`, monté avec une session comme le push, l'ouvre ensuite.
+  Un lien touché déconnecté survit donc à la connexion — sur le web aussi
+  (`returnPath`, en `sessionStorage` : la connexion Google quitte le site).
+- **Les liens universels sont natifs** : seule une nouvelle version les
+  porte, une mise à jour OTA non. D'ici là le lien ouvre le web, qui choisit
+  le profil de la même façon. `assetlinks.json` liste la clé de signature de
+  Play **et** la clé d'importation d'EAS, pour qu'un build interne installé
+  depuis EAS ouvre aussi le lien.
+
 ### Planning de la phase (#623)
 - **La matrice des Journées lit trois journées pour toutes les équipes ; ceci
   lit toute la phase pour une seule.** Demande d'un capitaine : le planning
