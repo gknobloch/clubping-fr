@@ -1,0 +1,3 @@
+# Apple fetches this file without an extension and wants JSON (#747).
+/.well-known/apple-app-site-association
+  Content-Type: application/json
