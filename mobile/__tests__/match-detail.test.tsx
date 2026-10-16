@@ -255,3 +255,51 @@ describe("Détail d'un match — le lieu (#611)", () => {
     open.mockRestore()
   })
 })
+
+describe("Détail d'un match — partager (#747)", () => {
+  const message = 'Journée 1 · Rixheim PPA 4 – Mulhouse TT 6\nMercredi 17 septembre à 19h30\nhttps://clubping.fr/match/g1?equipe=t1'
+
+  it('copies a link naming the match and the sender’s team', async () => {
+    const Clipboard = jest.requireMock('expo-clipboard') as { setStringAsync: jest.Mock }
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.getByTestId('share-game-message').props.children).toBe(message)
+    fireEvent.press(screen.getByTestId('share-game-copy'))
+    await waitFor(() => expect(screen.getByText('Lien copié')).toBeTruthy())
+    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith('https://clubping.fr/match/g1?equipe=t1')
+  })
+
+  it('sends the message to WhatsApp', () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    fireEvent.press(screen.getByTestId('share-game-whatsapp'))
+    expect(open).toHaveBeenCalledWith(`https://wa.me/?text=${encodeURIComponent(message)}`)
+    open.mockRestore()
+  })
+
+  it('offers the team’s group only when the team has one — copying the message, then opening it', async () => {
+    const Clipboard = jest.requireMock('expo-clipboard') as { setStringAsync: jest.Mock }
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.queryByTestId('share-game-group')).toBeNull()
+    fireEvent.press(screen.getByTestId('share-game-close'))
+
+    mockData.teams = [{ ...team, whatsappLink: 'https://chat.whatsapp.com/abc' }, opponent]
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    fireEvent.press(screen.getByTestId('share-game-group'))
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://chat.whatsapp.com/abc'))
+    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(message)
+    expect(screen.getByText('Message copié : collez-le dans le groupe.')).toBeTruthy()
+    open.mockRestore()
+  })
+
+  it('offers sharing even when the date is a guess — the link is not an agenda', () => {
+    mockData.teams = [team, { ...opponent, defaultDay: '', defaultTime: '' }]
+    mockData.games = [{ ...game, time: undefined, homeTeamId: 't2', awayTeamId: 't1' }]
+    render(<MatchDetailScreen />)
+    expect(screen.getByLabelText('Partager le match')).toBeTruthy()
+  })
+})

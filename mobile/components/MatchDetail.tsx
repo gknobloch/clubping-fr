@@ -18,6 +18,7 @@ import { clubLicences } from '@shared/lib/seasonLicences'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
 import { MatchSheet } from '@/components/MatchSheet'
+import { ShareGameSheet } from '@/components/ShareGameSheet'
 import { buildMatchEvent } from '@/utils/calendar'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 import { gameDate, gameTime, isSlotConfirmed, playersCommittedElsewhere } from '@/utils/matchdays'
@@ -72,6 +73,7 @@ export function MatchDetail({
 
   const [showCompose, setShowCompose] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [quickViewPlayer, setQuickViewPlayer] = useState<Player | null>(null)
   const game = games.find((g) => g.id === id)
   const team = teams.find((t) => t.id === teamId)
@@ -245,6 +247,7 @@ export function MatchDetail({
               confirmed={slotConfirmed}
               venue={venue}
               onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
+              onShare={() => setSharing(true)}
             />
           </View>
 
@@ -423,6 +426,17 @@ export function MatchDetail({
             clubTeamsInPhase.find((t) => t.playerIds.includes(quickViewPlayer.id)) ?? team
           }
           onClose={() => setQuickViewPlayer(null)}
+        />
+      )}
+
+      {sharing && (
+        <ShareGameSheet
+          game={game}
+          matchDay={matchDay}
+          team={team}
+          teams={teams}
+          clubs={clubs}
+          onClose={() => setSharing(false)}
         />
       )}
 

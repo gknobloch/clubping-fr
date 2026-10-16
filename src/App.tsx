@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { DataProvider } from '@/contexts/DataContext'
 import { AppShell } from '@/components/AppShell'
@@ -26,6 +27,8 @@ import { JoinPage } from '@/pages/JoinPage'
 import { ConfirmRequestPage } from '@/pages/ConfirmRequestPage'
 import { RequestsPage } from '@/pages/admin/RequestsPage'
 import { DeleteAccountPage } from '@/pages/DeleteAccountPage'
+import { SharedGamePage } from '@/pages/SharedGamePage'
+import { forgetReturnPath, readReturnPath, rememberReturnPath } from '@/lib/returnPath'
 
 /**
  * /competitions is the general admin's global configuration. A club's side of
@@ -49,8 +52,15 @@ function AuthLoading() {
 
 function ProtectedLayout() {
   const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
+  // Signed in and inside: wherever sign-in was headed has been reached.
+  useEffect(() => {
+    if (isAuthenticated) forgetReturnPath()
+  }, [isAuthenticated])
   if (loading) return <AuthLoading />
   if (!isAuthenticated) {
+    // Signing in comes back here (#747): a shared match opened signed out.
+    rememberReturnPath(location.pathname + location.search)
     return <Navigate to="/login" replace />
   }
   return <AppShell />
@@ -60,7 +70,7 @@ function PublicRoute() {
   const { isAuthenticated, loading } = useAuth()
   if (loading) return <AuthLoading />
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to={readReturnPath() ?? '/'} replace />
   }
   return <LoginPage />
 }
@@ -109,6 +119,10 @@ export default function App() {
             {/* Mobile entry point into a single match; renders at any width so a
                 shared link works anywhere (#306). */}
             <Route path="journees/:gameId" element={<MatchDayDetailPage />} />
+            {/* A shared match (#747): picks the profile that plays it, then
+                hands over to the match screen. The only path the app's
+                universal links claim. */}
+            <Route path="match/:gameId" element={<SharedGamePage />} />
             <Route path="club" element={<MyClubPage />} />
             <Route path="entrainements" element={<TrainingsPage />} />
             <Route path="compte" element={<ComptePage />} />

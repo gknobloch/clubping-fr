@@ -52,6 +52,7 @@ export function MatchHeader({
   label,
   labelMine,
   onAddToCalendar,
+  onShare,
 }: {
   matchDayNumber: number
   divisionLabel?: string
@@ -85,6 +86,8 @@ export function MatchHeader({
    * date to put in someone's agenda.
    */
   onAddToCalendar?: () => void
+  /** « Partager le match » (#747), beside the calendar — whatever the date. */
+  onShare?: () => void
 }) {
   const dateLabel = new Date(matchDayDate + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -174,6 +177,18 @@ export function MatchHeader({
             accessibilityLabel="Ajouter au calendrier"
           >
             <CalendarPlusIcon />
+          </TouchableOpacity>
+        ) : null}
+        {onShare ? (
+          <TouchableOpacity
+            style={s.calendarBtn}
+            onPress={onShare}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Partager le match"
+            testID="match-share"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         ) : null}
       </View>

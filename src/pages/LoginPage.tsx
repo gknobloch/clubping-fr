@@ -6,6 +6,7 @@ import { BrandMark } from '@/components/BrandMark'
 import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
+import { readReturnPath } from '@/lib/returnPath'
 import type { DevUser, User } from '@/types'
 
 // Shared header for both ways in — the e-mail code form and the preview's
@@ -309,7 +310,7 @@ function DevLogin({ standalone = false }: { standalone?: boolean }) {
         // On a preview this is a round trip that mints a real session, so it
         // has to complete before navigating — and it can fail (#313).
         await devLoginAs(user.id)
-        navigate('/', { replace: true })
+        navigate(readReturnPath() ?? '/', { replace: true })
       } catch {
         setError('Connexion impossible pour cet utilisateur.')
       }
