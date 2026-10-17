@@ -308,6 +308,11 @@ invisible dans le diff comme dans la revue.
   donc le message, puis ouvre le groupe, et dit de coller. Sur le web, la copie
   part dans le clic même : après un `await`, Safari bloque l'ouverture et la
   page n'a plus le focus pour écrire dans le presse-papiers.
+- **Sur le web, le bouton est sur l'écran du match et dans la fenêtre d'un
+  match** (`GameQuickView`) : sur un ordinateur, « Détails » mène à la matrice
+  et non à l'écran du match, donc la fenêtre est le seul endroit où il serait
+  trouvé. Il s'y ouvre au-dessus (`z` 50), et `ModalShell` ne laisse plus que
+  la fenêtre du dessus répondre au clavier : un Échap fermait les deux.
 - **Dans l'app, un lien n'est pas une route** : `+native-intent` le retient
   (`utils/sharedGameLink.ts`) et envoie le navigateur à l'accueil ;
   `SharedGameLinks`, monté avec une session comme le push, l'ouvre ensuite.

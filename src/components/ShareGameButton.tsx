@@ -12,11 +12,13 @@ import type { Game, MatchDay, Team } from '@/types'
  * The link names the sender's team only as a hint: whoever opens it lands on
  * their own side, under the profile that plays it (`sharedGameOpening`).
  */
-export function ShareGameButton({ game, matchDay, team }: {
+export function ShareGameButton({ game, matchDay, team, z }: {
   game: Game
   matchDay: MatchDay
   /** The side of the fixture on screen — the sender's. */
   team: Team
+  /** Stacking level: above the match dialog (40) when it opens from there. */
+  z?: 30 | 40 | 50
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -30,17 +32,18 @@ export function ShareGameButton({ game, matchDay, team }: {
       >
         <ShareIcon className="h-6 w-6 md:h-5 md:w-5" />
       </button>
-      {open && <ShareGameDialog game={game} matchDay={matchDay} team={team} onClose={() => setOpen(false)} />}
+      {open && <ShareGameDialog game={game} matchDay={matchDay} team={team} z={z} onClose={() => setOpen(false)} />}
     </>
   )
 }
 
 type Done = 'link' | 'group' | 'failed' | null
 
-function ShareGameDialog({ game, matchDay, team, onClose }: {
+function ShareGameDialog({ game, matchDay, team, z, onClose }: {
   game: Game
   matchDay: MatchDay
   team: Team
+  z?: 30 | 40 | 50
   onClose: () => void
 }) {
   const { teams, clubs } = useAppData()
@@ -86,7 +89,7 @@ function ShareGameDialog({ game, matchDay, team, onClose }: {
   const row = 'flex min-h-11 w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 last:border-b-0'
 
   return (
-    <ModalShell onClose={onClose} labelledBy="share-game-title" closeOnBackdrop>
+    <ModalShell onClose={onClose} labelledBy="share-game-title" closeOnBackdrop z={z}>
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DataProvider } from '@/contexts/DataContext'
 import {
@@ -38,12 +38,12 @@ const CAPTAIN_ID = 'p2-player-2'
 const GAME_ID = 'g1-1'
 const TEAM_ID = 'team-1'
 
-function renderAs(user: Record<string, unknown> | null) {
+function renderAs(user: Record<string, unknown> | null, onClose: () => void = () => {}) {
   authState.user = user
   return render(
     <MemoryRouter>
       <DataProvider initialData={testData}>
-        <GameQuickView gameId={GAME_ID} teamId={TEAM_ID} onClose={() => {}} />
+        <GameQuickView gameId={GAME_ID} teamId={TEAM_ID} onClose={onClose} />
       </DataProvider>
     </MemoryRouter>,
   )
@@ -119,5 +119,28 @@ describe('GameQuickView — where the match is played (#611)', () => {
     const link = screen.getByRole('link', { name: /ouvrir dans le plan/ })
     expect(link.textContent).toBe('1 rue du Sport, 68000 Etival')
     expect(new URL(link.getAttribute('href')!).searchParams.get('query')).toBe('1 rue du Sport, 68000 Etival')
+  })
+})
+
+describe('GameQuickView — sharing (#747)', () => {
+  it('offers it here, the only match screen a computer reaches, above this dialog', () => {
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' })
+    fireEvent.click(screen.getByRole('button', { name: 'Partager le match' }))
+    const dialog = screen.getByRole('dialog', { name: 'Partager le match' })
+    expect(dialog.className).toContain('z-50')
+    expect(screen.getByTestId('share-game-message').textContent).toContain(`/match/${GAME_ID}?equipe=${TEAM_ID}`)
+  })
+})
+
+describe('GameQuickView — a dialog over it (#747)', () => {
+  it('closes only the top dialog on Escape', () => {
+    const closeMatch = vi.fn()
+    renderAs({ id: CAPTAIN_ID, role: 'player', isPlayer: true, clubId: 'club-fftt-06680011' }, closeMatch)
+    fireEvent.click(screen.getByRole('button', { name: 'Partager le match' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Partager le match' })).toBeNull()
+    expect(closeMatch).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(closeMatch).toHaveBeenCalledTimes(1)
   })
 })

@@ -10,6 +10,7 @@ import { AvailabilityButtons, AvailabilityPills, LineupCheck } from '@/component
 import { Pill } from '@/components/icons'
 import { ModalShell } from '@/components/ModalShell'
 import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { ShareGameButton } from '@/components/ShareGameButton'
 import { MatchDate } from '@/components/MatchDate'
 import { getTeamName } from '@/lib/teamName'
 import { getMatchVenue } from '@/lib/venue'
@@ -129,7 +130,13 @@ export function GameQuickView({
             </p>
             <MatchVenueLink venue={venue} />
           </div>
-          <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+          {/* Share too (#747): on a computer this dialog is the only match
+              screen — its « Détails » goes to the matrix, not to the page that
+              carries the button on a phone. Above this dialog, hence z 50. */}
+          <div className="flex shrink-0 items-center">
+            <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+            <ShareGameButton game={game} matchDay={matchDay} team={team} z={50} />
+          </div>
         </div>
 
         {/* Availabilities + line-up */}
