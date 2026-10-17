@@ -2,15 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { Avatar } from '@/components/Avatar'
+import { ProfileAvatar } from '@/components/ProfileAvatar'
 import { ProfileList } from '@/components/ProfileSwitcher'
 import { getRoleLabel } from '@/mock/data'
-import { GENERAL_ADMINISTRATION, hasOtherProfiles } from '@/lib/profiles'
+import { hasOtherProfiles, managedSession, profileClubName } from '@/lib/profiles'
+import type { Profile } from '@/types'
 
 /**
  * The header's account menu (#720 in the app, #722 on the web): who is
- * signed in — name, club, role — and the way to Compte, then every other
- * profile the person may open, by club, one click to switch.
+ * signed in — name, club, role — and the way to Compte, then every profile
+ * the person may open, one click to switch.
+ *
+ * The button is the photo with the club in its corner (#749), so which club
+ * one is in reads without opening anything; on a desktop the club is also
+ * named under the name. On someone else's profile the photo is ringed — the
+ * banner under the header says whose.
  *
  * A disclosure hung under its button, closed by a click outside, Escape or
  * any navigation. `compact` is the phone header's: the avatar alone, next to
@@ -39,9 +45,18 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
   if (!user) return null
   // The person's photo (#741) — on `users` too, for a profile that does not play.
   const avatarUpdatedAt = (players.find((p) => p.id === user.id) ?? users.find((u) => u.id === user.id))?.avatarUpdatedAt
-  const clubName = user.role === 'general_admin'
-    ? GENERAL_ADMINISTRATION
-    : profiles.find((p) => p.id === user.id)?.clubName ?? clubs.find((c) => c.id === user.clubId)?.displayName
+  // The server names the club with the profile; `/api/data` for a session
+  // restored before the profiles came back.
+  const current: Profile = profiles.find((p) => p.id === user.id) ?? {
+    id: user.id,
+    role: user.role,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    clubId: user.clubId,
+    clubName: clubs.find((c) => c.id === user.clubId)?.displayName,
+  }
+  const clubName = current.clubId || user.role === 'general_admin' ? profileClubName(current) : undefined
+  const managed = !!managedSession(profiles, user.id)
   const menuId = compact ? 'account-menu-compact' : 'account-menu'
 
   return (
@@ -51,24 +66,23 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={menuId}
-        // The name is what the button is called, visible or not: the avatar's
-        // initials would otherwise be read before it.
-        aria-label={compact ? displayName : undefined}
+        // The name and the club are what the button is called, visible or
+        // not: the avatar's initials would otherwise be read before them.
+        aria-label={compact ? [displayName, clubName].filter(Boolean).join(', ') : undefined}
         title="Mon compte"
-        className={`flex items-center gap-2 rounded-lg ${
+        className={`flex items-center gap-2.5 rounded-lg text-left ${
           compact ? 'h-11 w-11 justify-center' : 'py-1 pl-1 pr-2'
         } hover:bg-slate-100`}
       >
-        <span aria-hidden>
-          <Avatar
-            playerId={user.id}
-            avatarUpdatedAt={avatarUpdatedAt}
-            firstName={user.firstName}
-            lastName={user.lastName}
-            size={28}
-          />
+        <span aria-hidden className="flex">
+          <ProfileAvatar profile={current} avatarUpdatedAt={avatarUpdatedAt} size={compact ? 30 : 32} managed={managed} />
         </span>
-        {!compact && <span className="text-sm font-medium text-slate-800">{displayName}</span>}
+        {!compact && (
+          <span className="leading-tight">
+            <span className="block text-sm font-medium text-slate-800">{displayName}</span>
+            {clubName && <span className="block text-xs text-slate-500">{clubName}</span>}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -82,17 +96,12 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
           }`}
         >
           <div className="flex items-center gap-3 p-4">
-            <Avatar
-              playerId={user.id}
-              avatarUpdatedAt={avatarUpdatedAt}
-              firstName={user.firstName}
-              lastName={user.lastName}
-              size={44}
-            />
+            <ProfileAvatar profile={current} avatarUpdatedAt={avatarUpdatedAt} size={44} managed={managed} />
             <div className="min-w-0">
               <p className="truncate font-semibold text-slate-800">{displayName}</p>
-              {clubName && <p className="truncate text-sm text-slate-700">{clubName}</p>}
-              <p className="text-xs text-slate-500">{getRoleLabel(user.role)}</p>
+              <p className="truncate text-sm text-slate-600">
+                {[clubName, getRoleLabel(user.role)].filter(Boolean).join(' · ')}
+              </p>
             </div>
           </div>
           <Link
@@ -103,9 +112,8 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
             <span aria-hidden className="text-slate-400">›</span>
           </Link>
           {hasOtherProfiles(profiles, user.id) && (
-            <div className="overflow-y-auto border-t border-slate-200 px-4 pb-3 pt-3">
-              <p className="mb-2 text-sm font-semibold text-slate-800">Changer de profil</p>
-              <ProfileList includeCurrent={false} onSwitched={() => setOpen(false)} />
+            <div className="overflow-y-auto border-t border-slate-200 px-2 pb-2 pt-3">
+              <ProfileList onSwitched={() => setOpen(false)} />
             </div>
           )}
         </div>

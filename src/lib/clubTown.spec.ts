@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { townFromClubName } from './clubTown'
+import { townFromClubName, clubInitial } from './clubTown'
 
 describe('townFromClubName (#611)', () => {
   it.each([
@@ -38,5 +38,17 @@ describe('townFromClubName (#611)', () => {
     expect(townFromClubName('TT')).toBeUndefined()
     expect(townFromClubName('A.S.C. TENNIS DE TABLE')).toBeUndefined()
     expect(townFromClubName('')).toBeUndefined()
+  })
+})
+
+describe('clubInitial (#749)', () => {
+  it('takes the town’s letter, not the abbreviation’s', () => {
+    expect(clubInitial('ASL Landser')).toBe('L')
+    expect(clubInitial('Rixheim PPA')).toBe('R')
+    expect(clubInitial('MULHOUSE TENNIS DE TABLE')).toBe('M')
+  })
+
+  it('falls back on the name when no town can be read', () => {
+    expect(clubInitial('TTC')).toBe('T')
   })
 })

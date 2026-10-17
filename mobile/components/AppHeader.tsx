@@ -7,6 +7,7 @@ import { useLayout } from '@/constants/layout'
 import { displayFonts } from '@/constants/typography'
 import { AccountHeaderButton } from '@/components/AccountHeaderButton'
 import { BrandMark } from '@/components/BrandMark'
+import { ManagedProfileBanner } from '@/components/ManagedProfileBanner'
 
 // ---------------------------------------------------------------------------
 // The app's one header (#365)
@@ -51,47 +52,55 @@ export function AppHeader({
     // a landscape notch eats into the bar's ends — the brand mark on one side,
     // the avatar on the other. The background still runs edge to edge; only its
     // content moves in.
-    <View
-      testID="app-header"
-      style={[
-        styles.header,
-        {
-          paddingTop: insets.top,
-          height: HEADER_HEIGHT + insets.top,
-          paddingLeft: HEADER_PADDING_X + insets.left,
-          paddingRight: HEADER_PADDING_X + insets.right,
-        },
-      ]}
-    >
-      <View style={styles.side}>
-        {/* router.back() rather than the native stack's own back: the first
-            detail screen pushed onto the shared stack has nothing beneath it
-            there, but plenty in the navigation history (#153). */}
-        {showBack && router.canGoBack() ? (
-          <TouchableOpacity
-            onPress={() => router.back()}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Retour"
-          >
-            <Ionicons name="chevron-back" size={26} color="#fff" />
-          </TouchableOpacity>
-        ) : (
-          // The slot is reserved for the chevron anyway, so the mark costs no
-          // layout — and it puts the brand on every screen rather than on the
-          // login page alone (#366). White: the bar is always dark navy.
-          <BrandMark size={30} color="#fff" ballColor={colors.primary} />
-        )}
+    <View>
+      <View
+        testID="app-header"
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top,
+            height: HEADER_HEIGHT + insets.top,
+            paddingLeft: HEADER_PADDING_X + insets.left,
+            paddingRight: HEADER_PADDING_X + insets.right,
+          },
+        ]}
+      >
+        <View style={styles.side}>
+          {/* router.back() rather than the native stack's own back: the first
+              detail screen pushed onto the shared stack has nothing beneath it
+              there, but plenty in the navigation history (#153). */}
+          {showBack && router.canGoBack() ? (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Retour"
+            >
+              <Ionicons name="chevron-back" size={26} color="#fff" />
+            </TouchableOpacity>
+          ) : (
+            // The slot is reserved for the chevron anyway, so the mark costs no
+            // layout — and it puts the brand on every screen rather than on the
+            // login page alone (#366). White: the bar is always dark navy.
+            <BrandMark size={30} color="#fff" ballColor={colors.primary} />
+          )}
+        </View>
+
+        {/* Centred in the bar on a phone, where the bar is the width of the
+            screen. On a slab the middle is a long way from anything, so the title
+            sits next to the mark instead (#446). */}
+        <Text style={[styles.title, isTablet && styles.titleLeft]} numberOfLines={1}>
+          {title}
+        </Text>
+
+        <View style={[styles.side, styles.sideRight]}>{showAccount && <AccountHeaderButton menuTop={HEADER_HEIGHT + insets.top} />}</View>
       </View>
-
-      {/* Centred in the bar on a phone, where the bar is the width of the
-          screen. On a slab the middle is a long way from anything, so the title
-          sits next to the mark instead (#446). */}
-      <Text style={[styles.title, isTablet && styles.titleLeft]} numberOfLines={1}>
-        {title}
-      </Text>
-
-      <View style={[styles.side, styles.sideRight]}>{showAccount && <AccountHeaderButton menuTop={HEADER_HEIGHT + insets.top} />}</View>
+      {/* On a delegated profile (#749): whose, and the way back — under the
+          bar on every screen, Compte included. */}
+      <ManagedProfileBanner
+        paddingLeft={HEADER_PADDING_X + insets.left}
+        paddingRight={HEADER_PADDING_X + insets.right}
+      />
     </View>
   )
 }

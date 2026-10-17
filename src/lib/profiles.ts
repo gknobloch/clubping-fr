@@ -4,15 +4,6 @@
 // network in the way.
 import type { Profile } from '../types'
 
-export interface ProfileClub {
-  /** Absent for the general administration, and for a profile in no club. */
-  clubId?: string
-  clubName: string
-  /** The general administration (#655): a role of the person, not a club. */
-  generalAdmin?: true
-  profiles: Profile[]
-}
-
 const NO_CLUB = 'Sans club'
 export const GENERAL_ADMINISTRATION = 'Administration générale'
 
@@ -24,38 +15,55 @@ export function profileName(p: Profile): string {
 }
 
 /**
- * The switcher's sections: one per club, clubs by name, profiles by first
- * name inside each; then « Administration générale » — a general admin's
- * profile is the person's role across every club (#655), which is why it is
- * not filed under « Sans club » — and the profiles with no club last.
- *
- * By club and not as one list, because a club is what tells two profiles of a
- * family apart at a glance once there are more than two — and a parent who
- * administers one club while the children play in another reads the
- * difference first.
+ * Where a profile is: its club, « Administration générale » for a general
+ * admin — a role of the person across every club (#655), never « Sans club »
+ * — and the club's id for one the server could not name.
  */
-export function profilesByClub(profiles: Profile[]): ProfileClub[] {
-  const byClub = new Map<string, ProfileClub>()
-  for (const p of profiles) {
-    const generalAdmin = p.role === 'general_admin'
-    const key = generalAdmin ? '\u0000general-admin' : p.clubId ?? ''
-    const club = byClub.get(key) ?? {
-      ...(p.clubId && !generalAdmin ? { clubId: p.clubId } : {}),
-      ...(generalAdmin ? { generalAdmin: true as const } : {}),
-      clubName: generalAdmin ? GENERAL_ADMINISTRATION : p.clubId ? (p.clubName || p.clubId) : NO_CLUB,
-      profiles: [],
-    }
-    club.profiles.push(p)
-    byClub.set(key, club)
-  }
-  const clubs = [...byClub.values()]
-  for (const c of clubs) {
-    c.profiles.sort((a, b) =>
-      (a.firstName ?? '').localeCompare(b.firstName ?? '', 'fr') ||
-      (a.lastName ?? '').localeCompare(b.lastName ?? '', 'fr'))
-  }
-  const rank = (c: ProfileClub) => (c.clubId ? 0 : c.generalAdmin ? 1 : 2)
-  return clubs.sort((a, b) => rank(a) - rank(b) || a.clubName.localeCompare(b.clubName, 'fr'))
+export function profileClubName(p: Profile): string {
+  if (p.role === 'general_admin') return GENERAL_ADMINISTRATION
+  return p.clubId ? (p.clubName || p.clubId) : NO_CLUB
+}
+
+export interface ProfileSections {
+  /** The person's own profiles, one per club: « Mes clubs ». */
+  own: Profile[]
+  /** Other people's, delegated to whoever signed in: « Profils que vous gérez ». */
+  managed: Profile[]
+}
+
+/**
+ * The switcher's two lists (#749). The person's own profiles differ only by
+ * their club — same name, same photo — so a row of « Mes clubs » is the club;
+ * a delegated profile is somebody else, so its row is that person. Mixing the
+ * two under club headings is what made the old switcher hard to read: « Nathan
+ * Thomas » twice, and Chloé's profile looking like one of Nathan's clubs.
+ *
+ * Own: clubs by name, then the general administration, then a profile in no
+ * club. Managed: by name.
+ */
+export function profileSections(profiles: Profile[]): ProfileSections {
+  const rank = (p: Profile) => (p.role === 'general_admin' ? 1 : p.clubId ? 0 : 2)
+  const own = profiles.filter((p) => !p.managed).sort((a, b) =>
+    rank(a) - rank(b) || profileClubName(a).localeCompare(profileClubName(b), 'fr'))
+  const managed = profiles.filter((p) => p.managed).sort((a, b) =>
+    profileName(a).localeCompare(profileName(b), 'fr') ||
+    profileClubName(a).localeCompare(profileClubName(b), 'fr'))
+  return { own, managed }
+}
+
+/**
+ * When the session is a delegated profile (#749): whose it is, and where
+ * « Revenir à mon profil » leads — the profile that signed in (#702), or any
+ * of the person's own if a server did not say which. Null on one's own.
+ */
+export function managedSession(
+  profiles: Profile[] | undefined,
+  currentId: string | undefined,
+): { current: Profile; home?: Profile } | null {
+  const current = profiles?.find((p) => p.id === currentId)
+  if (!profiles || !current?.managed) return null
+  const home = profiles.find((p) => p.signedIn && !p.managed) ?? profiles.find((p) => !p.managed)
+  return { current, ...(home ? { home } : {}) }
 }
 
 /**

@@ -1,36 +1,58 @@
 import { describe, expect, it } from 'vitest'
-import { hasOtherProfiles, profileName, profilesByClub } from './profiles'
+import { hasOtherProfiles, managedSession, profileClubName, profileName, profileSections } from './profiles'
 import type { Profile } from '../types'
 
 const p = (over: Partial<Profile> & Pick<Profile, 'id'>): Profile => ({ role: 'player', ...over })
 
-describe('profilesByClub (#640)', () => {
-  it('groups by club, clubs by name, the clubless last', () => {
-    const groups = profilesByClub([
-      p({ id: 'admin', role: 'general_admin', firstName: 'Benjamin' }),
-      p({ id: 'sacha', firstName: 'Sacha', clubId: 'b', clubName: 'Rixheim PPA' }),
-      p({ id: 'benjamin', firstName: 'Benjamin', clubId: 'a', clubName: 'CSS Bergheim' }),
-      p({ id: 'lou', firstName: 'Lou', clubId: 'b', clubName: 'Rixheim PPA' }),
-    ])
-    expect(groups.map((g) => g.clubName)).toEqual(['CSS Bergheim', 'Rixheim PPA', 'Administration générale'])
-    expect(groups[1].profiles.map((x) => x.id)).toEqual(['lou', 'sacha'])
-    expect(groups[2].clubId).toBeUndefined()
-  })
-
-  it('files the general administration apart — a role of the person, not a club (#655)', () => {
-    const groups = profilesByClub([
-      p({ id: 'ghost', firstName: 'Sans', lastName: 'Club' }),
+describe('profileSections (#749)', () => {
+  it('lists the person’s clubs by name, the general administration, then the clubless', () => {
+    const { own, managed } = profileSections([
+      p({ id: 'ghost', firstName: 'Gilles' }),
       p({ id: 'ga', role: 'general_admin', firstName: 'Gilles' }),
       p({ id: 'rix', firstName: 'Gilles', clubId: 'r', clubName: 'Rixheim PPA' }),
-      p({ id: 'lan', firstName: 'Gilles', clubId: 'l', clubName: 'Landser ASL' }),
+      p({ id: 'lan', firstName: 'Gilles', clubId: 'l', clubName: 'ASL Landser' }),
     ])
-    expect(groups.map((g) => g.clubName)).toEqual(['Landser ASL', 'Rixheim PPA', 'Administration générale', 'Sans club'])
-    expect(groups[2]).toMatchObject({ generalAdmin: true, profiles: [{ id: 'ga' }] })
-    expect(groups[3].generalAdmin).toBeUndefined()
+    expect(own.map((x) => x.id)).toEqual(['lan', 'rix', 'ga', 'ghost'])
+    expect(managed).toEqual([])
   })
 
-  it('falls back on the id of a club it cannot name', () => {
-    expect(profilesByClub([p({ id: 'x', clubId: 'club-1' })])[0].clubName).toBe('club-1')
+  it('sets the delegated profiles apart, by name', () => {
+    const { own, managed } = profileSections([
+      p({ id: 'nathan', firstName: 'Nathan', clubId: 'r', clubName: 'Rixheim PPA', signedIn: true }),
+      p({ id: 'sacha', firstName: 'Sacha', clubId: 'b', clubName: 'CSS Bergheim', managed: true }),
+      p({ id: 'chloe', firstName: 'Chloé', clubId: 'r', clubName: 'Rixheim PPA', managed: true }),
+    ])
+    expect(own.map((x) => x.id)).toEqual(['nathan'])
+    expect(managed.map((x) => x.id)).toEqual(['chloe', 'sacha'])
+  })
+})
+
+describe('profileClubName', () => {
+  it('names the club, the general administration, or falls back', () => {
+    expect(profileClubName(p({ id: 'a', clubId: 'r', clubName: 'Rixheim PPA' }))).toBe('Rixheim PPA')
+    expect(profileClubName(p({ id: 'g', role: 'general_admin', clubId: 'r' }))).toBe('Administration générale')
+    expect(profileClubName(p({ id: 'x', clubId: 'club-1' }))).toBe('club-1')
+    expect(profileClubName(p({ id: 'y' }))).toBe('Sans club')
+  })
+})
+
+describe('managedSession (#749)', () => {
+  const nathan = p({ id: 'nathan', clubId: 'r', signedIn: true })
+  const nathanLan = p({ id: 'nathan-lan', clubId: 'l' })
+  const chloe = p({ id: 'chloe', clubId: 'r', managed: true })
+
+  it('is nothing on one’s own profile', () => {
+    expect(managedSession([nathan, chloe], 'nathan')).toBeNull()
+    expect(managedSession(undefined, 'nathan')).toBeNull()
+  })
+
+  it('names whose profile it is, and leads back to the one that signed in', () => {
+    expect(managedSession([nathanLan, chloe, nathan], 'chloe')).toEqual({ current: chloe, home: nathan })
+  })
+
+  it('leads back to an own profile when the server did not say which signed in', () => {
+    const lan = p({ id: 'nathan-lan', clubId: 'l' })
+    expect(managedSession([chloe, lan], 'chloe')).toEqual({ current: chloe, home: lan })
   })
 })
 

@@ -694,4 +694,12 @@ export interface Profile {
   clubId?: string
   clubName?: string
   status?: PlayerStatus
+  /**
+   * Another person's profile, reached because they delegated to whoever
+   * signed in (#655, #749) — Chloé's, in Nathan's switcher. Absent for the
+   * person's own profiles, and from a server that predates the flag.
+   */
+  managed?: true
+  /** The profile that signed in (#702): where « Revenir à mon profil » leads. */
+  signedIn?: true
 }
