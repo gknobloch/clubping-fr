@@ -19,6 +19,7 @@ import { Screen, contentWidth } from '@/components/Screen'
 import { PlayerIdentityCard } from '@/components/PlayerIdentityCard'
 import { CARD_SPLIT_MIN_WIDTH, NextMatchCard } from '@/components/NextMatchCard'
 import { CaptainSelectionSheet } from '@/components/CaptainSelectionSheet'
+import { ShareGameSheet } from '@/components/ShareGameSheet'
 import { PlayerQuickView } from '@/components/PlayerQuickView'
 import { NextTrainingSection } from '@/components/NextTrainingSection'
 import { sortByName } from '@shared/lib/sortByName'
@@ -54,6 +55,8 @@ export default function HomeScreen() {
 
   const [composeGameId, setComposeGameId] = useState<string | null>(null)
   const [quickViewId, setQuickViewId] = useState<string | null>(null)
+  // The match whose « Partager » menu is open (#747).
+  const [shareGameId, setShareGameId] = useState<string | null>(null)
   const [matchPage, setMatchPage] = useState(0)
 
   const today = todayIso()
@@ -216,7 +219,7 @@ export default function HomeScreen() {
     time: string
     /** False while that club's playing day is unknown: the date is a guess (#429). */
     confirmed: boolean
-    /** Pre-built so the card's calendar icon has nothing left to decide (#426). */
+    /** Pre-built so the share menu's agenda row has nothing left to decide (#426, #747). */
     calendarEvent: MatchEvent
     availablePlayers: Player[]; availableCount: number; noResponseCount: number; selectedCount: number
   }
@@ -382,7 +385,7 @@ export default function HomeScreen() {
                           }}
                           onCompose={() => setComposeGameId(h.game.id)}
                           onOpenDetail={() => router.push({ pathname: '/match/[id]', params: { id: h.game.id, teamId: myActiveTeam.id } })}
-                          onAddToCalendar={() => openMatchInCalendar(h.calendarEvent)}
+                          onShare={() => setShareGameId(h.game.id)}
                         />
                       </View>
                     ))}
@@ -480,6 +483,23 @@ export default function HomeScreen() {
       )}
 
       {/* Captain line-up sheet for the selected upcoming match */}
+      {(() => {
+        const h = heroes.find((x) => x.game.id === shareGameId)
+        if (!h || !myActiveTeam) return null
+        return (
+          <ShareGameSheet
+            game={h.game}
+            matchDay={h.md}
+            team={myActiveTeam}
+            teams={teams}
+            clubs={clubs}
+            // No agenda gets the FFTT's guess (#429).
+            onAddToCalendar={h.confirmed ? () => openMatchInCalendar(h.calendarEvent) : undefined}
+            onClose={() => setShareGameId(null)}
+          />
+        )
+      })()}
+
       {composeGame && myActiveTeam && (
         <CaptainSelectionSheet
           team={myActiveTeam}

@@ -9,7 +9,7 @@ import { TeamBadge } from '@/components/TeamBadge'
 import { AvailabilityButtons, AvailabilityPills, LineupCheck } from '@/components/Availability'
 import { Pill } from '@/components/icons'
 import { ModalShell } from '@/components/ModalShell'
-import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { ShareGameButton } from '@/components/ShareGameButton'
 import { MatchDate } from '@/components/MatchDate'
 import { getTeamName } from '@/lib/teamName'
 import { getMatchVenue } from '@/lib/venue'
@@ -129,7 +129,10 @@ export function GameQuickView({
             </p>
             <MatchVenueLink venue={venue} />
           </div>
-          <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+          {/* « Partager » (#747), with « Ajouter à mon agenda » in its menu:
+              on a computer this dialog is the only match screen — its
+              « Détails » goes to the matrix. Above this dialog, hence z 50. */}
+          <ShareGameButton game={game} matchDay={matchDay} team={team} z={50} />
         </div>
 
         {/* Availabilities + line-up */}

@@ -5,8 +5,8 @@ import type { Club, Division, Game, Group, MatchDay, Player, Team, User } from '
 import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 
 // ---------------------------------------------------------------------------
-// Détail d'un match — the "Ajouter au calendrier" icon in the match header
-// (#416). What is worth asserting here is the hand-off: that the icon is
+// Détail d'un match — « Ajouter à mon agenda » (#416), a row of the header's
+// « Partager » menu since #747. What is worth asserting here is the hand-off: that the icon is
 // offered to everyone, and that the event handed to the OS carries the match
 // the screen displays.
 // The event's own shape is covered by utils/calendar.test.ts.
@@ -123,20 +123,29 @@ beforeEach(() => {
   ]
 })
 
+/** The share icon, then the menu's agenda row. */
+function addToCalendar() {
+  fireEvent.press(screen.getByLabelText('Partager le match'))
+  fireEvent.press(screen.getByTestId('share-game-calendar'))
+}
+
 describe("Détail d'un match — ajouter au calendrier", () => {
-  it('offers the icon to a plain member, who composes nothing', () => {
+  it('offers it to a plain member, who composes nothing', () => {
     render(<MatchDetailScreen />)
 
-    expect(screen.getByLabelText('Ajouter au calendrier')).toBeTruthy()
-    // It sits in the header, not as a fourth full-width shortcut row.
-    expect(screen.queryByText('Ajouter au calendrier')).toBeNull()
+    // In the share menu (#747), not as a fourth full-width shortcut row.
+    expect(screen.queryByText('Ajouter à mon agenda')).toBeNull()
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    // First in the menu: it is the icon's old gesture (#747).
+    const rows = screen.getAllByTestId(/^share-game-(calendar|whatsapp|copy|native)$/)
+    expect(rows[0].props.testID).toBe('share-game-calendar')
     expect(screen.queryByText("Composer l'équipe")).toBeNull()
   })
 
   it('hands the OS an event pre-filled with the match', async () => {
     render(<MatchDetailScreen />)
 
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent).toHaveBeenCalledWith({
@@ -155,7 +164,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockData.games = [{ ...game, homeTeamId: 't2', awayTeamId: 't1' }]
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({
@@ -169,7 +178,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockData.games = [{ ...game, time: undefined }]
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({
@@ -187,7 +196,8 @@ describe("Détail d'un match — ajouter au calendrier", () => {
 
     render(<MatchDetailScreen />)
 
-    expect(screen.queryByLabelText('Ajouter au calendrier')).toBeNull()
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.queryByTestId('share-game-calendar')).toBeNull()
     expect(screen.getByText(/Date à confirmer/)).toBeTruthy()
   })
 
@@ -198,7 +208,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockData.games = [{ ...game, time: undefined }]
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({ allDay: true })
@@ -209,7 +219,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockCreateEvent.mockRejectedValue(new Error('no calendar'))
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(alert).toHaveBeenCalled())
     expect(alert.mock.calls[0][1]).toContain('calendrier')
@@ -253,5 +263,45 @@ describe("Détail d'un match — le lieu (#611)", () => {
     fireEvent.press(screen.getByTestId('match-venue'))
     expect(open).toHaveBeenCalledWith(`maps://?q=${encodeURIComponent('Mulhouse, France')}`)
     open.mockRestore()
+  })
+})
+
+describe("Détail d'un match — partager (#747)", () => {
+  const message = 'Journée 1 · Rixheim PPA 4 – Mulhouse TT 6\nMercredi 17 septembre à 19h30\nhttps://clubping.fr/match/g1?equipe=t1'
+
+  it('copies a link naming the match and the sender’s team', async () => {
+    const Clipboard = jest.requireMock('expo-clipboard') as { setStringAsync: jest.Mock }
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    // The sheet shows the message, not the link: the link goes out with it.
+    expect(screen.getByTestId('share-game-message').props.children).toBe(message.split('\nhttps')[0])
+    fireEvent.press(screen.getByTestId('share-game-copy'))
+    await waitFor(() => expect(screen.getByText('Lien copié')).toBeTruthy())
+    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith('https://clubping.fr/match/g1?equipe=t1')
+  })
+
+  it('sends the message to WhatsApp', () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    fireEvent.press(screen.getByTestId('share-game-whatsapp'))
+    expect(open).toHaveBeenCalledWith(`https://wa.me/?text=${encodeURIComponent(message)}`)
+    open.mockRestore()
+  })
+
+  it('offers no row for the team’s group, even when it has one — WhatsApp’s « send to » reaches it', () => {
+    // An invite link only opens the group: the member had to paste. Removed.
+    mockData.teams = [{ ...team, whatsappLink: 'https://chat.whatsapp.com/abc' }, opponent]
+    render(<MatchDetailScreen />)
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.queryByText("Dans le groupe de l'équipe")).toBeNull()
+    expect(screen.getByTestId('share-game-whatsapp')).toBeTruthy()
+  })
+
+  it('offers sharing even when the date is a guess — the link is not an agenda', () => {
+    mockData.teams = [team, { ...opponent, defaultDay: '', defaultTime: '' }]
+    mockData.games = [{ ...game, time: undefined, homeTeamId: 't2', awayTeamId: 't1' }]
+    render(<MatchDetailScreen />)
+    expect(screen.getByLabelText('Partager le match')).toBeTruthy()
   })
 })

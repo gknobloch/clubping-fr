@@ -69,7 +69,7 @@ export function NextMatchCard({
   isCaptain,
   onCompose,
   onOpenDetail,
-  onAddToCalendar,
+  onShare,
   wide = false,
   team,
 }: {
@@ -101,8 +101,8 @@ export function NextMatchCard({
   onCompose: () => void
   /** Open the match detail screen. */
   onOpenDetail: () => void
-  /** Hand the match to the phone's calendar (#426). */
-  onAddToCalendar: () => void
+  /** « Partager le match » (#747) — its menu holds « Ajouter à mon agenda ». */
+  onShare: () => void
   /** Split in two: the game and my answer on one side, the team's on the other. */
   wide?: boolean
   /** Required when `wide` — it is the whole right-hand half. */
@@ -138,7 +138,7 @@ export function NextMatchCard({
           confirmed={confirmed}
           venue={venue}
           showCountdown
-          onAddToCalendar={onAddToCalendar}
+          onShare={onShare}
         />
       </TouchableOpacity>
 

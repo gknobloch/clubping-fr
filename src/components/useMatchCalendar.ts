@@ -1,6 +1,4 @@
 import { useAppData } from '@/contexts/DataContext'
-import { ICON_TARGET_CLASS } from '@/components/Button'
-import { CalendarPlusIcon } from '@/components/icons'
 import { buildMatchEvent } from '@/lib/calendar'
 import { icsFileName, toIcs } from '@/lib/ics'
 import { downloadIcs } from '@/lib/icsDownload'
@@ -11,7 +9,8 @@ import type { Game, MatchDay, Team } from '@/types'
 
 /**
  * "Add to my calendar" for one fixture (#426) — the web's counterpart to the
- * mobile app's native event screen (#416).
+ * mobile app's native event screen (#416). A row of the « Partager » menu
+ * since #747, where the icon that sat beside the date went.
  *
  * A downloaded .ics rather than a link to one provider's web calendar: the
  * player keeps whichever agenda they already use, and the file is the only
@@ -20,22 +19,17 @@ import type { Game, MatchDay, Team } from '@/types'
  * The event itself is built by the shared `buildMatchEvent`, so a match says
  * the same thing in both apps — including the all-day fallback when the slot
  * has no confirmed time.
+ *
+ * `confirmed` is false while the date is the FFTT's guess (#429): the screens
+ * that print it mark it, and an agenda is no place for a guess. One rule, so
+ * every screen offering it agrees.
  */
-export function AddToCalendarButton({
-  game,
-  matchDay,
-  team,
-  compact = false,
-  className = '',
-}: {
-  game: Game
-  matchDay: MatchDay
+export function useMatchCalendar(
+  game: Game,
+  matchDay: MatchDay,
   /** The team whose side of the fixture this is — it names the event's matchup. */
-  team: Team
-  /** For the Journées matrix, whose cells have no room for the full-size icon. */
-  compact?: boolean
-  className?: string
-}) {
+  team: Team,
+): { confirmed: boolean; add: () => void } {
   const { teams, clubs, divisions } = useAppData()
 
   const isHome = game.homeTeamId === team.id
@@ -43,17 +37,9 @@ export function AddToCalendarButton({
   const opponent = teams.find((t) => t.id === (isHome ? game.awayTeamId : game.homeTeamId))
   const opponentName = opponent ? getTeamName(opponent, clubs) : '?'
   const division = divisions.find((d) => d.id === team.divisionId)
-  // Nothing to offer while the date is the FFTT's guess (#429): the screens
-  // that print it now mark it, and an agenda is no place for a guess. One
-  // rule, so the Journées matrix and the team's match list agree.
   const confirmed = isSlotConfirmed(game, matchDay, homeTeam)
 
-  function addToCalendar(e: React.MouseEvent) {
-    // The matrix cell this can sit in is itself a button that opens the slot
-    // editor for an admin (#426) — the icon must not trip it.
-    e.stopPropagation()
-    e.preventDefault()
-
+  function add() {
     const teamName = getTeamName(team, clubs)
     const event = buildMatchEvent({
       date: gameDate(game, matchDay),
@@ -76,18 +62,5 @@ export function AddToCalendarButton({
     )
   }
 
-  if (!confirmed) return null
-
-  return (
-    <button
-      type="button"
-      onClick={addToCalendar}
-      title="Ajouter à mon agenda"
-      aria-label="Ajouter à mon agenda"
-      // The same grey as the date it sits next to: lighter read as disabled.
-      className={`shrink-0 text-slate-500 transition-colors hover:text-accent-600 ${ICON_TARGET_CLASS} ${className}`}
-    >
-      <CalendarPlusIcon className={compact ? 'h-4 w-4' : 'h-6 w-6 md:h-5 md:w-5'} />
-    </button>
-  )
+  return { confirmed, add }
 }

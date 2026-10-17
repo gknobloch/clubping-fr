@@ -1,4 +1,4 @@
-import { StyleSheet, Text, TouchableOpacity } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Sheet } from '@/components/Sheet'
 import { SelectionList, selection } from '@/components/Selection'
 import { ProfileChoices } from '@/components/ProfileChoices'
@@ -17,9 +17,11 @@ export function ProfileSwitcherSheet({ onClose }: { onClose: () => void }) {
       <SelectionList>
         <ProfileChoices includeCurrent onSwitched={onClose} />
       </SelectionList>
-      <TouchableOpacity testID="profile-sheet-close" style={selection.cancelBtn} onPress={onClose}>
-        <Text style={selection.cancelTxt}>Fermer</Text>
-      </TouchableOpacity>
+      <View style={selection.actions}>
+        <TouchableOpacity testID="profile-sheet-close" style={selection.cancelBtn} onPress={onClose}>
+          <Text style={selection.cancelTxt}>Fermer</Text>
+        </TouchableOpacity>
+      </View>
     </Sheet>
   )
 }
