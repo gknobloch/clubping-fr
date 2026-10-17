@@ -786,8 +786,8 @@ invisible dans le diff comme dans la revue.
   fusion qu'un profil d'administrateur général — souvent écrit sans nom, donc
   laissé à part par 0063 — rejoint la personne qui joue à Rixheim et à
   Landser. Le sélecteur le range sous « Administration générale », jamais sous
-  « Sans club » (`profilesByClub`) : Gilles passe de Rixheim à Landser à
-  l'administration sans se déconnecter.
+  « Sans club » (`profileSections`, `profileClubName`) : Gilles passe de
+  Rixheim à Landser à l'administration sans se déconnecter.
 
 ### Saisons communes, phases par fédération (#645)
 - **Une saison est à tout le monde ; une phase est à une fédération**
@@ -1486,14 +1486,16 @@ invisible dans le diff comme dans la revue.
   l'ancien profil. **Hors ligne, pas de changement** : il faut le serveur pour
   émettre une session, et `profiles` reste vide tant qu'il n'a pas répondu.
 - `/auth/me` et chaque réponse de connexion portent `profiles` — le membre
-  connecté compris, clubs nommés. Le sélecteur (`profilesByClub`) groupe par
-  club ; il n'apparaît **qu'avec un autre profil à proposer**
+  connecté compris, clubs nommés. Le sélecteur (`profileSections`, #749)
+  sépare les clubs de la personne des profils qu'on lui a délégués ; il
+  n'apparaît **qu'avec un autre profil à proposer**
   (`hasOtherProfiles`) : le menu du compte de l'en-tête et Mon compte, sur
   le web comme dans l'app.
 - **L'avatar de l'en-tête ouvre le menu du compte** (`AccountMenu`, #720 dans
   l'app, #722 sur le web — l'avatar et le nom sur ordinateur, l'avatar seul à
   côté du bouton de menu sur un téléphone), accroché sous lui : nom, club et rôle du profil ouvert,
-  « Mon compte », puis les autres profils par club — un toucher en change.
+  « Mon compte », puis les profils — un toucher en change (leur forme : #749,
+  ci-dessous).
   Changer de profil était tout en bas de Compte, à deux écrans de l'endroit
   où un parent ouvre les matchs de son enfant. Les lignes sont
   `ProfileChoices` dans l'app, `ProfileList` sur le web — partagées avec
@@ -1531,6 +1533,39 @@ invisible dans le diff comme dans la revue.
   `seed.sql` en portent une : Fabrice et Bastien Dangelser. Sans backend
   (`npm run dev`, E2E), le sélecteur lit les profils dans la liste du
   sélecteur de connexion, et changer revient à sélectionner l'autre.
+
+### Le club se lit sur l'avatar, un profil géré se voit (#749)
+- **Les profils d'une personne ne diffèrent que par leur club** : même nom,
+  même photo. Les grouper sous un intitulé de club, chaque ligne nommant la
+  personne, faisait lire « Nathan Thomas » deux fois et cachait la seule
+  différence dans un petit titre gris — et le profil de Chloé, délégué à
+  Nathan, s'y présentait comme un de ses clubs.
+- **Deux listes plates** (`profileSections`) : « Mes clubs », où une ligne
+  **est** le club — logo, nom, rôle ; puis « Profils que vous gérez », où une
+  ligne est l'autre personne — sa photo, badge de son club, son nom, club ·
+  rôle. Absente sans délégation. **Le profil ouvert est listé et coché** : la
+  liste se lit comme un choix déjà fait, pas comme « ailleurs ». Mêmes lignes
+  dans le menu de l'en-tête et dans Compte (`ProfileList` / `ProfileChoices`).
+- **Le club est en coin de l'avatar** (`ProfileAvatar`, `ProfileClubMark`,
+  web et app) : on voit dans quel club on est sans rien ouvrir. Sur le web le
+  nom du club est aussi sous le nom. Une pastille de club à côté du titre a
+  été essayée et écartée : trop serrée sur un téléphone.
+- **Un club sans logo prend l'initiale de sa ville** (`clubInitial`) — « L »
+  pour ASL Landser, pas le « A » de tous les ASL. L'administration générale
+  est un écusson, pas un club.
+- **Le serveur dit à qui est chaque profil** : `managed` (une autre personne,
+  atteinte par délégation) et `signedIn` (celui de la connexion, #702). Le
+  client ne peut pas le déduire — un nom ni une adresse ne sont une personne
+  (#655). Lus depuis qui s'est connecté, comme le reste de `reaches` : Nathan
+  sur le profil de Chloé voit toujours le sien comme le sien.
+- **Sur un profil géré, un bandeau sous l'en-tête** (`ManagedProfileBanner`,
+  `managedSession`) : « Vous gérez le profil de Chloé Bernard », et
+  « Revenir à mon profil » vers le profil de la connexion — sur chaque écran,
+  parce qu'un parent qui répond pour son enfant doit le savoir partout, pas
+  seulement en ouvrant le menu. L'avatar y est cerclé de rouge. Rien sur ses
+  propres profils : le badge suffit.
+- Sans backend (`npm run dev`, E2E), les profils du sélecteur de connexion
+  sont marqués d'après le nom : la paire Dangelser est deux personnes.
 
 ### Une photo est à celui qu'elle montre (#571)
 - `PUT` et `DELETE /users/:id/avatar` ne regardaient pas l'appelant : n'importe

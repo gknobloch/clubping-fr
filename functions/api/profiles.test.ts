@@ -44,7 +44,7 @@ const post = (db: D1Database, path: string, body: unknown, token?: string) =>
 interface SessionBody {
   token: string
   user: { id: string; personId?: string }
-  profiles: Array<{ id: string; firstName?: string; clubName?: string }>
+  profiles: Array<{ id: string; firstName?: string; clubName?: string; managed?: true; signedIn?: true }>
 }
 
 async function signIn(db: D1Database, email = 'henaut@example.fr'): Promise<SessionBody> {
@@ -162,6 +162,16 @@ describe('one person, several clubs (#655)', () => {
     expect((await post(db, 'switch', { userId: 'gilles-lan' }, body.token)).status).toBe(200)
   })
 
+  // #749: his own clubs, both — the switcher lists them under « Mes clubs ».
+  it('names neither profile managed, and the one signed in as such', async () => {
+    const { db } = await world(gilles)
+    const body = await signIn(db, 'gilles@example.fr')
+    expect(body.profiles.map((p) => [p.id, !!p.managed, !!p.signedIn])).toEqual([
+      ['gilles-rix', false, true],
+      ['gilles-lan', false, false],
+    ])
+  })
+
   // The person is the link, not the address: changing the address leaves the
   // other profile in reach — which an address-only rule could not.
   it('keeps both in reach whatever the address of either says', async () => {
@@ -185,6 +195,17 @@ describe('delegation (#655)', () => {
     const body = await signIn(db)
     expect(body.profiles.map((p) => p.id)).toEqual(['benjamin', 'sacha'])
     expect((await post(db, 'switch', { userId: 'sacha' }, body.token)).status).toBe(200)
+  })
+
+  // #749: whose each profile is, read from who signed in — still Benjamin
+  // once the session is Sacha's, which is what puts the banner up.
+  it('marks the delegated profile managed, before and after switching to it', async () => {
+    const { db } = await world(delegated)
+    const body = await signIn(db)
+    const flags = (b: SessionBody) => b.profiles.map((p) => [p.id, !!p.managed, !!p.signedIn])
+    expect(flags(body)).toEqual([['benjamin', false, true], ['sacha', true, false]])
+    const res = await post(db, 'switch', { userId: 'sacha' }, body.token)
+    expect(flags(await res.json() as SessionBody)).toEqual([['sacha', true, false], ['benjamin', false, true]])
   })
 
   it('does not let the person open the delegate’s — it goes one way', async () => {

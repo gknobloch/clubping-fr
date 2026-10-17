@@ -4,13 +4,14 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
-import { Avatar } from '@/components/Avatar'
+import { ProfileAvatar } from '@/components/ProfileAvatar'
 import { ProfileChoices } from '@/components/ProfileChoices'
 import { MODAL_ORIENTATIONS } from '@/components/Sheet'
 import { getRoleLabel } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
-import { GENERAL_ADMINISTRATION, hasOtherProfiles } from '@shared/lib/profiles'
+import { hasOtherProfiles, managedSession, profileClubName } from '@shared/lib/profiles'
+import type { Profile } from '@shared/types'
 
 /** Where the menu hangs: just under the header bar, by the avatar. */
 const MENU_WIDTH = 320
@@ -18,7 +19,8 @@ const EDGE = 12
 
 /**
  * The header avatar's menu (#720): who is signed in — name, club, role — and
- * the way to Compte, then every other profile the person may open, by club.
+ * the way to Compte, then every profile the person may open (#749): their
+ * clubs, then the profiles delegated to them, the current one ticked.
  * Switching used to sit at the bottom of Compte, two screens from where a
  * parent opens a child's matches.
  *
@@ -40,9 +42,18 @@ export function AccountMenu({ top, onClose }: {
 
   // The person's photo (#741) — on `users` too, for a profile that does not play.
   const player = players.find((p) => p.id === user.id) ?? users.find((u) => u.id === user.id)
-  const clubName = user.role === 'general_admin'
-    ? GENERAL_ADMINISTRATION
-    : profiles.find((p) => p.id === user.id)?.clubName ?? clubs.find((c) => c.id === user.clubId)?.displayName
+  // The server names the club with the profile; `/api/data` for a session
+  // restored before the profiles came back.
+  const current: Profile = profiles.find((p) => p.id === user.id) ?? {
+    id: user.id,
+    role: user.role,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    clubId: user.clubId,
+    clubName: clubs.find((c) => c.id === user.clubId)?.displayName,
+  }
+  const clubName = current.clubId || user.role === 'general_admin' ? profileClubName(current) : undefined
+  const managed = !!managedSession(profiles, user.id)
   const others = hasOtherProfiles(profiles, user.id)
 
   const openCompte = () => {
@@ -73,17 +84,12 @@ export function AccountMenu({ top, onClose }: {
         ]}
       >
         <View style={s.who}>
-          <Avatar
-            playerId={user.id}
-            avatarUpdatedAt={player?.avatarUpdatedAt}
-            firstName={user.firstName}
-            lastName={user.lastName}
-            size={44}
-          />
+          <ProfileAvatar profile={current} avatarUpdatedAt={player?.avatarUpdatedAt} size={44} managed={managed} />
           <View style={s.whoText}>
             <Text style={s.name} numberOfLines={1}>{displayName}</Text>
-            {clubName ? <Text style={s.club} numberOfLines={1}>{clubName}</Text> : null}
-            <Text style={s.role}>{getRoleLabel(user.role)}</Text>
+            <Text style={s.club} numberOfLines={1}>
+              {[clubName, getRoleLabel(user.role)].filter(Boolean).join(' · ')}
+            </Text>
           </View>
         </View>
 
@@ -102,7 +108,6 @@ export function AccountMenu({ top, onClose }: {
           // Shrinks under the capped card, or a long list pushes it off the
           // screen: React Native does not shrink by default (#623).
           <ScrollView style={s.others} contentContainerStyle={s.othersContent}>
-            <Text style={s.othersTitle}>Changer de profil</Text>
             <ProfileChoices onSwitched={onClose} />
           </ScrollView>
         )}
@@ -121,14 +126,12 @@ const s = StyleSheet.create({
   who: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   whoText: { flex: 1, gap: 1 },
   name: { fontSize: 16, fontFamily: fonts.semiBold, color: colors.textPrimary },
-  club: { fontSize: 14, color: colors.textPrimary },
-  role: { fontSize: 12, color: colors.textSecondary },
+  club: { fontSize: 13, color: colors.textSecondary },
   link: {
     flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 16,
     borderTopWidth: 1, borderTopColor: colors.border,
   },
   linkText: { flex: 1, fontSize: 15, fontFamily: fonts.medium, color: colors.textPrimary },
   others: { flexShrink: 1, borderTopWidth: 1, borderTopColor: colors.border },
-  othersContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
-  othersTitle: { fontSize: 13, fontFamily: fonts.semiBold, color: colors.textPrimary, marginTop: 10 },
+  othersContent: { paddingHorizontal: 8, paddingTop: 4, paddingBottom: 8 },
 })

@@ -291,6 +291,10 @@ async function userByEmail(db: D1Database, email: string): Promise<(UserRow & { 
 
 type ProfileRow = Pick<UserRow, 'id' | 'first_name' | 'last_name' | 'role' | 'club_id' | 'status'> & {
   club_name: string | null
+  /** 1 for a profile of another person, reached by delegation (#749). */
+  managed?: number | null
+  /** 1 for the profile that signed in — the session's origin (#702, #749). */
+  signed_in?: number | null
 }
 
 function serializeProfile(r: ProfileRow) {
@@ -302,6 +306,8 @@ function serializeProfile(r: ProfileRow) {
     ...(r.club_id ? { clubId: r.club_id } : {}),
     ...(r.club_name ? { clubName: r.club_name } : {}),
     ...(r.status ? { status: r.status } : {}),
+    ...(r.managed ? { managed: true as const } : {}),
+    ...(r.signed_in ? { signedIn: true as const } : {}),
   }
 }
 
@@ -328,7 +334,14 @@ async function profilesOf(db: D1Database, user: UserRow, rootId: string = user.i
     const rows = await db
       .prepare(
         `SELECT DISTINCT u.id, u.first_name, u.last_name, u.role, u.club_id, u.status,
-                c.display_name AS club_name
+                c.display_name AS club_name,
+                -- Whose it is (#749): the switcher sets the person's own clubs
+                -- apart from the profiles delegated to them, and says so when
+                -- the session is one of the latter. The client cannot tell —
+                -- names and addresses are not who a person is (#655).
+                CASE WHEN u.id = o.id OR (o.person_id IS NOT NULL AND u.person_id = o.person_id)
+                     THEN 0 ELSE 1 END AS managed,
+                CASE WHEN u.id = o.id THEN 1 ELSE 0 END AS signed_in
            FROM profiles o
            JOIN profiles u ON ${reaches('o', 'u')}
            LEFT JOIN clubs c ON c.id = u.club_id

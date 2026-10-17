@@ -68,3 +68,11 @@ export function townKey(name: string): string {
   return (townFromClubName(name) ?? '').split(/\s+/)[0]
     .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
+
+/**
+ * The letter a club without a logo is drawn with (#749): its town's — « L »
+ * for ASL Landser, not the « A » every ASL would share — or the name's own.
+ */
+export function clubInitial(clubName: string): string {
+  return ((townFromClubName(clubName) ?? clubName).trim()[0] ?? '?').toLocaleUpperCase('fr-FR')
+}

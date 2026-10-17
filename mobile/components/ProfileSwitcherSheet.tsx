@@ -15,7 +15,7 @@ export function ProfileSwitcherSheet({ onClose }: { onClose: () => void }) {
       <Text style={selection.title}>Changer de profil</Text>
       <Text style={s.hint}>Les profils liés à votre adresse e-mail.</Text>
       <SelectionList>
-        <ProfileChoices includeCurrent onSwitched={onClose} />
+        <ProfileChoices onSwitched={onClose} />
       </SelectionList>
       <View style={selection.actions}>
         <TouchableOpacity testID="profile-sheet-close" style={selection.cancelBtn} onPress={onClose}>
