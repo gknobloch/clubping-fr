@@ -1,5 +1,9 @@
 import { Alert } from 'react-native'
-import { createEventInCalendarAsync } from 'expo-calendar'
+// The legacy entry point, not the package root (#751): since SDK 57 the root's
+// createEventInCalendarAsync is a stub that always throws, and its successor
+// (`calendar.addEventWithForm()`) needs a calendar — so the permission this app
+// refuses on purpose (#418). The native method behind this one is unchanged.
+import { createEventInCalendarAsync } from 'expo-calendar/legacy'
 import type { MatchEvent } from '@shared/lib/calendar'
 
 // The native dialog refuses a second one while it is opening, and a card in a

@@ -19,7 +19,7 @@ import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 // Under __tests__/ rather than beside the screen: expo-router routes every file
 // under app/, and a test there is bundled into the app.
 // ---------------------------------------------------------------------------
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   createEventInCalendarAsync: jest.fn().mockResolvedValue({ action: 'canceled' }),
 }))
 
