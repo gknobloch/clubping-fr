@@ -4,7 +4,8 @@ import type { Club, Division, Game, Group, MatchDay, Phase, Player, Season, Team
 import HomeScreen from '@/app/(tabs)/index'
 
 // ---------------------------------------------------------------------------
-// Accueil — the "Ajouter au calendrier" icon on the next-match card (#426).
+// Accueil — « Ajouter à mon agenda » on the next-match card (#426), a row of
+// the card's « Partager » menu since #747.
 //
 // #416 had left it off this card deliberately: the whole card is a link to the
 // match detail. But this is where a player answers OUI, and blocking the
@@ -12,7 +13,7 @@ import HomeScreen from '@/app/(tabs)/index'
 // press must not open the detail screen instead.
 // ---------------------------------------------------------------------------
 const mockCreateEvent = jest.fn().mockResolvedValue({ action: 'saved', id: 'e1' })
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   createEventInCalendarAsync: (...args: unknown[]) => mockCreateEvent(...args),
 }))
 
@@ -96,16 +97,18 @@ beforeEach(() => {
 })
 
 describe('Accueil — ajouter le prochain match au calendrier', () => {
-  it('offers the icon on the next-match card', () => {
+  it('offers it in the next-match card’s share menu', () => {
     render(<HomeScreen />)
 
-    expect(screen.getByLabelText('Ajouter au calendrier')).toBeTruthy()
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.getByText('Ajouter à mon agenda')).toBeTruthy()
   })
 
   it('hands the OS the match the card shows, without opening the detail screen', async () => {
     render(<HomeScreen />)
 
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    fireEvent.press(screen.getByTestId('share-game-calendar'))
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     const [y, m, d] = matchDate.split('-').map(Number)
@@ -118,6 +121,8 @@ describe('Accueil — ajouter le prochain match au calendrier', () => {
       notes: 'Journée 1 · GE 5',
     })
     // The card around it is a link to the match: the icon must win the press.
+    // And the sheet closes once the OS screen has answered.
+    await waitFor(() => expect(screen.queryByTestId('share-game-sheet')).toBeNull())
     expect(mockPush).not.toHaveBeenCalled()
   })
 })

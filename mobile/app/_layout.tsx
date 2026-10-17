@@ -17,6 +17,7 @@ import { OfflineBanner } from '@/components/OfflineBanner'
 import { DataProvider } from '@/contexts/DataContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { PushNotifications } from '@/components/PushNotifications'
+import { SharedGameLinks } from '@/components/SharedGameLinks'
 import { UnsupportedOverlay, UpdateBanner } from '@/components/VersionGate'
 
 // Hold the native splash until the persisted session has been restored —
@@ -79,6 +80,16 @@ function Push() {
   return <PushNotifications />
 }
 
+/**
+ * A shared match link (#747), for the same reasons: it can arrive on a cold
+ * start, and signed out it waits for a session. Held by `+native-intent`.
+ */
+function SharedLinks() {
+  const { isAuthenticated, loading } = useAuth()
+  if (loading || !isAuthenticated) return null
+  return <SharedGameLinks />
+}
+
 // ---------------------------------------------------------------------------
 // Root layout
 //
@@ -114,6 +125,7 @@ export default function RootLayout() {
             <OfflineBanner />
             <AuthedRoutes fontsReady={loaded || error !== null} />
             <Push />
+            <SharedLinks />
             {/* Last, and absolutely positioned, so it covers the navigator
                 rather than replacing it — the screen underneath is what
                 dismisses the splash (#508). */}

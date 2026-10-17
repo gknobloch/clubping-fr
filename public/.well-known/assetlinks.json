@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fr.clubping.app",
+      "sha256_cert_fingerprints": [
+        "C1:4D:2E:EE:93:B7:CE:CD:55:8D:01:BC:E0:EE:C7:A3:E2:83:9B:66:0E:52:28:D0:E3:C0:42:CB:52:C4:61:B6",
+        "1D:3E:C2:7F:F7:55:61:64:6E:12:2C:1E:A2:C7:DC:9F:8E:54:68:6F:4C:8B:1E:72:EA:9F:64:45:72:B9:9C:4B"
+      ]
+    }
+  }
+]

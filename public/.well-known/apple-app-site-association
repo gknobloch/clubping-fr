@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["D7A22W55N2.fr.clubping.app"],
+        "components": [
+          { "/": "/match/*", "comment": "A shared match (#747) — the only path the app claims." }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,185 @@
+import { useState } from 'react'
+import { useAppData } from '@/contexts/DataContext'
+import { ICON_TARGET_CLASS } from '@/components/Button'
+import { ModalShell } from '@/components/ModalShell'
+import { CalendarPlusIcon, ChevronRightIcon, LinkIcon, ShareIcon, WhatsAppIcon } from '@/components/icons'
+import { useMatchCalendar } from '@/components/useMatchCalendar'
+import { gameShareMessage, gameShareUrl, whatsAppShareUrl } from '@/lib/gameShare'
+import type { Game, MatchDay, Team } from '@/types'
+
+/**
+ * "Partager le match" (#747) — the link, WhatsApp, and
+ * « Ajouter à mon agenda », whose icon this one replaced wherever a match
+ * showed it (#426).
+ *
+ * The link names the sender's team only as a hint: whoever opens it lands on
+ * their own side, under the profile that plays it (`sharedGameOpening`).
+ */
+export function ShareGameButton({ game, matchDay, team, z, compact = false }: {
+  game: Game
+  matchDay: MatchDay
+  /** The side of the fixture on screen — the sender's. */
+  team: Team
+  /** Stacking level: above the match dialog (40) when it opens from there. */
+  z?: 30 | 40 | 50
+  /** For the Journées matrix, whose cells have no room for the full-size icon. */
+  compact?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          // A matrix cell is itself a button: for an admin it opens the slot
+          // editor (#426), and this icon must not open it too.
+          e.stopPropagation()
+          e.preventDefault()
+          setOpen(true)
+        }}
+        title="Partager le match"
+        aria-label="Partager le match"
+        className={`shrink-0 text-slate-500 transition-colors hover:text-accent-600 ${ICON_TARGET_CLASS}`}
+      >
+        <ShareIcon className={compact ? 'h-4 w-4' : 'h-6 w-6 md:h-5 md:w-5'} />
+      </button>
+      {open && (
+        // React events climb the component tree, not the DOM: without this, a
+        // click inside the dialog would still reach the matrix cell around it.
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <ShareGameDialog game={game} matchDay={matchDay} team={team} z={z} onClose={() => setOpen(false)} />
+        </div>
+      )}
+    </>
+  )
+}
+
+type Done = 'link' | 'failed' | null
+
+function ShareGameDialog({ game, matchDay, team, z, onClose }: {
+  game: Game
+  matchDay: MatchDay
+  team: Team
+  z?: 30 | 40 | 50
+  onClose: () => void
+}) {
+  const { teams, clubs } = useAppData()
+  const [done, setDone] = useState<Done>(null)
+  const calendar = useMatchCalendar(game, matchDay, team)
+
+  // The origin the member is on: a preview shares a preview, which is the
+  // only link that would show the same data.
+  const url = gameShareUrl({ gameId: game.id, teamId: team.id }, window.location.origin)
+  const message = gameShareMessage({ game, matchDay, teams, clubs, url })
+  // What the sheet shows: the message without its link — an id of eighty
+  // characters says nothing to whoever is about to send it.
+  const preview = gameShareMessage({ game, matchDay, teams, clubs, url: '' })
+  const canShare = typeof navigator.share === 'function'
+
+  async function copy(text: string): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function copyLink() {
+    setDone((await copy(url)) ? 'link' : 'failed')
+  }
+
+  async function shareNative() {
+    try {
+      await navigator.share({ text: message })
+      onClose()
+    } catch {
+      /* dismissed: stay on the choices */
+    }
+  }
+
+  const row = 'flex min-h-11 w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 last:border-b-0'
+
+  return (
+    <ModalShell onClose={onClose} labelledBy="share-game-title" closeOnBackdrop z={z}>
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <h2 id="share-game-title" className="font-display text-lg font-semibold text-slate-800">
+              Partager le match
+            </h2>
+            <p className="mt-1 whitespace-pre-line break-words text-xs text-slate-500" data-testid="share-game-message">
+              {preview}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className={`shrink-0 text-slate-400 hover:text-slate-600 ${ICON_TARGET_CLASS}`}
+          >
+            ✕
+          </button>
+        </div>
+        <ul>
+          {/* First: not a way to share, but the icon that sat beside the date
+              went here (#747) — and only for a date someone confirmed (#429). */}
+          {calendar.confirmed && (
+            <li>
+              <button
+                type="button"
+                className={row}
+                onClick={() => {
+                  calendar.add()
+                  onClose()
+                }}
+              >
+                <CalendarPlusIcon className="h-5 w-5 shrink-0 text-slate-500" />
+                <span className="flex-1 font-medium text-slate-800">Ajouter à mon agenda</span>
+              </button>
+            </li>
+          )}
+          {/* No row for the team's own group: WhatsApp has no link that
+              posts into a given group — an invite link only opens it, which
+              left the member pasting. This one opens WhatsApp's « send to »,
+              the message written, where the team's group is one of the chats. */}
+          <li>
+            <a
+              href={whatsAppShareUrl(message)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={row}
+              onClick={onClose}
+            >
+              <WhatsAppIcon className="h-5 w-5 shrink-0 text-green-600" />
+              <span className="flex-1 font-medium text-slate-800">Envoyer sur WhatsApp</span>
+              <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
+            </a>
+          </li>
+          <li>
+            <button type="button" className={row} onClick={copyLink}>
+              <LinkIcon className="h-5 w-5 shrink-0 text-slate-500" />
+              <span className="flex-1 font-medium text-slate-800">
+                {done === 'link' ? 'Lien copié' : 'Copier le lien'}
+              </span>
+            </button>
+          </li>
+          {canShare && (
+            <li>
+              <button type="button" className={row} onClick={shareNative}>
+                <ShareIcon className="h-5 w-5 shrink-0 text-slate-500" />
+                <span className="flex-1 font-medium text-slate-800">Autres applications…</span>
+                <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
+              </button>
+            </li>
+          )}
+        </ul>
+        {done === 'failed' && (
+          <p role="alert" className="border-t border-slate-100 px-4 py-3 text-sm text-red-600">
+            Impossible de copier. Le lien : <span className="break-all">{url}</span>
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  )
+}

@@ -201,6 +201,15 @@ invisible dans le diff comme dans la revue.
   `SOFT_INPUT_ADJUST_RESIZE`, sa fenêtre rétrécit déjà. Mesuré au bord haut
   du clavier et non à sa hauteur, pour qu'un clavier flottant d'iPad ne
   soulève rien.
+- **L'agenda passe par `expo-calendar/legacy`** (#751). Depuis Expo SDK 57
+  (#589), la racine du paquet exporte encore `createEventInCalendarAsync`, mais
+  comme un bouchon qui **lève toujours** : de 1.5.0 à 1.8.0, « Ajouter à mon
+  agenda » répondait « Impossible d'ouvrir le calendrier » sur tout appareil,
+  match comme séance. Les tests remplaçaient tout le module et n'y voyaient
+  rien. La nouvelle API (`calendar.addEventWithForm()`) demande un calendrier,
+  donc la permission refusée exprès (#418). `__tests__/expo-calendar-legacy.test.ts`
+  lit les sources. **Après une montée de SDK, chercher les « will throw in
+  runtime » des paquets** : un mock de module entier les rend invisibles.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).
@@ -212,6 +221,11 @@ invisible dans le diff comme dans la revue.
   démo, qui en a deux, et invisible à tout test de rendu, jest n'ayant pas de
   moteur de mise en page. `__tests__/sheet-scroll-shrink.test.ts` lit les
   sources et casse le build sur la suivante.
+- **Le bouton « Annuler / Fermer » d'une feuille est dans `selection.actions`**,
+  même seul : `selection.cancelBtn` déclare `flex: 1`, une largeur dans la
+  rangée, mais une hauteur partant de zéro dans la colonne de la feuille — le
+  libellé est rogné et il reste un bouton gris vide (#747, et « Changer de
+  profil » depuis #640). `__tests__/sheet-cancel-row.test.ts` lit les sources.
 - **A licensee's coordinates are `EmailRow` / `PhoneRow`** in the app
   (`mobile/components/ContactRows.tsx`, #503) — the fiche joueur and Mon compte
   had drifted into two identical copies of them, wa.me URL included. Copying is
@@ -286,6 +300,52 @@ invisible dans le diff comme dans la revue.
   qu'aucun événement synthétique ne porte, donc ce que le test d'écran
   vérifie, c'est ce que l'écran *fait* d'un balayage, pas comment RN le
   détecte.
+
+### Partager un match (#747)
+- **Le lien est `/match/<id>?equipe=<équipe>`**, pas `/journees/<id>` : l'ouvrir
+  pose la question « sous quel profil ? », et passer d'un match à l'autre dans
+  l'app ne doit jamais la poser. C'est aussi le **seul chemin** que réclament
+  les liens universels (`apple-app-site-association`, `assetlinks.json`,
+  `associatedDomains` et `intentFilters` dans `mobile/app.json`) :
+  `src/test/universalLinks.spec.ts` tient les quatre d'accord. L'équipe n'est
+  qu'un indice — celle de qui partage.
+- **Le profil qui ouvre est une seule règle, `sharedGameOpening`**
+  (`src/lib/gameShare.ts`), web et app : parmi les profils que la session
+  atteint (`reaches`, délégations comprises), celui qui **joue** le match
+  (effectif, capitaine, ou nommé dans la composition — un renfort). Un seul :
+  on bascule. Plusieurs (un parent et son enfant dans la même équipe) : **on
+  demande**. Aucun : un profil d'un des deux clubs, le courant d'abord. Rien :
+  le profil courant. Le club tranche, et la fédération vient avec : Gilles
+  resté sur Rixheim ouvre un match AGR sous Landser.
+- **Pas de ligne « groupe de l'équipe »** : WhatsApp n'a aucun lien qui écrive
+  dans un groupe donné — un lien d'invitation (`whatsappLink`) ne fait que
+  l'ouvrir. Une première version copiait le message puis ouvrait le groupe, et
+  le membre devait coller ; retirée. « Envoyer sur WhatsApp » (`wa.me/?text=`)
+  ouvre le « envoyer à » de WhatsApp, message écrit, et le groupe de l'équipe
+  y est une conversation parmi les autres.
+- **Sur le web, le bouton est sur l'écran du match et dans la fenêtre d'un
+  match** (`GameQuickView`) : sur un ordinateur, « Détails » mène à la matrice
+  et non à l'écran du match, donc la fenêtre est le seul endroit où il serait
+  trouvé. Il s'y ouvre au-dessus (`z` 50), et `ModalShell` ne laisse plus que
+  la fenêtre du dessus répondre au clavier : un Échap fermait les deux.
+- **« Ajouter à mon agenda » d'un match est une ligne de ce menu**, plus une
+  icône : partout où l'icône d'agenda d'un match était (accueil, écran et
+  fenêtre du match, matrice des Journées), c'est l'icône Partager, et la ligne
+  n'apparaît que sur une date confirmée (#429). Les entraînements gardent leur
+  icône d'agenda. Dans l'app, l'écran d'agenda du système se présente
+  **par-dessus** la feuille, qui ne se ferme qu'après : iOS le présente sur le
+  contrôleur du dessus qui n'est pas en train de se fermer, et une feuille
+  fermée d'abord ne lui laisse rien.
+- **Dans l'app, un lien n'est pas une route** : `+native-intent` le retient
+  (`utils/sharedGameLink.ts`) et envoie le navigateur à l'accueil ;
+  `SharedGameLinks`, monté avec une session comme le push, l'ouvre ensuite.
+  Un lien touché déconnecté survit donc à la connexion — sur le web aussi
+  (`returnPath`, en `sessionStorage` : la connexion Google quitte le site).
+- **Les liens universels sont natifs** : seule une nouvelle version les
+  porte, une mise à jour OTA non. D'ici là le lien ouvre le web, qui choisit
+  le profil de la même façon. `assetlinks.json` liste la clé de signature de
+  Play **et** la clé d'importation d'EAS, pour qu'un build interne installé
+  depuis EAS ouvre aussi le lien.
 
 ### Planning de la phase (#623)
 - **La matrice des Journées lit trois journées pour toutes les équipes ; ceci

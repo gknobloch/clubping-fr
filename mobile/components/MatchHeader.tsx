@@ -1,6 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { CalendarPlusIcon } from '@/components/CalendarPlusIcon'
 import { colors } from '@/constants/colors'
 import { TeamBadge } from '@/components/TeamBadge'
 import { todayIso } from '@/utils/weeks'
@@ -51,7 +50,7 @@ export function MatchHeader({
   showCountdown,
   label,
   labelMine,
-  onAddToCalendar,
+  onShare,
 }: {
   matchDayNumber: number
   divisionLabel?: string
@@ -80,11 +79,10 @@ export function MatchHeader({
   label?: string
   labelMine?: boolean
   /**
-   * When set, an icon button sits in the space to the right of the date and
-   * venue lines (#416, #426) — unless the date is unconfirmed, which is no
-   * date to put in someone's agenda.
+   * « Partager le match » (#747): an icon right of the date and venue lines.
+   * « Ajouter à mon agenda » lives in its menu now, not beside it (#416, #426).
    */
-  onAddToCalendar?: () => void
+  onShare?: () => void
 }) {
   const dateLabel = new Date(matchDayDate + 'T12:00:00').toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -165,15 +163,16 @@ export function MatchHeader({
             </View>
           ) : null}
         </View>
-        {onAddToCalendar && confirmed ? (
+        {onShare ? (
           <TouchableOpacity
-            style={s.calendarBtn}
-            onPress={onAddToCalendar}
+            style={s.shareBtn}
+            onPress={onShare}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Ajouter au calendrier"
+            accessibilityLabel="Partager le match"
+            testID="match-share"
           >
-            <CalendarPlusIcon />
+            <Ionicons name="share-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -219,5 +218,5 @@ const s = StyleSheet.create({
   venueAddress: { textDecorationLine: 'underline', textDecorationColor: colors.border },
   // Bare, like the team header's WhatsApp icon — the app's icon buttons carry
   // no chrome, and hitSlop rather than padding gives them their target.
-  calendarBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  shareBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 })

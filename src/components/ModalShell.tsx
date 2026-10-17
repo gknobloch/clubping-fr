@@ -86,6 +86,11 @@ export function ModalShell({
     ;(focusables()[0] ?? dialog)?.focus()
 
     function onKeyDown(e: KeyboardEvent) {
+      // A dialog opened from another (sharing, from the match dialog — #747)
+      // comes later in the document. Only the top one answers the keyboard:
+      // otherwise one Escape closes both, and Tab is trapped twice.
+      const open = document.querySelectorAll('[aria-modal="true"]')
+      if (open[open.length - 1] !== dialog) return
       if (e.key === 'Escape') {
         e.preventDefault()
         onCloseRef.current()
