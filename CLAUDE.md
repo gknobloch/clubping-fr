@@ -317,11 +317,12 @@ invisible dans le diff comme dans la revue.
   demande**. Aucun : un profil d'un des deux clubs, le courant d'abord. Rien :
   le profil courant. Le club tranche, et la fédération vient avec : Gilles
   resté sur Rixheim ouvre un match AGR sous Landser.
-- **WhatsApp ne sait pas écrire dans un groupe donné** : un lien d'invitation
-  ne fait que l'ouvrir. « Dans le groupe de l'équipe » (`whatsappLink`) copie
-  donc le message, puis ouvre le groupe, et dit de coller. Sur le web, la copie
-  part dans le clic même : après un `await`, Safari bloque l'ouverture et la
-  page n'a plus le focus pour écrire dans le presse-papiers.
+- **Pas de ligne « groupe de l'équipe »** : WhatsApp n'a aucun lien qui écrive
+  dans un groupe donné — un lien d'invitation (`whatsappLink`) ne fait que
+  l'ouvrir. Une première version copiait le message puis ouvrait le groupe, et
+  le membre devait coller ; retirée. « Envoyer sur WhatsApp » (`wa.me/?text=`)
+  ouvre le « envoyer à » de WhatsApp, message écrit, et le groupe de l'équipe
+  y est une conversation parmi les autres.
 - **Sur le web, le bouton est sur l'écran du match et dans la fenêtre d'un
   match** (`GameQuickView`) : sur un ordinateur, « Détails » mène à la matrice
   et non à l'écran du match, donc la fenêtre est le seul endroit où il serait

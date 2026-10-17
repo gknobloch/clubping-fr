@@ -8,7 +8,7 @@ import { gameShareMessage, gameShareUrl, whatsAppShareUrl } from '@/lib/gameShar
 import type { Game, MatchDay, Team } from '@/types'
 
 /**
- * "Partager le match" (#747) — the link, WhatsApp, the team's own group, and
+ * "Partager le match" (#747) — the link, WhatsApp, and
  * « Ajouter à mon agenda », whose icon this one replaced wherever a match
  * showed it (#426).
  *
@@ -54,7 +54,7 @@ export function ShareGameButton({ game, matchDay, team, z, compact = false }: {
   )
 }
 
-type Done = 'link' | 'group' | 'failed' | null
+type Done = 'link' | 'failed' | null
 
 function ShareGameDialog({ game, matchDay, team, z, onClose }: {
   game: Game
@@ -87,15 +87,6 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
 
   async function copyLink() {
     setDone((await copy(url)) ? 'link' : 'failed')
-  }
-
-  // WhatsApp cannot be told to post into a given group: an invite link only
-  // opens it. So the message goes to the clipboard, and the sentence under the
-  // row says to paste it. The copy starts in the click itself, before the link
-  // opens: once the new tab has focus, the page may no longer write to the
-  // clipboard, and a `window.open` after an await is a popup Safari blocks.
-  function shareToGroup() {
-    void copy(message).then((copied) => setDone(copied ? 'group' : 'failed'))
   }
 
   async function shareNative() {
@@ -148,26 +139,10 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
               </button>
             </li>
           )}
-          {team.whatsappLink && (
-            <li>
-              <a
-                href={team.whatsappLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={row}
-                onClick={shareToGroup}
-              >
-                <WhatsAppIcon className="h-5 w-5 shrink-0 text-green-600" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-slate-800">Dans le groupe de l'équipe</span>
-                  <span className="block text-xs text-slate-500">
-                    {done === 'group' ? 'Message copié : collez-le dans le groupe.' : 'Copie le message et ouvre le groupe WhatsApp'}
-                  </span>
-                </span>
-                <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
-              </a>
-            </li>
-          )}
+          {/* No row for the team's own group: WhatsApp has no link that
+              posts into a given group — an invite link only opens it, which
+              left the member pasting. This one opens WhatsApp's « send to »,
+              the message written, where the team's group is one of the chats. */}
           <li>
             <a
               href={whatsAppShareUrl(message)}

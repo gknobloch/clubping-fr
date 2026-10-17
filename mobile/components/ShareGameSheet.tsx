@@ -31,7 +31,7 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onAddToCale
   onAddToCalendar?: () => Promise<void>
   onClose: () => void
 }) {
-  const [done, setDone] = useState<'link' | 'group' | null>(null)
+  const [done, setDone] = useState<'link' | null>(null)
   const url = gameShareUrl({ gameId: game.id, teamId: team.id })
   const message = gameShareMessage({ game, matchDay, teams, clubs, url })
   // What the sheet shows: the message without its link — an id of eighty
@@ -39,15 +39,6 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onAddToCale
   const preview = gameShareMessage({ game, matchDay, teams, clubs, url: '' })
 
   const open = (target: string) => Linking.openURL(target).catch(() => {})
-
-  // WhatsApp cannot be told to post into a given group: an invite link only
-  // opens it. So the message goes to the clipboard first, and the row says to
-  // paste it — the sheet stays open behind WhatsApp to say so on return.
-  async function shareToGroup() {
-    await Clipboard.setStringAsync(message)
-    setDone('group')
-    if (team.whatsappLink) void open(team.whatsappLink)
-  }
 
   async function copyLink() {
     await Clipboard.setStringAsync(url)
@@ -85,15 +76,10 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onAddToCale
             onPress={addToCalendar}
           />
         ) : null}
-        {team.whatsappLink ? (
-          <Row
-            testID="share-game-group"
-            icon={<Ionicons name="logo-whatsapp" size={22} color={WHATSAPP_GREEN} />}
-            label="Dans le groupe de l'équipe"
-            hint={done === 'group' ? 'Message copié : collez-le dans le groupe.' : 'Copie le message et ouvre le groupe WhatsApp'}
-            onPress={shareToGroup}
-          />
-        ) : null}
+        {/* No row for the team's own group: WhatsApp has no link that posts
+            into a given group — an invite link only opens it, which left the
+            member pasting. This one opens WhatsApp's own « send to », the
+            message written, where the team's group is one of the chats. */}
         <Row
           testID="share-game-whatsapp"
           icon={<Ionicons name="logo-whatsapp" size={22} color={WHATSAPP_GREEN} />}

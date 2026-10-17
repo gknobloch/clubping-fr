@@ -137,7 +137,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     expect(screen.queryByText('Ajouter à mon agenda')).toBeNull()
     fireEvent.press(screen.getByLabelText('Partager le match'))
     // First in the menu: it is the icon's old gesture (#747).
-    const rows = screen.getAllByTestId(/^share-game-(calendar|group|whatsapp|copy|native)$/)
+    const rows = screen.getAllByTestId(/^share-game-(calendar|whatsapp|copy|native)$/)
     expect(rows[0].props.testID).toBe('share-game-calendar')
     expect(screen.queryByText("Composer l'équipe")).toBeNull()
   })
@@ -289,22 +289,13 @@ describe("Détail d'un match — partager (#747)", () => {
     open.mockRestore()
   })
 
-  it('offers the team’s group only when the team has one — copying the message, then opening it', async () => {
-    const Clipboard = jest.requireMock('expo-clipboard') as { setStringAsync: jest.Mock }
-    render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Partager le match'))
-    expect(screen.queryByTestId('share-game-group')).toBeNull()
-    fireEvent.press(screen.getByTestId('share-game-close'))
-
+  it('offers no row for the team’s group, even when it has one — WhatsApp’s « send to » reaches it', () => {
+    // An invite link only opens the group: the member had to paste. Removed.
     mockData.teams = [{ ...team, whatsappLink: 'https://chat.whatsapp.com/abc' }, opponent]
-    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true)
     render(<MatchDetailScreen />)
     fireEvent.press(screen.getByLabelText('Partager le match'))
-    fireEvent.press(screen.getByTestId('share-game-group'))
-    await waitFor(() => expect(open).toHaveBeenCalledWith('https://chat.whatsapp.com/abc'))
-    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(message)
-    expect(screen.getByText('Message copié : collez-le dans le groupe.')).toBeTruthy()
-    open.mockRestore()
+    expect(screen.queryByText("Dans le groupe de l'équipe")).toBeNull()
+    expect(screen.getByTestId('share-game-whatsapp')).toBeTruthy()
   })
 
   it('offers sharing even when the date is a guess — the link is not an agenda', () => {
