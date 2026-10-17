@@ -117,9 +117,11 @@ export function SharedGameLinks() {
           )
         })}
       </SelectionList>
-      <TouchableOpacity testID="shared-game-profiles-close" style={selection.cancelBtn} onPress={close}>
-        <Text style={selection.cancelTxt}>Annuler</Text>
-      </TouchableOpacity>
+      <View style={selection.actions}>
+        <TouchableOpacity testID="shared-game-profiles-close" style={selection.cancelBtn} onPress={close}>
+          <Text style={selection.cancelTxt}>Annuler</Text>
+        </TouchableOpacity>
+      </View>
     </Sheet>
   )
 }

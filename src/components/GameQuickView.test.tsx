@@ -128,7 +128,10 @@ describe('GameQuickView — sharing (#747)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Partager le match' }))
     const dialog = screen.getByRole('dialog', { name: 'Partager le match' })
     expect(dialog.className).toContain('z-50')
-    expect(screen.getByTestId('share-game-message').textContent).toContain(`/match/${GAME_ID}?equipe=${TEAM_ID}`)
+    // The preview leaves the link out; the message sent carries it.
+    expect(screen.getByTestId('share-game-message').textContent).not.toContain('/match/')
+    expect(screen.getByRole('link', { name: 'Envoyer sur WhatsApp' }).getAttribute('href'))
+      .toContain(encodeURIComponent(`/match/${GAME_ID}?equipe=${TEAM_ID}`))
   })
 })
 

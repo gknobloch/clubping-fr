@@ -53,6 +53,9 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
   // only link that would show the same data.
   const url = gameShareUrl({ gameId: game.id, teamId: team.id }, window.location.origin)
   const message = gameShareMessage({ game, matchDay, teams, clubs, url })
+  // What the sheet shows: the message without its link — an id of eighty
+  // characters says nothing to whoever is about to send it.
+  const preview = gameShareMessage({ game, matchDay, teams, clubs, url: '' })
   const canShare = typeof navigator.share === 'function'
 
   async function copy(text: string): Promise<boolean> {
@@ -97,7 +100,7 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
               Partager le match
             </h2>
             <p className="mt-1 whitespace-pre-line break-words text-xs text-slate-500" data-testid="share-game-message">
-              {message}
+              {preview}
             </p>
           </div>
           <button

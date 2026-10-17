@@ -29,6 +29,9 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onClose }: 
   const [done, setDone] = useState<'link' | 'group' | null>(null)
   const url = gameShareUrl({ gameId: game.id, teamId: team.id })
   const message = gameShareMessage({ game, matchDay, teams, clubs, url })
+  // What the sheet shows: the message without its link — an id of eighty
+  // characters says nothing to whoever is about to send it.
+  const preview = gameShareMessage({ game, matchDay, teams, clubs, url: '' })
 
   const open = (target: string) => Linking.openURL(target).catch(() => {})
 
@@ -58,7 +61,7 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onClose }: 
   return (
     <Sheet onClose={onClose} testID="share-game-sheet">
       <Text style={selection.title}>Partager le match</Text>
-      <Text style={s.preview} testID="share-game-message">{message}</Text>
+      <Text style={s.preview} testID="share-game-message">{preview}</Text>
       <SelectionList>
         {team.whatsappLink ? (
           <Row
@@ -91,9 +94,11 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onClose }: 
           onPress={shareNative}
         />
       </SelectionList>
-      <TouchableOpacity testID="share-game-close" style={selection.cancelBtn} onPress={onClose}>
-        <Text style={selection.cancelTxt}>Fermer</Text>
-      </TouchableOpacity>
+      <View style={selection.actions}>
+        <TouchableOpacity testID="share-game-close" style={selection.cancelBtn} onPress={onClose}>
+          <Text style={selection.cancelTxt}>Fermer</Text>
+        </TouchableOpacity>
+      </View>
     </Sheet>
   )
 }

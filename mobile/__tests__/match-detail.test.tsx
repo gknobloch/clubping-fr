@@ -263,7 +263,8 @@ describe("Détail d'un match — partager (#747)", () => {
     const Clipboard = jest.requireMock('expo-clipboard') as { setStringAsync: jest.Mock }
     render(<MatchDetailScreen />)
     fireEvent.press(screen.getByLabelText('Partager le match'))
-    expect(screen.getByTestId('share-game-message').props.children).toBe(message)
+    // The sheet shows the message, not the link: the link goes out with it.
+    expect(screen.getByTestId('share-game-message').props.children).toBe(message.split('\nhttps')[0])
     fireEvent.press(screen.getByTestId('share-game-copy'))
     await waitFor(() => expect(screen.getByText('Lien copié')).toBeTruthy())
     expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith('https://clubping.fr/match/g1?equipe=t1')

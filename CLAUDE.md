@@ -212,6 +212,11 @@ invisible dans le diff comme dans la revue.
   démo, qui en a deux, et invisible à tout test de rendu, jest n'ayant pas de
   moteur de mise en page. `__tests__/sheet-scroll-shrink.test.ts` lit les
   sources et casse le build sur la suivante.
+- **Le bouton « Annuler / Fermer » d'une feuille est dans `selection.actions`**,
+  même seul : `selection.cancelBtn` déclare `flex: 1`, une largeur dans la
+  rangée, mais une hauteur partant de zéro dans la colonne de la feuille — le
+  libellé est rogné et il reste un bouton gris vide (#747, et « Changer de
+  profil » depuis #640). `__tests__/sheet-cancel-row.test.ts` lit les sources.
 - **A licensee's coordinates are `EmailRow` / `PhoneRow`** in the app
   (`mobile/components/ContactRows.tsx`, #503) — the fiche joueur and Mon compte
   had drifted into two identical copies of them, wa.me URL included. Copying is
