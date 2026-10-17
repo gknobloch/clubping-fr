@@ -75,6 +75,8 @@ function renderAndClick(gameId: string, teams = mockTeams) {
 /** The share icon, then its menu's agenda row (#747). */
 function addToCalendar() {
   fireEvent.click(screen.getByRole('button', { name: 'Partager le match' }))
+  // First in the menu: it is the icon's old gesture.
+  expect(screen.getAllByRole('listitem')[0].textContent).toBe('Ajouter à mon agenda')
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter à mon agenda' }))
 }
 

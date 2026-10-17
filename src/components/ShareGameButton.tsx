@@ -131,6 +131,23 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
           </button>
         </div>
         <ul>
+          {/* First: not a way to share, but the icon that sat beside the date
+              went here (#747) — and only for a date someone confirmed (#429). */}
+          {calendar.confirmed && (
+            <li>
+              <button
+                type="button"
+                className={row}
+                onClick={() => {
+                  calendar.add()
+                  onClose()
+                }}
+              >
+                <CalendarPlusIcon className="h-5 w-5 shrink-0 text-slate-500" />
+                <span className="flex-1 font-medium text-slate-800">Ajouter à mon agenda</span>
+              </button>
+            </li>
+          )}
           {team.whatsappLink && (
             <li>
               <a
@@ -178,23 +195,6 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
                 <ShareIcon className="h-5 w-5 shrink-0 text-slate-500" />
                 <span className="flex-1 font-medium text-slate-800">Autres applications…</span>
                 <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
-              </button>
-            </li>
-          )}
-          {/* Not a way to share, but the icon that sat beside the date went
-              here (#747) — and only for a date someone confirmed (#429). */}
-          {calendar.confirmed && (
-            <li>
-              <button
-                type="button"
-                className={row}
-                onClick={() => {
-                  calendar.add()
-                  onClose()
-                }}
-              >
-                <CalendarPlusIcon className="h-5 w-5 shrink-0 text-slate-500" />
-                <span className="flex-1 font-medium text-slate-800">Ajouter à mon agenda</span>
               </button>
             </li>
           )}

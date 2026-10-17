@@ -76,6 +76,15 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onAddToCale
       <Text style={selection.title}>Partager le match</Text>
       <Text style={s.preview} testID="share-game-message">{preview}</Text>
       <SelectionList>
+        {/* First: it is for oneself, and the gesture the icon used to be (#747). */}
+        {onAddToCalendar ? (
+          <Row
+            testID="share-game-calendar"
+            icon={<Ionicons name="calendar-outline" size={22} color={colors.textSecondary} />}
+            label="Ajouter à mon agenda"
+            onPress={addToCalendar}
+          />
+        ) : null}
         {team.whatsappLink ? (
           <Row
             testID="share-game-group"
@@ -106,14 +115,6 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onAddToCale
           label="Autres applications…"
           onPress={shareNative}
         />
-        {onAddToCalendar ? (
-          <Row
-            testID="share-game-calendar"
-            icon={<Ionicons name="calendar-outline" size={22} color={colors.textSecondary} />}
-            label="Ajouter à mon agenda"
-            onPress={addToCalendar}
-          />
-        ) : null}
       </SelectionList>
       <View style={selection.actions}>
         <TouchableOpacity testID="share-game-close" style={selection.cancelBtn} onPress={onClose}>

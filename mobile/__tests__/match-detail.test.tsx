@@ -136,7 +136,9 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     // In the share menu (#747), not as a fourth full-width shortcut row.
     expect(screen.queryByText('Ajouter à mon agenda')).toBeNull()
     fireEvent.press(screen.getByLabelText('Partager le match'))
-    expect(screen.getByText('Ajouter à mon agenda')).toBeTruthy()
+    // First in the menu: it is the icon's old gesture (#747).
+    const rows = screen.getAllByTestId(/^share-game-(calendar|group|whatsapp|copy|native)$/)
+    expect(rows[0].props.testID).toBe('share-game-calendar')
     expect(screen.queryByText("Composer l'équipe")).toBeNull()
   })
 
