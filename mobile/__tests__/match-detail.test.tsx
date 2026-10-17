@@ -15,7 +15,7 @@ import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 // file under app/, and a test there is bundled into the app.
 // ---------------------------------------------------------------------------
 const mockCreateEvent = jest.fn().mockResolvedValue({ action: 'saved', id: 'e1' })
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   createEventInCalendarAsync: (...args: unknown[]) => mockCreateEvent(...args),
 }))
 
