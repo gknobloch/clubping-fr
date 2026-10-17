@@ -11,7 +11,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: null, token: null }),
 }))
 
-const { AddToCalendarButton } = await import('./AddToCalendarButton')
+const { ShareGameButton } = await import('./ShareGameButton')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
@@ -55,23 +55,30 @@ function renderAndClick(gameId: string, teams = mockTeams) {
 
   render(
     <DataProvider initialData={{ ...testData, teams }}>
-      <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+      <ShareGameButton game={game} matchDay={matchDay} team={team} />
     </DataProvider>,
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Ajouter à mon agenda' }))
+  addToCalendar()
 
   const anchor = click.mock.instances[0] as HTMLAnchorElement | undefined
   return {
     clicked: click.mock.calls.length,
     fileName: (vi.mocked(document.createElement).mock.results
       .map((r) => r.value as HTMLElement)
-      .find((el) => el instanceof HTMLAnchorElement) as HTMLAnchorElement | undefined)?.download,
+      // The download's own anchor — the share menu's links are anchors too.
+      .find((el) => el instanceof HTMLAnchorElement && !!el.download) as HTMLAnchorElement | undefined)?.download,
     anchor,
     text: () => blobs[0]?.text() ?? Promise.resolve(''),
   }
 }
 
-describe('AddToCalendarButton (#426)', () => {
+/** The share icon, then its menu's agenda row (#747). */
+function addToCalendar() {
+  fireEvent.click(screen.getByRole('button', { name: 'Partager le match' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Ajouter à mon agenda' }))
+}
+
+describe('« Ajouter à mon agenda », in the share menu (#426, #747)', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -102,10 +109,11 @@ describe('AddToCalendarButton (#426)', () => {
 
     render(
       <DataProvider initialData={testData}>
-        <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+        <ShareGameButton game={game} matchDay={matchDay} team={team} />
       </DataProvider>,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: 'Partager le match' }))
     expect(screen.queryByRole('button', { name: 'Ajouter à mon agenda' })).not.toBeInTheDocument()
   })
 
@@ -124,10 +132,10 @@ describe('AddToCalendarButton (#426)', () => {
 
     render(
       <DataProvider initialData={{ ...testData, teams, games }}>
-        <AddToCalendarButton game={game} matchDay={matchDay} team={teams.find((t) => t.id === 'team-1')!} />
+        <ShareGameButton game={game} matchDay={matchDay} team={teams.find((t) => t.id === 'team-1')!} />
       </DataProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter à mon agenda' }))
+    addToCalendar()
     const ics = await blobs[0].text()
 
     expect(ics).toContain('DTSTART;VALUE=DATE:')
@@ -144,13 +152,14 @@ describe('AddToCalendarButton (#426)', () => {
     render(
       <DataProvider initialData={testData}>
         {/* The Journées matrix cell is itself a button: for an admin it opens
-            the slot editor, and the icon must not open it (#426). */}
+            the slot editor, and neither the icon nor its menu may open it
+            (#426, #747). */}
         <div role="button" tabIndex={0} onClick={outerClick}>
-          <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
+          <ShareGameButton game={game} matchDay={matchDay} team={team} compact />
         </div>
       </DataProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter à mon agenda' }))
+    addToCalendar()
 
     expect(outerClick).not.toHaveBeenCalled()
   })

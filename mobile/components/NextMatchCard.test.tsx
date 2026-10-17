@@ -86,7 +86,7 @@ function renderCard({
       isCaptain={isCaptain}
       onCompose={onCompose}
       onOpenDetail={onOpenDetail}
-      onAddToCalendar={jest.fn()}
+      onShare={jest.fn()}
       wide={wide}
       team={team({ canEdit })}
     />,

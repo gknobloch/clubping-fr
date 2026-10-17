@@ -17,7 +17,7 @@ import {
   activeMatchDayNumber,
   formatMatchDayRange,
 } from '@/lib/matchdays'
-import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { ShareGameButton } from '@/components/ShareGameButton'
 import { MatchDayCards, type MatchDayCardEntry } from '@/components/MatchDayCards'
 import { Switcher } from '@/components/Switcher'
 import { sortByName } from '@/lib/sortByName'
@@ -1278,11 +1278,11 @@ export function MatchDaysPage() {
                                           )}
                                         </span>
                                         {/* The one route from this screen to a player's own agenda
-                                            (#426): the cell is inert for a member, and for an admin
-                                            it opens the slot editor — neither leads to a calendar.
-                                            Only on a confirmed slot: the branch below says the date
-                                            is not known yet, and an agenda is no place for a guess. */}
-                                        <AddToCalendarButton game={game} matchDay={md} team={team} compact />
+                                            (#426) — the « Partager » menu since #747: the cell is
+                                            inert for a member, and for an admin it opens the slot
+                                            editor — neither leads to a calendar. Where the calendar
+                                            icon was, on a confirmed slot only. */}
+                                        <ShareGameButton game={game} matchDay={md} team={team} compact />
                                       </span>
                                     ) : sched.week ? (
                                       <span

@@ -2,37 +2,54 @@ import { useState } from 'react'
 import { useAppData } from '@/contexts/DataContext'
 import { ICON_TARGET_CLASS } from '@/components/Button'
 import { ModalShell } from '@/components/ModalShell'
-import { ChevronRightIcon, LinkIcon, ShareIcon, WhatsAppIcon } from '@/components/icons'
+import { CalendarPlusIcon, ChevronRightIcon, LinkIcon, ShareIcon, WhatsAppIcon } from '@/components/icons'
+import { useMatchCalendar } from '@/components/useMatchCalendar'
 import { gameShareMessage, gameShareUrl, whatsAppShareUrl } from '@/lib/gameShare'
 import type { Game, MatchDay, Team } from '@/types'
 
 /**
- * "Partager le match" (#747) — the link, WhatsApp, and the team's own group.
+ * "Partager le match" (#747) — the link, WhatsApp, the team's own group, and
+ * « Ajouter à mon agenda », whose icon this one replaced wherever a match
+ * showed it (#426).
  *
  * The link names the sender's team only as a hint: whoever opens it lands on
  * their own side, under the profile that plays it (`sharedGameOpening`).
  */
-export function ShareGameButton({ game, matchDay, team, z }: {
+export function ShareGameButton({ game, matchDay, team, z, compact = false }: {
   game: Game
   matchDay: MatchDay
   /** The side of the fixture on screen — the sender's. */
   team: Team
   /** Stacking level: above the match dialog (40) when it opens from there. */
   z?: 30 | 40 | 50
+  /** For the Journées matrix, whose cells have no room for the full-size icon. */
+  compact?: boolean
 }) {
   const [open, setOpen] = useState(false)
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={(e) => {
+          // A matrix cell is itself a button: for an admin it opens the slot
+          // editor (#426), and this icon must not open it too.
+          e.stopPropagation()
+          e.preventDefault()
+          setOpen(true)
+        }}
         title="Partager le match"
         aria-label="Partager le match"
         className={`shrink-0 text-slate-500 transition-colors hover:text-accent-600 ${ICON_TARGET_CLASS}`}
       >
-        <ShareIcon className="h-6 w-6 md:h-5 md:w-5" />
+        <ShareIcon className={compact ? 'h-4 w-4' : 'h-6 w-6 md:h-5 md:w-5'} />
       </button>
-      {open && <ShareGameDialog game={game} matchDay={matchDay} team={team} z={z} onClose={() => setOpen(false)} />}
+      {open && (
+        // React events climb the component tree, not the DOM: without this, a
+        // click inside the dialog would still reach the matrix cell around it.
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <ShareGameDialog game={game} matchDay={matchDay} team={team} z={z} onClose={() => setOpen(false)} />
+        </div>
+      )}
     </>
   )
 }
@@ -48,6 +65,7 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
 }) {
   const { teams, clubs } = useAppData()
   const [done, setDone] = useState<Done>(null)
+  const calendar = useMatchCalendar(game, matchDay, team)
 
   // The origin the member is on: a preview shares a preview, which is the
   // only link that would show the same data.
@@ -160,6 +178,23 @@ function ShareGameDialog({ game, matchDay, team, z, onClose }: {
                 <ShareIcon className="h-5 w-5 shrink-0 text-slate-500" />
                 <span className="flex-1 font-medium text-slate-800">Autres applications…</span>
                 <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" />
+              </button>
+            </li>
+          )}
+          {/* Not a way to share, but the icon that sat beside the date went
+              here (#747) — and only for a date someone confirmed (#429). */}
+          {calendar.confirmed && (
+            <li>
+              <button
+                type="button"
+                className={row}
+                onClick={() => {
+                  calendar.add()
+                  onClose()
+                }}
+              >
+                <CalendarPlusIcon className="h-5 w-5 shrink-0 text-slate-500" />
+                <span className="flex-1 font-medium text-slate-800">Ajouter à mon agenda</span>
               </button>
             </li>
           )}

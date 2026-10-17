@@ -5,8 +5,8 @@ import type { Club, Division, Game, Group, MatchDay, Player, Team, User } from '
 import MatchDetailScreen from '@/app/(tabs)/(detail)/match/[id]'
 
 // ---------------------------------------------------------------------------
-// Détail d'un match — the "Ajouter au calendrier" icon in the match header
-// (#416). What is worth asserting here is the hand-off: that the icon is
+// Détail d'un match — « Ajouter à mon agenda » (#416), a row of the header's
+// « Partager » menu since #747. What is worth asserting here is the hand-off: that the icon is
 // offered to everyone, and that the event handed to the OS carries the match
 // the screen displays.
 // The event's own shape is covered by utils/calendar.test.ts.
@@ -123,20 +123,27 @@ beforeEach(() => {
   ]
 })
 
+/** The share icon, then the menu's agenda row. */
+function addToCalendar() {
+  fireEvent.press(screen.getByLabelText('Partager le match'))
+  fireEvent.press(screen.getByTestId('share-game-calendar'))
+}
+
 describe("Détail d'un match — ajouter au calendrier", () => {
-  it('offers the icon to a plain member, who composes nothing', () => {
+  it('offers it to a plain member, who composes nothing', () => {
     render(<MatchDetailScreen />)
 
-    expect(screen.getByLabelText('Ajouter au calendrier')).toBeTruthy()
-    // It sits in the header, not as a fourth full-width shortcut row.
-    expect(screen.queryByText('Ajouter au calendrier')).toBeNull()
+    // In the share menu (#747), not as a fourth full-width shortcut row.
+    expect(screen.queryByText('Ajouter à mon agenda')).toBeNull()
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.getByText('Ajouter à mon agenda')).toBeTruthy()
     expect(screen.queryByText("Composer l'équipe")).toBeNull()
   })
 
   it('hands the OS an event pre-filled with the match', async () => {
     render(<MatchDetailScreen />)
 
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent).toHaveBeenCalledWith({
@@ -155,7 +162,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockData.games = [{ ...game, homeTeamId: 't2', awayTeamId: 't1' }]
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({
@@ -169,7 +176,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockData.games = [{ ...game, time: undefined }]
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({
@@ -187,7 +194,8 @@ describe("Détail d'un match — ajouter au calendrier", () => {
 
     render(<MatchDetailScreen />)
 
-    expect(screen.queryByLabelText('Ajouter au calendrier')).toBeNull()
+    fireEvent.press(screen.getByLabelText('Partager le match'))
+    expect(screen.queryByTestId('share-game-calendar')).toBeNull()
     expect(screen.getByText(/Date à confirmer/)).toBeTruthy()
   })
 
@@ -198,7 +206,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockData.games = [{ ...game, time: undefined }]
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(mockCreateEvent).toHaveBeenCalled())
     expect(mockCreateEvent.mock.calls[0][0]).toMatchObject({ allDay: true })
@@ -209,7 +217,7 @@ describe("Détail d'un match — ajouter au calendrier", () => {
     mockCreateEvent.mockRejectedValue(new Error('no calendar'))
 
     render(<MatchDetailScreen />)
-    fireEvent.press(screen.getByLabelText('Ajouter au calendrier'))
+    addToCalendar()
 
     await waitFor(() => expect(alert).toHaveBeenCalled())
     expect(alert.mock.calls[0][1]).toContain('calendrier')

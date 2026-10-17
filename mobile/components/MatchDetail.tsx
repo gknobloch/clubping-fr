@@ -246,7 +246,6 @@ export function MatchDetail({
               time={thisGameTime || undefined}
               confirmed={slotConfirmed}
               venue={venue}
-              onAddToCalendar={() => openMatchInCalendar(calendarEvent)}
               onShare={() => setSharing(true)}
             />
           </View>
@@ -436,6 +435,8 @@ export function MatchDetail({
           team={team}
           teams={teams}
           clubs={clubs}
+          // No agenda gets the FFTT's guess (#429).
+          onAddToCalendar={slotConfirmed ? () => openMatchInCalendar(calendarEvent) : undefined}
           onClose={() => setSharing(false)}
         />
       )}

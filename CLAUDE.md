@@ -327,6 +327,14 @@ invisible dans le diff comme dans la revue.
   et non à l'écran du match, donc la fenêtre est le seul endroit où il serait
   trouvé. Il s'y ouvre au-dessus (`z` 50), et `ModalShell` ne laisse plus que
   la fenêtre du dessus répondre au clavier : un Échap fermait les deux.
+- **« Ajouter à mon agenda » d'un match est une ligne de ce menu**, plus une
+  icône : partout où l'icône d'agenda d'un match était (accueil, écran et
+  fenêtre du match, matrice des Journées), c'est l'icône Partager, et la ligne
+  n'apparaît que sur une date confirmée (#429). Les entraînements gardent leur
+  icône d'agenda. Dans l'app, l'écran d'agenda du système se présente
+  **par-dessus** la feuille, qui ne se ferme qu'après : iOS le présente sur le
+  contrôleur du dessus qui n'est pas en train de se fermer, et une feuille
+  fermée d'abord ne lui laisse rien.
 - **Dans l'app, un lien n'est pas une route** : `+native-intent` le retient
   (`utils/sharedGameLink.ts`) et envoie le navigateur à l'accueil ;
   `SharedGameLinks`, monté avec une session comme le push, l'ouvre ensuite.

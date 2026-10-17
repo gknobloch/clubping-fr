@@ -8,7 +8,7 @@ import { Avatar } from '@/components/Avatar'
 import { IdentityCard } from '@/components/IdentityCard'
 import { ClubLogo } from '@/components/ClubLogo'
 import { TeamBadge } from '@/components/TeamBadge'
-import { AddToCalendarButton } from '@/components/AddToCalendarButton'
+import { ShareGameButton } from '@/components/ShareGameButton'
 import { MatchDate } from '@/components/MatchDate'
 import { GameQuickView } from '@/components/GameQuickView'
 import { PlayerPhaseHistory } from '@/components/PlayerPhaseHistory'
@@ -264,9 +264,10 @@ export function HomePage() {
                           <span className="text-slate-400">{isHome ? <HomeIcon className="h-4 w-4" /> : <AwayIcon className="h-4 w-4" />}</span>
                           {matchup}
                         </h2>
-                        {/* The slot, and the icon that blocks it in the
-                            player's own agenda (#426): answering OUI and
-                            writing the match down are one gesture apart. */}
+                        {/* The slot, and « Partager » (#747), whose menu
+                            blocks it in the player's own agenda (#426):
+                            answering OUI and writing the match down stay a
+                            gesture or two apart. */}
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <div className="min-w-0 space-y-1">
                             <p className="text-sm text-slate-500">
@@ -277,7 +278,7 @@ export function HomePage() {
                                 the same lines as the match screen's. */}
                             <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} />
                           </div>
-                          <AddToCalendarButton game={g} matchDay={md} team={myActiveTeam} />
+                          <ShareGameButton game={g} matchDay={md} team={myActiveTeam} />
                         </div>
                         {/* Labelled now that the team's own answers sit beside
                             it from md: up: two identical OUI / PE / NON

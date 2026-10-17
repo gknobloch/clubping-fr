@@ -17,13 +17,18 @@ const WHATSAPP_GREEN = '#25D366'
  * The link names the sender's team only as a hint: whoever opens it lands on
  * their own side, under the profile that plays it (`sharedGameOpening`).
  */
-export function ShareGameSheet({ game, matchDay, team, teams, clubs, onClose }: {
+export function ShareGameSheet({ game, matchDay, team, teams, clubs, onAddToCalendar, onClose }: {
   game: Game
   matchDay: MatchDay
   /** The side of the fixture on screen — the sender's. */
   team: Team
   teams: Team[]
   clubs: Club[]
+  /**
+   * « Ajouter à mon agenda » — the icon that sat beside the date, moved here
+   * (#747). Absent while the date is a guess (#429): no agenda gets one.
+   */
+  onAddToCalendar?: () => Promise<void>
   onClose: () => void
 }) {
   const [done, setDone] = useState<'link' | 'group' | null>(null)
@@ -47,6 +52,14 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onClose }: 
   async function copyLink() {
     await Clipboard.setStringAsync(url)
     setDone('link')
+  }
+
+  // The OS's event screen is presented over this sheet, not after it: iOS
+  // presents it on the topmost controller that is not being dismissed, and a
+  // sheet closing first leaves nothing it may present on. Closed once it is done.
+  async function addToCalendar() {
+    await onAddToCalendar?.()
+    onClose()
   }
 
   async function shareNative() {
@@ -93,6 +106,14 @@ export function ShareGameSheet({ game, matchDay, team, teams, clubs, onClose }: 
           label="Autres applications…"
           onPress={shareNative}
         />
+        {onAddToCalendar ? (
+          <Row
+            testID="share-game-calendar"
+            icon={<Ionicons name="calendar-outline" size={22} color={colors.textSecondary} />}
+            label="Ajouter à mon agenda"
+            onPress={addToCalendar}
+          />
+        ) : null}
       </SelectionList>
       <View style={selection.actions}>
         <TouchableOpacity testID="share-game-close" style={selection.cancelBtn} onPress={onClose}>

@@ -12,7 +12,6 @@ import { competitionGroupOf, competitionOfDivision, eligiblePlayers } from '@/li
 import { activeSeasonId } from '@/lib/season'
 import { clubLicences } from '@/lib/seasonLicences'
 import { withSeasonCategory } from '@/lib/seasonCategories'
-import { AddToCalendarButton } from '@/components/AddToCalendarButton'
 import { ShareGameButton } from '@/components/ShareGameButton'
 import { MatchVenueLink } from '@/components/MatchVenueLink'
 import { getMatchVenue } from '@/lib/venue'
@@ -229,10 +228,7 @@ export function MatchDayDetailPage() {
             </p>
             <MatchVenueLink venue={getMatchVenue(homeTeam, clubs)} />
           </div>
-          <div className="flex shrink-0 items-center">
-            <AddToCalendarButton game={game} matchDay={matchDay} team={team} />
-            <ShareGameButton game={game} matchDay={matchDay} team={team} />
-          </div>
+          <ShareGameButton game={game} matchDay={matchDay} team={team} />
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
