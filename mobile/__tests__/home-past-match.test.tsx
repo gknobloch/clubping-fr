@@ -15,7 +15,7 @@ import HomeScreen from '@/app/(tabs)/index'
 // stayed ahead of you until Sunday night; the web had always cut at the day.
 // Both now go through `upcomingTeamGames`.
 // ---------------------------------------------------------------------------
-jest.mock('expo-calendar', () => ({ createEventInCalendarAsync: jest.fn() }))
+jest.mock('expo-calendar/legacy', () => ({ createEventInCalendarAsync: jest.fn() }))
 
 const mockAuth: { user: User | null; displayName: string } = { user: null, displayName: 'Bo Martin' }
 const mockData = {

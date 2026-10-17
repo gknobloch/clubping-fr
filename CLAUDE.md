@@ -201,6 +201,15 @@ invisible dans le diff comme dans la revue.
   `SOFT_INPUT_ADJUST_RESIZE`, sa fenêtre rétrécit déjà. Mesuré au bord haut
   du clavier et non à sa hauteur, pour qu'un clavier flottant d'iPad ne
   soulève rien.
+- **L'agenda passe par `expo-calendar/legacy`** (#751). Depuis Expo SDK 57
+  (#589), la racine du paquet exporte encore `createEventInCalendarAsync`, mais
+  comme un bouchon qui **lève toujours** : de 1.5.0 à 1.8.0, « Ajouter à mon
+  agenda » répondait « Impossible d'ouvrir le calendrier » sur tout appareil,
+  match comme séance. Les tests remplaçaient tout le module et n'y voyaient
+  rien. La nouvelle API (`calendar.addEventWithForm()`) demande un calendrier,
+  donc la permission refusée exprès (#418). `__tests__/expo-calendar-legacy.test.ts`
+  lit les sources. **Après une montée de SDK, chercher les « will throw in
+  runtime » des paquets** : un mock de module entier les rend invisibles.
 - Dialogs go through `ModalShell`, which makes them bottom sheets below `sm:`.
   Never use `window.confirm` — it is silently inert on iOS Safari once a member
   blocks dialogs. Use `useConfirm` (#375).

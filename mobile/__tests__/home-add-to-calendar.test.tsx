@@ -12,7 +12,7 @@ import HomeScreen from '@/app/(tabs)/index'
 // press must not open the detail screen instead.
 // ---------------------------------------------------------------------------
 const mockCreateEvent = jest.fn().mockResolvedValue({ action: 'saved', id: 'e1' })
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   createEventInCalendarAsync: (...args: unknown[]) => mockCreateEvent(...args),
 }))
 
