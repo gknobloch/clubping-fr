@@ -42,6 +42,8 @@ export interface ClubMergeContext {
   teams: ReadonlyArray<{ clubId: string; phaseId: string; number: number }>
   memberGroups: ReadonlyArray<{ clubId: string; displayName: string }>
   competitionGroups: ReadonlyArray<{ clubId: string; competitionId: string }>
+  /** Both clubs' profiles: a person with one in each would end up twice in one club (#766). */
+  profiles: ReadonlyArray<{ clubId?: string; personId?: string; firstName?: string; lastName?: string }>
 }
 
 export type ClubMergeRefusal =
@@ -51,6 +53,7 @@ export type ClubMergeRefusal =
   | { reason: 'team_numbers'; message: string }
   | { reason: 'group_names'; message: string }
   | { reason: 'competition_groups'; message: string }
+  | { reason: 'same_person'; message: string }
 
 const groupKey = (name: string) => name.trim().toLowerCase()
 
@@ -106,6 +109,21 @@ export function clubMergeRefusal(
     return {
       reason: 'competition_groups',
       message: 'Les deux clubs réservent une même compétition à un groupe : levez l’une des deux réservations d’abord.',
+    }
+  }
+
+  // One person, a profile in each (#766): « Ajouter à un autre club » into the
+  // AGR's copy of Bootzheim, then this merge, left Agathe Da Costa twice in one
+  // club — twice in Joueurs, among the administrators and in her switcher.
+  // Which profile stays is a decision: one never used is deleted (#733), and
+  // the other is the one she signs in with.
+  const keptPeople = new Set(ctx.profiles.filter((p) => p.clubId === keep.id && p.personId).map((p) => p.personId))
+  const twice = ctx.profiles.filter((p) => p.clubId === remove.id && p.personId && keptPeople.has(p.personId))
+  if (twice.length) {
+    const who = [...new Set(twice.map((p) => [p.firstName, p.lastName].filter(Boolean).join(' ') || 'un membre'))]
+    return {
+      reason: 'same_person',
+      message: `${who.join(', ')} ${who.length > 1 ? 'ont' : 'a'} un profil dans chacun des deux clubs : supprimez ou archivez l’un des deux d’abord.`,
     }
   }
   return null

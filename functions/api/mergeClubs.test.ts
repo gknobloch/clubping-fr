@@ -104,6 +104,17 @@ describe('merging two rows of one club (#730)', () => {
     expect(d1.rows(`SELECT club_id FROM teams WHERE id = 'team-l1'`)).toEqual([{ club_id: LANDSER_IMPORTED }])
   })
 
+  it('refuses a person with a profile in each club, and moves nobody (#766)', async () => {
+    const d1 = world()
+    // Gilles added to the imported row by « Ajouter à un autre club »: one person, two profiles.
+    addMember(d1.exec, { id: 'gilles-bis', firstName: 'Gilles', lastName: 'Knobloch', clubId: LANDSER_IMPORTED, personId: 'person-gilles' })
+    const ga = await as(d1, 'ga')
+    const res = await ga(LANDSER_IMPORTED, LANDSER)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: 'same_person', message: expect.stringContaining('Gilles') })
+    expect(d1.rows(`SELECT club_id FROM users WHERE id = 'gilles-bis'`)).toEqual([{ club_id: LANDSER_IMPORTED }])
+  })
+
   it('refuses two different FFTT numbers: those are two clubs', async () => {
     const d1 = world()
     d1.exec("INSERT INTO clubs (id, affiliation_number, display_name, is_archived) VALUES ('club-fftt-06680011', '06680011', 'Rixheim PPA', 0)")

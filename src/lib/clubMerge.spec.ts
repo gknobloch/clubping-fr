@@ -9,7 +9,7 @@ const kembs = club('club-fftt-06680140', 'Kembs TT', '06680140')
 const kembsAgr = club('club-1-dfavb', 'Kembs ASL TT', '', [{ federationId: 'agr', affiliationNumber: '' }])
 const landser = club('club-agr-680036', 'ASL Landser', '', [{ federationId: 'agr', affiliationNumber: '680036' }])
 const landserImported = club('club-2-o1zd8', 'Landser ASL', '', [{ federationId: 'agr', affiliationNumber: '680036' }])
-const empty: ClubMergeContext = { teams: [], memberGroups: [], competitionGroups: [] }
+const empty: ClubMergeContext = { teams: [], memberGroups: [], competitionGroups: [], profiles: [] }
 
 describe('clubMergeKeeper', () => {
   it('keeps the row whose id the imports look up, whichever was picked', () => {
@@ -53,5 +53,28 @@ describe('clubMergeRefusal', () => {
     expect(clubMergeRefusal(kembs, kembsAgr, {
       ...empty, competitionGroups: [{ clubId: kembs.id, competitionId: 'c' }, { clubId: kembsAgr.id, competitionId: 'c' }],
     })?.reason).toBe('competition_groups')
+  })
+
+  it('refuses a person with a profile in each club, naming them — two people of one name are not (#766)', () => {
+    const agathe = { firstName: 'Agathe', lastName: 'Da Costa' }
+    const refusal = clubMergeRefusal(kembs, kembsAgr, {
+      ...empty,
+      profiles: [
+        { clubId: kembs.id, personId: 'person-agathe', ...agathe },
+        { clubId: kembsAgr.id, personId: 'person-agathe', ...agathe },
+      ],
+    })
+    expect(refusal).toEqual({
+      reason: 'same_person',
+      message: 'Agathe Da Costa a un profil dans chacun des deux clubs : supprimez ou archivez l’un des deux d’abord.',
+    })
+    expect(clubMergeRefusal(kembs, kembsAgr, {
+      ...empty,
+      profiles: [
+        { clubId: kembs.id, personId: 'person-a', ...agathe },
+        { clubId: kembsAgr.id, personId: 'person-b', ...agathe },
+        { clubId: kembsAgr.id, ...agathe },
+      ],
+    })).toBeNull()
   })
 })

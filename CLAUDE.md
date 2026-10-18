@@ -1007,7 +1007,11 @@ invisible dans le diff comme dans la revue.
 - **Ce qui demande une décision est refusé avec sa raison**
   (`clubMergeRefusal`, la même règle des deux côtés) : deux numéros FFTT, deux
   numéros d'une même fédération, deux équipes d'un même numéro dans une même
-  phase, deux groupes de même nom, une compétition réservée des deux côtés.
+  phase, deux groupes de même nom, une compétition réservée des deux côtés,
+  et **une personne qui a un profil dans chacun des deux** (#766) : déplacés
+  tels quels, Agathe Da Costa s'est retrouvée deux fois à FCJ Bootzheim —
+  dans Joueurs, parmi les administrateurs, dans son sélecteur. Lequel garder
+  est une décision : un profil jamais utilisé se supprime (#733).
 - Les ids d'équipe restent ce qu'ils sont (#282) : une équipe change de club
   sans changer d'id, ses rencontres la suivent.
 - **La revue d'un calendrier propose tous les clubs**, ceux de la fédération
