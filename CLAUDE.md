@@ -1030,6 +1030,18 @@ invisible dans le diff comme dans la revue.
   AGR active ; et **le nom d'une personne existante n'est jamais proposé** —
   la FFTT et l'AGR l'écrivent différemment (#655). Un homonyme reste une
   question, jamais une fusion.
+- **« NC » et « 80-D » sont des classements** (#765), gardés tels qu'imprimés :
+  non classé, et classement dames. `compareRanking` les lit — un classement
+  dames vaut le classement messieurs + 15 (`AGR_WOMEN_OFFSET` : 60-D joue
+  comme un 75, donc un 70 est mieux classé), et NC passe après tout
+  classement, avant l'absence de valeur. Lus autrement, ces lignes tombaient
+  dans « Lignes non lues ».
+- **Les homonymes du club se lisent dans `users`**, et `addPlayer` /
+  `updatePlayer` y écrivent aussi (#765) : sans quoi un import FFTT suivi de
+  la liste AGR, sans rechargement, ne retrouvait personne et proposait de
+  créer chaque licencié une seconde fois. « Tout rattacher » répond d'un coup
+  aux questions de même nom dans le club — une question, posée une fois ;
+  chaque ligne s'annule encore.
 - Une liste d'un autre club est refusée (numéro d'affiliation). Entrée :
   « Importer la liste AGR » sur Joueurs, pour un club de cette fédération,
   sur le web comme dans l'app (#681).

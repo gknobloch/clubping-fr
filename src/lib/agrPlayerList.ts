@@ -32,8 +32,10 @@ export interface AgrPlayerList {
 const HEADER_RE = /^Numéro de licence\s+NOM\s+Prénom\s+Classement/i
 const AFFILIATION_RE = /^\(\s*(\d+)\s*\)$/
 // « 1525803 BÜCHI Christian 30 »: the family name is the leading words in
-// capitals, the first name the rest, then the classement.
-const ROW_RE = /^(\d{4,9})\s+(.+?)\s+(\d{1,3})$/
+// capitals, the first name the rest, then the classement — « 80-D » for a
+// woman's (#765), « NC » for a licensee not yet classed. Kept as printed;
+// `compareRanking` is what reads them.
+const ROW_RE = /^(\d{4,9})\s+(.+?)\s+(\d{1,3}-D|\d{1,3}|NC)$/
 const UPPER_WORD = /^[\p{Lu}][\p{Lu}'’-]*$/u
 const FOOTER_RE = /^Impression du\b/i
 

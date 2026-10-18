@@ -59,21 +59,40 @@ export function formatRankingShort(value: string | undefined, federationId: stri
   return federationId && federationId !== FFTT_FEDERATION_ID && RULES[federationId] ? value.trim() : `${value} pts`
 }
 
-const numeric = (v: string | undefined): number | undefined => {
-  const n = Number(v?.trim())
-  return v?.trim() && Number.isFinite(n) ? n : undefined
+/**
+ * Where a women's classement sits on the men's scale at the AGR (#765): 60-D
+ * plays as a 75, 55-D as a 70 — so a 70 ranks better than a 60-D.
+ */
+export const AGR_WOMEN_OFFSET = 15
+
+/** « NC », non classé: a value, and the weakest one there is. */
+const NOT_CLASSED = 'NC'
+
+const numeric = (federationId: string | undefined, v: string | undefined): number | undefined => {
+  const t = v?.trim().toUpperCase()
+  if (!t) return undefined
+  if (rankingRule(federationId).lowerIsBetter) {
+    if (t === NOT_CLASSED) return Number.POSITIVE_INFINITY
+    const women = /^(\d+)\s*-\s*D$/.exec(t)
+    if (women) return Number(women[1]) + AGR_WOMEN_OFFSET
+  }
+  const n = Number(t)
+  return Number.isFinite(n) ? n : undefined
 }
 
 /**
  * Better ranked first, for a sort: negative when `a` ranks better than `b`.
  * Equal values compare equal — the AGR allows ties —, and a player with no
- * value comes after every player with one, whichever the direction.
+ * value comes after every player with one, whichever the direction. At the
+ * AGR, « 80-D » is read on the men's scale and « NC » comes after every
+ * classement — still before no value at all (#765).
  */
 export function compareRanking(federationId: string | undefined, a: string | undefined, b: string | undefined): number {
-  const x = numeric(a)
-  const y = numeric(b)
+  const x = numeric(federationId, a)
+  const y = numeric(federationId, b)
   if (x === undefined || y === undefined) return Number(x === undefined) - Number(y === undefined)
-  return rankingRule(federationId).lowerIsBetter ? x - y : y - x
+  if (x === y) return 0
+  return rankingRule(federationId).lowerIsBetter ? (x < y ? -1 : 1) : (x > y ? -1 : 1)
 }
 
 /**

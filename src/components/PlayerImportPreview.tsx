@@ -28,10 +28,11 @@ function rowName(row: PlayerImportRow): string {
  * on one field does.
  */
 function LinkOffer({
-  row, onConfirm,
+  row, onConfirm, federationName,
 }: {
   row: PlayerImportRow
   onConfirm: (licence: string, memberId: string | null) => void
+  federationName?: string
 }) {
   const link = row.link!
   // Somebody of another club (#731): saying yes adds a profile here to the
@@ -60,7 +61,9 @@ function LinkOffer({
         {link.archived ? ' (archivé)' : ''} figure déjà dans le club
         {link.heldLicence
           ? <> sous la licence <span className="font-mono">{link.heldLicence}</span>.</>
-          : <> sans numéro de licence.</>}
+          // Another federation's list (#765): the member may well hold an
+          // FFTT licence — it is this federation's they have none of.
+          : federationName ? <> sans licence {federationName}.</> : <> sans numéro de licence.</>}
         {' '}Est-ce la même personne&nbsp;?
       </p>
       <button
@@ -90,7 +93,7 @@ const STATUS_BADGE: Record<PlayerImportRow['status'], { label: string; className
  * would bury the handful of lines that matter.
  */
 export function PlayerImportPreview({
-  rows, selected, confirmed, onToggleField, onToggleRow, onConfirmLink,
+  rows, selected, confirmed, onToggleField, onToggleRow, onConfirmLink, federationName,
 }: {
   rows: PlayerImportRow[]
   /** Selected `licence:field` keys. */
@@ -100,6 +103,8 @@ export function PlayerImportPreview({
   onToggleField: (licence: string, field: PlayerSyncField['key']) => void
   onToggleRow: (licence: string, checked: boolean) => void
   onConfirmLink: (licence: string, memberId: string | null) => void
+  /** Another federation's list (#648) — « AGR »; absent for the FFTT's. */
+  federationName?: string
 }) {
   return (
     <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -131,7 +136,7 @@ export function PlayerImportPreview({
                   </span>
                 </label>
 
-                {row.link && <LinkOffer row={row} onConfirm={onConfirmLink} />}
+                {row.link && <LinkOffer row={row} onConfirm={onConfirmLink} federationName={federationName} />}
                 {isLinked && (
                   <p className="mt-1 text-sm text-slate-600">
                     {row.join

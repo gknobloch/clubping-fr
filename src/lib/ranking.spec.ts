@@ -44,6 +44,16 @@ describe('compareRanking', () => {
     expect(compareRanking('fftt', '905', undefined)).toBeLessThan(0)
     expect(compareRanking('agr', undefined, '')).toBe(0)
   })
+
+  it('reads a women’s classement on the men’s scale at the AGR: 60-D plays as a 75 (#765)', () => {
+    expect(sorted('agr', ['60-D', '80', '70'])).toEqual(['70', '60-D', '80'])
+    expect(compareRanking('agr', '55-D', '70')).toBe(0)
+  })
+
+  it('puts « NC » after every classement at the AGR, and before no value at all (#765)', () => {
+    expect(sorted('agr', ['NC', undefined, '85', '80-D'])).toEqual(['85', '80-D', 'NC', undefined])
+    expect(compareRanking('agr', 'NC', 'NC')).toBe(0)
+  })
 })
 
 describe('currentRankings', () => {
