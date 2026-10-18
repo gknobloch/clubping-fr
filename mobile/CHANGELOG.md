@@ -27,6 +27,38 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.9.0 — 18 octobre 2026
+
+Partager un match, et toujours savoir sous quel profil on est.
+
+- **Partager un match.** Le bouton Partager, en tête de l'écran d'un match,
+  envoie la rencontre sur WhatsApp, copie son lien ou passe par le partage du
+  téléphone. Un coéquipier qui touche le lien arrive directement sur le match,
+  dans l'app si elle est installée, sous le bon profil — et l'app demande
+  lequel quand plusieurs jouent ce match. « Ajouter à mon agenda » est dans le
+  même menu.
+- **« Ajouter à mon agenda » marche de nouveau**, pour un match comme pour une
+  séance d'entraînement : depuis la 1.5.0, il répondait « Impossible d'ouvrir
+  le calendrier ».
+- **Le club se lit sur l'avatar.** Le logo de votre club est en coin de votre
+  photo, en haut de l'écran. Le menu du compte liste « Mes clubs », puis les
+  « Profils que vous gérez », le profil ouvert coché.
+- **Un profil géré se voit.** En répondant pour votre enfant, un bandeau
+  « Vous gérez le profil de… » reste en haut de chaque écran, avec « Revenir à
+  mon profil ».
+- Une app plus légère sur Android.
+
+### Play
+
+Partager un match, et toujours savoir sous quel profil on est.
+
+- Partager un match : WhatsApp, lien, partage du téléphone ; le lien ouvre le
+  match dans l'app, sous le bon profil.
+- « Ajouter à mon agenda » marche de nouveau.
+- Le logo du club sur l'avatar, et « Profils que vous gérez » dans le menu.
+- Sur un profil géré, un bandeau « Revenir à mon profil ».
+- Une app plus légère.
+
 ## 1.8.0 — 13 octobre 2026
 
 L'AGR à côté de la FFTT, et plusieurs profils derrière une même adresse.
