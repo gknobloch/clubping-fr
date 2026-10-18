@@ -69,12 +69,16 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 #                          bump PR, days before review, and nobody is told too
 #                          early. Left stale it simply stops nudging. Unset, the
 #                          stores are not even read.
-#   CLIENT_MIN_VERSION     Builds below this are refused outright. UNSET, and it
-#                          should stay unset: it is an interrupter, not an
-#                          update policy. Set it only for a named reason — a
-#                          published build that is actively wrong — and say
-#                          which in the commit.
+#   CLIENT_MIN_VERSION     Builds below this are refused outright. It is an
+#                          interrupter, not an update policy: raise it only for
+#                          a named reason — a published build that is actively
+#                          wrong — and say which in the commit. Never as part
+#                          of a release.
 CLIENT_LATEST_VERSION = "1.8.0"
+# 1.6.0 (#604): app ≤ 1.5 filters line-up pickers with the per-licensee
+# exclusions `/data` stopped sending in #757, so it offers players a club's
+# group leaves out. Raised once no captain or admin was left on 1.5.
+CLIENT_MIN_VERSION = "1.6.0"
 # Comma-separated accepted OIDC audiences — fill in once OAuth clients exist (#100):
 #   GOOGLE_CLIENT_IDS = "web-id,ios-id,android-id"
 #   APPLE_CLIENT_IDS  = "fr.clubping.web,fr.clubping.app"

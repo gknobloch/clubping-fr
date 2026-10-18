@@ -151,8 +151,9 @@ builds up to 1.7.0 — which cannot say which store they came from — once both
 do. So bumping it here is right, and nothing has to be remembered later.
 
 `npm run test:run` fails if it ever runs *ahead* of `mobile/app.json`. Leave
-`CLIENT_MIN_VERSION` unset: it blocks, and a release is not a reason to block
-anybody — and unlike the ceiling, it is not held back by the stores.
+`CLIENT_MIN_VERSION` where it is: it blocks, and a release is not a reason to
+block anybody — and unlike the ceiling, it is not held back by the stores. It
+moves only for a named reason (1.6.0 since #604).
 
 **Leave `versionCode` and `buildNumber` alone.** `eas.json` sets
 `appVersionSource: "remote"`, so EAS owns them and increments each on its own at
