@@ -30,6 +30,7 @@
     "expo": "~57.0.30",
     "expo-apple-authentication": "~57.0.2",
     "expo-auth-session": "~57.0.16",
+    "expo-build-properties": "~57.0.22",
     "expo-calendar": "~57.0.5",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.19",
