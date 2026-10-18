@@ -2,7 +2,8 @@
 // share the parent's address sign in once and switch between the two. What is
 // shared by the web, the app and the API lives here, without React, D1 or a
 // network in the way.
-import type { Profile } from '../types'
+import type { Club, Federation, Profile } from '../types'
+import { clubAffiliations } from './federations'
 
 const NO_CLUB = 'Sans club'
 export const GENERAL_ADMINISTRATION = 'Administration générale'
@@ -22,6 +23,27 @@ export function profileName(p: Profile): string {
 export function profileClubName(p: Profile): string {
   if (p.role === 'general_admin') return GENERAL_ADMINISTRATION
   return p.clubId ? (p.clubName || p.clubId) : NO_CLUB
+}
+
+/**
+ * The federations a profile's club plays in, by their short name — « FFTT »,
+ * « AGR », both for FCJ Bootzheim (#767). Nothing in the switcher said which
+ * club was which championship: ASL Landser and Rixheim PPA read alike.
+ *
+ * Nothing while the app knows a single federation — the label would tell
+ * every row the same thing —, and nothing for the general administration,
+ * which is no club. The FFTT first, as `clubAffiliations` lists them; a club
+ * not loaded yet (a cache, a fixture) has none to show.
+ */
+export function profileFederations(
+  p: Profile,
+  clubs: ReadonlyArray<Pick<Club, 'id' | 'affiliationNumber' | 'affiliations'>>,
+  federations: ReadonlyArray<Pick<Federation, 'id' | 'shortName'>>,
+): string[] {
+  if (federations.length < 2 || p.role === 'general_admin' || !p.clubId) return []
+  const club = clubs.find((c) => c.id === p.clubId)
+  if (!club) return []
+  return [...new Set(clubAffiliations(club).map((a) => federations.find((f) => f.id === a.federationId)?.shortName ?? a.federationId.toUpperCase()))]
 }
 
 export interface ProfileSections {
