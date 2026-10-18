@@ -79,6 +79,41 @@ remotely by EAS. On the first `npm run submit:ios`, EAS prompts for the App Stor
 Connect credentials / API key and stores them for reuse. The App Store Connect app id
 is pinned in `eas.json` under `submit.production.ios.ascAppId`.
 
+## A new capability needs one interactive build (#761)
+
+The provisioning profile EAS stores is a snapshot of the App ID's capabilities on the
+day it was made. Add an entitlement that needs a capability — 1.9.0 added
+`associatedDomains` for shared match links (#747) — and the next store build fails
+in Xcode, after the upload and the queue:
+
+```
+Provisioning profile "*[expo] fr.clubping.app AppStore 2026-08-20T…" doesn't include
+the Associated Domains capability.
+```
+
+**`--non-interactive` never fixes it.** It reuses the stored profile as it is, and
+syncing capabilities needs an Apple sign-in, which is exactly what non-interactive
+mode cannot do. The remedy is one build in a real terminal, **from `mobile/`**:
+
+```
+eas build --platform ios --profile production --auto-submit
+```
+
+Say yes to signing in to the Apple account: EAS turns the capability on for the App
+ID and regenerates the profile, and every build after that is non-interactive again.
+1.9.0 lost iOS build 25 this way; build 26 went through.
+
+From the repo root, the same command reads the **web** `package.json`
+(`fr.clubping.webapp`), writes a stray `eas.json` and `app.json` there, offers to
+create a new EAS project and fails on "Invalid slug". Nothing is created on EAS, but
+the two files have to go.
+
+**See it coming**: the `npx expo config --type introspect` diff a release already
+prints for native config (*Native config only fails in a real binary*, below). A key
+under `ios.entitlements` that the last build did not have means a new capability:
+plan the iOS build as interactive from the start and hand it to whoever holds the
+Apple account. Android has no equivalent and can build in the background meanwhile.
+
 ## The version record in App Store Connect is not the version in the repo
 
 App Store Connect holds a *version record* — the "1.0" at the top of the Distribution
