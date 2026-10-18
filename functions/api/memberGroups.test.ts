@@ -295,15 +295,12 @@ describe('GET /api/data — who is sent which groups', () => {
     ])
   })
 
-  // App ≤ 1.5 reads per-licensee exclusions: the group rule, restated for it,
-  // and only for the clubs whose groups this viewer may see.
-  it('restates the group as exclusions for the old app (#604)', async () => {
+  // The exclusions restated for app ≤ 1.5 are gone with step 3 of #604: no
+  // build that reads them is still composing a line-up.
+  it('no longer restates the group as exclusions for the old app (#604)', async () => {
     const { db } = fakeDb('p2')
     const res = await request(db, 'GET', '/data')
-    const rows = ((await res.json()) as DataState).competitionEligibilities
-    // The club's players outside « Bureau » (p1 is in it); none of the club next door.
-    expect(rows.map((r) => r.playerId).sort()).toEqual(['ca', 'p2'])
-    expect(rows.every((r) => r.effect === 'excluded' && r.clubId === MINE)).toBe(true)
+    expect(await res.json()).not.toHaveProperty('competitionEligibilities')
   })
 
   it('sends everything under the local escape hatch', async () => {

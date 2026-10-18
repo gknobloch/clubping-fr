@@ -13,7 +13,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 // hall from FFTT on its own, without the summary waiting on it.
 
 const empty: DataState = {
-  divisions: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
+  divisions: [], competitions: [], competitionGroups: [], federations: [],
   clubs: [], seasons: [], phases: [], groups: [], teams: [], players: [],
   playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
   trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [],

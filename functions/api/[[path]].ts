@@ -12,7 +12,6 @@ import type {
   FederationRow, ClubFederationRow, FederationLicenceRow, OrganizationRow,
 } from './rows'
 import { PLAYER_CATEGORIES, type PlayerCategory } from '../../src/lib/playerCategories'
-import { legacyCompetitionExclusions } from '../../src/lib/competitionEligibility'
 import { groupNameTaken, normalizeGroupName } from '../../src/lib/memberGroups'
 import { buildTrainingEvent, isIsoDate, isTime, seriesCalendarDates, trainingEventUid } from '../../src/lib/trainings'
 import { toIcsMany } from '../../src/lib/ics'
@@ -524,15 +523,6 @@ app.get('/data', async (c) => {
       ...(r.fftt_contest_name ? { ffttContestName: r.fftt_contest_name } : {}),
     })),
     competitionGroups,
-    // For app ≤ 1.5 only (#604): the group rule restated as the exclusions its
-    // copy of the rule reads. Temporary — see legacyCompetitionExclusions.
-    competitionEligibilities: legacyCompetitionExclusions(
-      competitionGroups,
-      memberGroups,
-      usersR.results
-        .filter((r) => bool(r.is_player) && r.club_id)
-        .map((r) => ({ id: r.id, clubId: r.club_id as string })),
-    ),
     clubs: clubsR.results.map(r => ({
       id: r.id, affiliationNumber: r.affiliation_number ?? '', displayName: r.display_name,
       isArchived: bool(r.is_archived),

@@ -7,7 +7,6 @@ import {
   competitionOfDivision,
   eligiblePlayers,
   isPlayerEligible,
-  legacyCompetitionExclusions,
   playerEligibility,
   teamEligibility,
 } from './competitionEligibility'
@@ -221,43 +220,6 @@ describe('teamEligibility', () => {
 
   it('restricts nobody in a division filed under no competition', () => {
     expect(teamEligibility([free], ctx).admits('t-free', veteran)).toBe(true)
-  })
-})
-
-// The shim for app ≤ 1.5 (#604): its copy of the rule reads these rows, and an
-// `excluded` one beats everything in it.
-describe('legacyCompetitionExclusions', () => {
-  const players = [
-    { id: 'p-senior', clubId: 'club-1' },
-    { id: 'p-cadet', clubId: 'club-1' },
-    { id: 'p-veteran', clubId: 'club-1' },
-    { id: 'p-elsewhere', clubId: 'club-2' },
-  ]
-
-  it('excludes every member of the club outside the group, and no one else', () => {
-    const rows = legacyCompetitionExclusions(
-      [{ clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-seniors' }], [seniors], players,
-    )
-    expect(rows).toEqual([
-      { clubId: 'club-1', competitionId: 'comp-seniors', playerId: 'p-veteran', effect: 'excluded' },
-    ])
-  })
-
-  // A member of the group whose category does not fit gets no row — the old
-  // rule already turns them away by category, as the new one does.
-  it('leaves category mismatches to the categories, as the new rule does', () => {
-    const rows = legacyCompetitionExclusions(
-      [{ clubId: 'club-1', competitionId: 'comp-jeunes', groupId: 'g-seniors' }], [seniors], players,
-    )
-    expect(rows.map((r) => r.playerId)).toEqual(['p-veteran'])
-    expect(isPlayerEligible(senior, youth, seniors)).toBe(false)
-  })
-
-  it('says nothing for a competition with no group, or a group that is gone', () => {
-    expect(legacyCompetitionExclusions([], [seniors], players)).toEqual([])
-    expect(legacyCompetitionExclusions(
-      [{ clubId: 'club-1', competitionId: 'comp-seniors', groupId: 'g-gone' }], [seniors], players,
-    )).toEqual([])
   })
 })
 

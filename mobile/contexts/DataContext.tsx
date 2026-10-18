@@ -75,11 +75,7 @@ interface DataState {
   trainingSessions: TrainingSession[]
   trainingAvailabilities: TrainingAvailability[]
   competitions: Competition[]
-  /**
-   * The club's competition → group links (#604). The payload also carries a
-   * legacy `competitionEligibilities`, for older builds only: nothing here
-   * reads it.
-   */
+  /** The club's competition → group links (#604). */
   competitionGroups: CompetitionGroup[]
   matchDays: MatchDay[]
   games: Game[]

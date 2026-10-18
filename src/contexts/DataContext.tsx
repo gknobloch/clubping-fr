@@ -507,11 +507,7 @@ export type ClubAdminTarget =
   | { userId: string }
   | { firstName: string; lastName: string; email: string; phone?: string }
 
-/**
- * The payload, minus its one legacy field: `competitionEligibilities` is the
- * group rule restated for app ≤ 1.5 (#604), and no screen here may read it.
- */
-interface DataContextValue extends Omit<DataState, 'competitionEligibilities'> {
+interface DataContextValue extends DataState {
   updateDivision: (id: string, patch: Partial<Division>) => void
   /** Create a competition — general admin only, enforced by the API (#482). */
   addCompetition: (data: Omit<Competition, 'id'>) => Competition
@@ -835,7 +831,6 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
         seasons: mockSeasons, phases: mockPhases, divisions: mockDivisions,
         competitions: mockCompetitions,
         competitionGroups: mockCompetitionGroups,
-        competitionEligibilities: [],
         clubs: mockClubs, groups: mockGroups, teams: mockTeams, players: mockPlayers,
         playerPhasePoints: mockPlayerPhasePoints,
         playerSeasonCategories: mockPlayerSeasonCategories,

@@ -43,7 +43,7 @@ function open(viewerClubId?: string, divisions: Division[] = [], lines = PROM_HO
   render(
     <DataProvider
       initialData={{
-        divisions, clubs, seasons, phases: phaseList, competitions, organizations, competitionGroups: [], competitionEligibilities: [],
+        divisions, clubs, seasons, phases: phaseList, competitions, organizations, competitionGroups: [],
         federations: mockFederations, groups: [], teams: [], players: [], playerSeasonCategories: [],
         playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
         playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [], users: [],
@@ -102,7 +102,7 @@ describe('ImportFederationCalendarModal', () => {
     extract.lines = []
     render(
       <DataProvider initialData={{
-        divisions: [], clubs, seasons, phases, competitions, competitionGroups: [], competitionEligibilities: [],
+        divisions: [], clubs, seasons, phases, competitions, competitionGroups: [],
         federations: mockFederations, groups: [], teams: [], players: [], playerSeasonCategories: [],
         playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
         playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [], users: [],

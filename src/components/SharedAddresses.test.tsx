@@ -25,7 +25,7 @@ const asUser = (p: Player, admins: string[] = []): User =>
 function renderWith(players: Player[], personId?: string, admins: string[] = []) {
   const data = {
     divisions: [], clubs: [club('club-a', 'Rixheim PPA'), club('club-b', 'Landser ASL')], seasons: [], phases: [],
-    competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
+    competitions: [], competitionGroups: [], federations: [],
     groups: [], teams: [], players, playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
     gameAvailabilities: [], gameSelections: [], users: players.map((p) => asUser(p, admins)),

@@ -233,25 +233,6 @@ export interface CompetitionGroup {
   groupId: string
 }
 
-/**
- * **Legacy** — the per-licensee amendments of #482, replaced by
- * `CompetitionGroup` in #604.
- *
- * Still in the payload for one reason: app ≤ 1.5 reads it. The server restates
- * the group rule as `excluded` rows (`legacyCompetitionExclusions`) so an old
- * phone offers the same players as a new one. Nothing current reads it; it
- * goes when those builds are gone.
- */
-export type EligibilityEffect = 'included' | 'excluded'
-
-/** **Legacy** — see `EligibilityEffect`. */
-export interface CompetitionEligibility {
-  clubId: string
-  competitionId: string
-  playerId: string
-  effect: EligibilityEffect
-}
-
 export interface Group {
   /** Opaque generated local id; never carries meaning (#278). */
   id: string
@@ -540,11 +521,6 @@ export interface DataState {
    * general admin, scoped like `memberGroups`, whose ids they point at.
    */
   competitionGroups: CompetitionGroup[]
-  /**
-   * **Legacy**, for app ≤ 1.5 only: the group rule restated as exclusions.
-   * Never read it — see `EligibilityEffect`.
-   */
-  competitionEligibilities: CompetitionEligibility[]
   clubs: Club[]
   seasons: Season[]
   phases: Phase[]

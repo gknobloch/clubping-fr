@@ -23,7 +23,7 @@
 // competition past its categories — which is what the "lock" existed to stop,
 // so the lock is gone with it.
 
-import type { Competition, CompetitionEligibility, CompetitionGroup, MemberGroup } from '../types'
+import type { Competition, CompetitionGroup, MemberGroup } from '../types'
 import { normalizeCategory, type PlayerCategory } from './playerCategories'
 import { federationOfCompetition } from './federations'
 
@@ -322,38 +322,4 @@ export function teamEligibility(
     mayField: (teamId, player) =>
       byId.get(teamId)?.playerIds?.includes(player.id) === true || admits(teamId, player),
   }
-}
-
-/**
- * The group rule, restated as the per-licensee exclusions app ≤ 1.5 still
- * reads (#604).
- *
- * An installed app is not updated when the server is. Those builds read
- * `competitionEligibilities` from `GET /api/data`, and in their copy of the
- * rule an `excluded` row beats everything. So one row per club member outside
- * the group reproduces the group rule exactly: a member of the group whose
- * category does not fit gets no row, and their own copy already says « Hors
- * catégorie ». An old phone offers the same players as a new one, and no
- * forced update is needed.
- *
- * **Temporary.** Removed with the field itself, once `users.last_client_version`
- * shows no build older than the one that reads `competitionGroups` — see #604.
- */
-export function legacyCompetitionExclusions(
-  competitionGroups: CompetitionGroup[],
-  memberGroups: MemberGroup[],
-  players: Array<{ id: string; clubId: string }>,
-): CompetitionEligibility[] {
-  const out: CompetitionEligibility[] = []
-  for (const link of competitionGroups) {
-    const group = memberGroups.find((g) => g.id === link.groupId)
-    if (!group) continue
-    const members = new Set(group.memberIds)
-    for (const p of players) {
-      if (p.clubId === link.clubId && !members.has(p.id)) {
-        out.push({ clubId: link.clubId, competitionId: link.competitionId, playerId: p.id, effect: 'excluded' })
-      }
-    }
-  }
-  return out
 }

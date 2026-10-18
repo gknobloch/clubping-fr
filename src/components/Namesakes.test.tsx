@@ -21,7 +21,7 @@ const member = (id: string, personId: string, clubId: string, email?: string): U
 function renderList() {
   const users = [member('enzo-rix', 'p-rix', 'rixheim', 'enzo@example.fr'), member('enzo-lan', 'p-lan', 'landser')]
   const data = {
-    divisions: [], seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
+    divisions: [], seasons: [], phases: [], competitions: [], competitionGroups: [], federations: [],
     clubs: [
       { id: 'rixheim', displayName: 'Rixheim PPA', affiliationNumber: '', isArchived: false, addresses: [], channels: [] },
       { id: 'landser', displayName: 'ASL Landser', affiliationNumber: '', isArchived: false, addresses: [], channels: [] },

@@ -30,7 +30,7 @@ const clubs = [
 
 function renderPage(path = '/clubs', page: React.ReactNode = <ClubsPage />) {
   const data = {
-    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [],
+    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [],
     federations: mockFederations,
     groups: [], teams: [], players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],

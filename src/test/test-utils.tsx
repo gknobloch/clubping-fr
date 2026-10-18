@@ -32,7 +32,7 @@ const testData = {
   federations: mockFederations,
   divisions: mockDivisions,
   competitions: mockCompetitions,
-  competitionGroups: [], competitionEligibilities: [],
+  competitionGroups: [],
   clubs: mockClubs,
   seasons: mockSeasons,
   phases: mockPhases,

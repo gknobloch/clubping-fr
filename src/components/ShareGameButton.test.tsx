@@ -15,7 +15,7 @@ const { ShareGameButton } = await import('./ShareGameButton')
 
 const testData = {
   divisions: mockDivisions, clubs: mockClubs, seasons: mockSeasons, phases: mockPhases,
-  competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [], federations: [],
+  competitions: mockCompetitions, competitionGroups: [], federations: [],
   groups: mockGroups, teams: mockTeams, players: mockPlayers,
   playerSeasonCategories: mockPlayerSeasonCategories,
   playerSeasonLicences: mockPlayerSeasonLicences, memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
