@@ -282,6 +282,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...(u.clubId ? { clubId: u.clubId } : {}),
         ...(u.clubName ? { clubName: u.clubName } : {}),
         ...(u.status ? { status: u.status } : {}),
+        // What the server says from the person (#749); here, the name is all
+        // there is to go on — the fixtures' shared address is two people.
+        ...(u.id === devUser.id ? { signedIn: true as const } : {}),
+        ...(u.firstName !== devUser.firstName || u.lastName !== devUser.lastName ? { managed: true as const } : {}),
       }))
   }, [devUser, devUsers])
 

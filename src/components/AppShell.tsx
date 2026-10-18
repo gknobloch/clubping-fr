@@ -6,6 +6,7 @@ import { COMMIT_SHA, IS_PR_PREVIEW, PR_NUMBER } from '@/lib/preview'
 import { useConfirm } from '@/components/useConfirm'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { AccountMenu } from '@/components/AccountMenu'
+import { ManagedProfileBanner } from '@/components/ManagedProfileBanner'
 
 function PreviewBanner() {
   if (!IS_PR_PREVIEW) return null
@@ -174,6 +175,9 @@ export function AppShell() {
             </button>
           </div>
         </div>
+
+        {/* On a delegated profile (#749): whose, and the way back. */}
+        <ManagedProfileBanner />
 
         {menuOpen && (
           <>
