@@ -22,6 +22,10 @@ const MIGRATIONS = join(__dirname, '..', '..', 'migrations')
  * `node:sqlite` binds the missing ones as NULL and says nothing — which is how
  * every cascading delete answered 500 in production for months while its test
  * passed (#291, found on the AGR preview).
+ *
+ * Counted as SQLite counts them: a numbered `?1` used twice is one value, and
+ * a bare `?` takes the index after the largest so far (#763 — the query that
+ * clears a moved team's fixtures names its team twice as `?1`).
  */
 function placeholderCount(sql: string): number {
   let n = 0
@@ -34,7 +38,9 @@ function placeholderCount(sql: string): number {
       const eol = sql.indexOf('\n', i)
       i = eol < 0 ? sql.length : eol
     } else if (ch === '?') {
-      n++
+      const digits = /^\d+/.exec(sql.slice(i + 1))?.[0]
+      n = digits ? Math.max(n, Number(digits)) : n + 1
+      if (digits) i += digits.length
     }
   }
   return n

@@ -383,6 +383,8 @@ export interface FederationScheduleImportInput {
   notes: string[]
   /** Each name of the calendar: an existing club, or null to create it bare. */
   clubs: Array<{ name: string; clubId: string | null }>
+  /** The review named the teams this calendar takes out of another poule (#763); without it, the API refuses to move them. */
+  moveTeams?: boolean
   journees: AgrScheduleJournee[]
 }
 
@@ -392,6 +394,8 @@ export interface FederationScheduleImportSummary {
   groupId: string
   created: { division: boolean; group: boolean; clubs: number; teams: number; matchDays: number; games: number }
   updatedGames: number
+  /** Teams taken out of another poule of the phase, and their fixtures there removed (#763). */
+  moved?: { teams: number; games: number }
   /** The return leg built into phase 2 alongside (#649), when phase 2 exists. */
   returnLeg?: ReturnLegCreated
 }

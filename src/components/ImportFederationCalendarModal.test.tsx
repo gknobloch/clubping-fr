@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { DataProvider } from '@/contexts/DataContext'
 import { mockFederations } from '@/mock/data'
-import type { Club, Competition, Division, Phase, Season } from '@/types'
+import type { Club, Competition, DataState, Division, Phase, Season } from '@/types'
 import { PROM_HONNEUR_A_PHASE_1, PROM_HONNEUR_A_PHASE_2 } from '@/lib/__fixtures__/agrSchedules'
 
 // #647 — the review of an AGR calendar: phase, competition, and which club
@@ -38,15 +38,19 @@ const organizations = [
   { id: 'agr-67', type: 'Committee', identifier: '67', name: 'Bas-Rhin', federationId: 'agr' },
 ]
 
-function open(viewerClubId?: string, divisions: Division[] = [], lines = PROM_HONNEUR_A_PHASE_1, phaseList = phases) {
+function open(
+  viewerClubId?: string, divisions: Division[] = [], lines = PROM_HONNEUR_A_PHASE_1, phaseList = phases,
+  placed: Pick<DataState, 'groups' | 'teams' | 'matchDays' | 'games' | 'gameAvailabilities'> =
+    { groups: [], teams: [], matchDays: [], games: [], gameAvailabilities: [] },
+) {
   extract.lines = lines
   render(
     <DataProvider
       initialData={{
         divisions, clubs, seasons, phases: phaseList, competitions, organizations, competitionGroups: [],
-        federations: mockFederations, groups: [], teams: [], players: [], playerSeasonCategories: [],
+        federations: mockFederations, players: [], playerSeasonCategories: [],
         playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
-        playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [], users: [],
+        playerPhasePoints: [], gameSelections: [], users: [], ...placed,
       }}
     >
       <ImportFederationCalendarModal federationId="agr" viewerClubId={viewerClubId} onClose={() => {}} />
@@ -125,6 +129,27 @@ describe('ImportFederationCalendarModal', () => {
     // Changeable, and « create » stays offered.
     expect(within(division).getAllByRole('option').map((o) => o.textContent))
       .toEqual(['Créer « Prom. HONNEUR »', 'Excellence', 'Promotion Honneur'])
+  })
+
+  it('names the teams it takes out of another poule, and what leaves with them (#763)', async () => {
+    const team = (id: string, clubId: string, number: number) => ({
+      id, clubId, phaseId: 'phase-agr-27-1', number, divisionId: 'd-pe', groupId: 'g-wrong', gameLocationId: '', defaultDay: '',
+      defaultTime: '', captainId: '', playerIds: [], isArchived: false,
+    })
+    open('landser', [
+      { id: 'd-pe', phaseId: 'phase-agr-27-1', displayName: 'Promotion Excellence', rank: 2, playersPerGame: 4, isArchived: false, competitionId: 'c-agr' },
+      { id: 'd-ph', phaseId: 'phase-agr-27-1', displayName: 'Promotion Honneur', rank: 4, playersPerGame: 4, isArchived: false, competitionId: 'c-agr' },
+    ], PROM_HONNEUR_A_PHASE_1, phases, {
+      groups: [{ id: 'g-wrong', divisionId: 'd-pe', number: 2, teamIds: ['t-landser-2', 't-kembs-4'], isArchived: false }],
+      teams: [team('t-landser-2', 'landser', 2), team('t-kembs-4', 'kembs', 4)],
+      matchDays: [{ id: 'md-1', groupId: 'g-wrong', number: 1, date: '2026-09-25' }],
+      games: [{ id: 'g-1', matchDayId: 'md-1', homeTeamId: 't-landser-2', awayTeamId: 't-kembs-4' }],
+      gameAvailabilities: [{ gameId: 'g-1', playerId: 'p-1', status: 'available' }],
+    })
+    const alert = await screen.findByText(/Ces équipes sont déjà dans une autre poule de la phase/)
+    expect(alert).toHaveTextContent('Landser ASL 2 — Promotion Excellence · Poule B')
+    expect(alert).toHaveTextContent('Kembs TT 4 — Promotion Excellence · Poule B')
+    expect(alert).toHaveTextContent('Leurs 1 rencontre(s) dans l’ancienne poule sont supprimées, avec les disponibilités et compositions déjà saisies.')
   })
 
   it('chooses no phase for a phase-2 calendar when the AGR has no phase 2, and says so', async () => {

@@ -989,6 +989,23 @@ invisible dans le diff comme dans la revue.
   l'écran n'a pas d'import, et « Importer depuis un fichier » sur Groupes
   dans ce cas. Les fixtures de test sont trois vrais calendriers, **le
   contact du pied remplacé** (nom, adresse et e-mail d'un officiel).
+- **Réimporté dans une autre poule, un calendrier déplace ses équipes**
+  (#763). Une poule du Bas-Rhin importée d'abord dans le Haut-Rhin, puis dans
+  la bonne division, retrouve les mêmes équipes (#282) : le second import les
+  ajoutait à la nouvelle poule sans les retirer de l'ancienne, et leurs
+  rencontres y restaient en double. Elles sont maintenant **déplacées**, avec la
+  règle de `PATCH /teams/:id` (#422) : `group_id`, la composition de l'ancienne
+  poule, ses rencontres hors de la nouvelle (avec leurs dispos et
+  compositions), les journées vidées — et les autres journées de l'ancienne
+  poule redatées sur ce qu'il leur reste. `teamsLeavingTheirPoule`
+  (`src/lib/scheduleTeamMoves.ts`) est la règle des deux côtés.
+- **Jamais en silence** : une mauvaise division choisie dans la revue
+  arracherait une équipe à la poule où elle joue. La revue nomme les équipes,
+  leur poule et ce qui part avec elles ; l'API refuse sans `moveTeams` (409
+  `teams_elsewhere`). Un administrateur de club ne déplace que les équipes de
+  son club et celles d'un club sans administrateur (la règle de #613).
+- Une phase retour déjà recopiée (#649) depuis la mauvaise poule n'est pas
+  déplacée : ses équipes ont leurs propres ids, dans la phase 2.
 
 ### Deux fiches pour un club (#730)
 - **Les imports AGR ont dédoublé des clubs** : « Landser ASL » à côté de
