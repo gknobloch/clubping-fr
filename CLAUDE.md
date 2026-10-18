@@ -1351,9 +1351,10 @@ invisible dans le diff comme dans la revue.
   `users.last_client_version` (l'en-tête `X-Client-Version` de #508, écrit au
   changement seulement) disait trois membres en 1.5 ; la question utile était
   lesquels composent, dans un club qui a posé un groupe — un joueur qui ne
-  capitaine rien ne voit jamais un sélecteur. Plutôt que de relever
-  `CLIENT_MIN_VERSION` pour tous, on a demandé aux deux concernés de mettre
-  l'app à jour. `last_seen_at`, lui, est aussi écrit par le web, qui n'envoie
+  capitaine rien ne voit jamais un sélecteur. Plutôt que de bloquer d'abord,
+  on a demandé aux concernés de mettre l'app à jour, retiré le shim, puis
+  relevé `CLIENT_MIN_VERSION` à 1.6.0 une fois le dernier capitaine passé :
+  le mur n'a plus arrêté personne qui composait. `last_seen_at`, lui, est aussi écrit par le web, qui n'envoie
   pas de version : une date récente à côté d'une vieille version peut venir
   d'un navigateur — ça surestime, ça ne cache personne.
 - **Les liens sont de la portée des groupes** : `competitionGroups` ne va qu'au
@@ -2259,8 +2260,10 @@ invisible dans le diff comme dans la revue.
 - `CLIENT_LATEST_VERSION` suit `mobile/app.json` à chaque release ; en retard
   elle cesse simplement de proposer, ce qui ne coûte rien. **En avance, elle
   devient un rappel sans remède** — `src/test/mobileConfig.spec.ts` casse le
-  build dans ce sens-là seulement. `CLIENT_MIN_VERSION` reste vide : elle
-  bloque, et ne se relève que pour une raison nommée dans le commit.
+  build dans ce sens-là seulement. `CLIENT_MIN_VERSION` bloque, et ne se
+  relève que pour une raison nommée dans le commit — jamais avec une release.
+  Elle vaut **1.6.0** depuis #604 : une 1.5 compose avec des exclusions que
+  `/data` n'envoie plus.
 - **`CLIENT_LATEST_VERSION` est un plafond, pas une annonce** (#708). Relevée
   dans la PR de montée de version, elle était en ligne des jours avant que la
   revue d'Apple ou de Google ne rende la version installable : chaque membre
