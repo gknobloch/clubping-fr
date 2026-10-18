@@ -181,6 +181,12 @@ npx expo config --type introspect
 `mobile/DISTRIBUTION.md` has the specific traps, including why an iOS usage
 string must never be deleted to "not ask for" a permission.
 
+**A new key under `ios.entitlements` means a new capability on the App ID**
+(#761) — `associatedDomains` in 1.9.0. The provisioning profile EAS stores
+predates it, and a `--non-interactive` build reuses that profile and fails in
+Xcode ("doesn't include the Associated Domains capability"). Plan the iOS build
+of that release as interactive and handed to the user from the start (step 5).
+
 ## 5. Build and submit
 
 **First, check the credentials — before either build starts:**
@@ -230,6 +236,21 @@ Android upload keystore, and `mobile/google-play-service-account.json` for the
 Play upload. If a credential prompt does block a build, that is the one case
 `DISTRIBUTION.md` means about needing a real terminal — hand it back to the user
 rather than trying to fake a TTY.
+
+The other case is a **new iOS capability** (#761): the stored profile lacks it,
+and only an Apple sign-in can add it, which non-interactive mode never does. Give
+the user the interactive command, **with the `cd`**, since from the repo root EAS
+reads the web `package.json`, writes a stray `eas.json` and `app.json` and fails
+on "Invalid slug":
+
+```bash
+cd mobile && eas build --platform ios --profile production --auto-submit
+```
+
+They answer yes to the Apple sign-in; EAS enables the capability and regenerates
+the profile. Android still runs in the background meanwhile. A watcher waiting
+on the iOS build must wait for a build number **above** the failed one — the
+failed build stays the newest entry until the new one is queued.
 
 ### Where the builds land
 
