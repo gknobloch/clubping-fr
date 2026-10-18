@@ -186,6 +186,27 @@ For reference, that first upload was: Play Console → create the app with packa
 `.aab` from the EAS build page, then complete the store listing, content rating and
 **data safety** form.
 
+## Release builds are minified by R8 (#755)
+
+`expo-build-properties` sets `android.enableMinifyInReleaseBuilds`. Until 1.8.0 it was
+off, and Play warned on every bundle that it had no deobfuscation file — true, and
+harmless: nothing was obfuscated, so there was nothing to translate.
+
+**There is no mapping file to upload.** The Android Gradle plugin embeds it in the
+`.aab` (`BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`), and Play
+reads it from there; native debug symbols ride the same way. EAS Submit uploads the
+bundle and that is enough. If Play ever warns again on a minified build, check the
+bundle for that path before reaching for a manual upload.
+
+**R8 only breaks a release build.** It removes what it believes is unused, and a
+native module reached by reflection that loses a class crashes in Release and never
+in Debug — the same family as *Native config only fails in a real binary*, below.
+Expo modules ship their own keep rules, but after adding a native module or bumping
+the SDK, run the release build on a device before promoting it: launch, sign in, and
+open the screens that call the new module. Keep rules, if one is ever needed, go in
+`expo-build-properties` → `android.extraProguardRules`, never in the generated
+`android/` folder, which `prebuild --clean` throws away.
+
 ## Store listing assets
 
 The Play listing is filled from files in this repo:
