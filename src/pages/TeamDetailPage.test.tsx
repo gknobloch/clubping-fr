@@ -33,7 +33,7 @@ const CLUB_ID = 'club-fftt-06680011'
 function baseTestData(clubs = mockClubs, groups = mockGroups) {
   return {
     divisions: mockDivisions, clubs, seasons: mockSeasons, phases: mockPhases,
-    competitions: mockCompetitions, competitionGroups: [], competitionEligibilities: [], federations: [],
+    competitions: mockCompetitions, competitionGroups: [], federations: [],
     groups, teams: mockTeams, players: mockPlayers, matchDays: mockMatchDays,
     games: mockGames, gameAvailabilities: mockGameAvailabilities,
     gameSelections: mockGameSelections, users: mockUsers,

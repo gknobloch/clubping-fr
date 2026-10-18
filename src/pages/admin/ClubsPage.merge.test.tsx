@@ -22,7 +22,7 @@ const team = (id: string, clubId: string, phaseId: string, number: number) =>
 
 function renderPage(teams: Team[] = [team('t-agr', 'club-x', 'phase-agr-27-1', 1)]) {
   const data = {
-    divisions: [], seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [],
+    divisions: [], seasons: [], phases: [], competitions: [], competitionGroups: [],
     federations: mockFederations,
     clubs: [
       club('club-fftt-06680140', 'Kembs TT', { affiliationNumber: '06680140' }),

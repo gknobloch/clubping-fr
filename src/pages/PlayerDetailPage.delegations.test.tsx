@@ -33,7 +33,7 @@ function renderPlayer(id: string, viewer: Partial<User>) {
       <DataProvider
         initialData={{
           divisions: [], clubs: [club('club-a'), club('club-b')], seasons: [], phases: [], competitions: [],
-          competitionGroups: [], competitionEligibilities: [], federations: [], groups: [], teams: [], players,
+          competitionGroups: [], federations: [], groups: [], teams: [], players,
           matchDays: [], games: [], gameAvailabilities: [], gameSelections: [],
           users: players.map((p) => ({ ...p, role: 'player', isPlayer: true })),
           playerSeasonLicences: [], playerSeasonCategories: [], memberGroups: [],

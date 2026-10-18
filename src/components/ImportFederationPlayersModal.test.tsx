@@ -29,7 +29,7 @@ function open(lines: string[]) {
   extract.lines = lines
   render(
     <DataProvider initialData={{
-      divisions: [], clubs: [landser], seasons, phases, competitions: [], competitionGroups: [], competitionEligibilities: [],
+      divisions: [], clubs: [landser], seasons, phases, competitions: [], competitionGroups: [],
       federations: mockFederations, groups: [], teams: [], players: [lucas], playerSeasonCategories: [],
       playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
       playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [],

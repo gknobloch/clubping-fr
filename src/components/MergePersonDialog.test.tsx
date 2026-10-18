@@ -25,7 +25,7 @@ const other = member('v-other', 'p-other', 'Durand', 'landser')
 function renderDialog(onClose = vi.fn()) {
   const users = [rix, lan, other]
   const data = {
-    divisions: [], seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: [],
+    divisions: [], seasons: [], phases: [], competitions: [], competitionGroups: [], federations: [],
     clubs: [
       { id: 'rixheim', displayName: 'Rixheim PPA', affiliationNumber: '', isArchived: false, addresses: [], channels: [] },
       { id: 'landser', displayName: 'ASL Landser', affiliationNumber: '', isArchived: false, addresses: [], channels: [] },

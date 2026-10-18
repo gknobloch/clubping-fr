@@ -1334,23 +1334,28 @@ invisible dans le diff comme dans la revue.
 - **Trois déploiements, pas un** (#410). (1) Additif : `club_competition_groups`,
   `users.last_client_version` ; le code cesse de lire et d'écrire
   `club_competition_eligibility` et `is_category_locked`, qui restent en base.
-  (2) Une fois (1) **déployé** : les supprimer — c'est 0059. (3) Bien plus
-  tard : retirer les lignes de compatibilité ci-dessous. Tout est suivi dans
-  #604.
+  (2) Une fois (1) **déployé** : les supprimer — c'est 0059. (3) Une fois les
+  vieilles apps parties : retirer les lignes de compatibilité ci-dessous.
 - **0059 est un `DROP COLUMN`, jamais la reconstruction de 0038 / 0054.**
   `club_competition_groups` référence `competitions(id)` en `ON DELETE
   CASCADE`, et D1 applique les clés étrangères : supprimer `competitions` pour
   renommer une copie à sa place vide les liens de groupe de tous les clubs, en
   silence. Vrai pour toute table qu'une autre référence en cascade.
-- **Les apps ≤ 1.5 ne sont pas forcées à se mettre à jour.** Elles lisent
-  `competitionEligibilities`, et dans leur copie de la règle une ligne
-  `excluded` l'emporte sur tout : `/data` réexprime donc le groupe en une ligne
-  `excluded` par membre du club hors du groupe (`legacyCompetitionExclusions`).
-  Un vieux téléphone propose exactement les mêmes joueurs. Aucun écran actuel ne
-  lit ce champ — le `DataContext` du web l'exclut de son type.
-- **`users.last_client_version` dit quand retirer ce shim** : l'en-tête
-  `X-Client-Version` (#508) enfin enregistré, au changement seulement. Le web
-  n'envoie pas de version et laisse la valeur en place.
+- **Les apps ≤ 1.5 n'ont pas été forcées à se mettre à jour.** Elles lisaient
+  `competitionEligibilities`, où une ligne `excluded` l'emportait sur tout :
+  `/data` a donc réexprimé le groupe en une ligne `excluded` par membre hors du
+  groupe, le temps qu'elles disparaissent. Le champ n'est plus envoyé (étape 3) :
+  une 1.5 encore installée filtre sur la catégorie seule, et proposerait des
+  joueurs hors du groupe.
+- **Un shim se retire sur qui il sert, pas sur un compte de versions.**
+  `users.last_client_version` (l'en-tête `X-Client-Version` de #508, écrit au
+  changement seulement) disait trois membres en 1.5 ; la question utile était
+  lesquels composent, dans un club qui a posé un groupe — un joueur qui ne
+  capitaine rien ne voit jamais un sélecteur. Plutôt que de relever
+  `CLIENT_MIN_VERSION` pour tous, on a demandé aux deux concernés de mettre
+  l'app à jour. `last_seen_at`, lui, est aussi écrit par le web, qui n'envoie
+  pas de version : une date récente à côté d'une vieille version peut venir
+  d'un navigateur — ça surestime, ça ne cache personne.
 - **Les liens sont de la portée des groupes** : `competitionGroups` ne va qu'au
   club de celui qui regarde, comme `memberGroups` (#602), dont ils désignent
   les ids. Supprimer un groupe lève la restriction — la confirmation le dit —,

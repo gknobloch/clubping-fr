@@ -32,7 +32,7 @@ const detail = (numero: string, ville: string) =>
 
 function renderPage(url = '/clubs') {
   const data = {
-    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], competitionEligibilities: [], federations: mockFederations,
+    divisions: [], clubs, seasons: [], phases: [], competitions: [], competitionGroups: [], federations: mockFederations,
     groups: [], teams: [], players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
     gameAvailabilities: [], gameSelections: [], users: [],

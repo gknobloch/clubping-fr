@@ -81,7 +81,7 @@ const teams = [
 function renderPage(page: React.ReactNode) {
   const data = {
     divisions, clubs: [rixheim, kembs, landser], seasons, phases: [phase, agrPhase], competitions, organizations,
-    competitionGroups: [], competitionEligibilities: [], federations: mockFederations,
+    competitionGroups: [], federations: mockFederations,
     groups, teams, players: [], playerSeasonCategories: [], playerSeasonLicences: [], memberGroups: [],
     trainings: [], trainingSessions: [], trainingAvailabilities: [], playerPhasePoints: [], matchDays: [], games: [],
     gameAvailabilities: [], gameSelections: [], users: [],
