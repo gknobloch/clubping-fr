@@ -7,11 +7,13 @@ import { extractPdfScheduleLines } from '@/lib/pdfScheduleText'
 import { isAgrScheduleDocument, parseAgrScheduleLines, type AgrScheduleDocument } from '@/lib/agrScheduleDocument'
 import { matchFederationClub } from '@/lib/federationClubMatch'
 import { clubNameFromFederation } from '@/lib/ffttNames'
-import { matchDivisionName } from '@/lib/divisionNames'
+import { divisionNameKey, matchDivisionName } from '@/lib/divisionNames'
 import { federationOfDivision } from '@/lib/federations'
 import { phasesOfFederation } from '@/lib/federations'
 import { phaseIdFor, ffttPhaseIdForName } from '@/lib/ffttPhases'
 import { orderPhases } from '@/lib/phases'
+import { poolTitle } from '@/lib/poolLabel'
+import { teamsLeavingTheirPoule } from '@/lib/scheduleTeamMoves'
 
 const SELECT_CLASS =
   'mt-1 w-full min-h-[44px] md:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20'
@@ -37,7 +39,10 @@ export function ImportFederationCalendarModal({
   viewerClubId?: string
   onClose: () => void
 }) {
-  const { clubs, phases, seasons, competitions, divisions, federations = [], organizations = [], importFederationSchedule } = useAppData()
+  const {
+    clubs, phases, seasons, competitions, divisions, federations = [], organizations = [], importFederationSchedule,
+    teams, groups, matchDays, games, gameAvailabilities, gameSelections,
+  } = useAppData()
   const federation = federations.find((f) => f.id === federationId)
   const [doc, setDoc] = useState<AgrScheduleDocument | null>(null)
   const [reading, setReading] = useState(false)
@@ -146,6 +151,46 @@ export function ImportFederationCalendarModal({
   }
 
   const matchCount = doc?.journees.reduce((n, j) => n + j.matches.length, 0) ?? 0
+
+  // The teams this calendar takes out of another poule of the phase (#763):
+  // the same rows a wrong import made (#282), moved with their fixtures there
+  // (#422). Said here before the API is asked to — a wrong division chosen
+  // above would pull a team out of the poule it does play in.
+  const moving = useMemo(() => {
+    if (!doc || !phaseId) return null
+    const wanted = divisionNameKey(doc.division)
+    const targetDivisionId = divisionId
+      || divisions.find((d) => d.phaseId === phaseId && !d.isArchived && divisionNameKey(d.displayName) === wanted)?.id
+    const target = targetDivisionId
+      ? groups.find((g) => g.divisionId === targetDivisionId && g.number === doc.poolNumber)?.id ?? null
+      : null
+    const sides = doc.journees.flatMap((j) => j.matches.flatMap((m) => [m.home, m.away]))
+      .filter((sd) => clubIds[sd.club])
+      .map((sd) => ({ clubId: clubIds[sd.club], number: sd.number }))
+    const leaving = teamsLeavingTheirPoule(sides, teams.filter((t) => t.phaseId === phaseId), target)
+    if (!leaving.length) return null
+    const leavingIds = new Set(leaving.map((t) => t.id))
+    const outside = new Set(matchDays.filter((md) => md.groupId !== target).map((md) => md.id))
+    const gameIds = new Set(games
+      .filter((g) => outside.has(g.matchDayId) && (leavingIds.has(g.homeTeamId) || leavingIds.has(g.awayTeamId)))
+      .map((g) => g.id))
+    const answered = gameAvailabilities.some((a) => gameIds.has(a.gameId))
+      || gameSelections.some((sel) => gameIds.has(sel.gameId) && sel.playerIds.length > 0)
+    const context = { divisions, competitions }
+    return {
+      teams: leaving.map((t) => {
+        const from = groups.find((g) => g.id === t.groupId)
+        const division = divisions.find((d) => d.id === from?.divisionId)
+        return {
+          id: t.id,
+          name: `${clubs.find((c) => c.id === t.clubId)?.displayName ?? ''} ${t.number}`.trim(),
+          from: from ? `${division?.displayName ?? ''} · ${poolTitle(from, context)}` : '',
+        }
+      }),
+      games: gameIds.size,
+      answered,
+    }
+  }, [doc, phaseId, divisionId, divisions, competitions, groups, clubIds, teams, matchDays, games, gameAvailabilities, gameSelections, clubs])
   const ownClubMissing = !!doc && !!viewerClubId && !Object.values(clubIds).includes(viewerClubId)
   const canImport = !!doc && !!phaseId && !!competitionId && !ownClubMissing && !saving
 
@@ -160,6 +205,7 @@ export function ImportFederationCalendarModal({
       playersPerGame, notes: doc.notes,
       ...(doc.phaseNumber === 1 && secondPhase ? { secondPhase } : {}),
       clubs: doc.clubs.map((name) => ({ name, clubId: clubIds[name] || null })),
+      ...(moving ? { moveTeams: true } : {}),
       journees: doc.journees,
     })
     setSaving(false)
@@ -181,6 +227,12 @@ export function ImportFederationCalendarModal({
               et {done.created.games} rencontre(s) ajoutées{done.created.clubs ? `, ${done.created.clubs} club(s) créé(s)` : ''}
               {done.updatedGames ? ` ; ${done.updatedGames} rencontre(s) mise(s) à jour` : ''}.
             </p>
+            {done.moved?.teams ? (
+              <p>
+                {done.moved.teams} équipe(s) retirée(s) de leur ancienne poule
+                {done.moved.games ? `, avec ${done.moved.games} rencontre(s)` : ''}.
+              </p>
+            ) : null}
             {!done.created.teams && !done.created.games && !done.updatedGames && (
               <p className="text-slate-500">Rien de nouveau : ce calendrier était déjà importé.</p>
             )}
@@ -374,6 +426,21 @@ export function ImportFederationCalendarModal({
               )}
             </fieldset>
 
+            {moving && (
+              <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {moving.teams.length === 1 ? 'Cette équipe est' : 'Ces équipes sont'} déjà dans une autre poule de la phase.
+                L’import {moving.teams.length === 1 ? 'la' : 'les'} retire de cette poule pour {moving.teams.length === 1 ? 'la' : 'les'} placer dans celle-ci :
+                <ul className="mt-1 list-disc pl-5">
+                  {moving.teams.map((t) => <li key={t.id}>{t.name}{t.from ? ` — ${t.from}` : ''}</li>)}
+                </ul>
+                {moving.games > 0 && (
+                  <p className="mt-1">
+                    Leurs {moving.games} rencontre(s) dans l’ancienne poule sont supprimées
+                    {moving.answered ? ', avec les disponibilités et compositions déjà saisies' : ''}.
+                  </p>
+                )}
+              </div>
+            )}
             {doc.notes.length > 0 && (
               <div>
                 <p className="text-sm font-medium text-slate-700">Notes de la poule</p>

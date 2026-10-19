@@ -155,6 +155,91 @@ describe('importing an AGR calendar (#647)', () => {
     expect(d1.rows('SELECT count(*) AS n FROM divisions')).toEqual([{ n: 2 }])
   })
 
+  describe('a calendar imported again into another division (#763)', () => {
+    // The Bas-Rhin's poule first imported into the Haut-Rhin's division, then
+    // into the right one: the same teams (#282), which have to move.
+    function misfiled() {
+      const d1 = world()
+      d1.exec(`INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, competition_id) VALUES
+        ('d-wrong', 'phase-agr-27-1', 'Promotion Honneur', 4, 4, 0, 'comp-agr'),
+        ('d-right', 'phase-agr-27-1', 'Promotion Honneur Erstein/Sélestat', 5, 4, 0, 'comp-agr')`)
+      return d1
+    }
+    // Each name as the review resolves it: the clubs the first import created
+    // are found again by their AGR name.
+    const body = (divisionId: string, extra: Record<string, unknown> = {}) => (d1: ReturnType<typeof world>) => {
+      const byName = Object.fromEntries(d1.rows<{ club_id: string; name: string }>(
+        "SELECT club_id, name FROM club_federations WHERE federation_id = 'agr' AND name IS NOT NULL").map((r) => [r.name, r.club_id]))
+      return {
+        ...payload(doc(PROM_HONNEUR_A_PHASE_1), 'phase-agr-27-1', { ...byName, 'LANDSER ASL': LANDSER, 'KEMBS ASL TT': KEMBS }),
+        divisionId, ...extra,
+      }
+    }
+
+    it('refuses to move a team without the review’s confirmation, and writes nothing', async () => {
+      const d1 = misfiled()
+      const ga = await as(d1, 'ga')
+      await ga(body('d-wrong')(d1))
+      const res = await ga(body('d-right')(d1))
+      expect(res.status).toBe(409)
+      expect(await res.json()).toMatchObject({ error: 'teams_elsewhere' })
+      expect(d1.count('groups')).toBe(1)
+      expect(d1.count('games')).toBe(28)
+    })
+
+    it('moves the teams to the right poule, and takes their fixtures out of the wrong one', async () => {
+      const d1 = misfiled()
+      const ga = await as(d1, 'ga')
+      await ga(body('d-wrong')(d1))
+      const [wrong] = d1.rows<{ id: string }>("SELECT id FROM groups WHERE division_id = 'd-wrong'")
+      const res = await ga(body('d-right', { moveTeams: true })(d1))
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({ created: { group: true, teams: 0, games: 28 }, moved: { teams: 8, games: 28 } })
+      const [right] = d1.rows<{ id: string; team_ids: string }>("SELECT id, team_ids FROM groups WHERE division_id = 'd-right'")
+      expect(JSON.parse(right.team_ids)).toHaveLength(8)
+      expect(d1.count(`teams WHERE group_id = '${right.id}'`)).toBe(8)
+      expect(d1.rows(`SELECT team_ids FROM groups WHERE id = '${wrong.id}'`)).toEqual([{ team_ids: '[]' }])
+      // Nothing left of them in the wrong poule: no fixture, no journée.
+      expect(d1.count(`match_days WHERE group_id = '${wrong.id}'`)).toBe(0)
+      expect(d1.count('games')).toBe(28)
+    })
+
+    it('leaves the wrong poule’s own teams alone, their journées dated by their own fixtures again', async () => {
+      const d1 = misfiled()
+      const ga = await as(d1, 'ga')
+      await ga(body('d-wrong')(d1))
+      const [wrong] = d1.rows<{ id: string; team_ids: string }>("SELECT id, team_ids FROM groups WHERE division_id = 'd-wrong'")
+      const [j1] = d1.rows<{ id: string; date: string }>(`SELECT id, date FROM match_days WHERE group_id = '${wrong.id}' AND number = 1`)
+      // The poule's real teams, playing a fortnight later than the misfiled ones.
+      d1.exec(`INSERT INTO teams (id, club_id, phase_id, number, group_id) VALUES
+        ('t-stay-1', '${RIXHEIM}', 'phase-agr-27-1', 1, '${wrong.id}'), ('t-stay-2', '${RIXHEIM}', 'phase-agr-27-1', 2, '${wrong.id}')`)
+      d1.exec(`UPDATE groups SET team_ids = ? WHERE id = ?`, JSON.stringify([...JSON.parse(wrong.team_ids), 't-stay-1', 't-stay-2']), wrong.id)
+      d1.exec(`INSERT INTO games (id, match_day_id, home_team_id, away_team_id, date) VALUES ('g-stay', '${j1.id}', 't-stay-1', 't-stay-2', '2026-12-01')`)
+      d1.exec(`INSERT INTO game_availabilities (game_id, player_id, status) VALUES ('g-stay', 'ga', 'available')`)
+
+      const res = await ga(body('d-right', { moveTeams: true })(d1))
+      expect(await res.json()).toMatchObject({ moved: { teams: 8, games: 28 } })
+      expect(d1.rows(`SELECT team_ids FROM groups WHERE id = '${wrong.id}'`)).toEqual([{ team_ids: '["t-stay-1","t-stay-2"]' }])
+      expect(d1.rows(`SELECT id, date FROM match_days WHERE group_id = '${wrong.id}'`)).toEqual([{ id: j1.id, date: '2026-12-01' }])
+      expect(d1.count("game_availabilities WHERE game_id = 'g-stay'")).toBe(1)
+    })
+
+    it('lets a club admin move a bare club’s team, never one of a club with administrators of its own', async () => {
+      const d1 = misfiled()
+      await (await as(d1, 'ga'))(body('d-wrong')(d1))
+      // Kembs, in this calendar, has its admin: Landser cannot move Kembs's team.
+      const landser = await as(d1, 'landser-admin')
+      const refused = await landser(body('d-right', { moveTeams: true })(d1))
+      expect(refused.status).toBe(403)
+      expect(d1.count("groups WHERE division_id = 'd-right'")).toBe(0)
+      // Without one, the import moves it like the bare opponents it created.
+      d1.exec("UPDATE users SET role = 'player' WHERE id = 'kembs-admin'")
+      const res = await landser(body('d-right', { moveTeams: true })(d1))
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({ moved: { teams: 8 } })
+    })
+  })
+
   it('takes the division chosen in the review, and refuses one of another phase', async () => {
     const d1 = world()
     d1.exec(`INSERT INTO divisions (id, phase_id, display_name, rank, players_per_game, is_archived, competition_id) VALUES

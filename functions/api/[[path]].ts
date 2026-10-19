@@ -25,6 +25,7 @@ import { addressTakenMessage } from '../../src/lib/addressOwner'
 import { usualHomeSlot } from '../../src/lib/agrScheduleDocument'
 import { pdfTextLines } from '../../src/lib/pdfLines'
 import { divisionNameKey } from '../../src/lib/divisionNames'
+import { teamsLeavingTheirPoule } from '../../src/lib/scheduleTeamMoves'
 import { clubNameFromFederation } from '../../src/lib/ffttNames'
 import { clubMergeKeeper, clubMergeRefusal } from '../../src/lib/clubMerge'
 import { personMergeRefusal } from '../../src/lib/namesakes'
@@ -3276,6 +3277,8 @@ interface FederationScheduleInput {
   secondPhase?: 'return_leg' | 'new_groups'
   notes: string[]
   clubs: Array<{ name: string; clubId: string | null }>
+  /** The review has said which teams leave another poule, and the admin confirmed (#763). */
+  moveTeams: boolean
   journees: Array<{
     number: number
     matches: Array<{ date: string; time: string; home: { club: string; number: number }; away: { club: string; number: number } }>
@@ -3315,6 +3318,7 @@ function parseFederationScheduleInput(b: Record<string, unknown>): FederationSch
       const o = c as { name?: unknown; clubId?: unknown }
       return { name: str(o.name), clubId: str(o.clubId) || null }
     }).filter((c) => c.name),
+    moveTeams: b.moveTeams === true,
     journees: journees.map(({ number, matches }) => ({ number, matches })),
   }
   const valid = input.federationId && input.phaseId && input.competitionId && input.division
@@ -3449,8 +3453,8 @@ app.post('/federation-schedules/import', async (c) => {
       for (const sd of [m.home, m.away]) sides.set(`${sd.club}|${sd.number}`, { clubId: clubIdOf.get(sd.club)!, number: sd.number, name: sd.club })
     }
   }
-  const existingTeams = await db.prepare('SELECT id, club_id, number FROM teams WHERE phase_id = ?')
-    .bind(input.phaseId).all<{ id: string; club_id: string; number: number }>()
+  const existingTeams = await db.prepare('SELECT id, club_id, number, group_id FROM teams WHERE phase_id = ?')
+    .bind(input.phaseId).all<{ id: string; club_id: string; number: number; group_id: string }>()
   const teamIdOf = new Map<string, string>()
   let createdTeams = 0
   for (const [k, sd] of sides) {
@@ -3466,6 +3470,50 @@ app.post('/federation-schedules/import', async (c) => {
          VALUES (?, ?, ?, ?, ?, '', ?, ?, '', '[]', 0)`,
       ).bind(id, sd.clubId, input.phaseId, sd.number, groupId, slot?.day ?? '', slot?.time ?? ''))
     }
+  }
+  // A team found again in another poule of the phase moves here (#763): a
+  // calendar first imported in the wrong division, then in the right one,
+  // finds the same rows (#282). Never silently — a wrong division chosen in
+  // the review would pull a team out of the poule it does play in, fixtures
+  // and answers with it —, so the review says it and confirms. And a club on
+  // the app moves its own teams: #613's rule for who writes on a club the
+  // import did not create.
+  const leaving = teamsLeavingTheirPoule(
+    [...sides.values()],
+    existingTeams.results.map((t) => ({ id: t.id, clubId: t.club_id, number: t.number, groupId: t.group_id })),
+    group?.id ?? null,
+  )
+  if (leaving.length) {
+    if (!input.moveTeams) {
+      return c.json({
+        error: 'teams_elsewhere', teamIds: leaving.map((t) => t.id),
+        message: 'Des équipes de ce calendrier sont déjà dans une autre poule : confirmez leur déplacement.',
+      }, 409)
+    }
+    if (!isGeneralAdmin(c)) {
+      const others = [...new Set(leaving.map((t) => t.clubId).filter((id) => id !== viewer.clubId))]
+      const administered = others.length
+        ? await db.prepare(`SELECT 1 FROM profiles WHERE role = 'club_admin' AND club_id IN (${others.map(() => '?').join(',')}) LIMIT 1`)
+          .bind(...others).first()
+        : null
+      if (administered) {
+        return c.json({
+          ...notAllowed,
+          message: 'Une équipe de ce calendrier est dans une autre poule, et son club a ses administrateurs : c’est à eux de la déplacer.',
+        }, 403)
+      }
+    }
+    const gone = new Set(leaving.map((t) => t.id))
+    const phaseGroups = await db.prepare(
+      'SELECT g.id, g.team_ids FROM groups g JOIN divisions d ON d.id = g.division_id WHERE d.phase_id = ? AND g.id <> ?',
+    ).bind(input.phaseId, groupId).all<{ id: string; team_ids: string }>()
+    for (const g of phaseGroups.results) {
+      const ids = jsonParseIds(g.team_ids)
+      if (ids.some((id) => gone.has(id))) {
+        stmts.push(db.prepare('UPDATE groups SET team_ids = ? WHERE id = ?').bind(jsonStr(ids.filter((id) => !gone.has(id))), g.id))
+      }
+    }
+    stmts.push(...leaving.map((t) => db.prepare('UPDATE teams SET group_id = ? WHERE id = ?').bind(groupId, t.id)))
   }
   stmts.push(group
     ? db.prepare('UPDATE groups SET team_ids = ?, note = ? WHERE id = ?').bind(jsonStr([...teamIds]), note, groupId)
@@ -3525,6 +3573,12 @@ app.post('/federation-schedules/import', async (c) => {
     console.error('federation-schedules/import failed', err)
     return c.json({ error: 'import_failed' }, 500)
   }
+  // Their fixtures in the poule they left go with them (#422) — after the
+  // batch, so this poule's are written before anything is cleaned up.
+  let movedGames = 0
+  for (const t of leaving) {
+    movedGames += (await clearTeamGamesOutsideGroup(db, t.id, t.groupId, groupId)).deletedGames.length
+  }
   // A return leg is prepared as soon as both phases exist (#649) — here when
   // phase 2 already does, otherwise when it is created.
   let returnLeg: MirrorResult | null = null
@@ -3539,6 +3593,7 @@ app.post('/federation-schedules/import', async (c) => {
     ok: true, divisionId, groupId,
     created: { division: !existingDivision, group: !group, clubs: createdClubs.length, teams: createdTeams, matchDays: createdMatchDays, games: createdGames },
     updatedGames,
+    moved: { teams: leaving.length, games: movedGames },
   })
 })
 
@@ -6658,17 +6713,18 @@ async function syncGroupMembership(db: Env['Bindings']['DB'], teamId: string, gr
  *
  * They are matches it will not play, and their availabilities and
  * compositions answer a question that no longer exists, so they go. Journées
- * of the old pool left with no game at all go too. Everything else — the old
- * pool's other fixtures, the team row itself — is untouched.
+ * of the old pool left with no game at all go too, and the others are dated
+ * again by the fixtures they keep (#763). Everything else — the old pool's
+ * other fixtures, the team row itself — is untouched.
  */
 async function clearTeamGamesOutsideGroup(
   db: Env['Bindings']['DB'], teamId: string, previousGroupId: string, groupId: string,
 ) {
   const doomed = await db.prepare(
-    `SELECT id FROM games WHERE (home_team_id = ?1 OR away_team_id = ?1)
+    `SELECT id, match_day_id FROM games WHERE (home_team_id = ?1 OR away_team_id = ?1)
      AND match_day_id IN (SELECT id FROM match_days WHERE group_id <> ?2)`,
-  ).bind(teamId, groupId).all()
-  const deletedGames = doomed.results.map((g) => g.id as string)
+  ).bind(teamId, groupId).all<{ id: string; match_day_id: string }>()
+  const deletedGames = doomed.results.map((g) => g.id)
   if (deletedGames.length) await db.batch(clearGamesByIds(db, deletedGames))
   const emptied = await db.prepare(
     `SELECT id FROM match_days WHERE group_id = ?
@@ -6676,6 +6732,10 @@ async function clearTeamGamesOutsideGroup(
   ).bind(previousGroupId).all()
   const deletedMatchDays = emptied.results.map((m) => m.id as string)
   if (deletedMatchDays.length) await db.batch(deleteMatchDaysByIds(db, deletedMatchDays))
+  // A journée dated by a fixture that left is dated again by what remains
+  // (#763): an import into the wrong poule had set them to its own dates.
+  const shrunk = [...new Set(doomed.results.map((g) => g.match_day_id))].filter((id) => !deletedMatchDays.includes(id))
+  if (shrunk.length) await db.batch(shrunk.map((id) => matchDayDateRecomputeStmt(db, id)))
   return { deletedGames, deletedMatchDays }
 }
 
