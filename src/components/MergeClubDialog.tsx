@@ -33,7 +33,7 @@ export function MergeClubDialog({ club, onClose }: { club: Club; onClose: () => 
 
   const other = clubs.find((c) => c.id === otherId)
   const pair = other ? clubMergeKeeper(club, other) : null
-  const refusal = pair && clubMergeRefusal(pair.keep, pair.remove, { teams, memberGroups, competitionGroups })
+  const refusal = pair && clubMergeRefusal(pair.keep, pair.remove, { teams, memberGroups, competitionGroups, profiles: users })
   const moving = pair && [
     plural(teams.filter((t) => t.clubId === pair.remove.id).length, 'équipe', 'équipes'),
     plural(users.filter((u) => u.clubId === pair.remove.id).length, 'membre', 'membres'),

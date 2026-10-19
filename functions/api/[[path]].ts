@@ -4392,12 +4392,13 @@ app.post('/clubs/:id/merge-into', async (c) => {
   if (typeof d.targetId !== 'string' || !d.targetId) return c.json({ error: 'bad_request' }, 400)
   const keepId = d.targetId
 
-  const [clubRows, fedRows, teamRows, groupRows, reservedRows] = await Promise.all([
+  const [clubRows, fedRows, teamRows, groupRows, reservedRows, profileRows] = await Promise.all([
     db.prepare('SELECT id, display_name, affiliation_number FROM clubs WHERE id IN (?, ?)').bind(removeId, keepId).all(),
     db.prepare('SELECT club_id, federation_id, affiliation_number FROM club_federations WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
     db.prepare('SELECT club_id, phase_id, number FROM teams WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
     db.prepare('SELECT club_id, display_name FROM member_groups WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
     db.prepare('SELECT club_id, competition_id FROM club_competition_groups WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
+    db.prepare('SELECT club_id, person_id, first_name, last_name FROM profiles WHERE club_id IN (?, ?)').bind(removeId, keepId).all(),
   ])
   const feds = fedRows.results as Array<{ club_id: string; federation_id: string; affiliation_number: string | null }>
   const clubOf = (id: string) => {
@@ -4422,6 +4423,8 @@ app.post('/clubs/:id/merge-into', async (c) => {
       .map((g) => ({ clubId: g.club_id, displayName: g.display_name })),
     competitionGroups: (reservedRows.results as Array<{ club_id: string; competition_id: string }>)
       .map((g) => ({ clubId: g.club_id, competitionId: g.competition_id })),
+    profiles: (profileRows.results as Array<{ club_id: string; person_id: string | null; first_name: string | null; last_name: string | null }>)
+      .map((p) => ({ clubId: p.club_id, personId: p.person_id ?? undefined, firstName: p.first_name ?? undefined, lastName: p.last_name ?? undefined })),
   })
   if (refusal) return c.json({ error: refusal.reason, message: refusal.message }, 409)
 
