@@ -122,3 +122,66 @@ describe('A licensee of another club (#731)', () => {
     expect(writes.points.some((p) => p.playerId === writes.profiles[0].id)).toBe(true)
   })
 })
+
+// #771 — the web's « Tout rattacher » (#765): after the club's FFTT import, the
+// AGR list names members the club already holds, under no AGR licence. One
+// press answers every such question; each card can still be undone.
+describe('The club’s namesakes, all at once (#771)', () => {
+  const member = (id: string, firstName: string, lastName: string, licenseNumber: string) => ({
+    id, personId: `person-${id}`, firstName, lastName, licenseNumber, phone: '', status: 'active',
+    clubId: 'landser', role: 'player', isPlayer: true,
+  } as User)
+  // Nicolas holds an FFTT licence, Joris none: neither has an AGR one.
+  const nicolas = member('nicolas', 'Nicolas', 'Bernard', '6810001')
+  const joris = member('joris', 'Joris', 'Simon', '')
+  const saved = { users: mockData.users }
+  beforeEach(() => { mockData.users = [...saved.users, nicolas, joris] })
+  afterEach(() => Object.assign(mockData, saved))
+
+  it('says « sans licence AGR », not « sans numéro de licence »', async () => {
+    mockRead.mockResolvedValue({ ok: true, lines: AGR_PLAYER_LIST })
+    render(<ImportPlayersScreen />)
+    fireEvent.press(screen.getByTestId('import-pick-pdf'))
+    expect(await screen.findByText(/Nicolas Bernard figure déjà dans le club sans licence AGR\./)).toBeTruthy()
+  })
+
+  it('links every namesake in one press, and each can still be undone', async () => {
+    mockRead.mockResolvedValue({ ok: true, lines: AGR_PLAYER_LIST })
+    render(<ImportPlayersScreen />)
+    fireEvent.press(screen.getByTestId('import-pick-pdf'))
+    expect(await screen.findByTestId('import-namesakes')).toHaveTextContent(/2 licenciés de cette liste portent le nom d’un membre du club/)
+
+    fireEvent.press(screen.getByTestId('import-link-all'))
+    // Nothing left to ask: the banner goes, and the card under the finger is
+    // still Nicolas's, now linked.
+    expect(screen.queryByTestId('import-namesakes')).toBeNull()
+    expect(screen.getByTestId('import-card-351100')).toBeTruthy()
+    expect(screen.getByText('Rattaché à un membre du club.')).toBeTruthy()
+    expect(screen.getByTestId('import-field-351100-licenseNumber')).toBeChecked()
+
+    fireEvent.press(screen.getByTestId('import-unlink-351100'))
+    expect(screen.getByTestId('import-link-351100')).toBeTruthy()
+
+    fireEvent.press(screen.getByTestId('import-apply'))
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)[2] as Array<{ text: string; onPress?: () => void }>
+    buttons.find((b) => b.text === 'Importer')!.onPress!()
+    await waitFor(() => expect(applyPlayerImport).toHaveBeenCalled())
+    const writes = applyPlayerImport.mock.calls[0][0]
+    // Joris stays linked and gains his AGR licence; Nicolas, unlinked, is created.
+    expect(writes.updates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'joris', patch: expect.objectContaining({ licences: [{ federationId: 'agr', number: '353200' }] }) }),
+    ]))
+    expect(writes.updates.some((u) => u.id === 'nicolas')).toBe(false)
+    expect(writes.creates.map((c) => c.lastName)).toContain('Bernard')
+    expect(writes.creates).toHaveLength(4)
+  })
+
+  it('offers nothing for a single namesake', async () => {
+    mockData.users = [...saved.users, joris]
+    mockRead.mockResolvedValue({ ok: true, lines: AGR_PLAYER_LIST })
+    render(<ImportPlayersScreen />)
+    fireEvent.press(screen.getByTestId('import-pick-pdf'))
+    expect(await screen.findByTestId('import-deck-count')).toBeTruthy()
+    expect(screen.queryByTestId('import-namesakes')).toBeNull()
+  })
+})
