@@ -1062,7 +1062,9 @@ invisible dans le diff comme dans la revue.
   la liste AGR, sans rechargement, ne retrouvait personne et proposait de
   créer chaque licencié une seconde fois. « Tout rattacher » répond d'un coup
   aux questions de même nom dans le club — une question, posée une fois ;
-  chaque ligne s'annule encore.
+  chaque ligne s'annule encore. Sur le web comme dans l'app (#771), où il est
+  au-dessus du deck et ne change pas la carte sous le doigt ; la question
+  d'une carte y dit aussi « sans licence AGR ».
 - Une liste d'un autre club est refusée (numéro d'affiliation). Entrée :
   « Importer la liste AGR » sur Joueurs, pour un club de cette fédération,
   sur le web comme dans l'app (#681).

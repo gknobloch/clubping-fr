@@ -215,18 +215,34 @@ export default function ImportPlayersScreen() {
    * here (a confirmed row always has that licence line to write), so the card
    * under the finger stays the card under the finger.
    */
-  const confirmLink = (licence: string, memberId: string | null) => {
+  const confirmLinks = (answers: ReadonlyArray<readonly [licence: string, memberId: string | null]>) => {
     const next = new Map(confirmed)
-    if (memberId) next.set(licence, memberId)
-    else next.delete(licence)
+    for (const [licence, memberId] of answers) {
+      if (memberId) next.set(licence, memberId)
+      else next.delete(licence)
+    }
     setConfirmed(next)
-    const rebuilt = seat(rebuild.current(next)).find((r) => r.licence.licence === licence)
+    const rebuilt = seat(rebuild.current(next))
+    const answered = new Set(answers.map(([licence]) => licence))
     setSelected((prev) => {
-      const keep = new Set([...prev].filter((k) => !k.startsWith(`${licence}:`)))
-      if (rebuilt) for (const f of writableFields(rebuilt.fields)) keep.add(fieldKey(licence, f.key))
+      const keep = new Set([...prev].filter((k) => !answered.has(k.slice(0, k.indexOf(':')))))
+      for (const r of rebuilt) {
+        if (answered.has(r.licence.licence)) for (const f of writableFields(r.fields)) keep.add(fieldKey(r.licence.licence, f.key))
+      }
       return keep
     })
   }
+  const confirmLink = (licence: string, memberId: string | null) => confirmLinks([[licence, memberId]])
+
+  // The club's namesakes, all at once (#771, the web's since #765): an AGR
+  // list after the club's FFTT import names most of the licensees that import
+  // just created — as many identical questions, one card each. One press
+  // answers those the review could ask, each a single member of that name in
+  // this club; a licensee of another club (`on: 'person'`) stays a question,
+  // and every card keeps its « Annuler le rattachement ».
+  const pendingNamesakes = deck.filter((r) => r.link?.on === 'name')
+  const confirmAllNamesakes = () =>
+    confirmLinks(pendingNamesakes.map((r) => [r.licence.licence, r.link!.id] as const))
 
   /**
    * The federation's PDF (#681): picked, read by the API — Hermes runs no
@@ -592,6 +608,21 @@ export default function ImportPlayersScreen() {
                 ? '1 licencié à revoir'
                 : `${deck.length} licenciés à revoir`}
             </Text>
+            {pendingNamesakes.length > 1 && (
+              <View testID="import-namesakes" style={s.linkBox}>
+                <Text style={s.linkNote}>
+                  {pendingNamesakes.length} licenciés de cette liste portent le nom d’un membre du club.
+                </Text>
+                <TouchableOpacity
+                  testID="import-link-all"
+                  style={s.linkBtn}
+                  onPress={confirmAllNamesakes}
+                  accessibilityRole="button"
+                >
+                  <Text style={s.linkBtnTxt}>Tout rattacher</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <LicenceCard
               row={row}
               selected={selected}
@@ -599,6 +630,7 @@ export default function ImportPlayersScreen() {
               onToggleField={toggleField}
               onSetRow={setRow}
               onConfirmLink={confirmLink}
+              federationName={importFederation?.shortName}
             />
             {/* Dots while they fit, «12 / 53» past that — see `PagerPosition`.
                 A club's licence list is routinely longer than a row of dots
@@ -691,7 +723,7 @@ const STATUS_BADGE: Record<'new' | 'changed', { label: string; bg: string; fg: s
 }
 
 function LicenceCard({
-  row, selected, linked, onToggleField, onSetRow, onConfirmLink,
+  row, selected, linked, onToggleField, onSetRow, onConfirmLink, federationName,
 }: {
   row: PlayerImportRow
   selected: Set<string>
@@ -700,6 +732,8 @@ function LicenceCard({
   onToggleField: (licence: string, key: PlayerSyncField['key']) => void
   onSetRow: (row: PlayerImportRow, taken: boolean) => void
   onConfirmLink: (licence: string, memberId: string | null) => void
+  /** Another federation's list (#681) — « AGR »; absent for the FFTT's. */
+  federationName?: string
 }) {
   const fields = writableFields(row.fields)
   const taken = fields.filter((f) => selected.has(fieldKey(row.licence.licence, f.key)))
@@ -745,7 +779,9 @@ function LicenceCard({
             {row.link.archived ? ' (archivé)' : ''} figure déjà dans le club
             {row.link.heldLicence
               ? ` sous la licence ${row.link.heldLicence}.`
-              : ' sans numéro de licence.'}
+              // Another federation's list (#771): the member may well hold an
+              // FFTT licence — it is this federation's they have none of.
+              : federationName ? ` sans licence ${federationName}.` : ' sans numéro de licence.'}
             {' '}Est-ce la même personne ?
           </Text>
           <TouchableOpacity
