@@ -23,9 +23,12 @@ const mockAuth = {
 
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }))
 jest.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth }))
-jest.mock('@/contexts/DataContext', () => ({
-  useAppData: () => ({ players: [], users: [], clubs: [{ id: 'landser', displayName: 'ASL Landser' }] }),
-}))
+const mockData = {
+  players: [], users: [],
+  clubs: [{ id: 'landser', displayName: 'ASL Landser' }] as Array<Record<string, unknown>>,
+  federations: [] as Array<{ id: string; shortName: string }>,
+}
+jest.mock('@/contexts/DataContext', () => ({ useAppData: () => mockData }))
 
 const metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -74,6 +77,25 @@ it('lists the person’s clubs, ticked where they are, and the profiles they man
   await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'))
   expect(mockAuth.switchProfile).toHaveBeenCalledWith('chloe')
   expect(screen.queryByTestId('account-menu')).toBeNull()
+})
+
+it('tags each club with its federations once there is more than one (#767)', () => {
+  mockData.federations = [{ id: 'fftt', shortName: 'FFTT' }, { id: 'agr', shortName: 'AGR' }]
+  mockData.clubs = [
+    { id: 'landser', displayName: 'ASL Landser', affiliationNumber: '', affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }] },
+    { id: 'rixheim', displayName: 'Rixheim PPA', affiliationNumber: '06680011' },
+  ]
+  mockAuth.profiles = [
+    profile('nathan', 'Nathan', 'landser', 'ASL Landser', 'club_admin', { signedIn: true }),
+    profile('nathan-rix', 'Nathan', 'rixheim', 'Rixheim PPA', 'player'),
+    profile('chloe', 'Chloé', 'rixheim', 'Rixheim PPA', 'player', { managed: true }),
+  ]
+  const menu = openMenu()
+  expect(within(menu).getByTestId('profile-federations-nathan')).toBeTruthy()
+  expect(within(menu).getByLabelText('Rixheim PPA, Joueur, FFTT')).toBeTruthy()
+  expect(within(menu).getByLabelText('Chloé Bernard, Rixheim PPA · Joueur, FFTT')).toBeTruthy()
+  mockData.federations = []
+  mockData.clubs = [{ id: 'landser', displayName: 'ASL Landser' }]
 })
 
 it('says whose profile is open on a delegated one, and goes back in a tap', async () => {

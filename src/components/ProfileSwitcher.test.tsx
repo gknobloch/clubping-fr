@@ -29,7 +29,8 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }))
 
-vi.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [], users: [], clubs: [] }) }))
+const data = vi.hoisted(() => ({ clubs: [] as unknown[], federations: [] as unknown[] }))
+vi.mock('@/contexts/DataContext', () => ({ useAppData: () => ({ players: [], users: [], ...data }) }))
 
 function renderList() {
   return render(<MemoryRouter><ProfileList /></MemoryRouter>)
@@ -54,7 +55,8 @@ describe('ProfileList (#640, #749)', () => {
 
   it('ticks the signed-in profile and does not offer it', () => {
     renderList()
-    const current = screen.getByText('PPA Rixheim').closest('button')!
+    const mine = screen.getByRole('heading', { name: 'Mes clubs' }).parentElement!
+    const current = within(mine).getByText('PPA Rixheim').closest('button')!
     expect(current).toHaveAttribute('aria-current', 'true')
     expect(current).toBeDisabled()
     expect(within(current).getByText('Profil actuel')).toBeInTheDocument()
@@ -65,6 +67,22 @@ describe('ProfileList (#640, #749)', () => {
     fireEvent.click(screen.getByText('Sacha Henaut').closest('button')!)
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }))
     expect(switchProfile).toHaveBeenCalledWith('sacha')
+  })
+
+  it('tags each club with its federations once there is more than one (#767)', () => {
+    data.federations = [{ id: 'fftt', shortName: 'FFTT' }, { id: 'agr', shortName: 'AGR' }]
+    data.clubs = [
+      { id: 'a', affiliationNumber: '06680011', affiliations: [{ federationId: 'agr', affiliationNumber: '680011' }] },
+      { id: 'b', affiliationNumber: '', affiliations: [{ federationId: 'agr', affiliationNumber: '670011' }] },
+    ]
+    renderList()
+    expect(screen.getByTestId('profile-federations-benjamin')).toHaveTextContent('FFTTAGR')
+    expect(screen.getByTestId('profile-federations-benjamin-b')).toHaveTextContent('AGR')
+    // A managed row tags the club in its subtitle; the general administration is no club.
+    expect(screen.getByTestId('profile-federations-sacha')).toHaveTextContent('FFTTAGR')
+    expect(screen.queryByTestId('profile-federations-benjamin-ga')).toBeNull()
+    data.federations = []
+    data.clubs = []
   })
 
   it('says so when the switch fails', async () => {

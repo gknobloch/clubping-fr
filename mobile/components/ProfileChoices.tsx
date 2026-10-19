@@ -8,7 +8,7 @@ import { ProfileAvatar, ProfileClubMark } from '@/components/ProfileAvatar'
 import { getRoleLabel } from '@/utils/roles'
 import { colors } from '@/constants/colors'
 import { fonts } from '@/constants/typography'
-import { profileClubName, profileName, profileSections } from '@shared/lib/profiles'
+import { profileClubName, profileFederations, profileName, profileSections } from '@shared/lib/profiles'
 import type { Profile } from '@shared/types'
 
 /**
@@ -28,7 +28,7 @@ import type { Profile } from '@shared/types'
  */
 export function ProfileChoices({ onSwitched }: { onSwitched: () => void }) {
   const { user, profiles, switchProfile } = useAuth()
-  const { players, users } = useAppData()
+  const { players, users, clubs = [], federations = [] } = useAppData()
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -50,8 +50,19 @@ export function ProfileChoices({ onSwitched }: { onSwitched: () => void }) {
   const avatarOf = (id: string) => (players.find((x) => x.id === id) ?? users.find((x) => x.id === id))?.avatarUpdatedAt
   const role = (p: Profile) => `${getRoleLabel(p.role)}${p.status === 'archived' ? ' · Archivé' : ''}`
 
-  const row = (p: Profile, mark: ReactNode, title: string, subtitle: string) => {
+  // The club's federations beside its name (#767), as on the web: Landser is
+  // the AGR's, Rixheim the FFTT's, Bootzheim both — nothing else said so.
+  const pills = (p: Profile, names: string[]) => names.length > 0 && (
+    <View style={s.pills} testID={`profile-federations-${p.id}`}>
+      {names.map((n) => <Text key={n} style={s.pill}>{n}</Text>)}
+    </View>
+  )
+
+  /** A row: the club's name carries its federations, in the title (own) or the subtitle (managed). */
+  const row = (p: Profile, mark: ReactNode, title: string, roleText: string, clubIn: 'title' | 'subtitle') => {
     const current = p.id === user?.id
+    const subtitle = clubIn === 'title' ? roleText : `${profileClubName(p)} · ${roleText}`
+    const feds = profileFederations(p, clubs, federations)
     return (
       <TouchableOpacity
         key={p.id}
@@ -61,12 +72,23 @@ export function ProfileChoices({ onSwitched }: { onSwitched: () => void }) {
         disabled={current || !!busy}
         accessibilityRole="button"
         accessibilityState={{ selected: current, disabled: current || !!busy }}
-        accessibilityLabel={`${title}, ${subtitle}${current ? ', profil actuel' : ''}`}
+        accessibilityLabel={`${title}, ${subtitle}${feds.length ? `, ${feds.join(' et ')}` : ''}${current ? ', profil actuel' : ''}`}
       >
         {mark}
         <View style={s.body}>
-          <Text style={s.title} numberOfLines={1}>{title}</Text>
-          <Text style={s.subtitle} numberOfLines={1}>{subtitle}</Text>
+          <View style={s.line}>
+            <Text style={[s.title, s.shrink]} numberOfLines={1}>{title}</Text>
+            {clubIn === 'title' && pills(p, feds)}
+          </View>
+          {clubIn === 'title' ? (
+            <Text style={s.subtitle} numberOfLines={1}>{roleText}</Text>
+          ) : (
+            <View style={s.line}>
+              <Text style={s.subtitle} numberOfLines={1}>{profileClubName(p)}</Text>
+              {pills(p, feds)}
+              <Text style={[s.subtitle, s.shrink]} numberOfLines={1}>{`· ${roleText}`}</Text>
+            </View>
+          )}
         </View>
         {current ? (
           <Ionicons name="checkmark" size={22} color={colors.accent} />
@@ -82,7 +104,7 @@ export function ProfileChoices({ onSwitched }: { onSwitched: () => void }) {
       {own.length > 0 && (
         <View>
           <Text style={s.section}>Mes clubs</Text>
-          {own.map((p) => row(p, <ProfileClubMark profile={p} size={40} />, profileClubName(p), role(p)))}
+          {own.map((p) => row(p, <ProfileClubMark profile={p} size={40} />, profileClubName(p), role(p), 'title'))}
         </View>
       )}
       {managed.length > 0 && (
@@ -92,7 +114,8 @@ export function ProfileChoices({ onSwitched }: { onSwitched: () => void }) {
             p,
             <ProfileAvatar profile={p} avatarUpdatedAt={avatarOf(p.id)} size={40} />,
             profileName(p),
-            `${profileClubName(p)} · ${role(p)}`,
+            role(p),
+            'subtitle',
           ))}
         </View>
       )}
@@ -112,6 +135,13 @@ const s = StyleSheet.create({
   },
   rowCurrent: { backgroundColor: colors.accentSoft },
   body: { flex: 1, gap: 1 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  shrink: { flexShrink: 1 },
+  pills: { flexDirection: 'row', gap: 4, flexShrink: 0 },
+  pill: {
+    fontSize: 10, lineHeight: 14, fontFamily: fonts.semiBold, color: colors.textSecondary,
+    backgroundColor: colors.border, borderRadius: 4, paddingHorizontal: 5, overflow: 'hidden',
+  },
   title: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.textPrimary },
   subtitle: { fontSize: 12, color: colors.textSecondary },
 })

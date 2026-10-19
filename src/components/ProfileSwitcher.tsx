@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppData } from '@/contexts/DataContext'
 import { ProfileAvatar, ProfileClubMark } from '@/components/ProfileAvatar'
 import { getRoleLabel } from '@/mock/data'
-import { profileClubName, profileName, profileSections } from '@/lib/profiles'
+import { profileClubName, profileFederations, profileName, profileSections } from '@/lib/profiles'
 import type { Profile } from '@/types'
 
 function CheckIcon() {
@@ -31,7 +31,7 @@ function CheckIcon() {
  */
 export function ProfileList({ onSwitched }: { onSwitched?: () => void }) {
   const { user, profiles, switchProfile } = useAuth()
-  const { players, users } = useAppData()
+  const { players, users, clubs, federations = [] } = useAppData()
   const navigate = useNavigate()
   const [busy, setBusy] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
@@ -55,7 +55,21 @@ export function ProfileList({ onSwitched }: { onSwitched?: () => void }) {
   const avatarOf = (id: string) => (players.find((x) => x.id === id) ?? users.find((x) => x.id === id))?.avatarUpdatedAt
   const role = (p: Profile) => `${getRoleLabel(p.role)}${p.status === 'archived' ? ' · Archivé' : ''}`
 
-  const row = (p: Profile, mark: ReactNode, title: string, subtitle: string) => {
+  // The club's federations beside its name (#767): Landser is the AGR's,
+  // Rixheim the FFTT's, Bootzheim both — nothing else on the row said so.
+  const pills = (p: Profile) => {
+    const names = profileFederations(p, clubs, federations)
+    return names.length > 0 && (
+      <span className="flex shrink-0 gap-1" data-testid={`profile-federations-${p.id}`}>
+        {names.map((n) => (
+          <span key={n} className="rounded bg-slate-100 px-1.5 py-px text-[10px] font-semibold leading-4 text-slate-600">{n}</span>
+        ))}
+      </span>
+    )
+  }
+
+  /** A row: the club's name carries its federations, in the title (own) or the subtitle (managed). */
+  const row = (p: Profile, mark: ReactNode, title: string, roleText: string, clubIn: 'title' | 'subtitle') => {
     const current = p.id === user?.id
     return (
       <li key={p.id}>
@@ -70,8 +84,19 @@ export function ProfileList({ onSwitched }: { onSwitched?: () => void }) {
         >
           <span aria-hidden className="flex">{mark}</span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-slate-800">{title}</span>
-            <span className="block truncate text-xs text-slate-500">{subtitle}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-sm font-semibold text-slate-800">{title}</span>
+              {clubIn === 'title' && pills(p)}
+            </span>
+            {clubIn === 'title' ? (
+              <span className="block truncate text-xs text-slate-500">{roleText}</span>
+            ) : (
+              <span className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                <span className="shrink-0">{profileClubName(p)}</span>
+                {pills(p)}
+                <span className="truncate">{` · ${roleText}`}</span>
+              </span>
+            )}
           </span>
           {current ? (
             <>
@@ -92,7 +117,7 @@ export function ProfileList({ onSwitched }: { onSwitched?: () => void }) {
         <section>
           <h3 className="px-2 text-xs font-semibold text-slate-600">Mes clubs</h3>
           <ul className="mt-1 space-y-0.5">
-            {own.map((p) => row(p, <ProfileClubMark profile={p} size={36} />, profileClubName(p), role(p)))}
+            {own.map((p) => row(p, <ProfileClubMark profile={p} size={36} />, profileClubName(p), role(p), 'title'))}
           </ul>
         </section>
       )}
@@ -104,7 +129,8 @@ export function ProfileList({ onSwitched }: { onSwitched?: () => void }) {
               p,
               <ProfileAvatar profile={p} avatarUpdatedAt={avatarOf(p.id)} size={36} />,
               profileName(p),
-              `${profileClubName(p)} · ${role(p)}`,
+              role(p),
+              'subtitle',
             ))}
           </ul>
         </section>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasOtherProfiles, managedSession, profileClubName, profileName, profileSections } from './profiles'
+import { hasOtherProfiles, managedSession, profileClubName, profileFederations, profileName, profileSections } from './profiles'
 import type { Profile } from '../types'
 
 const p = (over: Partial<Profile> & Pick<Profile, 'id'>): Profile => ({ role: 'player', ...over })
@@ -68,5 +68,27 @@ describe('profileName', () => {
   it('reads the name, and the role when there is none', () => {
     expect(profileName(p({ id: 'a', firstName: 'Sacha', lastName: 'Henaut' }))).toBe('Sacha Henaut')
     expect(profileName(p({ id: 'g', role: 'general_admin' }))).toBe('Administrateur')
+  })
+})
+
+describe('profileFederations (#767)', () => {
+  const federations = [{ id: 'fftt', shortName: 'FFTT' }, { id: 'agr', shortName: 'AGR' }]
+  const clubs = [
+    { id: 'rixheim', affiliationNumber: '06680011' },
+    { id: 'landser', affiliationNumber: '', affiliations: [{ federationId: 'agr', affiliationNumber: '680036' }] },
+    { id: 'bootzheim', affiliationNumber: '06670183', affiliations: [{ federationId: 'agr', affiliationNumber: '670011' }] },
+  ]
+  const at = (clubId: string): Profile => ({ id: `p-${clubId}`, role: 'club_admin', clubId })
+
+  it('names the federations of the profile’s club, the FFTT first', () => {
+    expect(profileFederations(at('rixheim'), clubs, federations)).toEqual(['FFTT'])
+    expect(profileFederations(at('landser'), clubs, federations)).toEqual(['AGR'])
+    expect(profileFederations(at('bootzheim'), clubs, federations)).toEqual(['FFTT', 'AGR'])
+  })
+
+  it('says nothing with a single federation, for the general administration, or for a club not loaded', () => {
+    expect(profileFederations(at('bootzheim'), clubs, federations.slice(0, 1))).toEqual([])
+    expect(profileFederations({ id: 'ga', role: 'general_admin' }, clubs, federations)).toEqual([])
+    expect(profileFederations(at('unknown'), clubs, federations)).toEqual([])
   })
 })

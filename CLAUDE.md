@@ -1556,6 +1556,11 @@ invisible dans le diff comme dans la revue.
   web et app) : on voit dans quel club on est sans rien ouvrir. Sur le web le
   nom du club est aussi sous le nom. Une pastille de club à côté du titre a
   été essayée et écartée : trop serrée sur un téléphone.
+- **Le nom du club porte ses fédérations** (#767) : une étiquette « FFTT »,
+  « AGR » à côté, dans le titre d'une ligne de « Mes clubs » et dans le
+  sous-titre d'un profil géré — `profileFederations`, lu sur les
+  affiliations du club, web et app. Rien tant qu'il n'existe qu'une
+  fédération, ni pour l'administration générale.
 - **Un club sans logo prend l'initiale de sa ville** (`clubInitial`) — « L »
   pour ASL Landser, pas le « A » de tous les ASL. L'administration générale
   est un écusson, pas un club.
