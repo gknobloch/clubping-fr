@@ -125,6 +125,27 @@ export function ImportFederationPlayersModal({
     })
   }
 
+  // The club's namesakes, all at once (#765): FCJ Bootzheim's AGR list named
+  // nineteen of the licensees its FFTT import had just created — nineteen
+  // identical questions. One click answers those the review could ask, each
+  // a single member of that name in this club; the rest stay questions, and
+  // every row can still be undone.
+  const pendingNamesakes = rows.filter((r) => r.link?.on === 'name')
+  const confirmAllNamesakes = () => {
+    const next = new Map(confirmed)
+    for (const r of pendingNamesakes) next.set(r.licence.licence, r.link!.id)
+    setConfirmed(next)
+    const rebuilt = build(licences, next)
+    const linked = new Set(pendingNamesakes.map((r) => r.licence.licence))
+    setSelected((prev) => {
+      const keep = new Set([...prev].filter((k) => !linked.has(k.slice(0, k.indexOf(':')))))
+      for (const r of rebuilt) {
+        if (linked.has(r.licence.licence)) for (const f of writableFields(r.fields)) keep.add(fieldKey(r.licence.licence, f.key))
+      }
+      return keep
+    })
+  }
+
   async function apply() {
     if (!phase) return
     const writes = playerImportWrites(rows, selected, {
@@ -204,6 +225,20 @@ export function ImportFederationPlayersModal({
                 <p>{rows.length} licence{rows.length > 1 ? 's' : ''}</p>
                 <p>{selected.size} champ{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}</p>
               </div>
+              {pendingNamesakes.length > 1 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <p>
+                    {pendingNamesakes.length} licenciés de cette liste portent le nom d’un membre du club.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={confirmAllNamesakes}
+                    className="min-h-[44px] md:min-h-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100"
+                  >
+                    Tout rattacher
+                  </button>
+                </div>
+              )}
               <div className="max-h-[45vh] overflow-y-auto">
                 <PlayerImportPreview
                   rows={rows}
@@ -212,6 +247,7 @@ export function ImportFederationPlayersModal({
                   onToggleField={toggleField}
                   onToggleRow={toggleRow}
                   onConfirmLink={confirmLink}
+                  federationName={federation?.shortName}
                 />
               </div>
               {unread.length > 0 && (

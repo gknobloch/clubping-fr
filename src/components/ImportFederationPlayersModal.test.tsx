@@ -25,15 +25,15 @@ const lucas: Player = {
   licences: [{ federationId: 'agr', number: '1251100' }],
 }
 
-function open(lines: string[]) {
+function open(lines: string[], members: Player[] = [lucas]) {
   extract.lines = lines
   render(
     <DataProvider initialData={{
       divisions: [], clubs: [landser], seasons, phases, competitions: [], competitionGroups: [],
-      federations: mockFederations, groups: [], teams: [], players: [lucas], playerSeasonCategories: [],
+      federations: mockFederations, groups: [], teams: [], players: members, playerSeasonCategories: [],
       playerSeasonLicences: [], memberGroups: [], trainings: [], trainingSessions: [], trainingAvailabilities: [],
       playerPhasePoints: [], matchDays: [], games: [], gameAvailabilities: [], gameSelections: [],
-      users: [{ ...lucas, role: 'player', isPlayer: true }],
+      users: members.map((m) => ({ ...m, role: 'player' as const, isPlayer: true })),
     }}>
       <ImportFederationPlayersModal clubId="landser" federationId="agr" onClose={() => {}} />
     </DataProvider>,
@@ -50,6 +50,21 @@ describe('ImportFederationPlayersModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Importer la sélection' }))
     // Five new licensees; Lucas, found on his AGR licence, gains his classement.
     expect(await screen.findByRole('status')).toHaveTextContent('5 joueurs créés · 1 mis à jour.')
+  })
+
+  it('links every namesake of the club at once — FFTT licensees the AGR list names (#765)', async () => {
+    const fftt = (id: string, firstName: string, lastName: string, licenseNumber: string): Player => ({
+      id, firstName, lastName, licenseNumber, phone: '', status: 'active', clubId: 'landser',
+    })
+    open(AGR_PLAYER_LIST, [lucas, fftt('nicolas', 'Nicolas', 'Bernard', '6812345'), fftt('gregory', 'Gregory', 'Dupont', '6812346')])
+    expect(await screen.findByText('2 licenciés de cette liste portent le nom d’un membre du club.')).toBeInTheDocument()
+    // Their FFTT licence is not the question: it is the AGR's they lack.
+    expect(screen.getAllByText(/sans licence AGR/)).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Tout rattacher' }))
+    expect(screen.queryByRole('button', { name: 'Tout rattacher' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Rattaché à un membre du club.')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Importer la sélection' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('3 joueurs créés · 3 mis à jour.')
   })
 
   it('refuses another club’s list', async () => {

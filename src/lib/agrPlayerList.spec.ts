@@ -24,6 +24,17 @@ describe('parseAgrPlayerListLines', () => {
     expect(parse(AGR_PLAYER_LIST).licences[4]).toMatchObject({ lastName: 'De la Fontaine', firstName: 'Jean Pierre' })
   })
 
+  it('reads « NC » and a women’s classement, kept as printed (#765)', () => {
+    const lines = [...AGR_PLAYER_LIST]
+    lines.splice(3, 0, '1525697 CUCUAT Lucas NC', '1487657 DA COSTA OLIVEIRA Juliette 80-D')
+    const { licences, unread } = parse(lines)
+    expect(unread).toEqual([])
+    expect(licences.slice(0, 2)).toMatchObject([
+      { licence: '1525697', lastName: 'Cucuat', firstName: 'Lucas', points: 'NC' },
+      { licence: '1487657', lastName: 'Da Costa Oliveira', firstName: 'Juliette', points: '80-D' },
+    ])
+  })
+
   it('shows a line it cannot read rather than dropping it', () => {
     const lines = [...AGR_PLAYER_LIST]
     lines[3] = '351100 Bernard Nicolas 70'

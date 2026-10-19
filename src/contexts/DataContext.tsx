@@ -2076,6 +2076,8 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
   const updatePlayer = useCallback((id: string, patch: Partial<Player>) => {
     const local = withoutEmptyEmail(patch)
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...local } : p)))
+    // `users` is the same row (#765): the imports read their namesakes there.
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...local } : u)))
     // Changing club leaves the old club's groups — the API does the same (#602).
     if (patch.clubId !== undefined) {
       setMemberGroups((prev) => prev.map((g) => (
@@ -2094,6 +2096,10 @@ export function DataProvider({ children, initialData }: DataProviderProps) {
     const id = data.id ?? nextId('player')
     const player: Player = { ...withoutEmptyEmail(data), id }
     setPlayers((prev) => [...prev, player])
+    // And in `users`, where the AGR list looks for the club's namesakes
+    // (#765): an FFTT import then an AGR one, without a reload between,
+    // otherwise saw nobody and offered to create every licensee again.
+    setUsers((prev) => [...prev, { ...player, role: 'player', isPlayer: true }])
     if (persist) api('/players', { method: 'POST', body: JSON.stringify(player) })
     return player
   }, [persist])
