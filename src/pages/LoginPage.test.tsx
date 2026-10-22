@@ -51,10 +51,14 @@ describe('LoginPage', () => {
     render(<LoginPage />)
 
     expect(screen.getByText('Club Ping existe aussi en application')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Télécharger sur l’App Store' }))
-      .toHaveAttribute('href', 'https://apps.apple.com/fr/app/id6799859449')
-    expect(screen.getByRole('link', { name: 'Disponible sur Google Play' }))
-      .toHaveAttribute('href', 'https://play.google.com/store/apps/details?id=fr.clubping.app')
+    // Each link is the store's badge, named by its alt text.
+    const appStore = screen.getByRole('link', { name: 'Télécharger dans l’App Store' })
+    expect(appStore).toHaveAttribute('href', 'https://apps.apple.com/fr/app/id6799859449')
+    expect(within(appStore).getByRole('img').getAttribute('src'))
+      .toContain('toolbox.marketingtools.apple.com')
+    const play = screen.getByRole('link', { name: 'Disponible sur Google Play' })
+    expect(play).toHaveAttribute('href', 'https://play.google.com/store/apps/details?id=fr.clubping.app')
+    expect(within(play).getByRole('img').getAttribute('src')).toContain('fr_badge_web_generic.png')
   })
 
   it('shows the dev login picker in dev mode', () => {

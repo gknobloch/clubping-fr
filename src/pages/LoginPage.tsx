@@ -7,12 +7,13 @@ import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import { readReturnPath } from '@/lib/returnPath'
-import { APP_STORE_URL, PLAY_STORE_URL } from '@/lib/storeLinks'
+import {
+  APP_STORE_BADGE_URL,
+  APP_STORE_URL,
+  PLAY_STORE_BADGE_URL,
+  PLAY_STORE_URL,
+} from '@/lib/storeLinks'
 import type { DevUser, User } from '@/types'
-
-// 44px below `md:`, the rule for anything tappable.
-const STORE_LINK_CLASS =
-  'inline-flex min-h-[44px] md:min-h-0 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700 shadow-sm hover:bg-slate-50'
 
 // Shared header for both ways in — the e-mail code form and the preview's
 // standalone picker (#313). The mark appears nowhere else above 28px, and the
@@ -63,12 +64,23 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
             Below the way in for a new club, which is a way in; this is not. */}
         <div className="mt-6 text-center text-sm">
           <p className="text-slate-600">Club Ping existe aussi en application</p>
-          <div className="mt-2 flex flex-wrap justify-center gap-2">
-            <a className={STORE_LINK_CLASS} href={APP_STORE_URL}>
-              Télécharger sur l’App Store
+          {/* Google's badge carries a transparent margin inside the image and
+              Apple's none: 60px of Google's is 40px of badge, so the two read
+              as the same height once the margin is pulled back. */}
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <a href={APP_STORE_URL}>
+              <img
+                src={APP_STORE_BADGE_URL}
+                alt="Télécharger dans l’App Store"
+                className="h-10 w-auto"
+              />
             </a>
-            <a className={STORE_LINK_CLASS} href={PLAY_STORE_URL}>
-              Disponible sur Google Play
+            <a href={PLAY_STORE_URL}>
+              <img
+                src={PLAY_STORE_BADGE_URL}
+                alt="Disponible sur Google Play"
+                className="-my-2.5 h-[60px] w-auto"
+              />
             </a>
           </div>
         </div>
