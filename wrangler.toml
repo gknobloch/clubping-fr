@@ -74,7 +74,7 @@ RESEND_FROM = "Club Ping <no-reply@mail.leskno.fr>"
 #                          a named reason — a published build that is actively
 #                          wrong — and say which in the commit. Never as part
 #                          of a release.
-CLIENT_LATEST_VERSION = "1.9.0"
+CLIENT_LATEST_VERSION = "1.9.1"
 # 1.6.0 (#604): app ≤ 1.5 filters line-up pickers with the per-licensee
 # exclusions `/data` stopped sending in #757, so it offers players a club's
 # group leaves out. Raised once no captain or admin was left on 1.5.

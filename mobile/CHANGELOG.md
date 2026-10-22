@@ -27,6 +27,29 @@ Les versions antérieures à la 1.2.0 sont décrites dans leur issue de release
 
 ## À paraître
 
+## 1.9.1 — 22 octobre 2026
+
+La fédération de chaque club, et la liste AGR plus simple à importer.
+
+- **FFTT ou AGR.** Dans le menu du compte, chaque club porte l'étiquette de
+  sa fédération — ou des deux.
+- **Importer la liste AGR** : les joueurs non classés (« NC ») et les
+  classements dames (« 80-D ») sont lus, et « Tout rattacher » relie d'un coup
+  les licenciés qui portent le nom d'un membre du club.
+- **Feuille de match AGR** : un classement dames est rangé à sa juste place
+  (un 60-D joue comme un 75), un non classé après les classés.
+- Corrections techniques.
+
+### Play
+
+La fédération de chaque club, et la liste AGR plus simple à importer.
+
+- FFTT ou AGR : l'étiquette de chaque club dans le menu du compte.
+- Liste AGR : « NC » et classements dames lus, « Tout rattacher » pour les
+  membres du club du même nom.
+- Feuille de match AGR : classements dames et non classés à leur place.
+- Corrections techniques.
+
 ## 1.9.0 — 18 octobre 2026
 
 Partager un match, et toujours savoir sous quel profil on est.
