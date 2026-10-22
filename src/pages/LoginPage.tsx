@@ -64,9 +64,10 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
             Below the way in for a new club, which is a way in; this is not. */}
         <div className="mt-6 text-center text-sm">
           <p className="text-slate-600">Club Ping existe aussi en application</p>
-          {/* Google's badge carries a transparent margin inside the image and
-              Apple's none: 60px of Google's is 40px of badge, so the two read
-              as the same height once the margin is pulled back. */}
+          {/* Google's badge carries a transparent margin above and below it
+              inside the image, Apple's none: the badge is three quarters of
+              the image's height (measured on the preview), so 53px of Google's
+              is Apple's 40px, and the margin is pulled back to match. */}
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             <a href={APP_STORE_URL}>
               <img
@@ -79,7 +80,7 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
               <img
                 src={PLAY_STORE_BADGE_URL}
                 alt="Disponible sur Google Play"
-                className="-my-2.5 h-[60px] w-auto"
+                className="-my-[6.5px] h-[53px] w-auto"
               />
             </a>
           </div>
