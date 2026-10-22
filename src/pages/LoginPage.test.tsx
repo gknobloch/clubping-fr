@@ -46,6 +46,17 @@ describe('LoginPage', () => {
     expect(screen.getByText('Connectez-vous pour continuer')).toBeInTheDocument()
   })
 
+  // #773 — the first page a member sees from the club's link, often on a phone.
+  it('links to the app on both stores', () => {
+    render(<LoginPage />)
+
+    expect(screen.getByText('Club Ping existe aussi en application')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Télécharger sur l’App Store' }))
+      .toHaveAttribute('href', 'https://apps.apple.com/fr/app/id6799859449')
+    expect(screen.getByRole('link', { name: 'Disponible sur Google Play' }))
+      .toHaveAttribute('href', 'https://play.google.com/store/apps/details?id=fr.clubping.app')
+  })
+
   it('shows the dev login picker in dev mode', () => {
     render(<LoginPage />)
     expect(screen.getByText(/Mode développement/i)).toBeInTheDocument()

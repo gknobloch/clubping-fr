@@ -7,7 +7,12 @@ import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import { readReturnPath } from '@/lib/returnPath'
+import { APP_STORE_URL, PLAY_STORE_URL } from '@/lib/storeLinks'
 import type { DevUser, User } from '@/types'
+
+// 44px below `md:`, the rule for anything tappable.
+const STORE_LINK_CLASS =
+  'inline-flex min-h-[44px] md:min-h-0 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700 shadow-sm hover:bg-slate-50'
 
 // Shared header for both ways in — the e-mail code form and the preview's
 // standalone picker (#313). The mark appears nowhere else above 28px, and the
@@ -52,6 +57,20 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
           >
             Demandez à l’administrer
           </Link>
+        </div>
+        {/* The first page a member sees when their club sends them the link,
+            often on a phone — and nothing here said the app existed (#773).
+            Below the way in for a new club, which is a way in; this is not. */}
+        <div className="mt-6 text-center text-sm">
+          <p className="text-slate-600">Club Ping existe aussi en application</p>
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            <a className={STORE_LINK_CLASS} href={APP_STORE_URL}>
+              Télécharger sur l’App Store
+            </a>
+            <a className={STORE_LINK_CLASS} href={PLAY_STORE_URL}>
+              Disponible sur Google Play
+            </a>
+          </div>
         </div>
         {/* The stores want the policy reachable from the app itself, not only
             from the listing (#356). Muted: it is a legal footnote, not a way in. */}
