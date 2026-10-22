@@ -7,6 +7,12 @@ import { TEXT_TARGET_CLASS } from '@/components/Button'
 import { getDisplayNameForUser } from '@/mock/data'
 import type { ApiError } from '@/lib/authApi'
 import { readReturnPath } from '@/lib/returnPath'
+import {
+  APP_STORE_BADGE_URL,
+  APP_STORE_URL,
+  PLAY_STORE_BADGE_URL,
+  PLAY_STORE_URL,
+} from '@/lib/storeLinks'
 import type { DevUser, User } from '@/types'
 
 // Shared header for both ways in — the e-mail code form and the preview's
@@ -52,6 +58,32 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
           >
             Demandez à l’administrer
           </Link>
+        </div>
+        {/* The first page a member sees when their club sends them the link,
+            often on a phone — and nothing here said the app existed (#773).
+            Below the way in for a new club, which is a way in; this is not. */}
+        <div className="mt-6 text-center text-sm">
+          <p className="text-slate-600">Club Ping existe aussi en application</p>
+          {/* Google's badge carries a transparent margin above and below it
+              inside the image, Apple's none: the badge is 77% of the image's
+              height (measured on the preview), so 52px of Google's is Apple's
+              40px, and the margin is pulled back to match. */}
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <a href={APP_STORE_URL}>
+              <img
+                src={APP_STORE_BADGE_URL}
+                alt="Télécharger dans l’App Store"
+                className="h-10 w-auto"
+              />
+            </a>
+            <a href={PLAY_STORE_URL}>
+              <img
+                src={PLAY_STORE_BADGE_URL}
+                alt="Disponible sur Google Play"
+                className="-my-1.5 h-[52px] w-auto"
+              />
+            </a>
+          </div>
         </div>
         {/* The stores want the policy reachable from the app itself, not only
             from the listing (#356). Muted: it is a legal footnote, not a way in. */}

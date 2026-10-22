@@ -46,6 +46,21 @@ describe('LoginPage', () => {
     expect(screen.getByText('Connectez-vous pour continuer')).toBeInTheDocument()
   })
 
+  // #773 — the first page a member sees from the club's link, often on a phone.
+  it('links to the app on both stores', () => {
+    render(<LoginPage />)
+
+    expect(screen.getByText('Club Ping existe aussi en application')).toBeInTheDocument()
+    // Each link is the store's badge, named by its alt text.
+    const appStore = screen.getByRole('link', { name: 'Télécharger dans l’App Store' })
+    expect(appStore).toHaveAttribute('href', 'https://apps.apple.com/fr/app/id6799859449')
+    expect(within(appStore).getByRole('img').getAttribute('src'))
+      .toContain('toolbox.marketingtools.apple.com')
+    const play = screen.getByRole('link', { name: 'Disponible sur Google Play' })
+    expect(play).toHaveAttribute('href', 'https://play.google.com/store/apps/details?id=fr.clubping.app')
+    expect(within(play).getByRole('img').getAttribute('src')).toContain('fr_badge_web_generic.png')
+  })
+
   it('shows the dev login picker in dev mode', () => {
     render(<LoginPage />)
     expect(screen.getByText(/Mode développement/i)).toBeInTheDocument()
