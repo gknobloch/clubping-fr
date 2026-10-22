@@ -65,9 +65,9 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
         <div className="mt-6 text-center text-sm">
           <p className="text-slate-600">Club Ping existe aussi en application</p>
           {/* Google's badge carries a transparent margin above and below it
-              inside the image, Apple's none: the badge is three quarters of
-              the image's height (measured on the preview), so 53px of Google's
-              is Apple's 40px, and the margin is pulled back to match. */}
+              inside the image, Apple's none: the badge is 77% of the image's
+              height (measured on the preview), so 52px of Google's is Apple's
+              40px, and the margin is pulled back to match. */}
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             <a href={APP_STORE_URL}>
               <img
@@ -80,7 +80,7 @@ function LoginLayout({ caption, children }: { caption: string; children: React.R
               <img
                 src={PLAY_STORE_BADGE_URL}
                 alt="Disponible sur Google Play"
-                className="-my-[6.5px] h-[53px] w-auto"
+                className="-my-1.5 h-[52px] w-auto"
               />
             </a>
           </div>
