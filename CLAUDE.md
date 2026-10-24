@@ -2692,6 +2692,46 @@ invisible dans le diff comme dans la revue.
   est le transport Expo, et le seul à savoir purger un token qu'Expo déclare
   mort — personne d'autre ne le remarquera jamais.
 
+### Demander un avis sur les stores (#781)
+- **Deux formes, et ce sont les règles des stores qui tranchent.** Sur iOS,
+  la demande **native** (`expo-store-review`, `SKStoreReviewController`) : la
+  règle 5.6.1 d'Apple refuse toute invite d'avis maison, et le système se
+  plafonne déjà à trois affichages par an. Sur Android, **notre feuille** —
+  « Donner mon avis », « Plus tard », « Ne plus demander » — dont le premier
+  bouton ouvre la fiche Play : l'API In-App Review de Google interdit de
+  poser une question avant elle, et un lien vers la fiche n'est pas cette API.
+- **Personne ne sait si un avis a été laissé.** La demande iOS ne dit ni
+  qu'elle s'est affichée, ni ce que le membre a fait. Ce qu'on appelle
+  « avis donné », c'est être allé sur la page d'avis — depuis la feuille, ou
+  depuis « Noter Club Ping » dans Compte, le lien permanent que les deux
+  stores admettent. Ça suffit pour ne plus demander.
+- **Le moment est un « Oui » du membre pour lui-même**, jamais une dérogation
+  d'un capitaine : `setAvailability` lève `noteOwnYes`, et `ReviewPrompt`,
+  monté à côté du navigateur avec une session, regarde **une fois par
+  lancement**. Un signal plutôt qu'une veille sur la donnée : un
+  rafraîchissement qui apporte une réponse donnée sur le web n'est pas une
+  tâche qu'on vient de finir ici.
+- **Rarement** (`reviewPromptDue`, `src/lib/reviewPrompt.ts`) : pas avant 14
+  jours depuis la première lecture, trois réponses à soi, 120 jours entre deux
+  demandes, trois au plus, et jamais plus après un refus ou un avis. « Plus
+  tard » et un fond touché comptent comme une demande ; « avis donné »
+  l'emporte sur « refusé ».
+- **Jamais sous un profil géré** (#749), jamais depuis le cache (hors ligne),
+  jamais sur le web. Un serveur muet ne demande rien : le silence n'est pas un
+  oui.
+- **L'état est celui de la personne** (#655), `review_prompts` (0078) :
+  « Ne plus demander » tient sur ses autres profils de club, sur son prochain
+  téléphone et après une réinstallation. Lu et écrit **depuis qui s'est
+  connecté** (#702, `sessionRoot`), jamais depuis le profil ouvert. Une fusion
+  de deux personnes replie l'état de l'une dans l'autre
+  (`mergeReviewPromptStates`) avant que la cascade ne l'emporte.
+- **Module natif, livré à partir de 1.10.0** : il ne s'importe que depuis
+  `utils/storeReview.ts`, dans un `try` comme `documentPicker.ts`. Sur un
+  binaire plus ancien atteint par OTA, iOS ne demande rien — sans repli sur
+  une invite maison, pour la même règle 5.6.1. Android n'en dépend pas.
+- Sous TestFlight la demande iOS ne s'affiche jamais, mais elle est comptée :
+  un testeur consomme ses trois demandes sans rien voir.
+
 ### Supprimer une colonne, ou changer un schéma sous le code (#410)
 
 - **Le code d'abord, le schéma ensuite, et jamais dans le même déploiement.**
