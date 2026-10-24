@@ -3,7 +3,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react-native'
 import { render } from '@/__tests__/support/render'
 import { PHONE_WIDTH, TABLET_SMALL, resetWindowSize, setWindowSize } from '@/__tests__/support/window'
 import type {
-  Club, MemberGroup, Training, TrainingAvailability, TrainingSession, User,
+  Club, MemberGroup, Profile, Training, TrainingAvailability, TrainingSession, User,
 } from '@shared/types'
 import TrainingsScreen from '@/app/(tabs)/entrainements'
 import ClubScreen from '@/app/(tabs)/club'
@@ -11,6 +11,7 @@ import { NextTrainingSection } from '@/components/NextTrainingSection'
 import { MyAvailability } from '@/components/MyAvailability'
 import MonCompteScreen from '@/app/(tabs)/compte'
 import { setNotificationPreferences } from '@/utils/push'
+import { openReviewPage, recordReviewEvent } from '@/utils/storeReview'
 import { openMatchInCalendar } from '@/utils/addToCalendar'
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ import { openMatchInCalendar } from '@/utils/addToCalendar'
 // font.
 // ---------------------------------------------------------------------------
 
-const mockAuth: { user: User | null } = { user: null }
+const mockAuth: { user: User | null; profiles?: Profile[] } = { user: null }
 const mockData: Record<string, unknown> = {}
 const mockPush = jest.fn()
 
@@ -33,6 +34,10 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }))
 jest.mock('@/utils/addToCalendar', () => ({ openMatchInCalendar: jest.fn(async () => {}) }))
+jest.mock('@/utils/storeReview', () => ({
+  openReviewPage: jest.fn(async () => {}),
+  recordReviewEvent: jest.fn(async () => {}),
+}))
 jest.mock('@/utils/push', () => ({
   setNotificationsEnabled: jest.fn(async () => {}),
   setNotificationPreferences: jest.fn(async () => {}),
@@ -540,5 +545,27 @@ describe('Mon compte — ce qu’on veut recevoir', () => {
     mockAuth.user = member('p2', 'Enzo', 'Lotz', { notificationsEnabled: false })
     render(<MonCompteScreen />)
     expect(screen.queryByTestId('notify-match')).toBeNull()
+  })
+})
+
+describe('Mon compte — noter l’app (#781)', () => {
+  afterEach(() => {
+    mockAuth.profiles = undefined
+  })
+
+  it('mène à la page d’avis du store, et ne redemande plus', () => {
+    render(<MonCompteScreen />)
+    fireEvent.press(screen.getByTestId('compte-rate-app'))
+    expect(recordReviewEvent).toHaveBeenCalledWith('reviewed')
+    expect(openReviewPage).toHaveBeenCalled()
+  })
+
+  it('ne se propose pas sous un profil géré', () => {
+    mockAuth.profiles = [
+      { id: mockAuth.user!.id, firstName: 'Enzo', lastName: 'Lotz', role: 'player', managed: true } as Profile,
+      { id: 'parent', firstName: 'Léa', lastName: 'Lotz', role: 'player', signedIn: true } as Profile,
+    ]
+    render(<MonCompteScreen />)
+    expect(screen.queryByTestId('compte-rate-app')).toBeNull()
   })
 })

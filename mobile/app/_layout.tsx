@@ -18,6 +18,7 @@ import { DataProvider } from '@/contexts/DataContext'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { PushNotifications } from '@/components/PushNotifications'
 import { SharedGameLinks } from '@/components/SharedGameLinks'
+import { ReviewPrompt } from '@/components/ReviewPrompt'
 import { UnsupportedOverlay, UpdateBanner } from '@/components/VersionGate'
 
 // Hold the native splash until the persisted session has been restored —
@@ -90,6 +91,17 @@ function SharedLinks() {
   return <SharedGameLinks />
 }
 
+/**
+ * Asking for a store review (#781): only with a session, whose person keeps
+ * the answer. Beside the navigator because the moment is an answer given on
+ * whichever screen.
+ */
+function Review() {
+  const { isAuthenticated, loading } = useAuth()
+  if (loading || !isAuthenticated) return null
+  return <ReviewPrompt />
+}
+
 // ---------------------------------------------------------------------------
 // Root layout
 //
@@ -126,6 +138,7 @@ export default function RootLayout() {
             <AuthedRoutes fontsReady={loaded || error !== null} />
             <Push />
             <SharedLinks />
+            <Review />
             {/* Last, and absolutely positioned, so it covers the navigator
                 rather than replacing it — the screen underneath is what
                 dismisses the splash (#508). */}

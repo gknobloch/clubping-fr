@@ -407,7 +407,7 @@ interface SessionRow {
 }
 
 /** The profile a session's reach is read from: who signed in (#702). */
-async function sessionRoot(db: D1Database, token: string, user: UserRow): Promise<string> {
+export async function sessionRoot(db: D1Database, token: string, user: UserRow): Promise<string> {
   return (await sessionByToken(db, token))?.origin_user_id ?? user.id
 }
 

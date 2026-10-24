@@ -50,6 +50,7 @@ import {
 } from '@shared/lib/trainings'
 import { apiUrl } from '@/constants/api'
 import { dataHeaders, getSessionToken, getSessionUserId, onSessionChange } from '@/utils/api'
+import { noteOwnYes } from '@/utils/storeReview'
 import { clearCache, readCache, writeCache } from '@/utils/offlineCache'
 
 // ---------------------------------------------------------------------------
@@ -455,6 +456,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           ],
         }
       })
+
+      // A « Oui » of one's own is when the app may ask for a review (#781).
+      if (status === 'available' && !overriddenBy && playerId === getSessionUserId()) noteOwnYes()
 
       if (apiAvailable) {
         fetch(apiUrl('/game-availabilities/set'), {

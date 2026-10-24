@@ -48,6 +48,7 @@ import {
 } from '../../src/lib/clubAdminRequests'
 import { sendEmails } from './email'
 import { notificationsApp, notifyAvailabilityChange } from './notificationRoutes'
+import { foldReviewPrompt, reviewPromptApp } from './reviewPromptRoutes'
 import { clientVersionApp } from './clientVersion'
 import {
   clubConfirmationEmail, decisionEmail, newRequestForAdminEmail, type RequestSummary,
@@ -98,6 +99,9 @@ app.route('/auth', authApp)
 // Mobile push: device registration, the member's own switch, and the daily
 // sweep the scheduled workflow calls (#495).
 app.route('/notifications', notificationsApp)
+
+// Asking for a store review, and the person's answer (#781).
+app.route('/review-prompt', reviewPromptApp)
 
 // The version floor the store clients check themselves against (#508).
 app.route('/client-version', clientVersionApp)
@@ -5961,7 +5965,10 @@ app.post('/people/:personId/merge-into', async (c) => {
   if (refusal) return c.json({ error: refusal.reason, message: refusal.message }, 409)
 
   const fill = (col: string) => `${col} = COALESCE(NULLIF(${col}, ''), (SELECT NULLIF(${col}, '') FROM people WHERE id = ?))`
+  // A « Ne plus demander » on either side holds on the person kept (#781).
+  const reviewPrompt = await foldReviewPrompt(db, personId, targetId)
   await db.batch([
+    ...(reviewPrompt ? [reviewPrompt] : []),
     db.prepare(
       `UPDATE people SET ${['first_name', 'last_name', 'birth_date', 'birth_place'].map(fill).join(', ')},
          phone = COALESCE(NULLIF(phone, ''), (SELECT phone FROM people WHERE id = ?), '')

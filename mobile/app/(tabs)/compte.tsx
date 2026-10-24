@@ -1,6 +1,6 @@
 import {
   ScrollView, View, Text, StyleSheet,
-  TouchableOpacity, Alert, ActivityIndicator, Switch,
+  TouchableOpacity, Alert, ActivityIndicator, Switch, Platform,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
@@ -24,7 +24,8 @@ import { ContactEditor, type ContactField } from '@/components/ContactEditor'
 import { fonts } from '@/constants/typography'
 import { ProfileSwitcherSheet } from '@/components/ProfileSwitcherSheet'
 import { DelegationsSection } from '@/components/DelegationsSection'
-import { hasOtherProfiles, profileName } from '@shared/lib/profiles'
+import { hasOtherProfiles, managedSession, profileName } from '@shared/lib/profiles'
+import { openReviewPage, recordReviewEvent } from '@/utils/storeReview'
 import { licenceLabel, licencesOf } from '@shared/lib/licences'
 import { activePhaseIdsOf, clubFederationIds } from '@shared/lib/federations'
 
@@ -329,6 +330,33 @@ export default function MonCompteScreen() {
             )
           })}
         </View>
+
+        {/* Noter l'app (#781) — the standing link both stores allow, beside
+            the prompt that comes rarely. Not under a managed profile: the
+            person holding the phone is acting for someone else. Going to the
+            review page counts as reviewed, and the prompt stops. */}
+        {!managedSession(profiles, user?.id) && (
+          <TouchableOpacity
+            testID="compte-rate-app"
+            style={styles.section}
+            accessibilityRole="button"
+            onPress={() => {
+              void recordReviewEvent('reviewed')
+              void openReviewPage()
+            }}
+          >
+            <View style={styles.switchRow}>
+              <Ionicons name="star-outline" size={20} color={colors.accent} />
+              <View style={styles.switchLabels}>
+                <Text style={styles.switchTitle}>Noter Club Ping</Text>
+                <Text style={styles.switchHint}>
+                  {Platform.OS === 'ios' ? 'Sur l’App Store' : 'Sur Google Play'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={confirmLogout}>
